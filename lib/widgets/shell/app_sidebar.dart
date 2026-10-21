@@ -1,0 +1,355 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/providers/session_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/theme/app_theme_tokens.dart';
+
+/// Riverpod provider managing sidebar expanded vs collapsed rail state.
+final sidebarExpandedProvider = StateProvider<bool>((ref) => true);
+
+class _NavItemData {
+  final String label;
+  final String route;
+  final IconData icon;
+  final List<int> requiredObjIds;
+  final int Function(ShellMetadata)? getBadgeCount;
+
+  const _NavItemData({
+    required this.label,
+    required this.route,
+    required this.icon,
+    this.requiredObjIds = const [],
+    this.getBadgeCount,
+  });
+}
+
+/// Persistent left navigation sidebar / rail.
+class AppSidebar extends ConsumerWidget {
+  const AppSidebar({super.key});
+
+  static const List<_NavItemData> _navItems = [
+    _NavItemData(
+      label: 'Dashboard',
+      route: '/dashboard',
+      icon: Icons.dashboard_outlined,
+      requiredObjIds: [1],
+    ),
+    _NavItemData(
+      label: 'Students',
+      route: '/students',
+      icon: Icons.people_outline,
+      requiredObjIds: [12, 13, 20, 26],
+      getBadgeCount: _getStudentCount,
+    ),
+    _NavItemData(
+      label: 'Academics',
+      route: '/academics',
+      icon: Icons.menu_book_outlined,
+      requiredObjIds: [4, 25],
+      getBadgeCount: _getClassCount,
+    ),
+    _NavItemData(
+      label: 'Fees & Billing',
+      route: '/fees/vouchers',
+      icon: Icons.payments_outlined,
+      requiredObjIds: [16, 17, 18, 21],
+      getBadgeCount: _getPendingVoucherCount,
+    ),
+    _NavItemData(
+      label: 'Examinations',
+      route: '/exams',
+      icon: Icons.assignment_outlined,
+      requiredObjIds: [10, 23, 24],
+    ),
+    _NavItemData(
+      label: 'Attendance',
+      route: '/attendance',
+      icon: Icons.check_circle_outline,
+      requiredObjIds: [2, 28],
+    ),
+    _NavItemData(
+      label: 'Staff & Payroll',
+      route: '/staff',
+      icon: Icons.badge_outlined,
+      requiredObjIds: [14, 22, 29],
+      getBadgeCount: _getStaffCount,
+    ),
+    _NavItemData(
+      label: 'Library',
+      route: '/library',
+      icon: Icons.local_library_outlined,
+      requiredObjIds: [3],
+    ),
+  ];
+
+  static int _getStudentCount(ShellMetadata m) => m.studentCount;
+  static int _getClassCount(ShellMetadata m) => m.classCount;
+  static int _getPendingVoucherCount(ShellMetadata m) => m.pendingVouchers;
+  static int _getStaffCount(ShellMetadata m) => m.staffCount;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isExpanded = ref.watch(sidebarExpandedProvider);
+    final session = ref.watch(sessionProvider);
+    final metadataAsync = ref.watch(shellMetadataProvider);
+    final metadata = metadataAsync.valueOrNull ?? ShellMetadata.empty();
+
+    final currentPath = GoRouterState.of(context).matchedLocation;
+
+    return AnimatedContainer(
+      duration: AppDuration.fast,
+      width: isExpanded ? 240.0 : 68.0,
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(
+          right: BorderSide(color: AppColors.borderDefault, width: 1.0),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. Brand Header
+          _buildBrandHeader(isExpanded),
+          const Divider(height: 1.0, color: AppColors.borderDefault),
+
+          // 2. Navigation Items (8 Groups)
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              children: [
+                for (final item in _navItems)
+                  if (_isAllowed(session, item.requiredObjIds))
+                    _buildNavItem(
+                      context: context,
+                      item: item,
+                      isExpanded: isExpanded,
+                      isActive: _isRouteActive(currentPath, item.route),
+                      badgeCount: item.getBadgeCount?.call(metadata) ?? 0,
+                    ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1.0, color: AppColors.borderDefault),
+
+          // 3. Footer: System Settings & Rail Collapse Toggle
+          if (_isAllowed(session, const [15]))
+            _buildNavItem(
+              context: context,
+              item: const _NavItemData(
+                label: 'System Settings',
+                route: '/system/settings',
+                icon: Icons.settings_outlined,
+                requiredObjIds: [15],
+              ),
+              isExpanded: isExpanded,
+              isActive: _isRouteActive(currentPath, '/system'),
+              badgeCount: 0,
+            ),
+
+          _buildCollapseToggle(ref, isExpanded),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBrandHeader(bool isExpanded) {
+    return Container(
+      height: 64.0,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      child: Row(
+        mainAxisAlignment: isExpanded
+            ? MainAxisAlignment.start
+            : MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 36.0,
+            height: 36.0,
+            decoration: BoxDecoration(
+              color: AppColors.brandPrimary,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: const Icon(
+              Icons.school,
+              color: AppColors.surfaceRaised,
+              size: 20.0,
+            ),
+          ),
+          if (isExpanded) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Ailyans School',
+                    style: AppTypography.h3.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    'Automation v2.0',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                      fontSize: 11.0,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required BuildContext context,
+    required _NavItemData item,
+    required bool isExpanded,
+    required bool isActive,
+    required int badgeCount,
+  }) {
+    final itemWidget = InkWell(
+      onTap: () => context.go(item.route),
+      child: Container(
+        height: 44.0,
+        margin: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.xs,
+          vertical: 2.0,
+        ),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppColors.brandPrimary.withValues(alpha: 0.10)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Row(
+          children: [
+            // Active left indicator bar
+            Container(
+              width: 3.0,
+              height: 24.0,
+              decoration: BoxDecoration(
+                color: isActive ? AppColors.brandPrimary : Colors.transparent,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            // Icon
+            Icon(
+              item.icon,
+              size: 20.0,
+              color: isActive
+                  ? AppColors.brandPrimary
+                  : AppColors.textSecondary,
+            ),
+            if (isExpanded) ...[
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  item.label,
+                  style: AppTypography.label.copyWith(
+                    color: isActive
+                        ? AppColors.brandPrimary
+                        : AppColors.textPrimary,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (badgeCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7.0,
+                    vertical: 2.0,
+                  ),
+                  margin: const EdgeInsets.only(right: AppSpacing.xs),
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? AppColors.brandPrimary
+                        : AppColors.surfaceSubtle,
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                  ),
+                  child: Text(
+                    badgeCount.toString(),
+                    style: AppTypography.bodySmall.copyWith(
+                      color: isActive
+                          ? AppColors.surfaceRaised
+                          : AppColors.textSecondary,
+                      fontSize: 11.0,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+
+    if (!isExpanded) {
+      return Tooltip(
+        message: badgeCount > 0 ? '${item.label} ($badgeCount)' : item.label,
+        waitDuration: AppDuration.fast,
+        child: itemWidget,
+      );
+    }
+
+    return itemWidget;
+  }
+
+  Widget _buildCollapseToggle(WidgetRef ref, bool isExpanded) {
+    return InkWell(
+      onTap: () {
+        ref.read(sidebarExpandedProvider.notifier).state = !isExpanded;
+      },
+      child: Container(
+        height: 44.0,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        child: Row(
+          mainAxisAlignment: isExpanded
+              ? MainAxisAlignment.start
+              : MainAxisAlignment.center,
+          children: [
+            Icon(
+              isExpanded ? Icons.menu_open : Icons.menu,
+              size: 18.0,
+              color: AppColors.textSecondary,
+            ),
+            if (isExpanded) ...[
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Collapse Sidebar',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  bool _isRouteActive(String currentPath, String itemRoute) {
+    if (itemRoute == '/dashboard') {
+      return currentPath == '/dashboard';
+    }
+    return currentPath.startsWith(itemRoute);
+  }
+
+  bool _isAllowed(UserSession? session, List<int> requiredObjIds) {
+    if (requiredObjIds.isEmpty) return true;
+    if (session == null) return true;
+    return requiredObjIds.any((id) => session.allowedObjIds.contains(id));
+  }
+}
