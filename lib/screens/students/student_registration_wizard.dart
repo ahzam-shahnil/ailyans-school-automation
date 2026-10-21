@@ -1,19 +1,18 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_registration_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/input_formatters.dart';
+import '../../core/utils/photo_picker.dart';
 import '../../models/school_class.dart';
 
 /// Production StudentRegistrationWizard screen hosted at `/students/new`.
@@ -65,8 +64,9 @@ class _StudentRegistrationWizardState
   late final TextEditingController _vmDiscountController;
   late final TextEditingController _remarksController;
 
-  Timer? _cnicDebounce;
+  Timer? _siblingDebounce;
   String _debouncedCnic = '';
+  String _debouncedFName = '';
   bool _isSubmitting = false;
 
   @override
@@ -93,6 +93,7 @@ class _StudentRegistrationWizardState
     _fNameController = TextEditingController(text: draft.fName);
     _cnicController = TextEditingController(text: draft.cnicNo);
     _debouncedCnic = draft.cnicNo;
+    _debouncedFName = draft.fName;
     _occupationController = TextEditingController(text: draft.occupation ?? '');
     _pSchoolController = TextEditingController(text: draft.pSchool ?? '');
     _pClassController = TextEditingController(text: draft.pClass ?? '');
@@ -125,7 +126,7 @@ class _StudentRegistrationWizardState
 
   @override
   void dispose() {
-    _cnicDebounce?.cancel();
+    _siblingDebounce?.cancel();
 
     _nameFirstFocusNode.dispose();
     _fNameFocusNode.dispose();
@@ -191,64 +192,33 @@ class _StudentRegistrationWizardState
     );
   }
 
-  void _onCnicChanged(String val) {
-    ref.read(wizardDraftProvider.notifier).setCnicNo(val);
-    _cnicDebounce?.cancel();
-    _cnicDebounce = Timer(const Duration(milliseconds: 300), () {
+  void _triggerSiblingDebounce() {
+    _siblingDebounce?.cancel();
+    _siblingDebounce = Timer(const Duration(milliseconds: 300), () {
       if (mounted) {
         setState(() {
-          _debouncedCnic = val.trim();
+          _debouncedCnic = _cnicController.text.trim();
+          _debouncedFName = _fNameController.text.trim();
         });
       }
     });
   }
 
+  void _onCnicChanged(String val) {
+    ref.read(wizardDraftProvider.notifier).setCnicNo(val);
+    _triggerSiblingDebounce();
+  }
+
+  void _onFNameChanged(String val) {
+    ref.read(wizardDraftProvider.notifier).setFName(val);
+    _triggerSiblingDebounce();
+  }
+
   Future<void> _pickPhoto() async {
-    try {
-      final files = await FilePicker.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['jpg', 'jpeg', 'png'],
-      );
-
-      if (files.isEmpty || files.first.path == null) return;
-
-      final filePath = files.first.path!;
-      final file = File(filePath);
-      final sizeBytes = await file.length();
-
-      if (sizeBytes > 50 * 1024) {
-        final sizeKb = (sizeBytes / 1024).toStringAsFixed(2);
-        if (!mounted) return;
-        await showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Oops!'),
-            content: Text(
-              'Picture Size is $sizeKb KB. It Must be Less then 50 KB',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-
-      // Valid photo file - copy to temp draft storage
-      final tempDir = await getTemporaryDirectory();
-      final draftPhotoPath = p.join(
-        tempDir.path,
-        'draft_photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-      await file.copy(draftPhotoPath);
-
-      ref.read(wizardDraftProvider.notifier).setPhotoPath(draftPhotoPath);
-      setState(() {});
-    } catch (e) {
-      debugPrint('Error picking photo: $e');
+    final path = await pickPhotoWithValidation(context);
+    if (path != null) {
+      ref.read(wizardDraftProvider.notifier).setPhotoPath(path);
+      if (mounted) setState(() {});
     }
   }
 
@@ -296,28 +266,61 @@ class _StudentRegistrationWizardState
     ref.read(wizardDraftProvider.notifier).setTAddress(pAddr);
   }
 
-  void _copySiblingAddress(SiblingInfo sibling) {
-    if (sibling.pAddress != null && sibling.pAddress!.isNotEmpty) {
-      _pAddressController.text = sibling.pAddress!;
-      ref.read(wizardDraftProvider.notifier).setPAddress(sibling.pAddress!);
+  void _copySiblingFamilyInfo(List<SiblingInfo> siblings) {
+    if (siblings.isEmpty) return;
+    // If multiple siblings match: copy from the row with the HIGHEST Stu_RegID (most recent record).
+    final sibling = siblings.reduce(
+      (curr, next) => curr.stuRegId > next.stuRegId ? curr : next,
+    );
+    final draft = ref.read(wizardDraftProvider);
+    final notifier = ref.read(wizardDraftProvider.notifier);
+
+    // Only populate a field if the draft field is currently empty or whitespace; do not overwrite values the user has already typed.
+    if (draft.pAddress == null || draft.pAddress!.trim().isEmpty) {
+      if (sibling.pAddress != null && sibling.pAddress!.trim().isNotEmpty) {
+        _pAddressController.text = sibling.pAddress!;
+        notifier.setPAddress(sibling.pAddress!);
+      }
     }
-    if (sibling.tAddress != null && sibling.tAddress!.isNotEmpty) {
-      _tAddressController.text = sibling.tAddress!;
-      ref.read(wizardDraftProvider.notifier).setTAddress(sibling.tAddress!);
+
+    if (draft.tAddress == null || draft.tAddress!.trim().isEmpty) {
+      if (sibling.tAddress != null && sibling.tAddress!.trim().isNotEmpty) {
+        _tAddressController.text = sibling.tAddress!;
+        notifier.setTAddress(sibling.tAddress!);
+      }
     }
-    if (sibling.emerContName != null && sibling.emerContName!.isNotEmpty) {
-      _emerContNameController.text = sibling.emerContName!;
-      ref
-          .read(wizardDraftProvider.notifier)
-          .setEmerContName(sibling.emerContName!);
+
+    if (draft.occupation == null || draft.occupation!.trim().isEmpty) {
+      if (sibling.occupation != null && sibling.occupation!.trim().isNotEmpty) {
+        _occupationController.text = sibling.occupation!;
+        notifier.setOccupation(sibling.occupation!);
+      }
     }
-    if (sibling.emerContMobile != null && sibling.emerContMobile!.isNotEmpty) {
-      _emerContMobileController.text = sibling.emerContMobile!;
-      ref
-          .read(wizardDraftProvider.notifier)
-          .setEmerContMobile(sibling.emerContMobile!);
+
+    if (draft.mobile1.trim().isEmpty) {
+      if (sibling.mobile1 != null && sibling.mobile1!.trim().isNotEmpty) {
+        _mobile1Controller.text = sibling.mobile1!;
+        notifier.setMobile1(sibling.mobile1!);
+      }
     }
-    _showSnackBar('Copied family addresses from sibling.');
+
+    if (draft.emerContName == null || draft.emerContName!.trim().isEmpty) {
+      if (sibling.emerContName != null &&
+          sibling.emerContName!.trim().isNotEmpty) {
+        _emerContNameController.text = sibling.emerContName!;
+        notifier.setEmerContName(sibling.emerContName!);
+      }
+    }
+
+    if (draft.emerContMobile == null || draft.emerContMobile!.trim().isEmpty) {
+      if (sibling.emerContMobile != null &&
+          sibling.emerContMobile!.trim().isNotEmpty) {
+        _emerContMobileController.text = sibling.emerContMobile!;
+        notifier.setEmerContMobile(sibling.emerContMobile!);
+      }
+    }
+
+    _showSnackBar('Copied family addresses and contacts from sibling.');
   }
 
   Future<void> _onCancel() async {
@@ -891,6 +894,7 @@ class _StudentRegistrationWizardState
                           controller: _bFormController,
                           hint: '38302-1234567-1',
                           monospace: true,
+                          inputFormatters: const [CnicInputFormatter()],
                           onChanged: notifier.setBFormNo,
                         ),
                       ),
@@ -963,82 +967,89 @@ class _StudentRegistrationWizardState
   }
 
   Widget _buildPhotoDropzone(String? photoPath) {
-    return Container(
-      width: 240,
-      constraints: const BoxConstraints(minHeight: 240),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _pickPhoto,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(
-          color: AppColors.borderDefault,
-          width: 1.5,
-          style: BorderStyle.solid,
+        child: Container(
+          width: 240,
+          constraints: const BoxConstraints(minHeight: 240),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSubtle,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(
+              color: AppColors.borderDefault,
+              width: 1.5,
+              style: BorderStyle.solid,
+            ),
+          ),
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: photoPath != null && File(photoPath).existsSync()
+              ? Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      child: Image.file(
+                        File(photoPath),
+                        width: 160,
+                        height: 160,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: CircleAvatar(
+                        radius: 14,
+                        backgroundColor: AppColors.surfaceRaised,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          iconSize: 16,
+                          icon: const Icon(
+                            Icons.close,
+                            color: AppColors.statusErrorText,
+                          ),
+                          onPressed: _removePhoto,
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.add_a_photo,
+                      size: 48,
+                      color: AppColors.textMuted,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Click to choose photo',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Max 50 KB, JPEG or PNG',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton(
+                      onPressed: _pickPhoto,
+                      child: const Text('Choose Photo'),
+                    ),
+                  ],
+                ),
         ),
       ),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: photoPath != null && File(photoPath).existsSync()
-          ? Stack(
-              alignment: Alignment.center,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Image.file(
-                    File(photoPath),
-                    width: 160,
-                    height: 160,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: AppColors.surfaceRaised,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      iconSize: 16,
-                      icon: const Icon(
-                        Icons.close,
-                        color: AppColors.statusErrorText,
-                      ),
-                      onPressed: _removePhoto,
-                    ),
-                  ),
-                ),
-              ],
-            )
-          : Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.add_a_photo,
-                  size: 48,
-                  color: AppColors.textMuted,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Click to choose photo',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Max 50 KB, JPEG or PNG',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textMuted,
-                    fontSize: 11,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: _pickPhoto,
-                  child: const Text('Choose Photo'),
-                ),
-              ],
-            ),
     );
   }
 
@@ -1047,7 +1058,9 @@ class _StudentRegistrationWizardState
   // ─────────────────────────────────────────────────────────────
   Widget _buildStep2Guardian(WizardDraft draft) {
     final notifier = ref.read(wizardDraftProvider.notifier);
-    final siblingsAsync = ref.watch(siblingDiscoveryProvider(_debouncedCnic));
+    final siblingsAsync = ref.watch(
+      siblingDiscoveryProvider(SiblingQuery(_debouncedCnic, _debouncedFName)),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1074,7 +1087,7 @@ class _StudentRegistrationWizardState
                 focusNode: _fNameFocusNode,
                 hint: 'Enter father or legal guardian full name',
                 prefixIcon: Icons.person_outline,
-                onChanged: notifier.setFName,
+                onChanged: _onFNameChanged,
               ),
             ),
             const SizedBox(width: AppSpacing.md),
@@ -1086,6 +1099,7 @@ class _StudentRegistrationWizardState
                 hint: 'XXXXX-XXXXXXX-X',
                 prefixIcon: Icons.badge_outlined,
                 monospace: true,
+                inputFormatters: const [CnicInputFormatter()],
                 onChanged: _onCnicChanged,
               ),
             ),
@@ -1276,8 +1290,8 @@ class _StudentRegistrationWizardState
               if (siblings.isNotEmpty)
                 TextButton.icon(
                   icon: const Icon(Icons.link, size: 14),
-                  label: const Text('Copy Family Address'),
-                  onPressed: () => _copySiblingAddress(siblings.first),
+                  label: const Text('Copy Family Addresses & Contacts'),
+                  onPressed: () => _copySiblingFamilyInfo(siblings),
                 ),
             ],
           ),
@@ -1318,6 +1332,7 @@ class _StudentRegistrationWizardState
                 hint: '0300-1234567',
                 prefixIcon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
+                inputFormatters: const [MobileInputFormatter()],
                 onChanged: notifier.setMobile1,
               ),
             ),
@@ -1330,6 +1345,7 @@ class _StudentRegistrationWizardState
                 hint: '0321-7654321',
                 prefixIcon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
+                inputFormatters: const [MobileInputFormatter()],
                 onChanged: notifier.setMobile2,
               ),
             ),
@@ -1355,6 +1371,7 @@ class _StudentRegistrationWizardState
                 controller: _emerContMobileController,
                 hint: '0345-7654321',
                 keyboardType: TextInputType.phone,
+                inputFormatters: const [MobileInputFormatter()],
                 onChanged: notifier.setEmerContMobile,
               ),
             ),
@@ -1877,6 +1894,7 @@ class _StudentRegistrationWizardState
     bool monospace = false,
     TextInputType keyboardType = TextInputType.text,
     int maxLines = 1,
+    List<TextInputFormatter>? inputFormatters,
     required ValueChanged<String> onChanged,
   }) {
     return Column(
@@ -1907,6 +1925,7 @@ class _StudentRegistrationWizardState
           focusNode: focusNode,
           keyboardType: keyboardType,
           maxLines: maxLines,
+          inputFormatters: inputFormatters,
           style: monospace ? AppTypography.monospace : AppTypography.body,
           decoration: InputDecoration(
             hintText: hint,

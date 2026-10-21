@@ -1,11 +1,8 @@
-import 'dart:io';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import '../../repositories/photo_repository.dart';
 import '../db/database.dart';
 
 /// Data draft holding all in-progress student admission form state.
@@ -37,6 +34,51 @@ class WizardDraft {
   String? emerContMobile;
   String? pAddress;
   String? tAddress;
+
+  // Aliases for spec adherence
+  String? get permanentAddress => pAddress;
+  set permanentAddress(String? val) => pAddress = val;
+  String? get presentAddress => tAddress;
+  set presentAddress(String? val) => tAddress = val;
+  String? get fatherOccupation => occupation;
+  set fatherOccupation(String? val) => occupation = val;
+
+  /// Copies family addresses and contacts from sibling, prioritizing highest Stu_RegID.
+  /// Only populates empty/whitespace fields; does not overwrite existing user input.
+  void copyFamilyFromSibling(SiblingInfo sibling) {
+    if (pAddress == null || pAddress!.trim().isEmpty) {
+      if (sibling.pAddress != null && sibling.pAddress!.trim().isNotEmpty) {
+        pAddress = sibling.pAddress;
+      }
+    }
+    if (tAddress == null || tAddress!.trim().isEmpty) {
+      if (sibling.tAddress != null && sibling.tAddress!.trim().isNotEmpty) {
+        tAddress = sibling.tAddress;
+      }
+    }
+    if (occupation == null || occupation!.trim().isEmpty) {
+      if (sibling.occupation != null && sibling.occupation!.trim().isNotEmpty) {
+        occupation = sibling.occupation;
+      }
+    }
+    if (mobile1.trim().isEmpty) {
+      if (sibling.mobile1 != null && sibling.mobile1!.trim().isNotEmpty) {
+        mobile1 = sibling.mobile1!;
+      }
+    }
+    if (emerContName == null || emerContName!.trim().isEmpty) {
+      if (sibling.emerContName != null &&
+          sibling.emerContName!.trim().isNotEmpty) {
+        emerContName = sibling.emerContName;
+      }
+    }
+    if (emerContMobile == null || emerContMobile!.trim().isEmpty) {
+      if (sibling.emerContMobile != null &&
+          sibling.emerContMobile!.trim().isNotEmpty) {
+        emerContMobile = sibling.emerContMobile;
+      }
+    }
+  }
 
   // Step 4: Academic
   int? admInClass;
@@ -234,6 +276,15 @@ class WizardDraftNotifier extends StateNotifier<WizardDraft> {
       state = state.copyWith(emerContMobile: val);
   void setPAddress(String? val) => state = state.copyWith(pAddress: val);
   void setTAddress(String? val) => state = state.copyWith(tAddress: val);
+  void setPermanentAddress(String val) => setPAddress(val);
+  void setPresentAddress(String val) => setTAddress(val);
+  void setFatherOccupation(String? val) => setOccupation(val);
+
+  void copyFamilyFromSibling(SiblingInfo sibling) {
+    final updated = state.copyWith();
+    updated.copyFamilyFromSibling(sibling);
+    state = updated;
+  }
 
   void setAdmInClass(int? val) =>
       state = state.copyWith(admInClass: val, admClass: val);
@@ -270,6 +321,8 @@ class SiblingInfo {
   final String? tAddress;
   final String? emerContName;
   final String? emerContMobile;
+  final String? occupation;
+  final String? mobile1;
 
   const SiblingInfo({
     required this.stuRegId,
@@ -284,6 +337,8 @@ class SiblingInfo {
     this.tAddress,
     this.emerContName,
     this.emerContMobile,
+    this.occupation,
+    this.mobile1,
   });
 
   String get fullName => '$nameFirst ${nameLast ?? ''}'.trim();
@@ -298,15 +353,81 @@ class SiblingInfo {
   }
 }
 
-/// Discovers siblings under a Father CNIC if exactly 15 chars.
-final siblingDiscoveryProvider =
-    FutureProvider.family<List<SiblingInfo>, String>((ref, cnic) async {
-      final trimmed = cnic.trim();
-      if (trimmed.length != 15) return [];
+/// Query parameters for discovering siblings by Father CNIC or Father Name.
+class SiblingQuery {
+  final String cnicNo;
+  final String fName;
 
+  const SiblingQuery([this.cnicNo = '', this.fName = '']);
+
+  const SiblingQuery.cnic(String cnic) : cnicNo = cnic, fName = '';
+
+  const SiblingQuery.fatherName(String fatherName)
+    : cnicNo = '',
+      fName = fatherName;
+
+  factory SiblingQuery.query({
+    String cnicNo = '',
+    String? cnic,
+    String? fatherName,
+    String fName = '',
+  }) {
+    return SiblingQuery(cnic ?? cnicNo, fatherName ?? fName);
+  }
+
+  factory SiblingQuery.from(Object? input) {
+    if (input is SiblingQuery) return input;
+    if (input is String) {
+      final trimmed = input.trim();
+      final digits = trimmed.replaceAll(RegExp(r'\D'), '');
+      if (digits.length >= 8 || (!trimmed.contains(' ') && digits.isNotEmpty)) {
+        return SiblingQuery.cnic(trimmed);
+      }
+      return SiblingQuery.fatherName(trimmed);
+    }
+    return const SiblingQuery();
+  }
+
+  String trim() => cnicNo.isNotEmpty ? cnicNo.trim() : fName.trim();
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SiblingQuery &&
+          runtimeType == other.runtimeType &&
+          cnicNo.trim() == other.cnicNo.trim() &&
+          fName.trim().toLowerCase() == other.fName.trim().toLowerCase();
+
+  @override
+  int get hashCode =>
+      cnicNo.trim().hashCode ^ fName.trim().toLowerCase().hashCode;
+}
+
+/// Discovers siblings under a Father CNIC (min 10 digits or 10-char prefix)
+/// or Father Name fallback (min 5 chars).
+final siblingDiscoveryProvider =
+    FutureProvider.family<List<SiblingInfo>, SiblingQuery>((ref, query) async {
       final db = await DatabaseService.instance.database;
-      final rows = await db.rawQuery(
-        '''
+      return fetchSiblings(db, cnic: query.cnicNo, fatherName: query.fName);
+    });
+
+/// Queries SQLite for siblings matching CNIC or Father Name.
+Future<List<SiblingInfo>> fetchSiblings(
+  Database db, {
+  String? cnic,
+  String? fatherName,
+}) async {
+  final rawCnic = (cnic ?? '').trim();
+  final rawFName = (fatherName ?? '').trim().toLowerCase();
+  final digits = rawCnic.replaceAll(RegExp(r'[^0-9]'), '');
+
+  final canMatchCnic =
+      digits.length >= 10 || (digits.length >= 9 && rawCnic.length >= 10);
+  final canMatchName = rawFName.length >= 5;
+  if (!canMatchCnic && !canMatchName) return const [];
+
+  final query = canMatchCnic
+      ? '''
     SELECT 
       sr.Stu_RegID,
       sr.NameFirst,
@@ -315,41 +436,70 @@ final siblingDiscoveryProvider =
       sr.CNIC_No,
       sr.P_Address,
       sr.T_Address,
+      sr.Occupation,
+      sr.Mobile1,
       sr.EmerContName,
       sr.EmerContMobile,
+      sc.ClassRollNo,
       c.CName as class_name,
-      cs.SecName as section_name,
-      sc.ClassRollNo
+      cs.SecName as section_name
     FROM Stu_Reg sr
-    LEFT JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID
+    LEFT JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID AND sc.Present = 1
     LEFT JOIN Class c ON sc.ClassID = c.ClassID
     LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
-    WHERE sr.CNIC_No = ?
+    WHERE REPLACE(sr.CNIC_No, '-', '') LIKE ? || '%'
     GROUP BY sr.Stu_RegID
     ORDER BY sr.Stu_RegID ASC
-  ''',
-        [trimmed],
-      );
+  '''
+      : '''
+    SELECT 
+      sr.Stu_RegID,
+      sr.NameFirst,
+      sr.NameLast,
+      sr.F_Name,
+      sr.CNIC_No,
+      sr.P_Address,
+      sr.T_Address,
+      sr.Occupation,
+      sr.Mobile1,
+      sr.EmerContName,
+      sr.EmerContMobile,
+      sc.ClassRollNo,
+      c.CName as class_name,
+      cs.SecName as section_name
+    FROM Stu_Reg sr
+    LEFT JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID AND sc.Present = 1
+    LEFT JOIN Class c ON sc.ClassID = c.ClassID
+    LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+    WHERE LOWER(sr.F_Name) = ?
+    GROUP BY sr.Stu_RegID
+    ORDER BY sr.Stu_RegID ASC
+  ''';
 
-      return rows
-          .map(
-            (r) => SiblingInfo(
-              stuRegId: (r['Stu_RegID'] as int?) ?? 0,
-              nameFirst: (r['NameFirst'] as String?) ?? '',
-              nameLast: r['NameLast'] as String?,
-              fName: r['F_Name'] as String?,
-              cnicNo: r['CNIC_No'] as String?,
-              className: r['class_name'] as String?,
-              sectionName: r['section_name'] as String?,
-              classRollNo: r['ClassRollNo'] as int?,
-              pAddress: r['P_Address'] as String?,
-              tAddress: r['T_Address'] as String?,
-              emerContName: r['EmerContName'] as String?,
-              emerContMobile: r['EmerContMobile'] as String?,
-            ),
-          )
-          .toList();
-    });
+  final args = canMatchCnic ? [digits] : [rawFName];
+  final rows = await db.rawQuery(query, args);
+
+  return rows
+      .map(
+        (r) => SiblingInfo(
+          stuRegId: (r['Stu_RegID'] as int?) ?? 0,
+          nameFirst: (r['NameFirst'] as String?) ?? '',
+          nameLast: r['NameLast'] as String?,
+          fName: r['F_Name'] as String?,
+          cnicNo: r['CNIC_No'] as String?,
+          className: r['class_name'] as String?,
+          sectionName: r['section_name'] as String?,
+          classRollNo: r['ClassRollNo'] as int?,
+          pAddress: r['P_Address'] as String?,
+          tAddress: r['T_Address'] as String?,
+          emerContName: r['EmerContName'] as String?,
+          emerContMobile: r['EmerContMobile'] as String?,
+          occupation: r['Occupation'] as String?,
+          mobile1: r['Mobile1'] as String?,
+        ),
+      )
+      .toList();
+}
 
 /// Queries fee parameters for a given ClassID in the current session.
 final feePreviewProvider =
@@ -403,27 +553,10 @@ Future<int> submitStudentAdmission(
     // 3. Handle photo copy if photoPath is provided
     String? finalPhotoPath;
     if (draft.photoPath != null && draft.photoPath!.isNotEmpty) {
-      try {
-        final home = Platform.environment['HOME'] ?? '';
-        final userProfile = Platform.environment['USERPROFILE'] ?? '';
-        final baseDir = home.isNotEmpty ? home : userProfile;
-        if (baseDir.isNotEmpty) {
-          final photosDir = Directory(
-            p.join(baseDir, 'Documents', 'Ailyans', 'photos'),
-          );
-          if (!await photosDir.exists()) {
-            await photosDir.create(recursive: true);
-          }
-          final destPath = p.join(photosDir.path, '$nextStuRegId.jpg');
-          final sourceFile = File(draft.photoPath!);
-          if (await sourceFile.exists()) {
-            await sourceFile.copy(destPath);
-            finalPhotoPath = destPath;
-          }
-        }
-      } catch (e) {
-        debugPrint('Warning: photo copy failed: $e');
-      }
+      finalPhotoPath = await PhotoRepository().copyForStudent(
+        nextStuRegId,
+        draft.photoPath!,
+      );
     }
 
     // 4. Format ISO dates

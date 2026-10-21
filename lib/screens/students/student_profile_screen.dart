@@ -9,7 +9,9 @@ import 'package:intl/intl.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_profile_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/photo_picker.dart';
 import '../../models/student.dart';
+import '../../repositories/photo_repository.dart';
 
 /// Comprehensive 360-degree Student Profile Workstation.
 /// Hosted within [AppShell] at route `/students/:id`.
@@ -533,7 +535,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // 96px Avatar / Photo
-          _buildAvatar(student),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _handlePhotoTap(student),
+            child: _buildAvatar(student),
+          ),
           const SizedBox(width: AppSpacing.lg),
 
           // Core Info Column
@@ -765,11 +771,40 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     );
   }
 
+  Future<void> _handlePhotoTap(Student student) async {
+    final source = await pickPhotoWithValidation(context);
+    if (source == null) return;
+    final repo = PhotoRepository();
+    final newPath = await repo.copyForStudent(student.stuRegId, source);
+    if (newPath == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to save photo')));
+      }
+      return;
+    }
+    try {
+      await saveStudentProfile(student.copyWith(photoPath: newPath));
+      if (!mounted) return;
+      ref.invalidate(studentProfileProvider(student.stuRegId));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Photo updated')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update photo: $e')));
+      }
+    }
+  }
+
   Widget _buildAvatar(Student student) {
+    Widget avatar;
     if (student.photoPath != null && student.photoPath!.isNotEmpty) {
       final file = File(student.photoPath!);
       if (file.existsSync()) {
-        return ClipRRect(
+        avatar = ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.md),
           child: Image.file(
             file,
@@ -779,9 +814,13 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             errorBuilder: (_, __, ___) => _buildInitialsAvatar(student),
           ),
         );
+      } else {
+        avatar = _buildInitialsAvatar(student);
       }
+    } else {
+      avatar = _buildInitialsAvatar(student);
     }
-    return _buildInitialsAvatar(student);
+    return Tooltip(message: 'Click to change photo', child: avatar);
   }
 
   Widget _buildInitialsAvatar(Student student) {
