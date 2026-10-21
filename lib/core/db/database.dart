@@ -27,6 +27,12 @@ class DatabaseService {
     return _database!;
   }
 
+  /// Sets an explicit database instance for testing.
+  @visibleForTesting
+  void setDatabase(Database? db) {
+    _database = db;
+  }
+
   Future<Database> _initDatabase() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
