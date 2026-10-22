@@ -672,63 +672,82 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     return summary;
   }
 
+  /// Apply late fine to cohort vouchers (cmdSetFine VA 0x005f2400).
+  Future<int> applyLateFineToCohort({
+    required String billingMonth,
+    required int feeParamId,
+    required int fineAmount,
+  }) async {
+    final db = await DatabaseService.instance.database;
+    // Find unpaid vouchers for the billing month
+    final vouchers = await db.rawQuery(
+      "SELECT VoucherMasID FROM VoucharMas WHERE ForMonth = ? AND IsPaid = 'N'",
+      [billingMonth],
+    );
+    if (vouchers.isEmpty) return 0;
+
+    int count = 0;
+    await db.transaction((txn) async {
+      for (final v in vouchers) {
+        final id = v['VoucherMasID'] as String;
+        // Delete existing late-fine line item, then insert new one
+        await txn.rawDelete(
+          'DELETE FROM VoucharDet WHERE VoucharMasID = ? AND feeParameterID = ?',
+          [id, feeParamId],
+        );
+        final maxDetRows = await txn.rawQuery(
+          'SELECT COALESCE(MAX(VoucharDetID), 0) + 1 AS nextId FROM VoucharDet',
+        );
+        final nextDetId = ((maxDetRows.first['nextId'] as num?)?.toInt()) ?? 1;
+        await txn.insert('VoucharDet', {
+          'VoucharDetID': nextDetId,
+          'VoucharMasID': id,
+          'feeParameterID': feeParamId,
+          'Amount': fineAmount,
+          'Discount': 0,
+        });
+        // Recompute SubTotal from detail rows
+        await txn.rawUpdate(
+          'UPDATE VoucharMas SET SubTotal = (SELECT SUM(Amount) FROM VoucharDet WHERE VoucharMasID = ?) WHERE VoucherMasID = ?',
+          [id, id],
+        );
+        count++;
+      }
+    });
+    return count;
+  }
+
+  /// Sync due date for cohort vouchers (cmdSetDueDteForAll VA 0x005eec00).
+  Future<int> syncDueDateForCohort({
+    required String billingMonth,
+    required DateTime newDueDate,
+  }) async {
+    final db = await DatabaseService.instance.database;
+    final formatted = DateFormat('yyyy-MM-dd').format(newDueDate);
+    final count = await db.rawUpdate(
+      "UPDATE VoucharMas SET DueDate = ? WHERE ForMonth = ? AND IsPaid = 'N'",
+      [formatted, billingMonth],
+    );
+    return count;
+  }
+
   /// Batch update due dates for the month (Section S17 VA 0x005eec00).
   Future<int> batchUpdateDueDate(DateTime newDueDate) async {
     final filters = ref.read(voucherGenFiltersProvider);
-    final db = await DatabaseService.instance.database;
-    final formatted = DateFormat('yyyy-MM-dd').format(newDueDate);
-
-    final updated = await db.rawUpdate(
-      "UPDATE VoucharMas SET DueDate = ? WHERE ForMonth = ? AND IsPaid = 'N'",
-      [formatted, filters.billingMonth],
+    return syncDueDateForCohort(
+      billingMonth: filters.billingMonth,
+      newDueDate: newDueDate,
     );
-
-    ref.invalidate(voucherGenPreviewProvider);
-    return updated;
   }
 
   /// Batch late fee injection (Section S17 VA 0x005f2400).
   Future<int> batchApplyLateFine(int fineAmount) async {
     final filters = ref.read(voucherGenFiltersProvider);
-    final db = await DatabaseService.instance.database;
-
-    final rows = await db.rawQuery(
-      "SELECT VoucherMasID FROM VoucharMas WHERE ForMonth = ? AND IsPaid = 'N'",
-      [filters.billingMonth],
+    return applyLateFineToCohort(
+      billingMonth: filters.billingMonth,
+      feeParamId: 8,
+      fineAmount: fineAmount,
     );
-
-    int count = 0;
-    for (final r in rows) {
-      final voucherId = r['VoucherMasID'] as String;
-      // Delete existing fee head 4/8 fine
-      await db.delete(
-        'VoucharDet',
-        where: 'feeParameterID = 8 AND VoucharMasID = ?',
-        whereArgs: [voucherId],
-      );
-
-      final nextDetRow = await db.rawQuery(
-        'SELECT COALESCE(MAX(VoucharDetID), 0) + 1 AS nextId FROM VoucharDet',
-      );
-      final nextDetId = (nextDetRow.first['nextId'] as num).toInt();
-
-      await db.insert('VoucharDet', {
-        'VoucharDetID': nextDetId,
-        'VoucharMasID': voucherId,
-        'feeParameterID': 8, // Late Fee
-        'Amount': fineAmount.toDouble(),
-        'Discount': 0.0,
-      });
-
-      await db.rawUpdate(
-        'UPDATE VoucharMas SET SubTotal = (SELECT SUM(Amount) FROM VoucharDet WHERE VoucherMasID = ?) WHERE VoucherMasID = ?',
-        [voucherId, voucherId],
-      );
-      count++;
-    }
-
-    ref.invalidate(voucherGenPreviewProvider);
-    return count;
   }
 }
 

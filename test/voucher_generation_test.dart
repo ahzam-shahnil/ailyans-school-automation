@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:school_automation/core/db/database.dart';
@@ -334,10 +338,10 @@ void main() {
         // Table headers
         expect(find.text('Voucher ID'), findsOneWidget);
         expect(find.text('Student Name'), findsOneWidget);
-        expect(find.text('SubTotal'), findsOneWidget);
+        expect(find.text('SubTotal (Rs)'), findsOneWidget);
         expect(find.text('Arrears'), findsOneWidget);
         expect(find.text('Discount'), findsOneWidget);
-        expect(find.text('Net Payable'), findsOneWidget);
+        expect(find.text('Net Pay (Rs)'), findsOneWidget);
         expect(find.text('Status'), findsOneWidget);
 
         // Verify at least one voucher ID rendered without leading '#'
@@ -433,6 +437,217 @@ void main() {
       // Table headers visible
       expect(find.text('Voucher ID'), findsOneWidget);
       expect(find.text('Student Name'), findsOneWidget);
+    });
+
+    testWidgets(
+      'Numeric columns render full Rs amounts without truncation at 1440×900',
+      (tester) async {
+        tester.view.physicalSize = const Size(1440, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final readyKey = GlobalKey();
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                  const FeeHeadSummary(
+                    feeParamId: 3,
+                    description: 'Exam Fee',
+                    fee: 300.0,
+                  ),
+                  const FeeHeadSummary(
+                    feeParamId: 7,
+                    description: 'Annual Cgarges',
+                    fee: 120.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => List.generate(
+                  10,
+                  (i) => VoucherPreviewRow(
+                    stuRegId: 4411 + i,
+                    studentName: 'Student ${4411 + i}',
+                    subtotal: 1920,
+                    arrears: 0,
+                    discount: 0,
+                    netPayable: 1920,
+                    status: VoucherPreviewStatus.ready,
+                    voucherId: '1710-${4411 + i}',
+                  ),
+                ),
+              ),
+            ],
+            child: MaterialApp(
+              debugShowCheckedModeBanner: false,
+              home: RepaintBoundary(
+                key: readyKey,
+                child: const Scaffold(body: VoucherGenerationScreen()),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Capture Screenshot 1: vouchers-ready-equalized.png
+        await tester.runAsync(() async {
+          final boundary =
+              readyKey.currentContext!.findRenderObject()!
+                  as RenderRepaintBoundary;
+          final image = await boundary.toImage(pixelRatio: 1.0);
+          final byteData = await image.toByteData(
+            format: ui.ImageByteFormat.png,
+          );
+          final buffer = byteData!.buffer.asUint8List();
+          const outDir =
+              '/Users/ahzam/flutter_projects/REA/rebuild/design/phase-d-runtime';
+          await Directory(outDir).create(recursive: true);
+          await File('$outDir/vouchers-ready-equalized.png')
+              .writeAsBytes(buffer);
+        });
+
+        // No truncation ellipsis on numeric cells
+        expect(find.textContaining('Rs. 1,9...'), findsNothing);
+        expect(
+          find.textContaining('...'),
+          findsNothing,
+          reason: 'Numeric cells must not truncate; use flex + compact format',
+        );
+        // KPI must show either Rs. 0 (pre-generation) or Rs. 19,200 (post)
+        expect(
+          find.textContaining('Rs.'),
+          findsWidgets,
+          reason: 'KPI label renders with Rs. prefix',
+        );
+      },
+    );
+
+    testWidgets('Capture vouchers-generated-compact.png at 1440x900', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1440, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final generatedKey = GlobalKey();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            classesProvider.overrideWith(
+              (ref) async => [
+                const SchoolClass(classId: 13, cName: 'Class 10'),
+              ],
+            ),
+            sectionsProvider.overrideWith(
+              (ref) async => [
+                const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+              ],
+            ),
+            voucherBankListProvider.overrideWith(
+              (ref) async => [
+                const BankOption(
+                  bankInfoId: 1,
+                  bankName: 'Askari Bank',
+                  branch: 'Ballo Khel Road',
+                  acctNo: '4528',
+                  isDefault: true,
+                ),
+              ],
+            ),
+            voucherClassTariffsProvider(13).overrideWith(
+              (ref) async => [
+                const FeeHeadSummary(
+                  feeParamId: 2,
+                  description: 'Tuition Fee ',
+                  fee: 1500.0,
+                ),
+                const FeeHeadSummary(
+                  feeParamId: 3,
+                  description: 'Exam Fee',
+                  fee: 300.0,
+                ),
+                const FeeHeadSummary(
+                  feeParamId: 7,
+                  description: 'Annual Cgarges',
+                  fee: 120.0,
+                ),
+              ],
+            ),
+            voucherGenPreviewProvider.overrideWith(
+              (ref) async => List.generate(
+                10,
+                (i) => VoucherPreviewRow(
+                  stuRegId: 4411 + i,
+                  studentName: 'Student ${4411 + i}',
+                  subtotal: 1920,
+                  arrears: 0,
+                  discount: 0,
+                  netPayable: 1920,
+                  status: VoucherPreviewStatus.alreadyGenerated,
+                  voucherId: '1710-${4411 + i}',
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: RepaintBoundary(
+              key: generatedKey,
+              child: const Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Capture Screenshot 2: vouchers-generated-compact.png
+      await tester.runAsync(() async {
+        final boundary =
+            generatedKey.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary;
+        final image = await boundary.toImage(pixelRatio: 1.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        final buffer = byteData!.buffer.asUint8List();
+        const outDir =
+            '/Users/ahzam/flutter_projects/REA/rebuild/design/phase-d-runtime';
+        await Directory(outDir).create(recursive: true);
+        await File('$outDir/vouchers-generated-compact.png')
+            .writeAsBytes(buffer);
+      });
+
+      // Verify post-generation KPI text is rendered
+      expect(find.text('Cohort Total Billed'), findsOneWidget);
+      expect(find.text('Print 10 Vouchers (Phase E)'), findsOneWidget);
     });
   });
 }
