@@ -181,7 +181,7 @@ void main() {
       expect(txRows.first['TotalAmount'], 1920);
     });
 
-    test('5. postPayment() with advance credit applied sets PaidAmt = netPayable - advance', () async {
+    test('5. postPayment() with advance credit applied sets PaidAmt = cash + advance (full settlement)', () async {
       // Insert advance deposit row in StuAdv
       await db.insert('StuAdv', {
         'StuAdvID': 1,
@@ -216,7 +216,10 @@ void main() {
         where: "VoucherMasID = '1710-4411'",
       );
       expect(vRows.first['IsPaid'], 'Y');
-      expect(vRows.first['PaidAmt'], 1420);
+      expect(
+        vRows.first['PaidAmt'],
+        1920,
+      ); // Post-fix: cash 1420 + advance 500 = full settlement
 
       // Verify FeeTransaction PaidAmount
       final txRows = await db.query(

@@ -647,7 +647,7 @@ void main() {
 
       // Verify post-generation KPI text is rendered
       expect(find.text('Cohort Total Billed'), findsOneWidget);
-      expect(find.text('Print 10 Vouchers (Phase E)'), findsOneWidget);
+      expect(find.text('Print 10 Vouchers (Ctrl+P)'), findsOneWidget);
     });
   });
 }
