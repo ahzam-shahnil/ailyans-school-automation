@@ -26,6 +26,29 @@ class SchemaMigrations {
       currentVersion = 2;
     }
 
+    // Migration 003: Purge corrupted October 2017 vouchers produced by the
+    // arrears double-counting bug (SubTotals ~47,800–48,700 instead of ~1,920).
+    // Also reverts any prior-month 'O' status set by the buggy run to 'N'.
+    if (currentVersion < 3) {
+      await db.rawDelete('''
+        DELETE FROM VoucharDet WHERE VoucharMasID IN (
+          SELECT VoucherMasID FROM VoucharMas
+          WHERE ForMonth = 'October 2017' AND SubTotal > 5000
+        )
+      ''');
+      await db.rawDelete('''
+        DELETE FROM VoucharMas
+        WHERE ForMonth = 'October 2017' AND SubTotal > 5000
+      ''');
+      // Restore any prior-month rows incorrectly marked 'O' by the buggy run.
+      await db.rawUpdate('''
+        UPDATE VoucharMas SET IsPaid='N'
+        WHERE IsPaid='O' AND ForMonth != 'October 2017'
+      ''');
+      await db.execute('PRAGMA user_version = 3');
+      currentVersion = 3;
+    }
+
     // Ensure app_config table exists for device-local preferences
     await db.execute('''
       CREATE TABLE IF NOT EXISTS app_config (

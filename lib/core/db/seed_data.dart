@@ -1166,4 +1166,51 @@ class DatabaseSeeder {
       }
     });
   }
+
+  /// Seeds Cls_Param_Fee tariff table for batch billing (idempotent).
+  static Future<void> seedFeeTariffsIfEmpty(Database db) async {
+    final tuples = <({String className, int feeParamId, double fee})>[
+      (className: 'Class 10', feeParamId: 2, fee: 1500.0),
+      (className: 'Class 10', feeParamId: 3, fee: 300.0),
+      (className: 'Class 10', feeParamId: 7, fee: 120.0),
+      (className: 'Class 5', feeParamId: 2, fee: 1200.0),
+      (className: 'Class 5', feeParamId: 3, fee: 250.0),
+      (className: 'Class 5', feeParamId: 7, fee: 100.0),
+      (className: 'Class 3', feeParamId: 2, fee: 1000.0),
+      (className: 'Class 3', feeParamId: 3, fee: 200.0),
+      (className: 'Class 3', feeParamId: 7, fee: 80.0),
+    ];
+
+    const feeYr = '2017-2018';
+
+    for (final t in tuples) {
+      final clsRows = await db.rawQuery(
+        'SELECT ClassID FROM Class WHERE CName = ? LIMIT 1',
+        [t.className],
+      );
+      if (clsRows.isEmpty) continue; // class not seeded, skip silently
+      final classId = clsRows.first['ClassID'] as int;
+
+      final existing = await db.rawQuery(
+        'SELECT Cls_Param_Fee_ID FROM Cls_Param_Fee '
+        'WHERE ClassID = ? AND FeeParamID = ? AND FeeYr = ? LIMIT 1',
+        [classId, t.feeParamId, feeYr],
+      );
+      if (existing.isNotEmpty) continue; // idempotent
+
+      final idRows = await db.rawQuery(
+        'SELECT COALESCE(MAX(Cls_Param_Fee_ID), 0) + 1 AS nextId '
+        'FROM Cls_Param_Fee',
+      );
+      final nextId = (idRows.first['nextId'] as int?) ?? 1;
+
+      await db.insert('Cls_Param_Fee', {
+        'Cls_Param_Fee_ID': nextId,
+        'ClassID': classId,
+        'FeeParamID': t.feeParamId,
+        'FeeYr': feeYr,
+        'Fee': t.fee,
+      });
+    }
+  }
 }

@@ -54,6 +54,7 @@ class DatabaseService {
 
     // Seed initial development data if Users table is empty
     await DatabaseSeeder.seedIfEmpty(db);
+    await DatabaseSeeder.seedFeeTariffsIfEmpty(db);
 
     // Startup log message
     debugPrint('Database opened at: $dbPath');
