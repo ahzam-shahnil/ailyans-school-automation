@@ -3,9 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/db/database.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/voucher_pdf_generator.dart';
+import '../../models/fee_receipt_view.dart';
 import '../../models/voucher_preview_row.dart';
 
 /// Production VoucherGenerationScreen hosted within AppShell.
@@ -33,6 +36,7 @@ class _VoucherGenerationScreenState
   // Layout constants for the preview table.
   static const double _kIdColWidth = 82;
   static const double _kStatusColWidth = 112;
+  static const double _kPrintColWidth = 36;
   static const double _kColGap = 6;
   static const double _kRowHeight = 40;
   static const double _kFieldHeight = 36;
@@ -67,17 +71,71 @@ class _VoucherGenerationScreenState
     }
   }
 
-  void _showPrintDeferredSnackBar([int? count]) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Batch voucher PDF printing ships in Phase E. '
-          'Vouchers 1710-XXXX are committed and viewable via '
-          'Fee Ledger.',
-        ),
-        duration: Duration(seconds: 4),
-      ),
+  Future<void> _openPrintPreview({List<FeeReceiptView>? specific}) async {
+    final receipts = specific ?? await _loadGeneratedVouchers();
+    if (receipts.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No generated vouchers to print')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    await showVoucherPrintPreviewDialog(
+      context,
+      vouchers: receipts,
+      branchName: 'Ailyans Higher Secondary School',
+      branchAddress: 'Muslim Bazar Mianwali',
+      bankName: 'Askari Bank Limited',
+      bankBranch: 'Ballo Khel Road',
+      bankAcctNo: '4528',
     );
+  }
+
+  Future<List<FeeReceiptView>> _loadGeneratedVouchers() async {
+    final filters = ref.read(voucherGenFiltersProvider);
+    final db = await DatabaseService.instance.database;
+    final classIdParam = filters.classId;
+    final rows = await db.rawQuery(
+      '''
+      SELECT vm.*, sr.NameFirst, sr.NameLast, sr.F_Name,
+             c.CName AS class_name, cs.SecName AS section_name,
+             sc.ClassRollNo, sc.SessionYr
+      FROM VoucharMas vm
+      JOIN Stu_Reg sr ON vm.student_class_StuRegId = sr.Stu_RegID
+      LEFT JOIN Student_Class sc
+        ON sr.Stu_RegID = sc.Stu_RegID AND sc.SessionYr = vm.SessionYr
+      LEFT JOIN Class c ON sc.ClassID = c.ClassID
+      LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+      WHERE vm.ForMonth = ?
+        AND (? IS NULL OR vm.ClassID = ?)
+      ORDER BY sc.ClassRollNo ASC
+    ''',
+      [filters.billingMonth, classIdParam, classIdParam],
+    );
+
+    final out = <FeeReceiptView>[];
+    for (final row in rows) {
+      final vid = row['VoucherMasID'] as String;
+      final det = await db.rawQuery(
+        '''
+        SELECT vd.feeParameterID, vd.Amount, vd.Discount,
+               fp.ParamDesciption
+        FROM VoucharDet vd
+        LEFT JOIN FeeParameters fp ON vd.feeParameterID = fp.FeeParamID
+        WHERE vd.VoucharMasID = ?
+        ORDER BY vd.feeParameterID ASC
+      ''',
+        [vid],
+      );
+      out.add(
+        FeeReceiptView.fromFlatMap(
+          Map<String, dynamic>.from(row),
+          lineItems: det.map((m) => Map<String, dynamic>.from(m)).toList(),
+        ),
+      );
+    }
+    return out;
   }
 
   Future<void> _onApplyLateFine() async {
@@ -1193,10 +1251,10 @@ class _VoucherGenerationScreenState
         SizedBox(
           height: h,
           child: ElevatedButton.icon(
-            onPressed: () => _showPrintDeferredSnackBar(generatedCount),
+            onPressed: () => _openPrintPreview(),
             icon: const Icon(Icons.print_outlined, size: 20),
             label: Text(
-              'Print $generatedCount Vouchers (Phase E)',
+              'Print $generatedCount Vouchers (Ctrl+P)',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
@@ -1489,19 +1547,21 @@ class _VoucherGenerationScreenState
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               child: Row(
                 children: [
-                  _headerCell('VOUCHER ID', width: _kIdColWidth),
+                  _headerCell('Voucher ID', width: _kIdColWidth),
                   const SizedBox(width: _kColGap),
-                  _headerCell('STUDENT NAME', flex: 30),
+                  _headerCell('Student Name', flex: 30),
                   const SizedBox(width: _kColGap),
-                  _headerCell('SUBTOTAL (RS)', flex: 16, right: true),
+                  _headerCell('SubTotal (Rs)', flex: 16, right: true),
                   const SizedBox(width: _kColGap),
-                  _headerCell('ARREARS', flex: 13, right: true),
+                  _headerCell('Arrears', flex: 13, right: true),
                   const SizedBox(width: _kColGap),
-                  _headerCell('DISCOUNT', flex: 13, right: true),
+                  _headerCell('Discount', flex: 13, right: true),
                   const SizedBox(width: _kColGap),
-                  _headerCell('NET PAY (RS)', flex: 18, right: true),
+                  _headerCell('Net Pay (Rs)', flex: 18, right: true),
                   const SizedBox(width: _kColGap),
-                  _headerCell('STATUS', width: _kStatusColWidth, center: true),
+                  _headerCell('Status', width: _kStatusColWidth, center: true),
+                  const SizedBox(width: _kColGap),
+                  const SizedBox(width: _kPrintColWidth),
                 ],
               ),
             ),
@@ -1650,6 +1710,25 @@ class _VoucherGenerationScreenState
           SizedBox(
             width: _kStatusColWidth,
             child: Center(child: _buildStatusBadge(row.status)),
+          ),
+          const SizedBox(width: _kColGap),
+          SizedBox(
+            width: _kPrintColWidth,
+            child: IconButton(
+              icon: const Icon(Icons.print_outlined, size: 16),
+              color: AppColors.textMuted,
+              tooltip: 'Print this voucher',
+              padding: EdgeInsets.zero,
+              onPressed: () async {
+                final all = await _loadGeneratedVouchers();
+                final match = all
+                    .where((r) => r.stuRegId == row.stuRegId)
+                    .toList();
+                if (match.isNotEmpty && mounted) {
+                  await _openPrintPreview(specific: match);
+                }
+              },
+            ),
           ),
         ],
       ),
@@ -1973,8 +2052,7 @@ class _VoucherGenerationScreenState
                       foregroundColor: AppColors.textPrimary,
                       side: const BorderSide(color: AppColors.borderDefault),
                     ),
-                    onPressed: () =>
-                        _showPrintDeferredSnackBar(summary.generatedCount),
+                    onPressed: () => _openPrintPreview(),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   FilledButton(

@@ -49,6 +49,14 @@ class SchemaMigrations {
       currentVersion = 3;
     }
 
+    // Migration 004: Ensure VoucharMas has PaidAmt, PaidDate, BankID columns
+    // for payment settlement tracking.
+    if (currentVersion < 4) {
+      await applyMigration004(db);
+      await db.execute('PRAGMA user_version = 4');
+      currentVersion = 4;
+    }
+
     // Ensure app_config table exists for device-local preferences
     await db.execute('''
       CREATE TABLE IF NOT EXISTS app_config (
@@ -78,6 +86,23 @@ class SchemaMigrations {
       await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_users_active ON Users(IsActive) WHERE IsActive = 1',
       );
+    }
+  }
+
+  /// Migration M4: Adds `PaidAmt`, `PaidDate`, and `BankID` to `VoucharMas`.
+  static Future<void> applyMigration004(Database db) async {
+    final tableInfo = await db.rawQuery('PRAGMA table_info(VoucharMas)');
+    final cols = tableInfo.map((col) => col['name'] as String).toSet();
+    if (!cols.contains('PaidAmt')) {
+      await db.execute(
+        'ALTER TABLE VoucharMas ADD COLUMN PaidAmt INTEGER DEFAULT 0',
+      );
+    }
+    if (!cols.contains('PaidDate')) {
+      await db.execute('ALTER TABLE VoucharMas ADD COLUMN PaidDate TEXT');
+    }
+    if (!cols.contains('BankID')) {
+      await db.execute('ALTER TABLE VoucharMas ADD COLUMN BankID INTEGER');
     }
   }
 
