@@ -211,7 +211,16 @@ void main() {
         expect(find.text('View Fee Analytics →'), findsOneWidget);
         expect(find.text('Class Rosters →'), findsOneWidget);
 
-        // 6. Test Quick Action Navigation: Click "+ New Admission (Ctrl+N)"
+        // 6. Verify PENDING VOUCHERS card has InkWell with active onTap
+        final pendingVouchersInkWell = find.ancestor(
+          of: find.text('PENDING VOUCHERS'),
+          matching: find.byType(InkWell),
+        );
+        expect(pendingVouchersInkWell, findsOneWidget);
+        final inkWellWidget = tester.widget<InkWell>(pendingVouchersInkWell);
+        expect(inkWellWidget.onTap, isNotNull);
+
+        // 7. Test Quick Action Navigation: Click "+ New Admission (Ctrl+N)"
         await tester.tap(find.text('+ New Admission (Ctrl+N)'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));

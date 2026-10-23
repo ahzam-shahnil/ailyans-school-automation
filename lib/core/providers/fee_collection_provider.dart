@@ -9,6 +9,7 @@ import '../../core/utils/fee_head_display.dart';
 import '../utils/receipt_pdf_generator.dart'
     as rcp
     show FeeReceiptPrintData, FeeReceiptLineItem;
+import '../utils/defaulter_list_pdf_generator.dart';
 
 /// Bank record retrieved from BankInfo table.
 class BankRow {
@@ -738,6 +739,150 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     } catch (e) {
       return RevokeResult.error;
     }
+  }
+
+  /// Builds the fee defaulters list grouped by class & section with executive summary.
+  /// Used by FeeCollectionScreen to render the institutional defaulter roster PDF.
+  Future<
+    ({List<DefaulterClassGroup> groups, DefaulterListFilterSummary summary})
+  >
+  buildDefaulterList({String? classFilter, String? monthFilter}) async {
+    final db = await DatabaseService.instance.database;
+
+    final whereConditions = <String>[
+      "vm.IsPaid IN ('N', 'O')",
+      "(vm.SubTotal - COALESCE(vm.Discount, 0) - COALESCE(vm.PaidAmt, 0)) > 0",
+    ];
+    final whereArgs = <dynamic>[];
+
+    if (classFilter != null &&
+        classFilter.trim().isNotEmpty &&
+        classFilter != 'All Classes') {
+      whereConditions.add('c.CName = ?');
+      whereArgs.add(classFilter.trim());
+    }
+
+    if (monthFilter != null &&
+        monthFilter.trim().isNotEmpty &&
+        monthFilter != 'All Months') {
+      whereConditions.add('vm.ForMonth = ?');
+      whereArgs.add(monthFilter.trim());
+    }
+
+    final whereClause = whereConditions.join(' AND ');
+
+    final rows = await db.rawQuery('''
+      SELECT vm.VoucherMasID, vm.Student_Class_StuRegID,
+             sr.NameFirst, sr.NameLast, sr.F_Name, sr.Mobile1,
+             c.CName AS class_name, cs.SecName AS section_name,
+             sc.ClassRollNo, vm.ForMonth, vm.SubTotal, vm.Discount,
+             vm.PaidAmt, vm.IsPaid, vm.DueDate, vm.SessionYr
+      FROM VoucharMas vm
+      JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
+      LEFT JOIN Student_Class sc
+        ON sr.Stu_RegID = sc.Stu_RegID AND sc.SessionYr = vm.SessionYr
+      LEFT JOIN Class c ON sc.ClassID = c.ClassID
+      LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+      WHERE $whereClause
+      ORDER BY c.ClassID ASC, cs.ClassSecID ASC, sc.ClassRollNo ASC, vm.VoucherMasID DESC
+    ''', whereArgs);
+
+    final now = DateTime.now();
+    final allRows = <DefaulterListRow>[];
+
+    for (final r in rows) {
+      final first = (r['NameFirst'] as String?)?.trim() ?? '';
+      final last = (r['NameLast'] as String?)?.trim() ?? '';
+      final studentName = [first, last].where((s) => s.isNotEmpty).join(' ');
+      final subtotal = (r['SubTotal'] as num?)?.toInt() ?? 0;
+      final discount = (r['Discount'] as num?)?.toInt() ?? 0;
+      final paidAmt = (r['PaidAmt'] as num?)?.toInt() ?? 0;
+      final netPayable = subtotal - discount - paidAmt;
+
+      DateTime? dueDate;
+      final dueDateRaw = r['DueDate'];
+      if (dueDateRaw != null) {
+        dueDate = DateTime.tryParse(dueDateRaw.toString());
+      }
+
+      int daysOverdue = 0;
+      if (dueDate != null && now.isAfter(dueDate)) {
+        daysOverdue = now.difference(dueDate).inDays;
+      }
+
+      allRows.add(
+        DefaulterListRow(
+          voucherMasId: (r['VoucherMasID'] as String?) ?? '',
+          stuRegId: (r['Student_Class_StuRegID'] as num?)?.toInt() ?? 0,
+          studentName: studentName.isNotEmpty ? studentName : 'Unknown Student',
+          fatherName: (r['F_Name'] as String?)?.trim(),
+          mobile1: (r['Mobile1'] as String?)?.trim(),
+          className: (r['class_name'] as String?)?.trim() ?? 'Unknown Class',
+          sectionName: (r['section_name'] as String?)?.trim() ?? '',
+          rollNo: (r['ClassRollNo'] as num?)?.toInt(),
+          forMonth: (r['ForMonth'] as String?)?.trim() ?? '',
+          subtotal: subtotal,
+          discount: discount,
+          paidAmt: paidAmt,
+          netPayable: netPayable,
+          isPaid: (r['IsPaid'] as String?)?.trim() ?? 'N',
+          dueDate: dueDate,
+          daysOverdue: daysOverdue,
+        ),
+      );
+    }
+
+    // Group rows by class & section
+    final groupMap = <String, List<DefaulterListRow>>{};
+    for (final r in allRows) {
+      final label = r.sectionName.isNotEmpty
+          ? '${r.className} - Section ${r.sectionName}'
+          : r.className;
+      groupMap.putIfAbsent(label, () => []).add(r);
+    }
+
+    final groups = <DefaulterClassGroup>[];
+    for (final entry in groupMap.entries) {
+      final groupRows = entry.value;
+      final groupSubtotal = groupRows.fold<int>(
+        0,
+        (sum, r) => sum + r.netPayable,
+      );
+      groups.add(
+        DefaulterClassGroup(
+          classLabel: entry.key,
+          rows: groupRows,
+          subtotal: groupSubtotal,
+        ),
+      );
+    }
+
+    final sessionYr = rows.isNotEmpty
+        ? (rows.first['SessionYr'] as String?) ?? '2017-2018'
+        : '2017-2018';
+    final reportMonth = (monthFilter == null || monthFilter == 'All Months')
+        ? 'All Billing Months'
+        : monthFilter;
+    final totalDefaulters = allRows.length;
+    final uniqueStudents = allRows.map((r) => r.stuRegId).toSet().length;
+    final totalOutstanding = allRows.fold<int>(
+      0,
+      (sum, r) => sum + r.netPayable,
+    );
+
+    final summary = DefaulterListFilterSummary(
+      sessionYr: sessionYr,
+      classFilter: (classFilter == null || classFilter == 'All Classes')
+          ? null
+          : classFilter,
+      totalDefaulters: totalDefaulters,
+      uniqueStudents: uniqueStudents,
+      totalOutstanding: totalOutstanding,
+      reportMonth: reportMonth,
+      generatedAt: now,
+    );
+
+    return (groups: groups, summary: summary);
   }
 }
 

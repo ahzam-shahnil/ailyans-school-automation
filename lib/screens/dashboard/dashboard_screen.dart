@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/providers/fee_collection_provider.dart';
+import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
 /// Central Executive Dashboard Cockpit for School Administration.
@@ -326,6 +328,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                             icon: Icons.receipt_long_outlined,
                             iconColor: AppColors.chartRose,
                             isLoading: isLoading,
+                            onTap: () async {
+                              final buildData = await ref
+                                  .read(feeCollectionProvider.notifier)
+                                  .buildDefaulterList();
+                              if (!context.mounted) return;
+                              final meta = ref
+                                  .read(shellMetadataProvider)
+                                  .value;
+                              await showDefaulterListPrintPreviewDialog(
+                                context,
+                                initialGroups: buildData.groups,
+                                initialSummary: buildData.summary,
+                                branchName: meta?.branchName ?? "Ailyans's Higher Secondary School Mianwali",
+                                branchAddress:
+                                    meta?.branchAddress ??
+                                    'Muslim Bazar Mianwali',
+                                branchPhone: meta?.branchPhone,
+                                branchPrincipal: meta?.branchPrincipal,
+                              );
+                            },
                             mainWidget: Wrap(
                               crossAxisAlignment: WrapCrossAlignment.center,
                               spacing: AppSpacing.xs,
@@ -585,57 +607,65 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     required bool isLoading,
     required Widget mainWidget,
     required String footerText,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x06000000),
-            blurRadius: 4,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                  ),
-                ),
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.borderDefault),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x06000000),
+                blurRadius: 4,
+                offset: Offset(0, 1),
               ),
-              const SizedBox(width: AppSpacing.xs),
-              Icon(icon, size: 20, color: iconColor),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          if (isLoading)
-            _buildSkeletonBox(width: 120, height: 38)
-          else
-            mainWidget,
-          const SizedBox(height: AppSpacing.xs),
-          if (isLoading)
-            _buildSkeletonBox(width: 150, height: 14)
-          else
-            Text(
-              footerText,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textMuted,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Icon(icon, size: 20, color: iconColor),
+                ],
               ),
-            ),
-        ],
+              const SizedBox(height: AppSpacing.sm),
+              if (isLoading)
+                _buildSkeletonBox(width: 120, height: 38)
+              else
+                mainWidget,
+              const SizedBox(height: AppSpacing.xs),
+              if (isLoading)
+                _buildSkeletonBox(width: 150, height: 14)
+              else
+                Text(
+                  footerText,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

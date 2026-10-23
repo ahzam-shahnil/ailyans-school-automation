@@ -9,6 +9,7 @@ import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/receipt_pdf_generator.dart' as rcp;
+import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../models/fee_receipt_view.dart';
 
 /// Production FeeCollectionScreen hosted within AppShell at route `/fees/receipts`.
@@ -364,6 +365,49 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               ),
             ),
             child: const Text('Load All Paid', style: TextStyle(fontSize: 13)),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final notifier = ref.read(feeCollectionProvider.notifier);
+              final buildData = await notifier.buildDefaulterList();
+              final meta = ref.read(shellMetadataProvider).value;
+              final branchName =
+                  meta?.branchName ??
+                  "Ailyans's Higher Secondary School Mianwali";
+              final branchAddress =
+                  meta?.branchAddress ?? 'Muslim Bazar Mianwali';
+              final branchPhone = meta?.branchPhone ?? '03334449993';
+              final branchPrincipal = meta?.branchPrincipal ?? 'Nasir ali';
+
+              if (!mounted) return;
+              await showDefaulterListPrintPreviewDialog(
+                context,
+                initialGroups: buildData.groups,
+                initialSummary: buildData.summary,
+                branchName: branchName,
+                branchAddress: branchAddress,
+                branchPhone: branchPhone,
+                branchPrincipal: branchPrincipal,
+              );
+            },
+            icon: const Icon(
+              Icons.assignment_late_outlined,
+              size: 16,
+              color: AppColors.statusErrorText,
+            ),
+            label: const Text(
+              'Defaulter Report',
+              style: TextStyle(fontSize: 13, color: AppColors.statusErrorText),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(0, 40),
+              side: const BorderSide(color: AppColors.statusErrorBorder),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
           ElevatedButton.icon(
