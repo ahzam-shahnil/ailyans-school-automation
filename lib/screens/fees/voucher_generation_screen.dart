@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/fee_head_display.dart';
 import '../../core/utils/voucher_pdf_generator.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../models/voucher_preview_row.dart';
@@ -72,7 +74,16 @@ class _VoucherGenerationScreenState
   }
 
   Future<void> _openPrintPreview({List<FeeReceiptView>? specific}) async {
-    final receipts = specific ?? await _loadGeneratedVouchers();
+    List<FeeReceiptView> receipts;
+    try {
+      receipts = specific ?? await _loadGeneratedVouchers();
+    } catch (e, st) {
+      debugPrint('Print preview load failed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to load vouchers: $e')));
+      return;
+    }
     if (receipts.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -564,6 +575,19 @@ class _VoucherGenerationScreenState
               selected: const {'batch'},
               onSelectionChanged: (_) {},
             ),
+            const SizedBox(width: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: () => context.go('/fees/receipts'),
+              icon: const Icon(Icons.point_of_sale_outlined, size: 16),
+              label: const Text('Collect Fee'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                minimumSize: const Size(0, 32),
+              ),
+            ),
           ],
         ),
       ],
@@ -631,7 +655,7 @@ class _VoucherGenerationScreenState
             'Batch Generation Parameters',
             style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.sm),
 
           // Group 1: Session + Month
           _buildFieldGroup(
@@ -677,7 +701,7 @@ class _VoucherGenerationScreenState
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.sm),
 
           // Group 2: Class + Section
           _buildFieldGroup(
@@ -762,7 +786,7 @@ class _VoucherGenerationScreenState
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.sm),
 
           // Group 3: Issue + Due
           _buildFieldGroup(
@@ -799,7 +823,7 @@ class _VoucherGenerationScreenState
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: AppSpacing.sm),
 
           // Receiving bank: actionable selection with bank icon tile
           _labeledField(
@@ -855,7 +879,7 @@ class _VoucherGenerationScreenState
               error: (_, __) => const Text('Error loading banks'),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
 
           // Late fine pill + secondary Sync button (single compact row)
           Row(
@@ -894,7 +918,7 @@ class _VoucherGenerationScreenState
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.sm),
 
           // Fee heads fill the remaining space; never overflow (clips + scrolls
           // internally only if a class has an unusually large number of heads).
@@ -904,7 +928,7 @@ class _VoucherGenerationScreenState
               child: _buildFeeHeadsCompact(tariffsAsync, filters),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.md),
 
           _buildBottomAction(
             readyCount,
@@ -940,7 +964,7 @@ class _VoucherGenerationScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
-      children: [_buildFieldLabel(label), const SizedBox(height: 4), child],
+      children: [_buildFieldLabel(label), const SizedBox(height: 6), child],
     );
   }
 
@@ -1063,35 +1087,47 @@ class _VoucherGenerationScreenState
         border: Border.all(color: AppColors.borderDefault),
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.xs + 2),
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                const Icon(
-                  Icons.receipt_long_outlined,
-                  size: 14,
-                  color: AppColors.textMuted,
-                ),
-                const SizedBox(width: 6),
+                const Icon(Icons.tune, size: 12, color: AppColors.textMuted),
+                const SizedBox(width: AppSpacing.xs),
                 Text(
                   'FEE HEADS',
                   style: AppTypography.bodySmall.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                   ),
                 ),
                 const Spacer(),
-                const Tooltip(
-                  message: 'Arrears roll into Head #4. Full-waiver = Rs. 0 net audit voucher.',
-                  child: Icon(
-                    Icons.info_outline,
-                    size: 14,
-                    color: AppColors.textMuted,
+                TextButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Fee tariff management arrives with the Fee Parameters screen '
+                          '(Phase D Round 2). Currently tariffs are seeded per Class.',
+                        ),
+                        duration: Duration(seconds: 4),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.edit_outlined, size: 12),
+                  label: const Text(
+                    'Edit tariffs',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
               ],
@@ -1147,7 +1183,7 @@ class _VoucherGenerationScreenState
         children: [
           Expanded(
             child: Text(
-              t.description.trim(),
+              FeeHeadDisplay.of(t.description),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.bodySmall.copyWith(

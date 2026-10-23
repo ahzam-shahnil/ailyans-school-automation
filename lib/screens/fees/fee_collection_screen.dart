@@ -394,16 +394,13 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     FeeCollectionState state,
     FeeCollectionNotifier notifier,
   ) {
-    final search = state.directorySearch.toLowerCase();
-    final filteredRows = search.isEmpty
-        ? state.directoryRows
-        : state.directoryRows
-              .where(
-                (r) =>
-                    r.studentName.toLowerCase().contains(search) ||
-                    r.stuRegId.toString().contains(search),
-              )
-              .toList();
+    final q = state.directorySearch.toLowerCase();
+    final filtered = state.directoryRows.where((r) {
+      if (q.isEmpty) return true;
+      return r.studentName.toLowerCase().contains(q) ||
+          r.stuRegId.toString().contains(q) ||
+          r.voucherMasId.toLowerCase().contains(q);
+    }).toList();
     final filterLabel = state.activeDirectoryFilter == 'paid'
         ? 'Paid'
         : 'Unpaid';
@@ -428,7 +425,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             child: Row(
               children: [
                 Text(
-                  '${filteredRows.length} $filterLabel Vouchers',
+                  '${filtered.length} $filterLabel Vouchers',
                   style: AppTypography.h2,
                 ),
                 const Spacer(),
@@ -460,7 +457,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             child: Row(
               children: [
                 _dirHeaderCell('Voucher ID', flex: 2),
-                _dirHeaderCell('Reg', flex: 1),
+                _dirHeaderCell('Reg ID', flex: 1),
                 _dirHeaderCell('Student Name', flex: 3),
                 _dirHeaderCell('Class-Sec', flex: 2),
                 _dirHeaderCell('Month', flex: 2),
@@ -470,9 +467,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                   child: Center(
                     child: Text(
                       'Status',
-                      style: AppTypography.bodySmall.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
+                      style: AppTypography.label.copyWith(
+                        fontSize: 11,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ),
@@ -483,7 +480,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           const Divider(height: 1),
           // Row list
           Expanded(
-            child: filteredRows.isEmpty
+            child: filtered.isEmpty
                 ? Center(
                     child: Text(
                       state.activeDirectoryFilter == 'paid'
@@ -496,9 +493,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                   )
                 : ListView.builder(
                     itemExtent: 40,
-                    itemCount: filteredRows.length,
+                    itemCount: filtered.length,
                     itemBuilder: (ctx, i) {
-                      final r = filteredRows[i];
+                      final r = filtered[i];
                       return InkWell(
                         onTap: () =>
                             notifier.selectFromDirectory(r.voucherMasId),
@@ -573,7 +570,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                                 child: Align(
                                   alignment: Alignment.centerRight,
                                   child: Text(
-                                    NumberFormat('#,##0').format(r.netPayable),
+                                    _currencyFormat.format(r.netPayable),
                                     maxLines: 1,
                                     style: AppTypography.monospace.copyWith(
                                       fontSize: 12,
@@ -585,9 +582,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                               SizedBox(
                                 width: 80,
                                 child: Center(
-                                  child: _buildDirectoryStatusBadge(
-                                    r.statusLabel,
-                                  ),
+                                  child: _buildSmallStatusBadge(r.statusLabel),
                                 ),
                               ),
                             ],
@@ -622,33 +617,32 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     );
   }
 
-  Widget _buildDirectoryStatusBadge(String statusLabel) {
+  Widget _buildSmallStatusBadge(String status) {
     final Color bg;
     final Color fg;
-    switch (statusLabel) {
+    switch (status) {
       case 'PAID':
         bg = AppColors.statusSuccessBg;
         fg = AppColors.statusSuccessText;
       case 'OVERDUE':
-        bg = AppColors.statusErrorBg;
-        fg = AppColors.statusErrorText;
-      default:
         bg = AppColors.statusWarningBg;
         fg = AppColors.statusWarningText;
+      default:
+        bg = AppColors.surfaceSubtle;
+        fg = AppColors.textSecondary;
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(AppRadius.sm),
       ),
       child: Text(
-        '• $statusLabel',
-        style: TextStyle(
-          color: fg,
+        status,
+        style: AppTypography.bodySmall.copyWith(
           fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.3,
+          fontWeight: FontWeight.w600,
+          color: fg,
         ),
       ),
     );

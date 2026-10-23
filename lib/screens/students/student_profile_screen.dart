@@ -2233,231 +2233,226 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               border: Border.all(color: AppColors.borderDefault),
             ),
             padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header row
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.table_chart_outlined,
-                      size: 18,
-                      color: AppColors.brandPrimary,
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        'OFFICIAL VOUCHER ISSUANCE & PAYMENT LEDGER',
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.label.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header row
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.table_chart_outlined,
+                        size: 18,
+                        color: AppColors.brandPrimary,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceSubtle,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        border: Border.all(color: AppColors.borderDefault),
-                      ),
-                      child: Text(
-                        '${vouchers.length} Records',
-                        style: AppTypography.monospace
-                            .copyWith(fontSize: 11)
-                            .copyWith(color: AppColors.textSecondary),
-                      ),
-                    ),
-                    const Spacer(),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.print_outlined, size: 14),
-                      label: const Text('Print All Vouchers'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        textStyle: AppTypography.label.copyWith(fontSize: 12),
-                      ),
-                      onPressed: () => _showSnackBar('Print coming in Phase 2'),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.add, size: 14),
-                      label: const Text('+ Generate Single Voucher'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        textStyle: AppTypography.label.copyWith(fontSize: 12),
-                      ),
-                      onPressed: () => context.go('/fees/vouchers'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.md),
-
-                // Table or Empty state
-                if (vouchers.isEmpty)
-                  _buildEmptyTabState(
-                    icon: Icons.receipt_long_outlined,
-                    title: 'No vouchers issued yet',
-                    subtitle: 'No monthly tuition or fee vouchers have been created for this student registration.',
-                    buttonLabel: 'Generate Voucher',
-                    onButtonTap: () => context.go('/fees/vouchers'),
-                  )
-                else
-                  Expanded(
-                    child: SingleChildScrollView(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            border: Border.all(color: AppColors.borderDefault),
-                            borderRadius: BorderRadius.circular(AppRadius.md),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'OFFICIAL VOUCHER ISSUANCE & PAYMENT LEDGER',
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.label.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
-                          child: Table(
-                            columnWidths: const {
-                              0: FlexColumnWidth(1.8),
-                              1: FlexColumnWidth(1.8),
-                              2: FlexColumnWidth(1.5),
-                              3: FlexColumnWidth(1.5),
-                              4: FlexColumnWidth(1.5),
-                              5: FlexColumnWidth(1.3),
-                              6: FlexColumnWidth(1.5),
-                              7: FlexColumnWidth(1.5),
-                              8: FlexColumnWidth(1.3),
-                              9: FlexColumnWidth(1.6),
-                            },
-                            children: [
-                              TableRow(
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceSubtle,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          border: Border.all(color: AppColors.borderDefault),
+                        ),
+                        child: Text(
+                          '${vouchers.length} Records',
+                          style: AppTypography.monospace
+                              .copyWith(fontSize: 11)
+                              .copyWith(color: AppColors.textSecondary),
+                        ),
+                      ),
+                      const Spacer(),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.print_outlined, size: 14),
+                        label: const Text('Print All Vouchers'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          textStyle: AppTypography.label.copyWith(fontSize: 12),
+                        ),
+                        onPressed: () =>
+                            _showSnackBar('Print coming in Phase 2'),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.add, size: 14),
+                        label: const Text('+ Generate Single Voucher'),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          textStyle: AppTypography.label.copyWith(fontSize: 12),
+                        ),
+                        onPressed: () => context.go('/fees/vouchers'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Table or Empty state
+                  if (vouchers.isEmpty)
+                    _buildEmptyTabState(
+                      icon: Icons.receipt_long_outlined,
+                      title: 'No vouchers issued yet',
+                      subtitle: 'No monthly tuition or fee vouchers have been created for this student registration.',
+                      buttonLabel: 'Generate Voucher',
+                      onButtonTap: () => context.go('/fees/vouchers'),
+                    )
+                  else
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppColors.borderDefault),
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                        child: Table(
+                          columnWidths: const {
+                            0: FlexColumnWidth(1.8),
+                            1: FlexColumnWidth(1.8),
+                            2: FlexColumnWidth(1.5),
+                            3: FlexColumnWidth(1.5),
+                            4: FlexColumnWidth(1.5),
+                            5: FlexColumnWidth(1.3),
+                            6: FlexColumnWidth(1.5),
+                            7: FlexColumnWidth(1.5),
+                            8: FlexColumnWidth(1.3),
+                            9: FlexColumnWidth(1.6),
+                          },
+                          children: [
+                            TableRow(
+                              decoration: const BoxDecoration(
+                                color: AppColors.surfaceSubtle,
+                              ),
+                              children: [
+                                _buildTableHeaderCell('VOUCHER ID'),
+                                _buildTableHeaderCell('BILLING MONTH'),
+                                _buildTableHeaderCell('ISSUE DATE'),
+                                _buildTableHeaderCell('DUE DATE'),
+                                _buildTableHeaderCell('TOTAL BILLABLE'),
+                                _buildTableHeaderCell('CONCESSION'),
+                                _buildTableHeaderCell('PAID AMOUNT'),
+                                _buildTableHeaderCell('PAID ON'),
+                                _buildTableHeaderCell('STATUS'),
+                                _buildTableHeaderCell('ACTIONS'),
+                              ],
+                            ),
+                            ...vouchers.map((v) {
+                              final isPaid = v.isPaid == 'Y';
+                              return TableRow(
                                 decoration: const BoxDecoration(
-                                  color: AppColors.surfaceSubtle,
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: AppColors.borderDefault,
+                                    ),
+                                  ),
                                 ),
                                 children: [
-                                  _buildTableHeaderCell('VOUCHER ID'),
-                                  _buildTableHeaderCell('BILLING MONTH'),
-                                  _buildTableHeaderCell('ISSUE DATE'),
-                                  _buildTableHeaderCell('DUE DATE'),
-                                  _buildTableHeaderCell('TOTAL BILLABLE'),
-                                  _buildTableHeaderCell('CONCESSION'),
-                                  _buildTableHeaderCell('PAID AMOUNT'),
-                                  _buildTableHeaderCell('PAID ON'),
-                                  _buildTableHeaderCell('STATUS'),
-                                  _buildTableHeaderCell('ACTIONS'),
-                                ],
-                              ),
-                              ...vouchers.map((v) {
-                                final isPaid = v.isPaid == 'Y';
-                                return TableRow(
-                                  decoration: const BoxDecoration(
-                                    border: Border(
-                                      top: BorderSide(
-                                        color: AppColors.borderDefault,
+                                  _buildTableCell(v.voucherMasId, isMono: true),
+                                  _buildTableCell(v.forMonth, isBold: true),
+                                  _buildTableCell(v.formattedVDate),
+                                  _buildTableCell(v.formattedDueDate),
+                                  _buildTableCell(
+                                    'Rs. ${currencyFormat.format(v.subtotal)}',
+                                    isMono: true,
+                                  ),
+                                  _buildTableCell(
+                                    'Rs. ${currencyFormat.format(v.discount)}',
+                                    isMono: true,
+                                  ),
+                                  _buildTableCell(
+                                    v.paidAmount != null
+                                        ? 'Rs. ${currencyFormat.format(v.paidAmount)}'
+                                        : '—',
+                                    isMono: true,
+                                  ),
+                                  _buildTableCell(v.formattedPaidDate),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 8,
+                                    ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isPaid
+                                            ? AppColors.statusSuccessBg
+                                            : AppColors.statusErrorBg,
+                                        borderRadius: BorderRadius.circular(
+                                          AppRadius.sm,
+                                        ),
+                                        border: Border.all(
+                                          color: isPaid
+                                              ? AppColors.statusSuccessBorder
+                                              : AppColors.statusErrorBorder,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        v.statusText,
+                                        textAlign: TextAlign.center,
+                                        style: AppTypography.monospace
+                                            .copyWith(fontSize: 11)
+                                            .copyWith(
+                                              color: isPaid
+                                                  ? AppColors.statusSuccessText
+                                                  : AppColors.statusErrorText,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 10,
+                                            ),
                                       ),
                                     ),
                                   ),
-                                  children: [
-                                    _buildTableCell(
-                                      v.voucherMasId,
-                                      isMono: true,
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
                                     ),
-                                    _buildTableCell(v.forMonth, isBold: true),
-                                    _buildTableCell(v.formattedVDate),
-                                    _buildTableCell(v.formattedDueDate),
-                                    _buildTableCell(
-                                      'Rs. ${currencyFormat.format(v.subtotal)}',
-                                      isMono: true,
-                                    ),
-                                    _buildTableCell(
-                                      'Rs. ${currencyFormat.format(v.discount)}',
-                                      isMono: true,
-                                    ),
-                                    _buildTableCell(
-                                      v.paidAmount != null
-                                          ? 'Rs. ${currencyFormat.format(v.paidAmount)}'
-                                          : '—',
-                                      isMono: true,
-                                    ),
-                                    _buildTableCell(v.formattedPaidDate),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 8,
+                                    child: TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        minimumSize: const Size(50, 30),
                                       ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isPaid
-                                              ? AppColors.statusSuccessBg
-                                              : AppColors.statusErrorBg,
-                                          borderRadius: BorderRadius.circular(
-                                            AppRadius.sm,
-                                          ),
-                                          border: Border.all(
-                                            color: isPaid
-                                                ? AppColors.statusSuccessBorder
-                                                : AppColors.statusErrorBorder,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          v.statusText,
-                                          textAlign: TextAlign.center,
-                                          style: AppTypography.monospace
-                                              .copyWith(fontSize: 11)
-                                              .copyWith(
-                                                color: isPaid
-                                                    ? AppColors
-                                                          .statusSuccessText
-                                                    : AppColors.statusErrorText,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 10,
-                                              ),
+                                      child: Text(
+                                        'Print Receipt →',
+                                        style: AppTypography.label.copyWith(
+                                          fontSize: 11,
+                                          color: AppColors.brandPrimary,
                                         ),
                                       ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      child: TextButton(
-                                        style: TextButton.styleFrom(
-                                          padding: EdgeInsets.zero,
-                                          minimumSize: const Size(50, 30),
-                                        ),
-                                        child: Text(
-                                          'Print Receipt →',
-                                          style: AppTypography.label.copyWith(
-                                            fontSize: 11,
-                                            color: AppColors.brandPrimary,
-                                          ),
-                                        ),
-                                        onPressed: () => _showSnackBar(
-                                          'Print coming in Phase 2',
-                                        ),
+                                      onPressed: () => _showSnackBar(
+                                        'Print coming in Phase 2',
                                       ),
                                     ),
-                                  ],
-                                );
-                              }),
-                            ],
-                          ),
+                                  ),
+                                ],
+                              );
+                            }),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

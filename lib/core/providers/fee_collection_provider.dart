@@ -360,14 +360,13 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           : 'sc.ClassRollNo ASC, vm.VoucherMasID DESC';
 
       final rows = await db.rawQuery('''
-        SELECT vm.VoucherMasID, vm.student_class_StuRegId,
-               sr.NameFirst || ' ' || COALESCE(sr.NameLast,'') AS student_name,
-               sr.F_Name AS father_name,
+        SELECT vm.VoucherMasID, vm.Student_Class_StuRegID,
+               sr.NameFirst, sr.NameLast, sr.F_Name,
                c.CName AS class_name, cs.SecName AS section_name,
-               sc.ClassRollNo, vm.ForMonth,
-               vm.SubTotal, vm.Discount, vm.IsPaid, vm.DueDate
+               sc.ClassRollNo, vm.ForMonth, vm.SubTotal, vm.Discount,
+               vm.IsPaid, vm.DueDate
         FROM VoucharMas vm
-        JOIN Stu_Reg sr ON vm.student_class_StuRegId = sr.Stu_RegID
+        JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
         LEFT JOIN Student_Class sc
           ON sr.Stu_RegID = sc.Stu_RegID AND sc.SessionYr = vm.SessionYr
         LEFT JOIN Class c ON sc.ClassID = c.ClassID
@@ -387,6 +386,9 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       }
 
       final summaries = rows.map((r) {
+        final first = (r['NameFirst'] as String?)?.trim() ?? '';
+        final last = (r['NameLast'] as String?)?.trim() ?? '';
+        final studentName = [first, last].where((s) => s.isNotEmpty).join(' ');
         final subtotal = (r['SubTotal'] as num?)?.toInt() ?? 0;
         final discount = (r['Discount'] as num?)?.toInt() ?? 0;
         final dueDateRaw = r['DueDate'];
@@ -395,16 +397,16 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           dueDate = DateTime.tryParse(dueDateRaw.toString());
         }
         return FeeReceiptSummaryRow(
-          voucherMasId: r['VoucherMasID'] as String,
-          stuRegId: (r['student_class_StuRegId'] as num).toInt(),
-          studentName: ((r['student_name'] as String?) ?? '').trim(),
-          fatherName: (r['father_name'] as String?)?.trim(),
-          className: ((r['class_name'] as String?) ?? '').trim(),
-          sectionName: ((r['section_name'] as String?) ?? '').trim(),
+          voucherMasId: (r['VoucherMasID'] as String?) ?? '',
+          stuRegId: (r['Student_Class_StuRegID'] as num?)?.toInt() ?? 0,
+          studentName: studentName.isNotEmpty ? studentName : 'Unknown Student',
+          fatherName: (r['F_Name'] as String?)?.trim(),
+          className: (r['class_name'] as String?)?.trim() ?? '',
+          sectionName: (r['section_name'] as String?)?.trim() ?? '',
           rollNo: (r['ClassRollNo'] as num?)?.toInt(),
-          forMonth: ((r['ForMonth'] as String?) ?? '').trim(),
+          forMonth: (r['ForMonth'] as String?)?.trim() ?? '',
           netPayable: subtotal - discount,
-          isPaid: ((r['IsPaid'] as String?) ?? 'N').trim(),
+          isPaid: (r['IsPaid'] as String?)?.trim() ?? 'N',
           dueDate: dueDate,
         );
       }).toList();

@@ -147,7 +147,13 @@ class FeeReceiptView {
 
     return FeeReceiptView(
       voucherMasId: row['VoucherMasID'] as String,
-      stuRegId: (row['student_class_StuRegId'] as num).toInt(),
+      stuRegId:
+          ((row['Student_Class_StuRegID'] ??
+                      row['student_class_StuRegId'] ??
+                      row['Stu_RegID'])
+                  as num?)
+              ?.toInt() ??
+          0,
       studentName: studentName.isNotEmpty ? studentName : 'Unknown Student',
       fatherName: (row['F_Name'] as String?)?.trim() ?? '',
       className: row['class_name'] as String?,

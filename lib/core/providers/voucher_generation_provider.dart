@@ -377,26 +377,37 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
 
     final netPayable = subtotal + arrears - discount;
 
-    // 5. Duplicate Check
+    // 5. Duplicate Check & Persisted Values
     final existing = await db.rawQuery(
-      'SELECT VoucherMasID FROM VoucharMas WHERE VoucherMasID = ? LIMIT 1',
+      'SELECT VoucherMasID, SubTotal, Discount FROM VoucharMas WHERE VoucherMasID = ? LIMIT 1',
       [voucherId],
     );
 
+    int rowSubtotal = subtotal;
+    int rowDiscount = discount;
+    int rowNetPayable = netPayable;
     String? skipReason;
+
     if (existing.isNotEmpty) {
       status = VoucherPreviewStatus.alreadyGenerated;
       skipReason = 'Already generated';
+      final persistedSubTotal =
+          (existing.first['SubTotal'] as num?)?.toInt() ?? subtotal;
+      final persistedDiscount =
+          (existing.first['Discount'] as num?)?.toInt() ?? discount;
+      rowSubtotal = persistedSubTotal;
+      rowDiscount = persistedDiscount;
+      rowNetPayable = persistedSubTotal - persistedDiscount;
     }
 
     previewRows.add(
       VoucherPreviewRow(
         stuRegId: stuRegId,
         studentName: studentName,
-        subtotal: subtotal,
+        subtotal: rowSubtotal,
         arrears: arrears,
-        discount: discount,
-        netPayable: netPayable,
+        discount: rowDiscount,
+        netPayable: rowNetPayable,
         status: status,
         skipReason: skipReason,
         voucherId: voucherId,

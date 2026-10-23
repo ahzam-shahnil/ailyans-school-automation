@@ -8,6 +8,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../models/fee_receipt_view.dart';
+import 'fee_head_display.dart';
 
 // ============================================================================
 // CORE DESIGN SYSTEM & FORMATTING UTILITIES
@@ -521,8 +522,9 @@ class VoucherFeeDetailItem {
             (map['FeeParamID'] ?? map['feeParameterID'] ?? '0').toString(),
           ) ??
           0,
-      parameterTitle: (map['ParamDescription'] ?? map['Detail'] ?? 'Fee Head')
-          .toString(),
+      parameterTitle: FeeHeadDisplay.of(
+        (map['ParamDescription'] ?? map['Detail'] ?? 'Fee Head').toString(),
+      ),
       amount: double.tryParse((map['Amount'] ?? '0').toString()) ?? 0.0,
     );
   }
@@ -665,7 +667,7 @@ class FeeVoucherTransactionRecord {
           .map(
             (li) => VoucherFeeDetailItem(
               feeParamId: li.feeParamId,
-              parameterTitle: li.headName,
+              parameterTitle: FeeHeadDisplay.of(li.headName),
               amount: li.amount.toDouble(),
             ),
           )
@@ -1502,7 +1504,7 @@ class ThreeCopyVouchersPdf {
     required String bankAcctNo,
   }) async {
     final doc = pw.Document(
-      title: 'Fee Vouchers — $branchName',
+      title: 'Fee Vouchers - $branchName',
       author: branchName,
     );
     for (final v in vouchers) {
@@ -1610,7 +1612,7 @@ class ThreeCopyVouchersPdf {
           pw.SizedBox(height: 6),
           // Bank info
           pw.Text(
-            'Bank: $bankName — $bankBranch',
+            'Bank: $bankName - $bankBranch',
             style: const pw.TextStyle(fontSize: 8),
           ),
           pw.Text('A/C: $bankAcctNo', style: const pw.TextStyle(fontSize: 8)),
@@ -1721,7 +1723,7 @@ class ThreeCopyVouchersPdf {
                       pw.Padding(
                         padding: const pw.EdgeInsets.all(3),
                         child: pw.Text(
-                          li.headName,
+                          FeeHeadDisplay.of(li.headName),
                           style: ReportTheme.tableCellStyle,
                         ),
                       ),
@@ -1858,7 +1860,7 @@ Future<void> showVoucherPrintPreviewDialog(
                     child: Row(
                       children: [
                         Text(
-                          'Print Preview — ${vouchers.length} Voucher(s)',
+                          'Print Preview - ${vouchers.length} Voucher(s)',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
@@ -1902,7 +1904,7 @@ Future<void> showVoucherPrintPreviewDialog(
                           : FeeLedgerVoucherGenerator(
                               institutionName: branchName,
                               ledgerPeriodTitle:
-                                  'Cohort Ledger — ${vouchers.isNotEmpty ? vouchers.first.forMonth : ""}',
+                                  'Cohort Ledger - ${vouchers.isNotEmpty ? vouchers.first.forMonth : ""}',
                               transactions: vouchers
                                   .map(
                                     (v) =>
