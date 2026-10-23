@@ -230,6 +230,10 @@ class AppSidebar extends ConsumerWidget {
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         child: Row(
+          mainAxisAlignment: isExpanded
+              ? MainAxisAlignment.start
+              : MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             // Active left indicator bar
             Container(

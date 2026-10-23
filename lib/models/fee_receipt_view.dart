@@ -1,5 +1,7 @@
 library fee_receipt_view;
 
+import 'package:school_automation/core/utils/fee_head_display.dart';
+
 /// Production Fee Receipt Model for FeeCollectionScreen (/fees/receipts).
 /// Matches Behavior Spec §S19 (frmVoucharRecipt @ 0x0041c754).
 
@@ -21,7 +23,7 @@ class FeeReceiptLineItem {
   factory FeeReceiptLineItem.fromMap(Map<String, dynamic> map) {
     return FeeReceiptLineItem(
       feeParamId: (map['feeParameterID'] as num?)?.toInt() ?? 0,
-      headName: (map['ParamDesciption'] as String?) ?? 'Unknown Fee',
+      headName: FeeHeadDisplay.of(map['ParamDesciption'] as String?),
       amount: (map['Amount'] as num?)?.toInt() ?? 0,
       discount: (map['Discount'] as num?)?.toInt() ?? 0,
     );

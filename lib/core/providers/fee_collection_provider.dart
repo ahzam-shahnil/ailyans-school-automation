@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../models/fee_receipt_view.dart';
 import '../db/database.dart';
-import '../utils/receipt_pdf_generator.dart' as rcp
+import '../../core/utils/fee_head_display.dart';
+import '../utils/receipt_pdf_generator.dart'
+    as rcp
     show FeeReceiptPrintData, FeeReceiptLineItem;
 
 /// Bank record retrieved from BankInfo table.
@@ -467,7 +469,8 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final discount = (mas['Discount'] as num?)?.toInt() ?? 0;
       final masNetPayable = subtotal - discount;
       final forMonth = (mas['ForMonth'] as String?)?.trim() ?? '';
-      final sessionYr = (mas['sc_session'] as String?)?.trim() ??
+      final sessionYr =
+          (mas['sc_session'] as String?)?.trim() ??
           (mas['SessionYr'] as String?)?.trim();
       final className = (mas['class_name'] as String?)?.trim();
       final sectionName = (mas['section_name'] as String?)?.trim();
@@ -477,11 +480,14 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final nameFirst = (mas['NameFirst'] as String?)?.trim() ?? '';
       final nameMid = (mas['NameMiddle'] as String?)?.trim() ?? '';
       final nameLast = (mas['NameLast'] as String?)?.trim() ?? '';
-      final parts = [nameFirst, nameMid, nameLast]
-          .where((p) => p.isNotEmpty)
-          .toList();
-      final studentName =
-          parts.isNotEmpty ? parts.join(' ') : 'Unknown Student';
+      final parts = [
+        nameFirst,
+        nameMid,
+        nameLast,
+      ].where((p) => p.isNotEmpty).toList();
+      final studentName = parts.isNotEmpty
+          ? parts.join(' ')
+          : 'Unknown Student';
       final fatherName = (mas['F_Name'] as String?)?.trim();
 
       // 2. Load line items from VoucharDet joined to FeeParameters
@@ -498,7 +504,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final lineItems = detRows.map((r) {
         return rcp.FeeReceiptLineItem(
           feeParamId: (r['feeParameterID'] as num?)?.toInt() ?? 0,
-          headName: (r['ParamDesciption'] as String?) ?? 'Fee Head',
+          headName: FeeHeadDisplay.of(r['ParamDesciption'] as String?),
           amount: (r['Amount'] as num?)?.toInt() ?? 0,
           discount: (r['Discount'] as num?)?.toInt() ?? 0,
         );
