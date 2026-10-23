@@ -106,6 +106,184 @@ class ReportTheme {
       ),
     );
   }
+
+  static pw.Widget sectionTitle(String title) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(top: 6, bottom: 2),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+      decoration: const pw.BoxDecoration(
+        color: bannerBgColor,
+        border: pw.Border(left: pw.BorderSide(color: primaryColor, width: 3)),
+      ),
+      child: pw.Text(title, style: sectionBannerStyle),
+    );
+  }
+
+  static pw.Widget infoField(String label, String? value) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 1.5, horizontal: 4),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            label,
+            style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey600),
+          ),
+          pw.SizedBox(height: 1),
+          pw.Text(
+            (value == null || value.trim().isEmpty) ? '-' : value,
+            style: const pw.TextStyle(fontSize: 8.5),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget signatureFooter({
+    String leftLabel = 'Prepared By',
+    String rightLabel = 'Principal Signature',
+    String thirdLabel = 'School Stamp',
+  }) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(top: 12),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          _sigBox(leftLabel),
+          _sigBox(rightLabel),
+          _sigBox(thirdLabel),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _sigBox(String label) {
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
+      children: [
+        pw.Container(
+          width: 130,
+          height: 1,
+          color: PdfColors.grey400,
+          margin: const pw.EdgeInsets.only(bottom: 3),
+        ),
+        pw.Text(
+          label,
+          style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget fullWidthSectionHeader(String code, String title) {
+    return pw.Container(
+      width: double.infinity,
+      margin: const pw.EdgeInsets.only(top: 8),
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: const pw.BoxDecoration(
+        color: PdfColor.fromInt(0xFF1E3A8A),
+        borderRadius: pw.BorderRadius.only(
+          topLeft: pw.Radius.circular(2),
+          topRight: pw.Radius.circular(2),
+        ),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            title,
+            style: const pw.TextStyle(
+              fontSize: 8.5,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+          pw.Text(
+            code,
+            style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey300),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget gridCell(
+    String label,
+    String? value, {
+    bool isBold = false,
+    PdfColor? valueColor,
+    pw.Alignment alignment = pw.Alignment.topLeft,
+  }) {
+    final display =
+        (value == null || value.trim().isEmpty || value.trim() == '-')
+        ? '-'
+        : value.trim();
+    final isEmpty = display == '-';
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      alignment: alignment,
+      child: pw.Column(
+        crossAxisAlignment:
+            alignment == pw.Alignment.topRight ||
+                alignment == pw.Alignment.centerRight
+            ? pw.CrossAxisAlignment.end
+            : (alignment == pw.Alignment.topCenter ||
+                      alignment == pw.Alignment.center
+                  ? pw.CrossAxisAlignment.center
+                  : pw.CrossAxisAlignment.start),
+        mainAxisSize: pw.MainAxisSize.min,
+        children: [
+          if (label.isNotEmpty) ...[
+            pw.Text(
+              label,
+              style: const pw.TextStyle(
+                fontSize: 6.5,
+                color: PdfColors.grey600,
+              ),
+            ),
+            pw.SizedBox(height: 2),
+          ],
+          pw.Text(
+            display,
+            style: pw.TextStyle(
+              fontSize: 8.5,
+              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+              color: isEmpty
+                  ? PdfColors.grey400
+                  : (valueColor ?? PdfColors.black),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget borderedTable({
+    required List<pw.TableRow> children,
+    List<int>? flexColumnWidths,
+    List<double>? fixedColumnWidths,
+  }) {
+    final Map<int, pw.TableColumnWidth> widths = {};
+    if (flexColumnWidths != null) {
+      for (int i = 0; i < flexColumnWidths.length; i++) {
+        widths[i] = pw.FlexColumnWidth(flexColumnWidths[i].toDouble());
+      }
+    }
+    if (fixedColumnWidths != null) {
+      for (int i = 0; i < fixedColumnWidths.length; i++) {
+        widths[i] = pw.FixedColumnWidth(fixedColumnWidths[i]);
+      }
+    }
+    return pw.Table(
+      border: pw.TableBorder.all(
+        color: const PdfColor.fromInt(0xFFCBD5E1),
+        width: 0.5,
+      ),
+      columnWidths: widths.isEmpty ? null : widths,
+      children: children,
+    );
+  }
 }
 
 // ============================================================================

@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_profile_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/biodata_pdf_generator.dart';
 import '../../core/utils/photo_picker.dart';
 import '../../models/student.dart';
 import '../../repositories/photo_repository.dart';
@@ -726,7 +728,22 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             OutlinedButton.icon(
               icon: const Icon(Icons.print_outlined, size: 16),
               label: const Text('Print Biodata'),
-              onPressed: () => _showSnackBar('Print coming in Phase 2'),
+              onPressed: () async {
+                final meta = ref.read(shellMetadataProvider).value;
+                final stuId = int.tryParse(widget.studentId) ?? -1;
+                final data = await buildBiodataPrintData(stuId, ref);
+                if (!mounted) return;
+                await showBiodataPrintPreviewDialog(
+                  context,
+                  data: data,
+                  branchName:
+                      meta?.branchName ??
+                      "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                  branchPhone: meta?.branchPhone,
+                  branchPrincipal: meta?.branchPrincipal,
+                );
+              },
             ),
             if (isLeft) ...[
               const SizedBox(width: AppSpacing.sm),

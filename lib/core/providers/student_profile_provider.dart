@@ -5,6 +5,7 @@ import '../../models/student.dart';
 import '../../models/student_enrollment.dart';
 import '../../models/student_voucher.dart';
 import '../db/database.dart';
+import '../utils/biodata_pdf_generator.dart';
 
 /// Aggregated data bundle for the 360-degree Student Profile Workstation.
 class StudentProfileBundle {
@@ -205,5 +206,103 @@ Future<void> saveStudentProfile(Student updatedStudent) async {
     updatedStudent.toMap(),
     where: 'Stu_RegID = ?',
     whereArgs: [updatedStudent.stuRegId],
+  );
+}
+
+/// Builds student biodata print model from profile bundle, SQLite enrollments and fee vouchers.
+Future<StudentBiodataPrintData> buildBiodataPrintData(
+  int stuRegId,
+  WidgetRef ref,
+) async {
+  // Read the bundle from studentProfileProvider.family(stuRegId).future
+  final bundle = await ref.read(studentProfileProvider(stuRegId).future);
+
+  final student = bundle.student;
+  final enrollments = bundle.enrollments;
+
+  // Load fee summary
+  final db = await DatabaseService.instance.database;
+  final feeRows = await db.rawQuery(
+    '''
+    SELECT COALESCE(SUM(SubTotal), 0) as total_billed,
+           COALESCE(SUM(COALESCE(PaidAmt, 0)), 0) as total_paid
+    FROM VoucharMas WHERE Student_Class_StuRegID = ?
+    ''',
+    [stuRegId],
+  );
+  final feeTotalBilled = (feeRows.first['total_billed'] as int?) ?? 0;
+  final feeTotalPaid = (feeRows.first['total_paid'] as int?) ?? 0;
+  final feeBalance = feeTotalBilled - feeTotalPaid;
+
+  // Resolve admClassName if admInClass is set
+  String? admClassName;
+  if (student.admInClass != null) {
+    final clsRows = await db.rawQuery(
+      'SELECT CName FROM Class WHERE ClassID = ? LIMIT 1',
+      [student.admInClass],
+    );
+    if (clsRows.isNotEmpty) {
+      admClassName = clsRows.first['CName'] as String?;
+    }
+  }
+
+  // Resolve currentClassSection (active enrollment)
+  String currentClassSection = 'Not Enrolled';
+  final currentEnrollment = enrollments.where((e) => e.isActive).toList();
+  if (currentEnrollment.isNotEmpty) {
+    final e = currentEnrollment.first;
+    currentClassSection = '${e.className}-${e.sectionName}';
+  } else if (enrollments.isNotEmpty) {
+    final e = enrollments.first;
+    currentClassSection = '${e.className}-${e.sectionName}';
+  }
+
+  return StudentBiodataPrintData(
+    stuRegId: stuRegId,
+    studentName: student.fullName,
+    nameMiddle: student.nameMiddle,
+    dob: student.dob,
+    sex: student.sex,
+    religion: student.religion,
+    nationality: student.nationality,
+    bFormNo: student.bFormNo,
+    photoPath: student.photoPath,
+    fatherName: student.fName,
+    cnicNo: student.cnicNo,
+    occupation: student.occupation,
+    mobile1: student.mobile1,
+    mobile2: student.mobile2,
+    phoneOffice: student.phoneOffice,
+    phoneRes: student.phoneRes,
+    emerContName: student.emerContName,
+    emerContMobile: student.emerContMobile,
+    pAddress: student.pAddress,
+    tAddress: student.tAddress,
+    pSchool: student.pSchool,
+    pClass: student.pClass,
+    slCertificate: student.slCertificate,
+    admInClass: student.admInClass,
+    admClassName: admClassName,
+    doAdmission: student.doAdmission,
+    discount: student.discount,
+    vmDiscount: student.vmDiscount,
+    fullDiscount: student.fullDiscount,
+    officeFile: student.officeFile,
+    remarks: student.remarls,
+    enrollmentHistory: enrollments
+        .map(
+          (e) => StudentEnrollmentHistoryRow(
+            sessionYr: e.sessionYr,
+            className: e.className,
+            sectionName: e.sectionName,
+            classRollNo: e.classRollNo,
+            isPresent: e.present == 1,
+          ),
+        )
+        .toList(),
+    feeTotalBilled: feeTotalBilled,
+    feeTotalPaid: feeTotalPaid,
+    feeBalance: feeBalance,
+    currentClassSection: currentClassSection,
   );
 }
