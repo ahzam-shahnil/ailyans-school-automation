@@ -10,6 +10,12 @@ class ShellMetadata {
   /// InstBranch.BranchAddress where BrnachID = 1
   final String branchAddress;
 
+  /// InstBranch.BrPhone where BrnachID = 1
+  final String? branchPhone;
+
+  /// InstBranch.BrPrincipal where BrnachID = 1
+  final String? branchPrincipal;
+
   /// Active academic session year (defaults to "2017-2018")
   final String sessionYear;
 
@@ -28,6 +34,8 @@ class ShellMetadata {
   const ShellMetadata({
     required this.branchName,
     required this.branchAddress,
+    this.branchPhone,
+    this.branchPrincipal,
     required this.sessionYear,
     required this.studentCount,
     required this.classCount,
@@ -40,6 +48,8 @@ class ShellMetadata {
     return const ShellMetadata(
       branchName: "Ailyans's Higher Secondary School Mianwali",
       branchAddress: 'Muslim Bazar Mianwali',
+      branchPhone: null,
+      branchPrincipal: null,
       sessionYear: '2017-2018',
       studentCount: 0,
       classCount: 0,
@@ -55,7 +65,7 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
 
   // 1. Branch Name
   final branchRows = await db.rawQuery(
-    'SELECT BranchName, BranchAddress FROM InstBranch WHERE BrnachID = 1 LIMIT 1',
+    'SELECT BranchName, BranchAddress, BrPhone, BrPrincipal FROM InstBranch WHERE BrnachID = 1 LIMIT 1',
   );
   final branchName = branchRows.isNotEmpty
       ? (branchRows.first['BranchName'] as String? ??
@@ -65,6 +75,12 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
       ? (branchRows.first['BranchAddress'] as String? ??
             'Muslim Bazar Mianwali')
       : 'Muslim Bazar Mianwali';
+  final branchPhone = branchRows.isNotEmpty
+      ? (branchRows.first['BrPhone'] as String?)
+      : null;
+  final branchPrincipal = branchRows.isNotEmpty
+      ? (branchRows.first['BrPrincipal'] as String?)
+      : null;
 
   // 2. Enrolled Student Count
   final studentRows = await db.rawQuery(
@@ -91,6 +107,8 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
   return ShellMetadata(
     branchName: branchName,
     branchAddress: branchAddress,
+    branchPhone: branchPhone,
+    branchPrincipal: branchPrincipal,
     sessionYear: '2017-2018',
     studentCount: studentCount,
     classCount: classCount,

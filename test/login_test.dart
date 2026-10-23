@@ -90,6 +90,8 @@ void main() {
     const testMetadata = ShellMetadata(
       branchName: "Ailyans's Higher Secondary School Mianwali",
       branchAddress: 'Muslim Bazar Mianwali',
+      branchPhone: null,
+      branchPrincipal: null,
       sessionYear: '2017-2018',
       studentCount: 150,
       classCount: 12,
