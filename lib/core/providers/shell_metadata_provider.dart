@@ -7,6 +7,9 @@ class ShellMetadata {
   /// InstBranch.BranchName where BrnachID = 1
   final String branchName;
 
+  /// InstBranch.BranchAddress where BrnachID = 1
+  final String branchAddress;
+
   /// Active academic session year (defaults to "2017-2018")
   final String sessionYear;
 
@@ -24,6 +27,7 @@ class ShellMetadata {
 
   const ShellMetadata({
     required this.branchName,
+    required this.branchAddress,
     required this.sessionYear,
     required this.studentCount,
     required this.classCount,
@@ -35,6 +39,7 @@ class ShellMetadata {
   factory ShellMetadata.empty() {
     return const ShellMetadata(
       branchName: "Ailyans's Higher Secondary School Mianwali",
+      branchAddress: 'Muslim Bazar Mianwali',
       sessionYear: '2017-2018',
       studentCount: 0,
       classCount: 0,
@@ -50,12 +55,16 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
 
   // 1. Branch Name
   final branchRows = await db.rawQuery(
-    'SELECT BranchName FROM InstBranch WHERE BrnachID = 1 LIMIT 1',
+    'SELECT BranchName, BranchAddress FROM InstBranch WHERE BrnachID = 1 LIMIT 1',
   );
   final branchName = branchRows.isNotEmpty
       ? (branchRows.first['BranchName'] as String? ??
             "Ailyans's Higher Secondary School Mianwali")
       : "Ailyans's Higher Secondary School Mianwali";
+  final branchAddress = branchRows.isNotEmpty
+      ? (branchRows.first['BranchAddress'] as String? ??
+            'Muslim Bazar Mianwali')
+      : 'Muslim Bazar Mianwali';
 
   // 2. Enrolled Student Count
   final studentRows = await db.rawQuery(
@@ -81,6 +90,7 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
 
   return ShellMetadata(
     branchName: branchName,
+    branchAddress: branchAddress,
     sessionYear: '2017-2018',
     studentCount: studentCount,
     classCount: classCount,

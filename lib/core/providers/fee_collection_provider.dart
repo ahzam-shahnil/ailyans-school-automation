@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../../models/fee_receipt_view.dart';
 import '../db/database.dart';
+import '../utils/receipt_pdf_generator.dart' as rcp
+    show FeeReceiptPrintData, FeeReceiptLineItem;
 
 /// Bank record retrieved from BankInfo table.
 class BankRow {
@@ -419,6 +421,163 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       );
     } catch (e) {
       // Swallow silently on mount — DB may not be ready yet
+    }
+  }
+
+  /// Loads all data needed to print a 3-copy payment receipt for a given voucher.
+  ///
+  /// Tries FeeTransaction first (preferred — has official FeeTransID).
+  /// Falls back to constructing from VoucharMas row for pre-seeded paid vouchers
+  /// that have IsPaid='Y' but no matching FeeTransaction row.
+  ///
+  /// Returns null if the voucher cannot be found or is not paid.
+  Future<rcp.FeeReceiptPrintData?> loadReceiptPrintData(
+    String voucherMasId, {
+    String paymentMode = 'Cash',
+  }) async {
+    try {
+      final db = await DatabaseService.instance.database;
+
+      // 1. Load VoucharMas row with student + class info
+      final masRows = await db.rawQuery(
+        '''
+        SELECT vm.VoucherMasID, vm.Student_Class_StuRegID, vm.SubTotal,
+               vm.ForMonth, vm.Discount, vm.IsPaid, vm.PaidAmt, vm.PaidDate,
+               vm.BankID, vm.SessionYr,
+               sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
+               c.CName AS class_name,
+               cs.SecName AS section_name,
+               sc.ClassRollNo, sc.SessionYr AS sc_session
+        FROM VoucharMas vm
+        LEFT JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
+        LEFT JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID
+        LEFT JOIN Class c ON sc.ClassID = c.ClassID
+        LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+        WHERE vm.VoucherMasID = ?
+        ORDER BY sc.SessionYr DESC
+        LIMIT 1
+        ''',
+        [voucherMasId],
+      );
+      if (masRows.isEmpty) return null;
+      final mas = masRows.first;
+
+      final stuRegId = (mas['Student_Class_StuRegID'] as num?)?.toInt() ?? 0;
+      final subtotal = (mas['SubTotal'] as num?)?.toInt() ?? 0;
+      final discount = (mas['Discount'] as num?)?.toInt() ?? 0;
+      final masNetPayable = subtotal - discount;
+      final forMonth = (mas['ForMonth'] as String?)?.trim() ?? '';
+      final sessionYr = (mas['sc_session'] as String?)?.trim() ??
+          (mas['SessionYr'] as String?)?.trim();
+      final className = (mas['class_name'] as String?)?.trim();
+      final sectionName = (mas['section_name'] as String?)?.trim();
+      final rollNo = (mas['ClassRollNo'] as num?)?.toInt();
+
+      // Assemble student name
+      final nameFirst = (mas['NameFirst'] as String?)?.trim() ?? '';
+      final nameMid = (mas['NameMiddle'] as String?)?.trim() ?? '';
+      final nameLast = (mas['NameLast'] as String?)?.trim() ?? '';
+      final parts = [nameFirst, nameMid, nameLast]
+          .where((p) => p.isNotEmpty)
+          .toList();
+      final studentName =
+          parts.isNotEmpty ? parts.join(' ') : 'Unknown Student';
+      final fatherName = (mas['F_Name'] as String?)?.trim();
+
+      // 2. Load line items from VoucharDet joined to FeeParameters
+      final detRows = await db.rawQuery(
+        '''
+        SELECT vd.feeParameterID, fp.ParamDesciption, vd.Amount, vd.Discount
+        FROM VoucharDet vd
+        LEFT JOIN FeeParameters fp ON vd.feeParameterID = fp.FeeParamID
+        WHERE vd.VoucharMasID = ?
+        ORDER BY vd.feeParameterID ASC
+        ''',
+        [voucherMasId],
+      );
+      final lineItems = detRows.map((r) {
+        return rcp.FeeReceiptLineItem(
+          feeParamId: (r['feeParameterID'] as num?)?.toInt() ?? 0,
+          headName: (r['ParamDesciption'] as String?) ?? 'Fee Head',
+          amount: (r['Amount'] as num?)?.toInt() ?? 0,
+          discount: (r['Discount'] as num?)?.toInt() ?? 0,
+        );
+      }).toList();
+
+      // 3. Try FeeTransaction first (has official receipt ID + cash amount)
+      final transRows = await db.rawQuery(
+        '''
+        SELECT ft.FeeTransID, ft.BankID, ft.SubmissionDate,
+               ft.TotalAmount, ft.PaidAmount, ft.Detail
+        FROM FeeTransaction ft
+        WHERE ft.VoucharNo = ?
+        ORDER BY ft.FeeTransID DESC
+        LIMIT 1
+        ''',
+        [voucherMasId],
+      );
+
+      int feeTransId;
+      DateTime submissionDate;
+      int paidAmount;
+      int bankIdForReceipt;
+
+      if (transRows.isNotEmpty) {
+        // Preferred path — FeeTransaction row exists
+        final tr = transRows.first;
+        feeTransId = (tr['FeeTransID'] as num?)?.toInt() ?? 0;
+        final dateStr = (tr['SubmissionDate'] as String?)?.trim() ?? '';
+        submissionDate = DateTime.tryParse(dateStr) ?? DateTime.now();
+        paidAmount = (tr['PaidAmount'] as num?)?.toInt() ?? 0;
+        bankIdForReceipt = (tr['BankID'] as num?)?.toInt() ?? 1;
+      } else {
+        // Fallback — pre-seeded paid voucher without FeeTransaction row
+        feeTransId = 0; // displayed as #00000
+        final paidDateStr = (mas['PaidDate'] as String?)?.trim() ?? '';
+        submissionDate = DateTime.tryParse(paidDateStr) ?? DateTime.now();
+        paidAmount = (mas['PaidAmt'] as num?)?.toInt() ?? masNetPayable;
+        bankIdForReceipt = (mas['BankID'] as num?)?.toInt() ?? 1;
+      }
+
+      // 4. Load bank info
+      final bankRows = await db.rawQuery(
+        'SELECT BankName, Branch, AcctNo FROM BankInfo WHERE BankInfoID = ? LIMIT 1',
+        [bankIdForReceipt],
+      );
+      final bankName = bankRows.isNotEmpty
+          ? (bankRows.first['BankName'] as String?)?.trim() ?? 'Askari Bank'
+          : 'Askari Bank';
+      final bankBranch = bankRows.isNotEmpty
+          ? (bankRows.first['Branch'] as String?)?.trim()
+          : null;
+      final bankAcctNo = bankRows.isNotEmpty
+          ? (bankRows.first['AcctNo'] as String?)?.trim()
+          : null;
+
+      return rcp.FeeReceiptPrintData(
+        feeTransId: feeTransId,
+        voucherMasId: voucherMasId,
+        stuRegId: stuRegId,
+        studentName: studentName,
+        fatherName: fatherName,
+        className: className,
+        sectionName: sectionName,
+        rollNo: rollNo,
+        sessionYr: sessionYr,
+        forMonth: forMonth,
+        submissionDate: submissionDate,
+        subtotal: subtotal,
+        discount: discount,
+        totalAmount: masNetPayable,
+        paidAmount: paidAmount,
+        paymentMode: paymentMode,
+        bankName: bankName,
+        bankBranch: bankBranch,
+        bankAcctNo: bankAcctNo,
+        lineItems: lineItems,
+      );
+    } catch (_) {
+      return null;
     }
   }
 

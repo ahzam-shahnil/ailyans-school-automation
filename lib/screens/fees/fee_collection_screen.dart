@@ -6,8 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/providers/fee_collection_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
-import '../../core/utils/voucher_pdf_generator.dart';
+import '../../core/utils/receipt_pdf_generator.dart' as rcp;
 import '../../models/fee_receipt_view.dart';
 
 /// Production FeeCollectionScreen hosted within AppShell at route `/fees/receipts`.
@@ -83,6 +84,12 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   }
 
   Future<void> _onPostPayment() async {
+    // Capture voucherMasId BEFORE postPayment() clears the state
+    final settledVoucherId = ref
+        .read(feeCollectionProvider)
+        .currentReceipt
+        ?.voucherMasId;
+
     final success = await ref
         .read(feeCollectionProvider.notifier)
         .postPayment();
@@ -98,6 +105,11 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       _amountController.clear();
       _remarksController.clear();
       _lookupFocusNode.requestFocus();
+
+      // Auto-open receipt preview for the just-settled voucher
+      if (settledVoucherId != null) {
+        await _openReceiptPrint(settledVoucherId);
+      }
     } else {
       final error = ref.read(feeCollectionProvider).postError;
       if (error != null) {
@@ -119,17 +131,58 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     _lookupFocusNode.requestFocus();
   }
 
-  Future<void> _openReceiptPrint() async {
-    final receipt = ref.read(feeCollectionProvider).currentReceipt;
-    if (receipt == null) return;
-    await showVoucherPrintPreviewDialog(
+  /// Opens the official 3-copy payment receipt preview.
+  ///
+  /// [explicitVoucherId] allows opening for a just-settled voucher even after
+  /// the provider state is cleared (post-payment auto-print).
+  Future<void> _openReceiptPrint([String? explicitVoucherId]) async {
+    final targetVoucherId =
+        explicitVoucherId ??
+        ref.read(feeCollectionProvider).currentReceipt?.voucherMasId;
+    if (targetVoucherId == null) return;
+
+    // If opening from the manual button, check that the voucher is paid
+    if (explicitVoucherId == null) {
+      final receipt = ref.read(feeCollectionProvider).currentReceipt;
+      if (receipt != null && !receipt.isFullyPaid) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cannot print payment receipt -- payment not yet posted for this voucher',
+            ),
+          ),
+        );
+        return;
+      }
+    }
+
+    final meta = ref.read(shellMetadataProvider).value;
+    final branchName =
+        meta?.branchName ?? "Ailyans's Higher Secondary School Mianwali";
+    final branchAddress = meta?.branchAddress ?? 'Muslim Bazar Mianwali';
+
+    final paymentMode = ref.read(feeCollectionProvider).paymentMode;
+    final printData = await ref
+        .read(feeCollectionProvider.notifier)
+        .loadReceiptPrintData(targetVoucherId, paymentMode: paymentMode);
+
+    if (!mounted) return;
+
+    if (printData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not load receipt data. Is the voucher paid?'),
+        ),
+      );
+      return;
+    }
+
+    await rcp.showReceiptPrintPreviewDialog(
       context,
-      vouchers: [receipt],
-      branchName: 'Ailyans Higher Secondary School',
-      branchAddress: 'Muslim Bazar Mianwali',
-      bankName: 'Askari Bank Limited',
-      bankBranch: 'Ballo Khel Road',
-      bankAcctNo: '4528',
+      receipts: [printData],
+      branchName: branchName,
+      branchAddress: branchAddress,
     );
   }
 
