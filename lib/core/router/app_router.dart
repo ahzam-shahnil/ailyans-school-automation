@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../screens/attendance/attendance_screen.dart';
 import '../../screens/dashboard/dashboard_screen.dart';
 import '../../screens/fees/fee_collection_screen.dart';
+import '../../screens/fees/fee_parameter_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/login/login_screen.dart';
 import '../../screens/students/student_list_screen.dart';
@@ -89,6 +90,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               title: 'Academics & Classes',
               route: '/academics',
             ),
+          ),
+          GoRoute(
+            path: '/fees/parameters',
+            builder: (context, state) => const FeeParameterScreen(),
           ),
           GoRoute(
             path: '/fees/vouchers',

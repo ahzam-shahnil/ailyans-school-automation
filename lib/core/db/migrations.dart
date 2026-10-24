@@ -57,6 +57,13 @@ class SchemaMigrations {
       currentVersion = 4;
     }
 
+    // Migration 005: Dev-only cleanup: purge test vouchers and reset to clean state.
+    if (currentVersion < 5) {
+      await applyMigration005(db);
+      await db.execute('PRAGMA user_version = 5');
+      currentVersion = 5;
+    }
+
     // Ensure app_config table exists for device-local preferences
     await db.execute('''
       CREATE TABLE IF NOT EXISTS app_config (
@@ -104,6 +111,14 @@ class SchemaMigrations {
     if (!cols.contains('BankID')) {
       await db.execute('ALTER TABLE VoucharMas ADD COLUMN BankID INTEGER');
     }
+  }
+
+  /// Migration 005: Purges all test voucher data (VoucharDet, VoucharMas, FeeTransaction).
+  /// Leaves students, classes, tariffs, attendance, banks, and users intact.
+  static Future<void> applyMigration005(Database db) async {
+    await db.delete('VoucharDet');
+    await db.delete('VoucharMas');
+    await db.delete('FeeTransaction');
   }
 
   /// Executes a multi-statement SQL script using a transactional batch.

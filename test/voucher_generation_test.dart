@@ -249,6 +249,82 @@ void main() {
       expect(sepVoucher.first['IsPaid'], 'O');
     });
 
+    test('4f. Arrears query only rolls over strictly prior months (SUBSTR(VoucherMasID, 1, 4) < billingMonthPrefix)', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      // Mark prior September voucher as unpaid
+      await db.rawUpdate(
+        "UPDATE VoucharMas SET IsPaid = 'N' WHERE VoucherMasID = '1709-4411'",
+      );
+
+      // Insert a future November 2017 unpaid voucher for 4411
+      await db.insert('VoucharMas', {
+        'VoucherMasID': '1711-4411',
+        'VDate': '2017-11-01',
+        'Student_Class_StuRegID': 4411,
+        'ClassID': 13,
+        'SubTotal': 2500,
+        'ForMonth': 'November 2017',
+        'Discount': 0,
+        'DueDate': '2017-11-10',
+        'IsPaid': 'N',
+        'SessionYr': '2017-2018',
+      });
+
+      // Set billing month to October 2017
+      container
+          .read(voucherGenFiltersProvider.notifier)
+          .setBillingMonth('October 2017');
+
+      final preview = await container.read(voucherGenPreviewProvider.future);
+      final row4411 = preview.firstWhere((r) => r.stuRegId == 4411);
+
+      // Arrears should only include September 2017 (1800), NOT November 2017 (2500)
+      expect(row4411.arrears, 1800);
+    });
+
+    test('4g. Toggling fee head chip excludes it from preview and execution; reconcile UPDATE sets exact SUM(Amount)', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      // Delete any existing October vouchers to allow generation
+      await db.delete('VoucharDet');
+      await db.delete('VoucharMas');
+
+      // Toggle OFF Exam Fee (ID 3) and Annual Charges (ID 7)
+      container.read(voucherGenFiltersProvider.notifier).toggleFeeHead(3);
+      container.read(voucherGenFiltersProvider.notifier).toggleFeeHead(7);
+      container
+          .read(voucherGenFiltersProvider.notifier)
+          .setIncludeArrears(false);
+
+      final preview = await container.read(voucherGenPreviewProvider.future);
+      expect(preview.isNotEmpty, isTrue);
+      // Only Tuition Fee (1500) remains
+      expect(preview.first.subtotal, 1500);
+      expect(preview.first.arrears, 0);
+
+      // Execute generation
+      await container
+          .read(voucherGenExecutionProvider.notifier)
+          .generateVouchers();
+
+      // Verify inserted VoucharDet rows only have FeeParamID = 2
+      final details = await db.rawQuery(
+        "SELECT feeParameterID, Amount FROM VoucharDet WHERE VoucharMasID = '1710-4411'",
+      );
+      expect(details.length, 1);
+      expect(details.first['feeParameterID'], 2);
+      expect(details.first['Amount'], 1500.0);
+
+      // Verify VoucharMas SubTotal is exactly 1500 (reconcile UPDATE verified)
+      final mas = await db.rawQuery(
+        "SELECT SubTotal FROM VoucharMas WHERE VoucherMasID = '1710-4411'",
+      );
+      expect(mas.first['SubTotal'], 1500);
+    });
+
     // Widget UI Test: Verify rendering of VoucherGenerationScreen
     testWidgets(
       'UI renders VoucherGenerationScreen with 40/60 split, table, and KPI strip',

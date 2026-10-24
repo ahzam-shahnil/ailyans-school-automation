@@ -17,6 +17,7 @@ class VoucherGenFilters {
   final int bankId;
   final bool includeArrears;
   final int lateFineAmount;
+  final Set<int> excludedFeeParamIds;
 
   VoucherGenFilters({
     this.sessionYr = '2017-2018',
@@ -28,6 +29,7 @@ class VoucherGenFilters {
     this.bankId = 1,
     this.includeArrears = true,
     this.lateFineAmount = 100,
+    this.excludedFeeParamIds = const {},
   }) : issueDate = issueDate ?? DateTime(2017, 10, 1),
        dueDate = dueDate ?? DateTime(2017, 10, 10);
 
@@ -43,6 +45,7 @@ class VoucherGenFilters {
     int? bankId,
     bool? includeArrears,
     int? lateFineAmount,
+    Set<int>? excludedFeeParamIds,
   }) {
     return VoucherGenFilters(
       sessionYr: sessionYr ?? this.sessionYr,
@@ -54,6 +57,7 @@ class VoucherGenFilters {
       bankId: bankId ?? this.bankId,
       includeArrears: includeArrears ?? this.includeArrears,
       lateFineAmount: lateFineAmount ?? this.lateFineAmount,
+      excludedFeeParamIds: excludedFeeParamIds ?? this.excludedFeeParamIds,
     );
   }
 }
@@ -87,7 +91,32 @@ class BankOption {
     required this.isDefault,
   });
 
-  String get displayName => '$bankName — $branch';
+  String get displayName => '$bankName - $branch';
+}
+
+/// Helper method to compute a 4-char yyMM prefix for the selected billing month.
+String _yyMmPrefix(String monthName) {
+  // monthName format: 'September 2017', 'October 2017'
+  const monthNumbers = {
+    'January': '01',
+    'February': '02',
+    'March': '03',
+    'April': '04',
+    'May': '05',
+    'June': '06',
+    'July': '07',
+    'August': '08',
+    'September': '09',
+    'October': '10',
+    'November': '11',
+    'December': '12',
+  };
+  final parts = monthName.trim().split(RegExp(r'\s+'));
+  if (parts.length != 2) return '0000';
+  final mm = monthNumbers[parts[0]] ?? '00';
+  final yyyy = parts[1];
+  final yy = yyyy.length == 4 ? yyyy.substring(2) : '00';
+  return '$yy$mm';
 }
 
 /// Execution summary displayed in the Batch Complete Dialog.
@@ -149,7 +178,22 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
       classId: classId,
       clearClassId: classId == null,
       clearClassSecId: true,
+      excludedFeeParamIds: const {},
     );
+  }
+
+  void toggleFeeHead(int feeParamId) {
+    final next = Set<int>.from(state.excludedFeeParamIds);
+    if (next.contains(feeParamId)) {
+      next.remove(feeParamId);
+    } else {
+      next.add(feeParamId);
+    }
+    state = state.copyWith(excludedFeeParamIds: next);
+  }
+
+  void setIncludeArrears(bool value) {
+    state = state.copyWith(includeArrears: value);
   }
 
   void setClassSecId(int? secId) {
@@ -325,7 +369,13 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
       tariffCache[classId] = tariffs;
     }
 
-    final subtotal = tariffs.fold<int>(
+    final activeTariffs = tariffs
+        .where(
+          (t) => !filters.excludedFeeParamIds.contains(t['FeeParamID'] as int),
+        )
+        .toList();
+
+    final subtotal = activeTariffs.fold<int>(
       0,
       (sum, t) => sum + ((t['Fee'] as num?)?.toInt() ?? 0),
     );
@@ -333,6 +383,7 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
     // 3. Compute arrears if includeArrears is true
     int arrears = 0;
     if (filters.includeArrears) {
+      final billingMonthPrefix = _yyMmPrefix(filters.billingMonth);
       final overdueRows = await db.rawQuery(
         '''
         SELECT vm.VoucherMasID, vm.SubTotal, vm.Discount,
@@ -340,9 +391,9 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
         FROM VoucharMas vm
         WHERE vm.Student_Class_StuRegID = ?
           AND vm.IsPaid IN ('N', 'O')
-          AND vm.ForMonth != ?
+          AND SUBSTR(vm.VoucherMasID, 1, 4) < ?
       ''',
-        [stuRegId, filters.billingMonth],
+        [stuRegId, billingMonthPrefix],
       );
 
       for (final ov in overdueRows) {
@@ -362,7 +413,7 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
     VoucherPreviewStatus status;
 
     if (fullDiscount) {
-      final tuitionTariff = tariffs.firstWhere(
+      final tuitionTariff = activeTariffs.firstWhere(
         (t) => (t['FeeParamID'] as int) == 2,
         orElse: () => {'Fee': 0},
       );
@@ -567,88 +618,107 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
         [studentClassId, filters.sessionYr],
       );
 
+      final activeTariffs = tariffs
+          .where(
+            (t) =>
+                !filters.excludedFeeParamIds.contains(t['FeeParamID'] as int),
+          )
+          .toList();
+
       final isFullWaiver = (row.status == VoucherPreviewStatus.fullWaiver);
 
       await db.transaction((txn) async {
-        // 1. Arrears rollover: mark prior unpaid as 'O' (excluding current billing month)
-        await txn.rawUpdate(
-          "UPDATE VoucharMas SET IsPaid = 'O' "
-          "WHERE Student_Class_StuRegID = ? AND IsPaid = 'N' AND ForMonth != ?",
-          [row.stuRegId, filters.billingMonth],
-        );
+        try {
+          final billingMonthPrefix = _yyMmPrefix(filters.billingMonth);
 
-        // 2. Insert VoucharMas
-        await txn.insert('VoucharMas', {
-          'VoucherMasID': row.voucherId,
-          'VDate': vDateStr,
-          'Student_Class_StuRegID': row.stuRegId,
-          'SubTotal': row.subtotal + row.arrears,
-          'ForMonth': filters.billingMonth,
-          'ClassID': studentClassId,
-          'Remarks': null,
-          'Discount': isFullWaiver ? (row.subtotal + row.arrears) : 0,
-          'DueDate': dueDateStr,
-          'IsPaid': 'N',
-          'SessionYr': filters.sessionYr,
-        });
+          // 1. Arrears rollover: mark prior unpaid as 'O' (strictly prior billing months)
+          if (filters.includeArrears) {
+            await txn.rawUpdate(
+              "UPDATE VoucharMas SET IsPaid = 'O' "
+              "WHERE Student_Class_StuRegID = ? AND IsPaid = 'N' AND SUBSTR(VoucherMasID, 1, 4) < ?",
+              [row.stuRegId, billingMonthPrefix],
+            );
+          }
 
-        // 3. Insert VoucharDet for class tariffs
-        for (final t in tariffs) {
-          final feeParamId = t['FeeParamID'] as int;
-          final fee = (t['Fee'] as num?)?.toDouble() ?? 0.0;
-          final isTuition = (feeParamId == 2);
-          final detDiscount = (isFullWaiver && isTuition) ? fee : 0.0;
-
-          final detIdRows = await txn.rawQuery(
-            'SELECT COALESCE(MAX(VoucharDetID), 0) + 1 AS nextId FROM VoucharDet',
-          );
-          final nextDetId = (detIdRows.first['nextId'] as num).toInt();
-
-          await txn.insert('VoucharDet', {
-            'VoucharDetID': nextDetId,
-            'VoucharMasID': row.voucherId,
-            'feeParameterID': feeParamId,
-            'Amount': fee,
-            'Discount': detDiscount,
+          // 2. Insert VoucharMas with placeholder SubTotal: 0
+          await txn.insert('VoucharMas', {
+            'VoucherMasID': row.voucherId,
+            'VDate': vDateStr,
+            'Student_Class_StuRegID': row.stuRegId,
+            'SubTotal': 0,
+            'ForMonth': filters.billingMonth,
+            'ClassID': studentClassId,
+            'Remarks': null,
+            'Discount': 0,
+            'DueDate': dueDateStr,
+            'IsPaid': 'N',
+            'SessionYr': filters.sessionYr,
           });
-        }
 
-        // 4. If arrears > 0: inject FeeParamID = 4 ("Arears")
-        if (row.arrears > 0) {
-          final detIdRows = await txn.rawQuery(
-            'SELECT COALESCE(MAX(VoucharDetID), 0) + 1 AS nextId FROM VoucharDet',
-          );
-          final nextDetId = (detIdRows.first['nextId'] as num).toInt();
+          // 3. Insert VoucharDet for active class tariffs
+          for (final t in activeTariffs) {
+            final feeParamId = t['FeeParamID'] as int;
+            final fee = (t['Fee'] as num?)?.toDouble() ?? 0.0;
+            final isTuition = (feeParamId == 2);
+            final detDiscount = (isFullWaiver && isTuition) ? fee : 0.0;
 
-          await txn.insert('VoucharDet', {
-            'VoucharDetID': nextDetId,
-            'VoucharMasID': row.voucherId,
-            'feeParameterID': 4, // Head 4: "Arears"
-            'Amount': row.arrears.toDouble(),
-            'Discount': 0.0,
-          });
-        }
+            final detIdRows = await txn.rawQuery(
+              'SELECT COALESCE(MAX(VoucharDetID), 0) + 1 AS nextId FROM VoucharDet',
+            );
+            final nextDetId = (detIdRows.first['nextId'] as num).toInt();
 
-        // 5. Full Discount rule adjustments
-        if (isFullWaiver) {
+            await txn.insert('VoucharDet', {
+              'VoucharDetID': nextDetId,
+              'VoucharMasID': row.voucherId,
+              'feeParameterID': feeParamId,
+              'Amount': fee,
+              'Discount': detDiscount,
+            });
+          }
+
+          // 4. If includeArrears and arrears > 0: inject FeeParamID = 4 ("Arears")
+          if (filters.includeArrears && row.arrears > 0) {
+            final detIdRows = await txn.rawQuery(
+              'SELECT COALESCE(MAX(VoucharDetID), 0) + 1 AS nextId FROM VoucharDet',
+            );
+            final nextDetId = (detIdRows.first['nextId'] as num).toInt();
+
+            await txn.insert('VoucharDet', {
+              'VoucharDetID': nextDetId,
+              'VoucharMasID': row.voucherId,
+              'feeParameterID': 4, // Head 4: "Arears"
+              'Amount': row.arrears.toDouble(),
+              'Discount': 0.0,
+            });
+          }
+
+          // 5. Full Discount rule adjustments
+          if (isFullWaiver) {
+            await txn.rawUpdate(
+              'UPDATE VoucharDet SET Discount = Amount '
+              'WHERE VoucharMasID = ? AND feeParameterID = 2',
+              [row.voucherId],
+            );
+            await txn.rawUpdate(
+              'UPDATE VoucharMas SET Discount = (SELECT COALESCE(SUM(Discount), 0) FROM VoucharDet WHERE VoucharMasID = ?) '
+              'WHERE VoucherMasID = ?',
+              [row.voucherId, row.voucherId],
+            );
+          }
+
+          // 6. Final reconcile UPDATE (single source of truth):
           await txn.rawUpdate(
-            'UPDATE VoucharDet SET Discount = Amount '
-            'WHERE VoucharMasID = ? AND feeParameterID = 2',
-            [row.voucherId],
-          );
-          await txn.rawUpdate(
-            'UPDATE VoucharMas SET Discount = (SELECT SUM(Amount) FROM VoucharDet WHERE VoucharMasID = ?) '
+            'UPDATE VoucharMas SET SubTotal = (SELECT COALESCE(SUM(Amount), 0) FROM VoucharDet WHERE VoucharMasID = ?) '
             'WHERE VoucherMasID = ?',
             [row.voucherId, row.voucherId],
           );
+        } catch (e) {
+          // ignore: avoid_print
+          print(
+            'Voucher generation transaction failed for ${row.voucherId}: $e',
+          );
+          rethrow;
         }
-
-        // 6. UPDATE VoucharMas SET SubTotal = (SELECT SUM(Amount) FROM VoucharDet WHERE VoucherMasID=?)
-        await txn.rawUpdate(
-          'UPDATE VoucharMas SET SubTotal = (SELECT SUM(Amount) FROM VoucharDet WHERE VoucherMasID = ?) '
-          'WHERE VoucherMasID = ?',
-          [row.voucherId, row.voucherId],
-        );
       });
 
       generated++;

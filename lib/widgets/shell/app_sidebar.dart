@@ -233,19 +233,22 @@ class AppSidebar extends ConsumerWidget {
           mainAxisAlignment: isExpanded
               ? MainAxisAlignment.start
               : MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Active left indicator bar
-            Container(
-              width: 3.0,
+            // Active left indicator bar (3px when active, 0px when inactive)
+            SizedBox(
+              width: isActive ? 3.0 : 0.0,
               height: 24.0,
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.brandPrimary : Colors.transparent,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: isActive ? AppColors.brandPrimary : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                ),
               ),
             ),
-            const SizedBox(width: AppSpacing.xs),
-            // Icon
+            if (isExpanded) const SizedBox(width: AppSpacing.xs),
+            // Icon (fixed 20px)
             Icon(
               item.icon,
               size: 20.0,
@@ -265,6 +268,7 @@ class AppSidebar extends ConsumerWidget {
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
                   ),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
               if (badgeCount > 0)
@@ -347,6 +351,9 @@ class AppSidebar extends ConsumerWidget {
   bool _isRouteActive(String currentPath, String itemRoute) {
     if (itemRoute == '/dashboard') {
       return currentPath == '/dashboard';
+    }
+    if (itemRoute.startsWith('/fees')) {
+      return currentPath.startsWith('/fees');
     }
     return currentPath.startsWith(itemRoute);
   }

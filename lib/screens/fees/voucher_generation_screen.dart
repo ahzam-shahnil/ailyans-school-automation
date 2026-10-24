@@ -1105,17 +1105,7 @@ class _VoucherGenerationScreenState
                 ),
                 const Spacer(),
                 TextButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Fee tariff management arrives with the Fee Parameters screen '
-                          '(Phase D Round 2). Currently tariffs are seeded per Class.',
-                        ),
-                        duration: Duration(seconds: 4),
-                      ),
-                    );
-                  },
+                  onPressed: () => context.go('/fees/parameters'),
                   icon: const Icon(Icons.edit_outlined, size: 12),
                   label: const Text(
                     'Edit tariffs',
@@ -1135,24 +1125,34 @@ class _VoucherGenerationScreenState
             const SizedBox(height: 6),
             tariffsAsync.when(
               data: (tariffs) {
-                if (tariffs.isEmpty) {
-                  return Text(
-                    'No tariffs defined for this selection',
-                    style: AppTypography.bodySmall,
-                  );
-                }
                 return LayoutBuilder(
                   builder: (context, c) {
                     const gap = 6.0;
                     final w = (c.maxWidth - gap) / 2;
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
-                      children: tariffs
-                          .map(
-                            (t) => SizedBox(width: w, child: _buildFeeChip(t)),
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (tariffs.isEmpty)
+                          Text(
+                            'No tariffs defined for this selection',
+                            style: AppTypography.bodySmall,
                           )
-                          .toList(),
+                        else
+                          Wrap(
+                            spacing: gap,
+                            runSpacing: gap,
+                            children: tariffs.map((t) {
+                              final isIncluded = !filters.excludedFeeParamIds
+                                  .contains(t.feeParamId);
+                              return SizedBox(
+                                width: w,
+                                child: _buildFeeChip(t, isIncluded),
+                              );
+                            }).toList(),
+                          ),
+                        const SizedBox(height: 8),
+                        _buildArrearsChip(filters.includeArrears),
+                      ],
                     );
                   },
                 );
@@ -1170,39 +1170,105 @@ class _VoucherGenerationScreenState
     );
   }
 
-  Widget _buildFeeChip(FeeHeadSummary t) {
-    return Container(
-      height: 26,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.borderDefault),
+  Widget _buildFeeChip(FeeHeadSummary t, bool isIncluded) {
+    return InkWell(
+      onTap: () {
+        ref
+            .read(voucherGenFiltersProvider.notifier)
+            .toggleFeeHead(t.feeParamId);
+        ref.invalidate(voucherGenPreviewProvider);
+      },
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: isIncluded ? AppColors.surfaceRaised : AppColors.surfaceSubtle,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(
+            color: isIncluded
+                ? AppColors.brandPrimary
+                : AppColors.borderDefault,
+            width: isIncluded ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              isIncluded ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 14,
+              color: isIncluded ? AppColors.brandPrimary : AppColors.textMuted,
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                '${FeeHeadDisplay.of(t.description)}: Rs. ${currencyFormat.format(t.fee.toInt())}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: isIncluded ? FontWeight.w600 : FontWeight.normal,
+                  color: isIncluded
+                      ? AppColors.textPrimary
+                      : AppColors.textMuted,
+                  fontSize: 10.5,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              FeeHeadDisplay.of(t.description),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildArrearsChip(bool includeArrears) {
+    return InkWell(
+      onTap: () {
+        ref
+            .read(voucherGenFiltersProvider.notifier)
+            .setIncludeArrears(!includeArrears);
+        ref.invalidate(voucherGenPreviewProvider);
+      },
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: includeArrears
+              ? AppColors.surfaceRaised
+              : AppColors.surfaceSubtle,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(
+            color: includeArrears
+                ? AppColors.brandPrimary
+                : AppColors.borderDefault,
+            width: includeArrears ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              includeArrears ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 14,
+              color: includeArrears
+                  ? AppColors.brandPrimary
+                  : AppColors.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'Include Past Arrears',
               style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
+                fontWeight: includeArrears
+                    ? FontWeight.w600
+                    : FontWeight.normal,
+                color: includeArrears
+                    ? AppColors.textPrimary
+                    : AppColors.textMuted,
                 fontSize: 11,
               ),
             ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            currencyFormat.format(t.fee.toInt()),
-            maxLines: 1,
-            style: AppTypography.monospace.copyWith(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
