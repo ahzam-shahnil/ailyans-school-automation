@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../screens/attendance/attendance_screen.dart';
 import '../../screens/dashboard/dashboard_screen.dart';
 import '../../screens/fees/fee_collection_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
@@ -106,10 +107,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/attendance',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Attendance Roll Call',
-              route: '/attendance',
-            ),
+            builder: (context, state) => const AttendanceScreen(),
           ),
           GoRoute(
             path: '/staff',
