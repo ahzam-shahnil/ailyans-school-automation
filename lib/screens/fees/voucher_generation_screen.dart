@@ -66,6 +66,73 @@ class _VoucherGenerationScreenState
     ref.read(voucherGenExecutionProvider.notifier).generateVouchers();
   }
 
+  Future<void> _onRegenerateUnpaid() async {
+    final filters = ref.read(voucherGenFiltersProvider);
+    final classesAsync = ref.read(classesProvider);
+    final classes = classesAsync.valueOrNull ?? [];
+    final match = classes
+        .where((c) => c.classId == filters.classId)
+        .firstOrNull;
+    final resolvedClassName = match?.cName ?? 'Class ${filters.classId}';
+    final sectionLabel = filters.classSecId == null
+        ? 'All Sections'
+        : 'Section ${filters.classSecId}';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Regenerate Vouchers'),
+        content: Text(
+          'Cohort: $resolvedClassName / $sectionLabel / ${filters.billingMonth} / ${filters.sessionYr}\n\n'
+          'This will delete all UNPAID vouchers for this cohort and regenerate them '
+          'with the current fee-head configuration.\n\n'
+          'Paid vouchers are never touched. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Regenerate'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final summary = await ref
+        .read(voucherGenExecutionProvider.notifier)
+        .regenerateUnpaidCohortVouchers();
+    if (!mounted) return;
+
+    if (summary != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Regenerated ${summary.generatedCount} voucher(s) with current configuration.',
+          ),
+          backgroundColor: AppColors.statusSuccessText,
+        ),
+      );
+    } else {
+      final error = ref.read(voucherGenExecutionProvider).error;
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: AppColors.statusErrorText,
+          ),
+        );
+      }
+    }
+  }
+
   void _onEscape() {
     final execState = ref.read(voucherGenExecutionProvider);
     if (execState.completionSummary != null) {
@@ -1201,16 +1268,22 @@ class _VoucherGenerationScreenState
             ),
             const SizedBox(width: 4),
             Expanded(
-              child: Text(
-                '${FeeHeadDisplay.of(t.description)}: Rs. ${currencyFormat.format(t.fee.toInt())}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySmall.copyWith(
-                  fontWeight: isIncluded ? FontWeight.w600 : FontWeight.normal,
-                  color: isIncluded
-                      ? AppColors.textPrimary
-                      : AppColors.textMuted,
-                  fontSize: 10.5,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${FeeHeadDisplay.of(t.description)}: Rs. ${currencyFormat.format(t.fee.toInt())}',
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: isIncluded
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: isIncluded
+                        ? AppColors.textPrimary
+                        : AppColors.textMuted,
+                    fontSize: 10.5,
+                  ),
                 ),
               ),
             ),
@@ -1349,27 +1422,52 @@ class _VoucherGenerationScreenState
       );
     }
     if (generatedCount > 0) {
-      return shadowed(
-        SizedBox(
-          height: h,
-          child: ElevatedButton.icon(
-            onPressed: () => _openPrintPreview(),
-            icon: const Icon(Icons.print_outlined, size: 20),
-            label: Text(
-              'Print $generatedCount Vouchers (Ctrl+P)',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            ),
-            style: ElevatedButton.styleFrom(
-              elevation: 0,
-              backgroundColor: AppColors.brandSecondary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(h),
-              shape: shape,
+      return Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: ElevatedButton.icon(
+              onPressed: () => _openPrintPreview(),
+              icon: const Icon(Icons.print, size: 20),
+              label: Text(
+                'Print $generatedCount Vouchers (Ctrl+P)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                elevation: 0,
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(h),
+                shape: shape,
+              ),
             ),
           ),
-        ),
+          const SizedBox(width: 8),
+          SizedBox(
+            height: h,
+            child: OutlinedButton.icon(
+              onPressed: isGenerating ? null : _onRegenerateUnpaid,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: const Text(
+                'Regenerate',
+                maxLines: 1,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.brandPrimary,
+                side: const BorderSide(color: AppColors.brandPrimary),
+                minimumSize: const Size(0, h),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                shape: shape,
+              ),
+            ),
+          ),
+        ],
       );
     }
     return SizedBox(
@@ -1399,6 +1497,39 @@ class _VoucherGenerationScreenState
     int readyCount,
     int generatedCount,
   ) {
+    final filters = ref.watch(voucherGenFiltersProvider);
+    final generatedRows = previewList
+        .where((r) => r.status == VoucherPreviewStatus.alreadyGenerated)
+        .toList();
+    final readyRows = previewList
+        .where((r) => r.status != VoucherPreviewStatus.alreadyGenerated)
+        .toList();
+
+    final persistedSum = generatedRows.isNotEmpty
+        ? generatedRows.first.subtotal
+        : null;
+
+    int? currentToggleSum = readyRows.firstOrNull?.subtotal;
+    if (currentToggleSum == null && filters.classId != null) {
+      final tariffsAsync = ref.watch(
+        voucherClassTariffsProvider(filters.classId),
+      );
+      currentToggleSum = tariffsAsync.maybeWhen(
+        data: (tariffs) {
+          final activeTariffs = tariffs
+              .where((t) => !filters.excludedFeeParamIds.contains(t.feeParamId))
+              .toList();
+          return activeTariffs.fold<int>(0, (s, t) => s + t.fee.toInt());
+        },
+        orElse: () => null,
+      );
+    }
+
+    final bool hasDrift =
+        persistedSum != null &&
+        currentToggleSum != null &&
+        currentToggleSum != persistedSum;
+
     return Container(
       decoration: _cardDecoration(),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -1445,19 +1576,6 @@ class _VoucherGenerationScreenState
                 ),
                 onPressed: () => ref.invalidate(voucherGenPreviewProvider),
               ),
-              const SizedBox(width: AppSpacing.xs),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.filter_list, size: 16),
-                label: const Text('Filter List'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textPrimary,
-                  side: const BorderSide(color: AppColors.borderDefault),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                ),
-                onPressed: () {},
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1501,6 +1619,39 @@ class _VoucherGenerationScreenState
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
+
+          if (hasDrift)
+            Container(
+              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.statusWarningBg,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.statusWarningBorder),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: AppColors.statusWarningText,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Fee head configuration changed. Click Regenerate to apply.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.statusWarningText,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // Table (header sticky, body scrolls internally, footer pinned)
           Expanded(

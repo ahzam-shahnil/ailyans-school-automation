@@ -724,6 +724,154 @@ void main() {
       // Verify post-generation KPI text is rendered
       expect(find.text('Cohort Total Billed'), findsOneWidget);
       expect(find.text('Print 10 Vouchers (Ctrl+P)'), findsOneWidget);
+      expect(find.text('Regenerate'), findsOneWidget);
+
+      // Tap Regenerate to open confirmation dialog
+      await tester.tap(find.text('Regenerate'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Regenerate Vouchers'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'Cohort: Class 10 / All Sections / October 2017 / 2017-2018',
+        ),
+        findsOneWidget,
+      );
+
+      // Capture Screenshot 3: voucher-regenerate-dialog.png
+      await tester.runAsync(() async {
+        final boundary =
+            generatedKey.currentContext!.findRenderObject()!
+                as RenderRepaintBoundary;
+        final image = await boundary.toImage(pixelRatio: 1.0);
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        final buffer = byteData!.buffer.asUint8List();
+        const outDir =
+            '/Users/ahzam/flutter_projects/REA/rebuild/design/phase-d-runtime';
+        await Directory(outDir).create(recursive: true);
+        await File('$outDir/voucher-regenerate-dialog.png')
+            .writeAsBytes(buffer);
+      });
+
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
     });
+  });
+
+  group('Regenerate unpaid cohort', () {
+    test('regenerates unpaid cohort with newly toggled fee heads', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(voucherGenFiltersProvider.notifier).setClassId(13);
+      // Pre-warm preview
+      await container.read(voucherGenPreviewProvider.future);
+
+      // 1. Initial generation of October 2017 with all fee heads (SubTotal 1920)
+      final initialSummary = await container
+          .read(voucherGenExecutionProvider.notifier)
+          .generateVouchers();
+      expect(initialSummary, isNotNull);
+      expect(initialSummary!.generatedCount, 10);
+
+      final initialMas = await db.rawQuery(
+        "SELECT COUNT(*) as cnt FROM VoucharMas WHERE ForMonth = 'October 2017'",
+      );
+      expect(initialMas.first['cnt'], 10);
+
+      // 2. Toggle Exam (ID 3) OFF
+      container.read(voucherGenFiltersProvider.notifier).toggleFeeHead(3);
+
+      // 3. Call regenerateUnpaidCohortVouchers()
+      final regenSummary = await container
+          .read(voucherGenExecutionProvider.notifier)
+          .regenerateUnpaidCohortVouchers();
+      expect(regenSummary, isNotNull);
+      expect(regenSummary!.generatedCount, 10);
+
+      // 4. Assertions:
+      // VoucharMas count still 10 (not 20 — old ones deleted)
+      final masRows = await db.rawQuery(
+        "SELECT * FROM VoucharMas WHERE ForMonth = 'October 2017'",
+      );
+      expect(masRows.length, 10);
+
+      // Every VoucharMas row for October 2017 has SubTotal = 1620
+      for (final row in masRows) {
+        expect(row['SubTotal'], 1620);
+        final vId = row['VoucherMasID'] as String;
+
+        // Every VoucharMas row has exactly 2 VoucharDet rows (tuition + annual)
+        final detRows = await db.rawQuery(
+          "SELECT * FROM VoucharDet WHERE VoucharMasID = ?",
+          [vId],
+        );
+        expect(detRows.length, 2);
+
+        // No VoucharDet row for the regenerated vouchers has feeParameterID = 3 (exam)
+        final paramIds = detRows
+            .map((d) => d['feeParameterID'] as int)
+            .toList();
+        expect(paramIds.contains(3), isFalse);
+        expect(paramIds, containsAll([2, 7]));
+      }
+    });
+
+    test(
+      'blocks regeneration with verbatim error when paid voucher exists',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
+
+        container.read(voucherGenFiltersProvider.notifier).setClassId(13);
+        await container.read(voucherGenPreviewProvider.future);
+
+        // Generate October 2017
+        final initialSummary = await container
+            .read(voucherGenExecutionProvider.notifier)
+            .generateVouchers();
+        expect(initialSummary, isNotNull);
+        expect(initialSummary!.generatedCount, 10);
+
+        // Mark ONE voucher as paid
+        await db.rawUpdate(
+          "UPDATE VoucharMas SET IsPaid = 'Y' WHERE VoucherMasID = '1710-4411'",
+        );
+
+        // Call regenerateUnpaidCohortVouchers()
+        final result = await container
+            .read(voucherGenExecutionProvider.notifier)
+            .regenerateUnpaidCohortVouchers();
+
+        // Assertions:
+        // Returns null
+        expect(result, isNull);
+
+        // Notifier state.error has verbatim error
+        final error = container.read(voucherGenExecutionProvider).error;
+        expect(
+          error,
+          'Cannot regenerate: 1 paid voucher(s) exist in this cohort. Revoke payments first.',
+        );
+
+        // VoucharMas count still 10 (no deletion occurred)
+        final masCount = await db.rawQuery(
+          "SELECT COUNT(*) as cnt FROM VoucharMas WHERE ForMonth = 'October 2017'",
+        );
+        expect(masCount.first['cnt'], 10);
+
+        // Paid voucher still has IsPaid = 'Y'
+        final paidVoucher = await db.rawQuery(
+          "SELECT IsPaid FROM VoucharMas WHERE VoucherMasID = '1710-4411'",
+        );
+        expect(paidVoucher.first['IsPaid'], 'Y');
+
+        // Other 9 vouchers still have IsPaid = 'N' (untouched)
+        final otherVouchers = await db.rawQuery(
+          "SELECT COUNT(*) as cnt FROM VoucharMas WHERE ForMonth = 'October 2017' AND IsPaid = 'N'",
+        );
+        expect(otherVouchers.first['cnt'], 9);
+      },
+    );
   });
 }

@@ -830,6 +830,142 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
       fineAmount: fineAmount,
     );
   }
+
+  /// Regenerate unpaid cohort vouchers.
+  Future<BatchGenerationSummary?> regenerateUnpaidCohortVouchers() async {
+    final filters = ref.read(voucherGenFiltersProvider);
+    if (filters.classId == null) {
+      state = state.copyWith(error: 'No eligible students for this cohort');
+      return null;
+    }
+
+    final db = await DatabaseService.instance.database;
+    final sectionFilter = filters.classSecId;
+    final billingMonthPrefix = _yyMmPrefix(filters.billingMonth);
+
+    // 1. Block if any paid voucher exists in cohort
+    final paidCheck = await db.rawQuery(
+      '''
+      SELECT COUNT(*) AS paidCount
+      FROM VoucharMas vm
+      WHERE vm.ClassID = ?
+        AND vm.ForMonth = ?
+        AND vm.SessionYr = ?
+        AND vm.IsPaid = 'Y'
+        AND (? IS NULL OR vm.Student_Class_StuRegID IN (
+          SELECT Stu_RegID FROM Student_Class
+          WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
+        ))
+      ''',
+      [
+        filters.classId,
+        filters.billingMonth,
+        filters.sessionYr,
+        sectionFilter,
+        filters.classId,
+        sectionFilter ?? 0,
+        filters.sessionYr,
+      ],
+    );
+    final paidCount = (paidCheck.first['paidCount'] as num?)?.toInt() ?? 0;
+    if (paidCount > 0) {
+      state = state.copyWith(
+        error:
+            'Cannot regenerate: $paidCount paid voucher(s) exist in this cohort. Revoke payments first.',
+      );
+      return null;
+    }
+
+    // 2. Delete unpaid vouchers, revert orphaned 'O' rollovers, all in one transaction
+    await db.transaction((txn) async {
+      // Revert orphaned prior-month 'O' vouchers back to 'N' for students in this cohort
+      await txn.rawUpdate(
+        '''
+        UPDATE VoucharMas
+        SET IsPaid = 'N'
+        WHERE IsPaid = 'O'
+          AND SUBSTR(VoucherMasID, 1, 4) < ?
+          AND Student_Class_StuRegID IN (
+            SELECT Student_Class_StuRegID FROM VoucharMas
+            WHERE ClassID = ? AND ForMonth = ? AND SessionYr = ?
+              AND IsPaid IN ('N', 'O')
+              AND (? IS NULL OR Student_Class_StuRegID IN (
+                SELECT Stu_RegID FROM Student_Class
+                WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
+              ))
+          )
+        ''',
+        [
+          billingMonthPrefix,
+          filters.classId,
+          filters.billingMonth,
+          filters.sessionYr,
+          sectionFilter,
+          filters.classId,
+          sectionFilter ?? 0,
+          filters.sessionYr,
+        ],
+      );
+
+      // Delete VoucharDet first (FK-safe)
+      await txn.rawDelete(
+        '''
+        DELETE FROM VoucharDet
+        WHERE VoucharMasID IN (
+          SELECT VoucherMasID FROM VoucharMas
+          WHERE ClassID = ? AND ForMonth = ? AND SessionYr = ?
+            AND IsPaid IN ('N', 'O')
+            AND (? IS NULL OR Student_Class_StuRegID IN (
+              SELECT Stu_RegID FROM Student_Class
+              WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
+            ))
+        )
+        ''',
+        [
+          filters.classId,
+          filters.billingMonth,
+          filters.sessionYr,
+          sectionFilter,
+          filters.classId,
+          sectionFilter ?? 0,
+          filters.sessionYr,
+        ],
+      );
+
+      // Delete VoucharMas
+      await txn.rawDelete(
+        '''
+        DELETE FROM VoucharMas
+        WHERE ClassID = ? AND ForMonth = ? AND SessionYr = ?
+          AND IsPaid IN ('N', 'O')
+          AND (? IS NULL OR Student_Class_StuRegID IN (
+            SELECT Stu_RegID FROM Student_Class
+            WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
+          ))
+        ''',
+        [
+          filters.classId,
+          filters.billingMonth,
+          filters.sessionYr,
+          sectionFilter,
+          filters.classId,
+          sectionFilter ?? 0,
+          filters.sessionYr,
+        ],
+      );
+    });
+
+    // 3. Invalidate and deterministically await fresh preview (NO Future.delayed)
+    ref.invalidate(voucherGenPreviewProvider);
+    try {
+      await ref.read(voucherGenPreviewProvider.future);
+    } catch (_) {
+      // Preview rebuild may throw if no students; treat as empty cohort
+    }
+
+    // 4. Regenerate with current config through the SAME generation method
+    return generateVouchers();
+  }
 }
 
 final voucherGenExecutionProvider =
