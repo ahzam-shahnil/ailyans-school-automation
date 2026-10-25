@@ -47,9 +47,16 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     final uri = GoRouterState.of(context).uri;
     final status = uri.queryParameters['status'];
     final month = uri.queryParameters['month'];
-    if (status == null && month == null) return;
 
     final notifier = ref.read(feeLedgerProvider.notifier);
+
+    // If no query params, reset to defaults so state from a previous
+    // navigation does not leak. Each navigation lands on the state the URL declares.
+    if (status == null && month == null) {
+      notifier.clearFilters();
+      return;
+    }
+
     if (status != null && status.isNotEmpty) {
       notifier.setStatus(status);
     }
