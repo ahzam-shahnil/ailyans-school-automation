@@ -38,7 +38,24 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     // Verify permission on load if session is present
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkPermissions();
+      _applyQueryParams();
     });
+  }
+
+  void _applyQueryParams() {
+    if (!mounted) return;
+    final uri = GoRouterState.of(context).uri;
+    final status = uri.queryParameters['status'];
+    final month = uri.queryParameters['month'];
+    if (status == null && month == null) return;
+
+    final notifier = ref.read(feeLedgerProvider.notifier);
+    if (status != null && status.isNotEmpty) {
+      notifier.setStatus(status);
+    }
+    if (month != null && month.isNotEmpty) {
+      notifier.setMonth(month);
+    }
   }
 
   @override
@@ -618,14 +635,19 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
                   : null,
               isDense: true,
               underline: const SizedBox.shrink(),
-              items: state.sessionYears
-                  .map(
-                    (y) => DropdownMenuItem(
-                      value: y,
-                      child: Text(y, style: const TextStyle(fontSize: 12)),
-                    ),
-                  )
-                  .toList(),
+              items:
+                  {
+                        if (state.selectedSessionYr.isNotEmpty)
+                          state.selectedSessionYr,
+                        ...state.sessionYears,
+                      }
+                      .map(
+                        (y) => DropdownMenuItem(
+                          value: y,
+                          child: Text(y, style: const TextStyle(fontSize: 12)),
+                        ),
+                      )
+                      .toList(),
               onChanged: (val) {
                 if (val != null) notifier.setSession(val);
               },
@@ -647,7 +669,10 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
                   value: null,
                   child: Text('All Months', style: TextStyle(fontSize: 12)),
                 ),
-                ...state.months.map(
+                ...{
+                  if (state.selectedMonth != null) state.selectedMonth!,
+                  ...state.months,
+                }.map(
                   (m) => DropdownMenuItem<String?>(
                     value: m,
                     child: Text(m, style: const TextStyle(fontSize: 12)),

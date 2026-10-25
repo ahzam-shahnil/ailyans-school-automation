@@ -6,8 +6,6 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
-import '../../core/providers/fee_collection_provider.dart';
-import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
 /// Central Executive Dashboard Cockpit for School Administration.
@@ -206,6 +204,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                             icon: Icons.fact_check_outlined,
                             iconColor: AppColors.chartBlue,
                             isLoading: isLoading,
+                            onTap: () => context.go('/attendance'),
                             mainWidget: Row(
                               crossAxisAlignment: CrossAxisAlignment.baseline,
                               textBaseline: TextBaseline.alphabetic,
@@ -233,6 +232,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                             icon: Icons.payments_outlined,
                             iconColor: AppColors.chartTeal,
                             isLoading: isLoading,
+                            onTap: () => context.go('/fees/ledger'),
                             mainWidget: Wrap(
                               crossAxisAlignment: WrapCrossAlignment.center,
                               spacing: AppSpacing.xs,
@@ -293,6 +293,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                             icon: Icons.school_outlined,
                             iconColor: AppColors.chartAmber,
                             isLoading: isLoading,
+                            onTap: () => context.go('/students'),
                             mainWidget: Row(
                               crossAxisAlignment: CrossAxisAlignment.baseline,
                               textBaseline: TextBaseline.alphabetic,
@@ -328,26 +329,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                             icon: Icons.receipt_long_outlined,
                             iconColor: AppColors.chartRose,
                             isLoading: isLoading,
-                            onTap: () async {
-                              final buildData = await ref
-                                  .read(feeCollectionProvider.notifier)
-                                  .buildDefaulterList();
-                              if (!context.mounted) return;
-                              final meta = ref
-                                  .read(shellMetadataProvider)
-                                  .value;
-                              await showDefaulterListPrintPreviewDialog(
-                                context,
-                                initialGroups: buildData.groups,
-                                initialSummary: buildData.summary,
-                                branchName: meta?.branchName ?? "Ailyans's Higher Secondary School Mianwali",
-                                branchAddress:
-                                    meta?.branchAddress ??
-                                    'Muslim Bazar Mianwali',
-                                branchPhone: meta?.branchPhone,
-                                branchPrincipal: meta?.branchPrincipal,
-                              );
-                            },
+                            onTap: () =>
+                                context.go('/fees/ledger?status=Unpaid'),
                             mainWidget: Wrap(
                               crossAxisAlignment: WrapCrossAlignment.center,
                               spacing: AppSpacing.xs,
@@ -609,10 +592,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     required String footerText,
     VoidCallback? onTap,
   }) {
-    return Material(
+    final Widget card = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        hoverColor: onTap != null
+            ? AppColors.brandPrimary.withValues(alpha: 0.04)
+            : null,
+        mouseCursor: onTap != null
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: Container(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -668,6 +657,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         ),
       ),
     );
+
+    if (onTap == null) return card;
+    return Tooltip(
+      message: 'Click to view details',
+      waitDuration: const Duration(milliseconds: 500),
+      child: card,
+    );
   }
 
   /// Builds the left-column Recent Fee Payments Feed card.
@@ -721,7 +717,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.go('/fees/receipts'),
+                  onPressed: () => context.go('/fees/ledger'),
                   child: Text(
                     'Open Fee Ledger →',
                     style: AppTypography.label.copyWith(
@@ -926,7 +922,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.go('/fees/vouchers'),
+                  onPressed: () => context.go('/fees/ledger'),
                   child: Text(
                     'View Fee Analytics →',
                     style: AppTypography.label.copyWith(
