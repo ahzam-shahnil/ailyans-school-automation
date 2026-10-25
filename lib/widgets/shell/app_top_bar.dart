@@ -411,6 +411,12 @@ class AppTopBar extends ConsumerWidget {
     if (path.startsWith('/library')) {
       return 'Home > Library';
     }
+    if (path.startsWith('/system/permissions')) {
+      return 'Home > System Administration > User Access Control Matrix';
+    }
+    if (path.startsWith('/system/users')) {
+      return 'Home > System Administration > Operator Accounts';
+    }
     if (path.startsWith('/system')) {
       return 'Home > System Settings';
     }

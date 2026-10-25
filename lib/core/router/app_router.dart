@@ -12,6 +12,8 @@ import '../../screens/login/login_screen.dart';
 import '../../screens/students/student_list_screen.dart';
 import '../../screens/students/student_profile_screen.dart';
 import '../../screens/students/student_registration_wizard.dart';
+import '../../screens/system/permission_matrix_screen.dart';
+import '../../screens/system/user_management_screen.dart';
 import '../../widgets/shell/app_shell.dart';
 import '../providers/session_provider.dart';
 import '../theme/app_theme_tokens.dart';
@@ -129,17 +131,15 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/system/settings',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'System Settings',
-              route: '/system/settings',
-            ),
+            redirect: (context, state) => '/system/users',
           ),
           GoRoute(
             path: '/system/users',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'User Management & Permissions',
-              route: '/system/users',
-            ),
+            builder: (context, state) => const UserManagementScreen(),
+          ),
+          GoRoute(
+            path: '/system/permissions',
+            builder: (context, state) => const PermissionMatrixScreen(),
           ),
         ],
       ),
