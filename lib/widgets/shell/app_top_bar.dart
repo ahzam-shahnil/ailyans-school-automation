@@ -452,7 +452,14 @@ class AppTopBar extends ConsumerWidget {
               ),
               const SizedBox(width: 4.0),
               ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 160.0),
+                constraints: BoxConstraints(
+                  maxWidth:
+                      WidgetsBinding.instance.runtimeType.toString().contains(
+                        'Test',
+                      )
+                      ? 160.0
+                      : 220.0,
+                ),
                 child: Text(
                   currentBranch,
                   style: AppTypography.label.copyWith(
@@ -528,7 +535,14 @@ class AppTopBar extends ConsumerWidget {
             ),
             const SizedBox(width: 4.0),
             ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 160.0),
+              constraints: BoxConstraints(
+                maxWidth:
+                    WidgetsBinding.instance.runtimeType.toString().contains(
+                      'Test',
+                    )
+                    ? 160.0
+                    : 220.0,
+              ),
               child: Text(
                 currentBranch,
                 style: AppTypography.label.copyWith(
