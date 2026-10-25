@@ -178,70 +178,99 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                         ),
                       ],
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              context.go('/students/enrollment/bulk'),
-                          icon: const Icon(
-                            Icons.group_add_outlined,
-                            size: 16.0,
-                          ),
-                          label: const Text('Bulk Enrollment'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.textPrimary,
-                            side: const BorderSide(
-                              color: AppColors.borderDefault,
+                    Flexible(
+                      child: Wrap(
+                        alignment: WrapAlignment.end,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                context.go('/students/enrollment/bulk'),
+                            icon: const Icon(
+                              Icons.group_add_outlined,
+                              size: 16.0,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                            ),
-                            minimumSize: const Size(0, 40),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Export coming in Phase 2'),
-                                duration: Duration(seconds: 2),
+                            label: const Text('Bulk Enrollment'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              side: const BorderSide(
+                                color: AppColors.borderDefault,
                               ),
-                            );
-                          },
-                          icon: const Icon(Icons.download_outlined, size: 16.0),
-                          label: const Text('Export CSV'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.textPrimary,
-                            side: const BorderSide(
-                              color: AppColors.borderDefault,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              minimumSize: const Size(0, 40),
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                          OutlinedButton.icon(
+                            onPressed: () => context.go('/students/promote'),
+                            icon: const Icon(Icons.trending_up, size: 16.0),
+                            label: const Text('Batch Promotion'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              side: const BorderSide(
+                                color: AppColors.borderDefault,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              minimumSize: const Size(0, 40),
                             ),
-                            minimumSize: const Size(0, 40),
                           ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        ElevatedButton.icon(
-                          onPressed: () => context.go('/students/new'),
-                          icon: const Icon(
-                            Icons.person_add_outlined,
-                            size: 16.0,
-                          ),
-                          label: const Text('+ New Student (Ctrl+N)'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.brandPrimary,
-                            foregroundColor: AppColors.textOnPrimary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(AppRadius.md),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Export coming in Phase 2'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.download_outlined,
+                              size: 16.0,
                             ),
-                            minimumSize: const Size(0, 40),
-                            elevation: AppElevation.flat,
+                            label: const Text('Export CSV'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              side: const BorderSide(
+                                color: AppColors.borderDefault,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              minimumSize: const Size(0, 40),
+                            ),
                           ),
-                        ),
-                      ],
+                          ElevatedButton.icon(
+                            onPressed: () => context.go('/students/new'),
+                            icon: const Icon(
+                              Icons.person_add_outlined,
+                              size: 16.0,
+                            ),
+                            label: const Text('+ New Student (Ctrl+N)'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.brandPrimary,
+                              foregroundColor: AppColors.textOnPrimary,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              minimumSize: const Size(0, 40),
+                              elevation: AppElevation.flat,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

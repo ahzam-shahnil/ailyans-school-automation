@@ -365,6 +365,9 @@ class AppTopBar extends ConsumerWidget {
     if (path.startsWith('/students/enrollment/bulk')) {
       return 'Home > Students > Bulk Class Enrollment';
     }
+    if (path.startsWith('/students/promote')) {
+      return 'Home > Students > Batch Promotion';
+    }
     if (path.startsWith('/students/')) {
       return 'Home > Students > Student Profile';
     }
