@@ -6,6 +6,7 @@ import '../../screens/attendance/attendance_screen.dart';
 import '../../screens/dashboard/dashboard_screen.dart';
 import '../../screens/exams/marks_entry_screen.dart';
 import '../../screens/fees/fee_collection_screen.dart';
+import '../../screens/fees/fee_ledger_screen.dart';
 import '../../screens/fees/fee_parameter_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/login/login_screen.dart';
@@ -108,10 +109,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/fees/ledger',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Fee Ledger',
-              route: '/fees/ledger',
-            ),
+            builder: (context, state) => const FeeLedgerScreen(),
           ),
           GoRoute(path: '/exams', redirect: (context, state) => '/exams/marks'),
           GoRoute(

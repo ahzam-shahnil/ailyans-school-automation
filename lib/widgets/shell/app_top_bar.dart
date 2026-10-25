@@ -365,6 +365,9 @@ class AppTopBar extends ConsumerWidget {
     if (path.startsWith('/students/')) {
       return 'Home > Students > Student Profile';
     }
+    if (path.startsWith('/fees/ledger')) {
+      return 'Home > Fees > Fee Ledger & Analytics';
+    }
     if (path.startsWith('/fees/parameters')) {
       return 'Home > Fees > Fee Structure & Bank Setup';
     }
