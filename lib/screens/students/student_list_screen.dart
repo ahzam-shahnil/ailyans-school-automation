@@ -182,6 +182,26 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         OutlinedButton.icon(
+                          onPressed: () =>
+                              context.go('/students/enrollment/bulk'),
+                          icon: const Icon(
+                            Icons.group_add_outlined,
+                            size: 16.0,
+                          ),
+                          label: const Text('Bulk Enrollment'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.textPrimary,
+                            side: const BorderSide(
+                              color: AppColors.borderDefault,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                            ),
+                            minimumSize: const Size(0, 40),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        OutlinedButton.icon(
                           onPressed: () {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(

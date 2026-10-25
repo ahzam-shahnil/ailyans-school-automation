@@ -362,6 +362,9 @@ class AppTopBar extends ConsumerWidget {
     if (path == '/students/new') {
       return 'Home > Students > New Admission';
     }
+    if (path.startsWith('/students/enrollment/bulk')) {
+      return 'Home > Students > Bulk Class Enrollment';
+    }
     if (path.startsWith('/students/')) {
       return 'Home > Students > Student Profile';
     }

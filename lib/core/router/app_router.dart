@@ -10,6 +10,7 @@ import '../../screens/fees/fee_ledger_screen.dart';
 import '../../screens/fees/fee_parameter_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/login/login_screen.dart';
+import '../../screens/students/bulk_enrollment_screen.dart';
 import '../../screens/students/student_list_screen.dart';
 import '../../screens/students/student_profile_screen.dart';
 import '../../screens/students/student_registration_wizard.dart';
@@ -74,7 +75,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/students',
             builder: (context, state) => const StudentListScreen(),
             routes: [
-              // CRITICAL: 'new' MUST precede ':id' to prevent routing conflicts
+              // CRITICAL: 'enrollment/bulk' and 'new' MUST precede ':id' to prevent routing conflicts
+              GoRoute(
+                path: 'enrollment/bulk',
+                builder: (context, state) => const BulkEnrollmentScreen(),
+              ),
               GoRoute(
                 path: 'new',
                 builder: (context, state) => const StudentRegistrationWizard(),
