@@ -2,11 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/db/database.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../screens/login/change_password_dialog.dart';
 import 'app_sidebar.dart';
+
+/// Provides list of branches configured in the system.
+final branchListProvider = FutureProvider<List<Map<String, dynamic>>>((
+  ref,
+) async {
+  if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+    return const [];
+  }
+  final db = await DatabaseService.instance.database;
+  return await db.rawQuery(
+    'SELECT BrnachID, BranchName FROM InstBranch ORDER BY BrnachID ASC',
+  );
+});
+
+/// Current active branch name selected in the top bar.
+final currentBranchProvider = StateProvider<String?>((ref) => null);
 
 /// Persistent top bar of the desktop application shell.
 class AppTopBar extends ConsumerWidget {
@@ -78,45 +95,7 @@ class AppTopBar extends ConsumerWidget {
         const SizedBox(width: AppSpacing.xs),
 
         // Branch Selector Pill
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: 6.0,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceSubtle,
-            border: Border.all(color: AppColors.borderDefault),
-            borderRadius: BorderRadius.circular(AppRadius.md),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.location_on_outlined,
-                size: 15.0,
-                color: AppColors.brandPrimary,
-              ),
-              const SizedBox(width: 4.0),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 150.0),
-                child: Text(
-                  'Main Campus',
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.textPrimary,
-                    fontSize: 12.0,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 2.0),
-              const Icon(
-                Icons.arrow_drop_down,
-                size: 16.0,
-                color: AppColors.textSecondary,
-              ),
-            ],
-          ),
-        ),
+        _buildBranchPill(context, ref, metadata),
 
         const SizedBox(width: AppSpacing.md),
 
@@ -252,6 +231,8 @@ class AppTopBar extends ConsumerWidget {
               context.go('/login');
             } else if (value == 'change_password') {
               ChangePasswordDialog.show(context, username: session?.user.name);
+            } else if (value == 'profile') {
+              _showProfileDialog(context, session);
             }
           },
           itemBuilder: (context) => [
@@ -432,5 +413,279 @@ class AppTopBar extends ConsumerWidget {
       return parts.first.substring(0, 1).toUpperCase();
     }
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+  }
+
+  Widget _buildBranchPill(
+    BuildContext context,
+    WidgetRef ref,
+    ShellMetadata metadata,
+  ) {
+    final branchListAsync = ref.watch(branchListProvider);
+    final branches = branchListAsync.valueOrNull ?? [];
+    final currentBranch =
+        ref.watch(currentBranchProvider) ??
+        (branches.isNotEmpty
+            ? (branches.first['BranchName'] as String? ?? metadata.branchName)
+            : metadata.branchName);
+
+    // If 1 or 0 branches: read-only chip with tooltip, no arrow
+    if (branches.length <= 1) {
+      return Tooltip(
+        message: 'Single campus configured. Add more branches in Settings to switch.',
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 6.0,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSubtle,
+            border: Border.all(color: AppColors.borderDefault),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                size: 15.0,
+                color: AppColors.brandPrimary,
+              ),
+              const SizedBox(width: 4.0),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 160.0),
+                child: Text(
+                  currentBranch,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 12.0,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 2+ branches: interactive PopupMenuButton
+    return PopupMenuButton<String>(
+      offset: const Offset(0, 36),
+      tooltip: 'Switch Branch',
+      color: AppColors.surfaceRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        side: const BorderSide(color: AppColors.borderDefault),
+      ),
+      onSelected: (branchName) {
+        ref.read(currentBranchProvider.notifier).state = branchName;
+      },
+      itemBuilder: (context) => branches.map((b) {
+        final bName = b['BranchName'] as String? ?? '';
+        final isSelected = bName == currentBranch;
+        return PopupMenuItem<String>(
+          value: bName,
+          child: Row(
+            children: [
+              Icon(
+                isSelected ? Icons.check : Icons.business_outlined,
+                size: 16.0,
+                color: isSelected
+                    ? AppColors.brandPrimary
+                    : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 8.0),
+              Text(
+                bName,
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                  color: isSelected
+                      ? AppColors.brandPrimary
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: 6.0,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSubtle,
+          border: Border.all(color: AppColors.borderDefault),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.location_on_outlined,
+              size: 15.0,
+              color: AppColors.brandPrimary,
+            ),
+            const SizedBox(width: 4.0),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160.0),
+              child: Text(
+                currentBranch,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textPrimary,
+                  fontSize: 12.0,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 2.0),
+            const Icon(
+              Icons.arrow_drop_down,
+              size: 16.0,
+              color: AppColors.textSecondary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showProfileDialog(BuildContext context, UserSession? session) {
+    final user = session?.user;
+    if (user == null) return;
+
+    final roleLabel = user.userLevel == 1
+        ? 'Admin (Level 1)'
+        : user.userLevel == 2
+        ? 'Operator (Level 2)'
+        : 'Guest (Level 3)';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        titlePadding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        actionsPadding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8.0),
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.person,
+                size: 20.0,
+                color: AppColors.brandPrimary,
+              ),
+            ),
+            const SizedBox(width: 12.0),
+            Text(
+              'Profile Information',
+              style: AppTypography.h2.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        content: SizedBox(
+          width: 520.0,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildProfileRow('Account Name:', user.name, isBold: true),
+              _buildProfileRow('Designation:', user.designation ?? '-'),
+              _buildProfileRow(
+                'National CNIC:',
+                user.cnic ?? '-',
+                isMono: true,
+              ),
+              _buildProfileRow('Branch:', user.branch ?? '-'),
+              _buildProfileRow(
+                'Primary Mobile:',
+                user.mobile1 ?? '-',
+                isMono: true,
+              ),
+              _buildProfileRow(
+                'Secondary Mobile:',
+                user.mobile2 ?? '-',
+                isMono: true,
+              ),
+              _buildProfileRow('Residential Address:', user.address ?? '-'),
+              _buildProfileRow('User Role Level:', roleLabel),
+              _buildProfileRow(
+                'Account Status:',
+                user.isActive ? 'Active' : 'Inactive',
+                statusColor: user.isActive
+                    ? AppColors.statusSuccessText
+                    : AppColors.textMuted,
+              ),
+              _buildProfileRow('Remarks:', user.remarks ?? '-'),
+            ],
+          ),
+        ),
+        actions: [
+          OutlinedButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.lock_reset, size: 16),
+            label: const Text('Change Password'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              ChangePasswordDialog.show(context, username: user.name);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    bool isMono = false,
+    Color? statusColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 150.0,
+            child: Text(
+              label,
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style:
+                  (isMono ? AppTypography.monospace : AppTypography.bodySmall)
+                      .copyWith(
+                        fontWeight: isBold
+                            ? FontWeight.w700
+                            : FontWeight.normal,
+                        color: statusColor ?? AppColors.textPrimary,
+                      ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

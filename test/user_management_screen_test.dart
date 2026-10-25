@@ -298,5 +298,27 @@ void main() {
       await tester.pump(const Duration(milliseconds: 200));
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+      'm) Clicking [+ New User] enters new mode with NEW OPERATOR ACCOUNT header',
+      (tester) async {
+        tester.view.physicalSize = const Size(1440, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() => tester.view.resetPhysicalSize());
+
+        await tester.pumpWidget(
+          const ProviderScope(child: MaterialApp(home: UserManagementScreen())),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 200));
+
+        expect(find.text('OPERATOR DIRECTORY'), findsOneWidget);
+        await tester.tap(find.text('New User (Ctrl+N)'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 250));
+
+        expect(find.text('NEW OPERATOR ACCOUNT'), findsOneWidget);
+      },
+    );
   });
 }

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/providers/fee_collection_provider.dart';
@@ -404,6 +405,22 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               minimumSize: const Size(0, 40),
               side: const BorderSide(color: AppColors.statusErrorBorder),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          OutlinedButton.icon(
+            onPressed: () => context.go('/fees/ledger'),
+            icon: const Icon(Icons.assessment_outlined, size: 16),
+            label: const Text(
+              'View Full Ledger',
+              style: TextStyle(fontSize: 13),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(0, 40),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppRadius.md),
               ),

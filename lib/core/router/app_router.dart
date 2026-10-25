@@ -106,6 +106,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/fees/receipts',
             builder: (context, state) => const FeeCollectionScreen(),
           ),
+          GoRoute(
+            path: '/fees/ledger',
+            builder: (context, state) => const _GenericShellPlaceholder(
+              title: 'Fee Ledger',
+              route: '/fees/ledger',
+            ),
+          ),
           GoRoute(path: '/exams', redirect: (context, state) => '/exams/marks'),
           GoRoute(
             path: '/exams/marks',

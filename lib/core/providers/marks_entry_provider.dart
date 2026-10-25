@@ -17,6 +17,7 @@ class MarksEntryState {
   final int theoryMax;
   final int practicalMax;
   final String? subjectTeacher;
+  final int? selectedTeacherIdOverride;
 
   final List<MarksEntryRow> roster;
   final List<Map<String, dynamic>> exGradeRows;
@@ -27,6 +28,7 @@ class MarksEntryState {
   final List<Map<String, dynamic>> classes;
   final List<Map<String, dynamic>> sections;
   final List<Map<String, dynamic>> subjects;
+  final List<Map<String, dynamic>> teachers;
 
   final bool isLoading;
   final bool isSaving;
@@ -43,6 +45,7 @@ class MarksEntryState {
     this.theoryMax = 100,
     this.practicalMax = 0,
     this.subjectTeacher,
+    this.selectedTeacherIdOverride,
     this.roster = const [],
     this.exGradeRows = const [],
     this.sessionYears = const [],
@@ -51,6 +54,7 @@ class MarksEntryState {
     this.classes = const [],
     this.sections = const [],
     this.subjects = const [],
+    this.teachers = const [],
     this.isLoading = false,
     this.isSaving = false,
     this.toast,
@@ -73,6 +77,8 @@ class MarksEntryState {
     int? practicalMax,
     String? subjectTeacher,
     bool clearSubjectTeacher = false,
+    int? selectedTeacherIdOverride,
+    bool clearTeacherOverride = false,
     List<MarksEntryRow>? roster,
     List<Map<String, dynamic>>? exGradeRows,
     List<String>? sessionYears,
@@ -81,6 +87,7 @@ class MarksEntryState {
     List<Map<String, dynamic>>? classes,
     List<Map<String, dynamic>>? sections,
     List<Map<String, dynamic>>? subjects,
+    List<Map<String, dynamic>>? teachers,
     bool? isLoading,
     bool? isSaving,
     String? toast,
@@ -110,6 +117,9 @@ class MarksEntryState {
       subjectTeacher: clearSubjectTeacher
           ? null
           : (subjectTeacher ?? this.subjectTeacher),
+      selectedTeacherIdOverride: clearTeacherOverride
+          ? null
+          : (selectedTeacherIdOverride ?? this.selectedTeacherIdOverride),
       roster: roster ?? this.roster,
       exGradeRows: exGradeRows ?? this.exGradeRows,
       sessionYears: sessionYears ?? this.sessionYears,
@@ -118,6 +128,7 @@ class MarksEntryState {
       classes: classes ?? this.classes,
       sections: sections ?? this.sections,
       subjects: subjects ?? this.subjects,
+      teachers: teachers ?? this.teachers,
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
       toast: clearToast ? null : (toast ?? this.toast),
@@ -141,6 +152,14 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
     if (state.errorMessage != null) {
       state = state.copyWith(clearError: true);
     }
+  }
+
+  /// Sets an explicit teacher override for exam cohort registration and saving.
+  void setTeacherOverride(int? teacherId) {
+    state = state.copyWith(
+      selectedTeacherIdOverride: teacherId,
+      clearTeacherOverride: teacherId == null,
+    );
   }
 
   /// Initial load of dropdown metadata (sessions, terms, classes).
@@ -173,12 +192,18 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
         'SELECT ClassID, CName FROM Class ORDER BY ClassID DESC',
       );
 
+      // 4. Teachers
+      final teacherRows = await db.rawQuery(
+        'SELECT TeacherID, TName FROM Teachers ORDER BY TName ASC',
+      );
+
       if (!mounted) return;
       state = state.copyWith(
         sessionYears: years.isNotEmpty ? years : [defaultYr],
         selectedSessionYr: defaultYr,
         terms: termRows,
         classes: classRows,
+        teachers: teacherRows,
         isLoading: false,
       );
     } catch (e) {
@@ -452,6 +477,16 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
       final classSecId = state.selectedClassSecId ?? 0;
       final sessionYr = state.selectedSessionYr;
 
+      int fallbackTeacherId = 1;
+      if (state.selectedSubjId != null) {
+        final match = state.subjects.firstWhere(
+          (s) => s['SubjID'] == state.selectedSubjId,
+          orElse: () => <String, dynamic>{},
+        );
+        fallbackTeacherId = (match['TeacherID'] as num?)?.toInt() ?? 1;
+      }
+      final teacherId = state.selectedTeacherIdOverride ?? fallbackTeacherId;
+
       int existingCnt = 0;
       int newCnt = 0;
       final updatedRoster = <MarksEntryRow>[];
@@ -466,6 +501,14 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
           if (masCheck.isNotEmpty) {
             existingCnt++;
             final masId = (masCheck.first['ExamMasID'] as num).toInt();
+            if (state.selectedTeacherIdOverride != null) {
+              await txn.update(
+                'ExamMas',
+                {'TeacherID': state.selectedTeacherIdOverride},
+                where: 'ExamMasID = ?',
+                whereArgs: [masId],
+              );
+            }
             updatedRoster.add(row.copyWith(examMasId: masId));
           } else {
             final maxRow = await txn.rawQuery(
@@ -480,7 +523,7 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
               'ClassID': classId,
               'ClassSecID': classSecId,
               'Stu_RegID': row.stuRegId,
-              'TeacherID': 1,
+              'TeacherID': teacherId,
               'Detail': '-',
               'SessionYr': sessionYr,
             });
@@ -746,6 +789,17 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
       final sessionYr = state.selectedSessionYr;
       final subjId = state.selectedSubjId!;
 
+      int fallbackTeacherId = 1;
+      if (state.selectedSubjId != null) {
+        final match = state.subjects.firstWhere(
+          (s) => s['SubjID'] == state.selectedSubjId,
+          orElse: () => <String, dynamic>{},
+        );
+        fallbackTeacherId = (match['TeacherID'] as num?)?.toInt() ?? 1;
+      }
+      final effectiveTeacherId =
+          state.selectedTeacherIdOverride ?? fallbackTeacherId;
+
       int enteredCnt = 0;
       int updatedCnt = 0;
       int absentCnt = 0;
@@ -758,6 +812,14 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
           int masId;
           if (row.examMasId != null) {
             masId = row.examMasId!;
+            if (state.selectedTeacherIdOverride != null) {
+              await txn.update(
+                'ExamMas',
+                {'TeacherID': state.selectedTeacherIdOverride},
+                where: 'ExamMasID = ?',
+                whereArgs: [masId],
+              );
+            }
           } else {
             final masRows = await txn.rawQuery(
               'SELECT ExamMasID FROM ExamMas WHERE ExamInfoID = ? AND Stu_RegID = ? LIMIT 1',
@@ -765,6 +827,14 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
             );
             if (masRows.isNotEmpty) {
               masId = (masRows.first['ExamMasID'] as num).toInt();
+              if (state.selectedTeacherIdOverride != null) {
+                await txn.update(
+                  'ExamMas',
+                  {'TeacherID': state.selectedTeacherIdOverride},
+                  where: 'ExamMasID = ?',
+                  whereArgs: [masId],
+                );
+              }
             } else {
               final maxMas = await txn.rawQuery(
                 'SELECT COALESCE(MAX(ExamMasID), 0) + 1 AS nextId FROM ExamMas',
@@ -777,7 +847,7 @@ class MarksEntryNotifier extends StateNotifier<MarksEntryState> {
                 'ClassID': classId,
                 'ClassSecID': classSecId,
                 'Stu_RegID': row.stuRegId,
-                'TeacherID': 1,
+                'TeacherID': effectiveTeacherId,
                 'Detail': '-',
                 'SessionYr': sessionYr,
               });

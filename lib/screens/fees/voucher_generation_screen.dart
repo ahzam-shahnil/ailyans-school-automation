@@ -1576,6 +1576,19 @@ class _VoucherGenerationScreenState
                 ),
                 onPressed: () => ref.invalidate(voucherGenPreviewProvider),
               ),
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/fees/ledger'),
+                icon: const Icon(Icons.assessment_outlined, size: 16),
+                label: const Text('View Full Ledger'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.borderDefault),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),

@@ -38,6 +38,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   int? _lastSyncedUserId;
   bool _lastSyncedCreatingNew = false;
 
+  final FocusNode _nameFocusNode = FocusNode();
+  final ScrollController _formScrollController = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +60,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     _mobile2Controller.dispose();
     _addressController.dispose();
     _remarksController.dispose();
+    _nameFocusNode.dispose();
+    _formScrollController.dispose();
     super.dispose();
   }
 
@@ -181,6 +186,24 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
           next.isCreatingNew != prev?.isCreatingNew) {
         setState(() {
           _syncForm(next);
+        });
+
+        if (next.isCreatingNew && prev?.isCreatingNew != true) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _nameFocusNode.requestFocus();
+            }
+          });
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _formScrollController.hasClients) {
+            _formScrollController.animateTo(
+              0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
         });
       }
     });
@@ -607,14 +630,21 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Detail Header
-        Container(
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
             vertical: AppSpacing.sm,
           ),
-          decoration: const BoxDecoration(
-            color: AppColors.surfaceRaised,
-            border: Border(bottom: BorderSide(color: AppColors.borderDefault)),
+          decoration: BoxDecoration(
+            color: isNew
+                ? AppColors.brandPrimary.withValues(alpha: 0.08)
+                : AppColors.surfaceRaised,
+            border: isNew
+                ? Border.all(color: AppColors.brandPrimary, width: 1.0)
+                : const Border(
+                    bottom: BorderSide(color: AppColors.borderDefault),
+                  ),
           ),
           child: Row(
             children: [
@@ -626,6 +656,9 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   style: AppTypography.h3.copyWith(
                     fontWeight: FontWeight.w700,
                     fontSize: 14.0,
+                    color: isNew
+                        ? AppColors.brandPrimary
+                        : AppColors.textPrimary,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -690,284 +723,295 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
 
         // Scrollable Form Fields
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Row 1: Account Name * + Designation
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _buildFormField(
-                        label: 'Account Name *',
-                        controller: _nameController,
-                        hint: 'Unique login username',
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: SingleChildScrollView(
+              key: ValueKey(
+                '${state.isCreatingNew}-${state.selectedUser?.id ?? "new"}',
+              ),
+              controller: _formScrollController,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Row 1: Account Name * + Designation
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildFormField(
+                          label: 'Account Name *',
+                          controller: _nameController,
+                          hint: 'Unique login username',
+                          focusNode: _nameFocusNode,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: _buildFormField(
-                        label: 'Designation',
-                        controller: _desigController,
-                        hint: 'e.g. Principal / Accountant',
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: _buildFormField(
+                          label: 'Designation',
+                          controller: _desigController,
+                          hint: 'e.g. Principal / Accountant',
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
 
-                // Row 2: National CNIC + Branch Identifier
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _buildFormField(
-                        label: 'National CNIC',
-                        controller: _cnicController,
-                        hint: 'XXXXX-XXXXXXX-X',
-                        inputFormatters: const [CnicInputFormatter()],
+                  // Row 2: National CNIC + Branch Identifier
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildFormField(
+                          label: 'National CNIC',
+                          controller: _cnicController,
+                          hint: 'XXXXX-XXXXXXX-X',
+                          inputFormatters: const [CnicInputFormatter()],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Branch Identifier',
-                            style: AppTypography.bodySmall.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4.0),
-                          DropdownButtonFormField<String>(
-                            key: ValueKey(initialBranchVal),
-                            initialValue: initialBranchVal,
-                            isExpanded: true,
-                            menuMaxHeight: 400,
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: 8.0,
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Branch Identifier',
+                              style: AppTypography.bodySmall.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
                               ),
                             ),
-                            items: branchItems.map((b) {
-                              return DropdownMenuItem<String>(
-                                value: b,
-                                child: Text(
-                                  b,
-                                  style: AppTypography.bodySmall,
-                                  overflow: TextOverflow.ellipsis,
+                            const SizedBox(height: 4.0),
+                            DropdownButtonFormField<String>(
+                              key: ValueKey(initialBranchVal),
+                              initialValue: initialBranchVal,
+                              isExpanded: true,
+                              menuMaxHeight: 400,
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.sm,
+                                  vertical: 8.0,
                                 ),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() {
-                                  _selectedBranch = val;
-                                });
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-
-                // Row 3: Primary Mobile + Secondary Mobile
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _buildFormField(
-                        label: 'Primary Mobile',
-                        controller: _mobile1Controller,
-                        hint: '03XX-XXXXXXX',
-                        inputFormatters: const [MobileInputFormatter()],
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: _buildFormField(
-                        label: 'Secondary Mobile',
-                        controller: _mobile2Controller,
-                        hint: '03XX-XXXXXXX',
-                        inputFormatters: const [MobileInputFormatter()],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-
-                // Row 4: Password * + Account Active Switch
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Password *',
-                            style: AppTypography.bodySmall.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4.0),
-                          TextField(
-                            controller: _pwdController,
-                            obscureText: _obscurePassword,
-                            decoration: InputDecoration(
-                              hintText: isNew
-                                  ? 'Enter initial password (min 8 chars)'
-                                  : '•••••••• (Leave blank to keep existing)',
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.sm,
-                                vertical: 8.0,
                               ),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility
-                                      : Icons.visibility_off,
-                                  size: 18,
-                                  color: AppColors.textMuted,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Account Status',
-                            style: AppTypography.bodySmall.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: 4.0),
-                          Container(
-                            height: 38.0,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.sm,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceRaised,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                              border: Border.all(
-                                color: AppColors.borderDefault,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
+                              items: branchItems.map((b) {
+                                return DropdownMenuItem<String>(
+                                  value: b,
                                   child: Text(
-                                    _isActive
-                                        ? 'Active (Can Log In)'
-                                        : 'Inactive',
-                                    style: AppTypography.bodySmall.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: _isActive
-                                          ? AppColors.statusSuccessText
-                                          : AppColors.textMuted,
-                                    ),
+                                    b,
+                                    style: AppTypography.bodySmall,
                                     overflow: TextOverflow.ellipsis,
                                   ),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() {
+                                    _selectedBranch = val;
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // Row 3: Primary Mobile + Secondary Mobile
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildFormField(
+                          label: 'Primary Mobile',
+                          controller: _mobile1Controller,
+                          hint: '03XX-XXXXXXX',
+                          inputFormatters: const [MobileInputFormatter()],
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: _buildFormField(
+                          label: 'Secondary Mobile',
+                          controller: _mobile2Controller,
+                          hint: '03XX-XXXXXXX',
+                          inputFormatters: const [MobileInputFormatter()],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // Row 4: Password * + Account Active Switch
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Password *',
+                              style: AppTypography.bodySmall.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 4.0),
+                            TextField(
+                              controller: _pwdController,
+                              obscureText: _obscurePassword,
+                              decoration: InputDecoration(
+                                hintText: isNew
+                                    ? 'Enter initial password (min 8 chars)'
+                                    : '•••••••• (Leave blank to keep existing)',
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.sm,
+                                  vertical: 8.0,
                                 ),
-                                Switch(
-                                  value: _isActive,
-                                  activeThumbColor: AppColors.brandPrimary,
-                                  onChanged: (val) {
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
+                                    size: 18,
+                                    color: AppColors.textMuted,
+                                  ),
+                                  onPressed: () {
                                     setState(() {
-                                      _isActive = val;
+                                      _obscurePassword = !_obscurePassword;
                                     });
                                   },
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Account Status',
+                              style: AppTypography.bodySmall.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 4.0),
+                            Container(
+                              height: 38.0,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.surfaceRaised,
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                                border: Border.all(
+                                  color: AppColors.borderDefault,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      _isActive
+                                          ? 'Active (Can Log In)'
+                                          : 'Inactive',
+                                      style: AppTypography.bodySmall.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: _isActive
+                                            ? AppColors.statusSuccessText
+                                            : AppColors.textMuted,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: _isActive,
+                                    activeThumbColor: AppColors.brandPrimary,
+                                    onChanged: (val) {
+                                      setState(() {
+                                        _isActive = val;
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
 
-                // Row 5: User Role Level * (Radio Group)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'User Role Level *',
-                      style: AppTypography.bodySmall.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textSecondary,
+                  // Row 5: User Role Level * (Radio Group)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'User Role Level *',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4.0),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 4.0,
+                      const SizedBox(height: 4.0),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: 4.0,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceRaised,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border: Border.all(color: AppColors.borderDefault),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: _buildRadioOption('Level 1 (Admin)', 1),
+                            ),
+                            Expanded(
+                              child: _buildRadioOption('Level 2 (Operator)', 2),
+                            ),
+                            Expanded(
+                              child: _buildRadioOption('Level 3 (Guest)', 3),
+                            ),
+                          ],
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceRaised,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: AppColors.borderDefault),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildRadioOption('Level 1 (Admin)', 1),
-                          ),
-                          Expanded(
-                            child: _buildRadioOption('Level 2 (Operator)', 2),
-                          ),
-                          Expanded(
-                            child: _buildRadioOption('Level 3 (Guest)', 3),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
 
-                // Row 6: Residential Address
-                _buildFormField(
-                  label: 'Residential Address',
-                  controller: _addressController,
-                  hint: 'Mailing / residential street address',
-                ),
-                const SizedBox(height: AppSpacing.sm),
+                  // Row 6: Residential Address
+                  _buildFormField(
+                    label: 'Residential Address',
+                    controller: _addressController,
+                    hint: 'Mailing / residential street address',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
 
-                // Row 7: Remarks / Internal Notes
-                _buildFormField(
-                  label: 'Remarks / Internal Notes',
-                  controller: _remarksController,
-                  hint: 'Account notes, authorization details, or legacy memo',
-                  maxLines: 2,
-                ),
-              ],
+                  // Row 7: Remarks / Internal Notes
+                  _buildFormField(
+                    label: 'Remarks / Internal Notes',
+                    controller: _remarksController,
+                    hint:
+                        'Account notes, authorization details, or legacy memo',
+                    maxLines: 2,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -1094,6 +1138,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     String? hint,
     List<TextInputFormatter>? inputFormatters,
     int maxLines = 1,
+    FocusNode? focusNode,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1108,6 +1153,7 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
         const SizedBox(height: 4.0),
         TextField(
           controller: controller,
+          focusNode: focusNode,
           maxLines: maxLines,
           inputFormatters: inputFormatters,
           decoration: InputDecoration(

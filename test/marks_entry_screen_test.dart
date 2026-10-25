@@ -432,6 +432,24 @@ void main() {
       expect(csRow.percentage, 85.0);
       expect(csRow.computeGrade(exGrades), 'B');
     });
+
+    test('o) teacher override updates state and cohort creation', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(marksEntryProvider.notifier);
+      await notifier.loadInitialData();
+      expect(container.read(marksEntryProvider).teachers, isNotEmpty);
+
+      notifier.setTeacherOverride(2);
+      expect(container.read(marksEntryProvider).selectedTeacherIdOverride, 2);
+
+      notifier.setTeacherOverride(null);
+      expect(
+        container.read(marksEntryProvider).selectedTeacherIdOverride,
+        isNull,
+      );
+    });
   });
 
   group('MarksEntryScreen Layout & Responsiveness', () {

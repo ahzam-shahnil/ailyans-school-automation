@@ -140,6 +140,14 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
     final notifier = ref.read(marksEntryProvider.notifier);
     final state = ref.read(marksEntryProvider);
 
+    final hasMarks = state.roster.any(
+      (r) =>
+          r.theoryObtained != null || r.practicalObtained != null || r.isAbsent,
+    );
+    if (state.roster.isEmpty || state.selectedSubjId == null || !hasMarks) {
+      return;
+    }
+
     // Gate validations handled inside notifier, but overwrite check requires UI dialog
     final hasExisting = await notifier.hasExistingMarks();
     if (hasExisting) {
@@ -246,6 +254,15 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
             children: [
               // 1. Top Filter Bar (~88px)
               _buildFilterBar(context, state, notifier),
+
+              const Divider(
+                height: 1,
+                thickness: 1,
+                color: AppColors.borderDefault,
+              ),
+
+              // Step Indicator Strip
+              _buildStepIndicator(state),
 
               const Divider(
                 height: 1,
@@ -438,29 +455,137 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
 
           const SizedBox(height: AppSpacing.xs),
 
-          // Row 2: Badges for Theory Max, Practical Max, Assigned Teacher
+          // Row 2: Badges for Theory Max, Practical Max, and Teacher Override Dropdown
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildBadgePill(
-                label: 'Theory Max',
-                value: '${state.theoryMax}',
-                color: AppColors.brandPrimary,
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: _buildBadgePill(
+                  label: 'Theory Max',
+                  value: '${state.theoryMax}',
+                  color: AppColors.brandPrimary,
+                ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              _buildBadgePill(
-                label: 'Prac Max',
-                value: '${state.practicalMax}',
-                color: state.practicalMax > 0
-                    ? AppColors.brandSecondary
-                    : AppColors.textMuted,
+              Padding(
+                padding: const EdgeInsets.only(top: 4.0),
+                child: _buildBadgePill(
+                  label: 'Prac Max',
+                  value: '${state.practicalMax}',
+                  color: state.practicalMax > 0
+                      ? AppColors.brandSecondary
+                      : AppColors.textMuted,
+                ),
               ),
-              const SizedBox(width: AppSpacing.xs),
-              _buildBadgePill(
-                label: 'Teacher',
-                value: state.subjectTeacher ?? 'Not Assigned',
-                color: state.subjectTeacher != null
-                    ? AppColors.chartViolet
-                    : AppColors.textMuted,
+              const SizedBox(width: AppSpacing.sm),
+              // Teacher Override Dropdown (200px width, menuMaxHeight: 400)
+              SizedBox(
+                width: 200.0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 32.0,
+                      child: DropdownButtonFormField<int?>(
+                        key: ValueKey(state.selectedTeacherIdOverride),
+                        initialValue: state.selectedTeacherIdOverride,
+                        isExpanded: true,
+                        menuMaxHeight: 400.0,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textPrimary,
+                          fontSize: 12.0,
+                        ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xs,
+                            vertical: 6.0,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            borderSide: const BorderSide(
+                              color: AppColors.borderDefault,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            borderSide: const BorderSide(
+                              color: AppColors.borderDefault,
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            borderSide: const BorderSide(
+                              color: AppColors.brandPrimary,
+                            ),
+                          ),
+                          suffixIcon: state.selectedTeacherIdOverride != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.close, size: 14),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 20,
+                                    minHeight: 20,
+                                  ),
+                                  splashRadius: 12,
+                                  tooltip: 'Revert to curriculum default',
+                                  onPressed: () =>
+                                      notifier.setTeacherOverride(null),
+                                )
+                              : null,
+                        ),
+                        hint: Text(
+                          'Select Teacher',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                            fontSize: 11.0,
+                          ),
+                        ),
+                        items: [
+                          DropdownMenuItem<int?>(
+                            value: null,
+                            child: Text(
+                              'Not Assigned',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textMuted,
+                                fontSize: 11.0,
+                              ),
+                            ),
+                          ),
+                          ...state.teachers.map((t) {
+                            final tid = (t['TeacherID'] as num).toInt();
+                            final tname =
+                                t['TName'] as String? ?? 'Teacher $tid';
+                            return DropdownMenuItem<int?>(
+                              value: tid,
+                              child: Text(
+                                tname,
+                                style: AppTypography.bodySmall.copyWith(
+                                  fontSize: 11.0,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }),
+                        ],
+                        onChanged: (val) => notifier.setTeacherOverride(val),
+                      ),
+                    ),
+                    const SizedBox(height: 2.0),
+                    Text(
+                      'Default: ${state.subjectTeacher ?? 'Not Assigned'}',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 10.0,
+                        color: AppColors.textSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -553,8 +678,88 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
   }
 
   // ==========================================================================
-  // 2. COHORT ACTION STRIP
+  // 2. STEP INDICATOR & COHORT ACTION STRIP
   // ==========================================================================
+  Widget _buildStepIndicator(MarksEntryState state) {
+    int activeStep = 1;
+    final selectedStudents = state.roster.where((r) => r.isSelected).toList();
+    final effectiveCohort = selectedStudents.isNotEmpty
+        ? selectedStudents
+        : state.roster;
+    final anyMarksEntered = state.roster.any(
+      (r) =>
+          r.theoryObtained != null || r.practicalObtained != null || r.isAbsent,
+    );
+
+    if (state.roster.isEmpty) {
+      activeStep = 1;
+    } else if (effectiveCohort.any((r) => r.examMasId == null)) {
+      activeStep = 2;
+    } else if (anyMarksEntered) {
+      activeStep = 4;
+    } else {
+      activeStep = 3;
+    }
+
+    final steps = [
+      '1. Load Students',
+      '2. Register for Exam',
+      '3. Enter Marks',
+      '4. Save',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 4.0,
+      ),
+      color: AppColors.surface,
+      child: Row(
+        children: [
+          for (int i = 0; i < steps.length; i++) ...[
+            if (i > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: Icon(
+                  Icons.arrow_forward_ios,
+                  size: 9.0,
+                  color: AppColors.textMuted.withValues(alpha: 0.5),
+                ),
+              ),
+            Container(
+              height: 28.0,
+              padding: const EdgeInsets.symmetric(horizontal: 10.0),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: activeStep == i + 1
+                    ? AppColors.brandPrimary
+                    : AppColors.surfaceSubtle,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color: activeStep == i + 1
+                      ? AppColors.brandPrimary
+                      : AppColors.borderDefault,
+                ),
+              ),
+              child: Text(
+                steps[i],
+                style: AppTypography.bodySmall.copyWith(
+                  fontSize: 11.0,
+                  fontWeight: activeStep == i + 1
+                      ? FontWeight.w700
+                      : FontWeight.normal,
+                  color: activeStep == i + 1
+                      ? Colors.white
+                      : AppColors.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildCohortActionStrip(
     BuildContext context,
     MarksEntryState state,
@@ -573,11 +778,13 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  // [Load Students]
-                  OutlinedButton.icon(
+                  // 1. [Load Students] - Primary CTA
+                  ElevatedButton.icon(
                     icon: const Icon(Icons.people_outline, size: 16),
                     label: const Text('Load Students'),
-                    style: OutlinedButton.styleFrom(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brandPrimary,
+                      foregroundColor: Colors.white,
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.sm,
@@ -589,39 +796,52 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                   ),
                   const SizedBox(width: AppSpacing.xs),
 
-                  // [Init Exam Cohort]
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.add_task_outlined, size: 16),
-                    label: const Text('Init Exam Cohort'),
-                    style: OutlinedButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
+                  // 2. [Register Students for Exam] - Secondary CTA
+                  Tooltip(
+                    message: state.roster.isEmpty ? 'Load students first' : 'Creates exam records for all loaded students. Required before saving marks.',
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.add_task_outlined, size: 16),
+                      label: const Text('Register Students for Exam'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.brandPrimary,
+                        side: BorderSide(
+                          color: state.roster.isEmpty
+                              ? AppColors.borderDefault
+                              : AppColors.brandPrimary,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                        ),
                       ),
+                      onPressed: state.isLoading || state.roster.isEmpty
+                          ? null
+                          : () => notifier.generateExamCohort(),
                     ),
-                    onPressed: state.isLoading || state.roster.isEmpty
-                        ? null
-                        : () => notifier.generateExamCohort(),
                   ),
                   const SizedBox(width: AppSpacing.xs),
 
-                  // [Load Existing]
-                  OutlinedButton.icon(
+                  // 3. [Load Existing] - Tertiary
+                  TextButton.icon(
                     icon: const Icon(Icons.history_outlined, size: 16),
                     label: const Text('Load Existing'),
-                    style: OutlinedButton.styleFrom(
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.sm,
                       ),
                     ),
-                    onPressed: state.isLoading
+                    onPressed:
+                        (state.isLoading ||
+                            state.roster.isEmpty ||
+                            state.selectedSubjId == null)
                         ? null
                         : () => notifier.loadExistingMarks(),
                   ),
                   const SizedBox(width: AppSpacing.xs),
 
-                  // [Select All]
+                  // 4. [Select All]
                   OutlinedButton.icon(
                     icon: Icon(
                       state.roster.isNotEmpty &&
@@ -1261,7 +1481,16 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
               visualDensity: VisualDensity.compact,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
             ),
-            onPressed: (state.isSaving || state.roster.isEmpty)
+            onPressed:
+                (state.isSaving ||
+                    state.roster.isEmpty ||
+                    state.selectedSubjId == null ||
+                    !state.roster.any(
+                      (r) =>
+                          r.theoryObtained != null ||
+                          r.practicalObtained != null ||
+                          r.isAbsent,
+                    ))
                 ? null
                 : _handleSave,
           ),
