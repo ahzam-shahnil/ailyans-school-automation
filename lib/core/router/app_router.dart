@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../screens/attendance/attendance_screen.dart';
 import '../../screens/dashboard/dashboard_screen.dart';
+import '../../screens/exams/marks_entry_screen.dart';
 import '../../screens/fees/fee_collection_screen.dart';
 import '../../screens/fees/fee_parameter_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
@@ -103,12 +104,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/fees/receipts',
             builder: (context, state) => const FeeCollectionScreen(),
           ),
+          GoRoute(path: '/exams', redirect: (context, state) => '/exams/marks'),
           GoRoute(
-            path: '/exams',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Examinations Module',
-              route: '/exams',
-            ),
+            path: '/exams/marks',
+            builder: (context, state) => const MarksEntryScreen(),
           ),
           GoRoute(
             path: '/attendance',
