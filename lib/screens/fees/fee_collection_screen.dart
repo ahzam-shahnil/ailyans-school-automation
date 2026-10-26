@@ -198,6 +198,19 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           .amountTendered
           .toString();
     }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      try {
+        final uri = GoRouterState.of(context).uri;
+        final studentId = uri.queryParameters['studentId'];
+        if (studentId == null || studentId.isEmpty) return;
+        _lookupController.text = studentId;
+        await _onLookup();
+      } catch (_) {
+        // Ignored when FeeCollectionScreen is rendered without GoRouter (e.g. in isolated component tests)
+      }
+    });
   }
 
   @override
