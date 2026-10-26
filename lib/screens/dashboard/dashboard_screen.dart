@@ -525,7 +525,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed: () => context.go('/fees/receipts'),
+                              onPressed: () =>
+                                  context.go('/fees/receipts?from=dashboard'),
                               icon: const Icon(
                                 Icons.payments_outlined,
                                 size: 18,
@@ -942,7 +943,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.go('/fees/receipts'),
+                  onPressed: () => context.go('/fees/receipts?from=dashboard'),
                   child: Text(
                     'View All Payments →',
                     style: AppTypography.label.copyWith(

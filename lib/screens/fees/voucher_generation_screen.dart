@@ -644,7 +644,7 @@ class _VoucherGenerationScreenState
             ),
             const SizedBox(width: AppSpacing.sm),
             OutlinedButton.icon(
-              onPressed: () => context.go('/fees/receipts'),
+              onPressed: () => context.go('/fees/receipts?from=vouchers'),
               icon: const Icon(Icons.point_of_sale_outlined, size: 16),
               label: const Text('Collect Fee'),
               style: OutlinedButton.styleFrom(

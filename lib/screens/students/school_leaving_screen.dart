@@ -739,7 +739,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
             ElevatedButton.icon(
               onPressed: () {
                 final stuId = state.selectedStudent?.stuRegId;
-                context.go('/fees/receipts?studentId=$stuId');
+                context.go('/fees/receipts?studentId=$stuId&from=leaving');
               },
               icon: const Icon(Icons.payment, size: 16),
               label: const Text('Pay Arrears Now'),

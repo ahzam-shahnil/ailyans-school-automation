@@ -35,6 +35,17 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   final NumberFormat _currencyFormat = NumberFormat('#,##0');
   final DateFormat _dateFormat = DateFormat('dd-MMM-yyyy');
 
+  static const Map<String, ({String label, String route})> _originConfig = {
+    'leaving': (label: 'Back to School Leaving', route: '/students/leaving'),
+    'ledger': (label: 'Back to Fee Ledger', route: '/fees/ledger'),
+    'dashboard': (label: 'Back to Dashboard', route: '/dashboard'),
+    'students': (label: 'Back to Students', route: '/students'),
+    'vouchers': (label: 'Back to Voucher Generation', route: '/fees/vouchers'),
+    'parameters': (label: 'Back to Fee Parameters', route: '/fees/parameters'),
+  };
+
+  String? _originScreen; // valid key from _originConfig | null
+
   @override
   void dispose() {
     _lookupController.dispose();
@@ -204,9 +215,18 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       try {
         final uri = GoRouterState.of(context).uri;
         final studentId = uri.queryParameters['studentId'];
-        if (studentId == null || studentId.isEmpty) return;
-        _lookupController.text = studentId;
-        await _onLookup();
+        final from = uri.queryParameters['from'];
+
+        if (from != null && _originConfig.containsKey(from)) {
+          setState(() {
+            _originScreen = from;
+          });
+        }
+
+        if (studentId != null && studentId.isNotEmpty) {
+          _lookupController.text = studentId;
+          await _onLookup();
+        }
       } catch (_) {
         // Ignored when FeeCollectionScreen is rendered without GoRouter (e.g. in isolated component tests)
       }
@@ -247,6 +267,27 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Origin back affordance (context-aware back button)
+              if (_originScreen != null &&
+                  _originConfig.containsKey(_originScreen!)) ...[
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () =>
+                          context.go(_originConfig[_originScreen!]!.route),
+                      icon: const Icon(Icons.arrow_back, size: 16),
+                      label: Text(_originConfig[_originScreen!]!.label),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.brandPrimary,
+                        side: const BorderSide(color: AppColors.borderDefault),
+                        backgroundColor: AppColors.surfaceRaised,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+              ],
+
               // Top Search Bar (always visible)
               _buildSearchBar(state),
 
