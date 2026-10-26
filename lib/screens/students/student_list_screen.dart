@@ -224,6 +224,23 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             ),
                           ),
                           OutlinedButton.icon(
+                            onPressed: () => context.go('/students/leaving'),
+                            icon: const Icon(Icons.exit_to_app, size: 16.0),
+                            label: const Text('School Leaving'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              side: const BorderSide(
+                                color: AppColors.borderDefault,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              minimumSize: const Size(0, 40),
+                            ),
+                          ),
+                          OutlinedButton.icon(
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(

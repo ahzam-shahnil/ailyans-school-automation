@@ -12,6 +12,7 @@ import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/login/login_screen.dart';
 import '../../screens/students/batch_promotion_screen.dart';
 import '../../screens/students/bulk_enrollment_screen.dart';
+import '../../screens/students/school_leaving_screen.dart';
 import '../../screens/students/student_list_screen.dart';
 import '../../screens/students/student_profile_screen.dart';
 import '../../screens/students/student_registration_wizard.dart';
@@ -84,6 +85,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'promote',
                 builder: (context, state) => const BatchPromotionScreen(),
+              ),
+              GoRoute(
+                path: 'leaving',
+                builder: (context, state) => const SchoolLeavingScreen(),
               ),
               GoRoute(
                 path: 'new',

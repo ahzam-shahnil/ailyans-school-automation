@@ -750,7 +750,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               OutlinedButton.icon(
                 icon: const Icon(Icons.description_outlined, size: 16),
                 label: const Text('Print SLC'),
-                onPressed: () => _showSnackBar('Print coming in Phase 2'),
+                onPressed: () => context.go('/students/leaving'),
               ),
             ],
           ] else ...[
@@ -2885,7 +2885,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   description: 'Official transfer clearance certificate issued upon formal withdrawal, verifying conduct, session progression, and clear dues.',
                   buttonLabel: 'Print SLC →',
                   icon: Icons.description_outlined,
-                  onTap: () => _showSnackBar('Print coming in Phase 2'),
+                  onTap: () => context.go('/students/leaving'),
                 ),
               ),
             ],

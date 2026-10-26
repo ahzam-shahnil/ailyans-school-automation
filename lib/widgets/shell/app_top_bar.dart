@@ -368,6 +368,9 @@ class AppTopBar extends ConsumerWidget {
     if (path.startsWith('/students/promote')) {
       return 'Home > Students > Batch Promotion';
     }
+    if (path.startsWith('/students/leaving')) {
+      return 'Home > Students > School Leaving';
+    }
     if (path.startsWith('/students/')) {
       return 'Home > Students > Student Profile';
     }
