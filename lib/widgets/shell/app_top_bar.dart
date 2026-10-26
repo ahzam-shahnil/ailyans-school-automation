@@ -389,6 +389,12 @@ class AppTopBar extends ConsumerWidget {
     if (path.startsWith('/academics')) {
       return 'Home > Academics';
     }
+    if (path.startsWith('/exams/terms')) {
+      return 'Home > Examinations > Terms & Schedules';
+    }
+    if (path.startsWith('/exams/subjects')) {
+      return 'Home > Examinations > Class Subject Mapping';
+    }
     if (path.startsWith('/exams/marks')) {
       return 'Home > Examinations > Marks Entry';
     }

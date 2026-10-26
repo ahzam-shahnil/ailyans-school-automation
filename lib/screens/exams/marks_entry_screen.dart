@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/providers/marks_entry_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -585,6 +586,39 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
+                ),
+              ),
+              const Spacer(),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/exams/terms'),
+                icon: const Icon(Icons.calendar_today_outlined, size: 14),
+                label: const Text('Exam Terms', style: TextStyle(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.borderDefault),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  minimumSize: const Size(0, 32),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/exams/subjects'),
+                icon: const Icon(Icons.menu_book_outlined, size: 14),
+                label: const Text(
+                  'Class Subjects',
+                  style: TextStyle(fontSize: 12),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.borderDefault),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  minimumSize: const Size(0, 32),
                 ),
               ),
             ],
