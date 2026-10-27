@@ -71,7 +71,7 @@ class AppSidebar extends ConsumerWidget {
     ),
     _NavItemData(
       label: 'Staff & Payroll',
-      route: '/staff',
+      route: '/staff/teachers',
       icon: Icons.badge_outlined,
       requiredObjIds: [14, 22, 29],
       getBadgeCount: _getStaffCount,
@@ -354,6 +354,9 @@ class AppSidebar extends ConsumerWidget {
     }
     if (itemRoute.startsWith('/fees')) {
       return currentPath.startsWith('/fees');
+    }
+    if (itemRoute.startsWith('/staff')) {
+      return currentPath.startsWith('/staff');
     }
     return currentPath.startsWith(itemRoute);
   }

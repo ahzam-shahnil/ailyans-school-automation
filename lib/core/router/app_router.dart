@@ -12,6 +12,7 @@ import '../../screens/fees/fee_ledger_screen.dart';
 import '../../screens/fees/fee_parameter_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/login/login_screen.dart';
+import '../../screens/staff/teacher_list_screen.dart';
 import '../../screens/students/batch_promotion_screen.dart';
 import '../../screens/students/bulk_enrollment_screen.dart';
 import '../../screens/students/school_leaving_screen.dart';
@@ -146,11 +147,26 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const AttendanceScreen(),
           ),
           GoRoute(
-            path: '/staff',
+            path: '/staff/teachers',
+            builder: (context, state) => const TeacherListScreen(),
+          ),
+          GoRoute(
+            path: '/staff/teachers/new',
             builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Staff & Payroll',
-              route: '/staff',
+              title: 'New Teacher',
+              route: '/staff/teachers/new',
             ),
+          ),
+          GoRoute(
+            path: '/staff/teachers/:id',
+            builder: (context, state) => const _GenericShellPlaceholder(
+              title: 'Teacher Profile',
+              route: '/staff/teachers/:id',
+            ),
+          ),
+          GoRoute(
+            path: '/staff',
+            redirect: (context, state) => '/staff/teachers',
           ),
           GoRoute(
             path: '/library',
