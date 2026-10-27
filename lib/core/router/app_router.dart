@@ -13,6 +13,7 @@ import '../../screens/fees/fee_parameter_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/login/login_screen.dart';
 import '../../screens/staff/teacher_list_screen.dart';
+import '../../screens/staff/teacher_profile_screen.dart';
 import '../../screens/students/batch_promotion_screen.dart';
 import '../../screens/students/bulk_enrollment_screen.dart';
 import '../../screens/students/school_leaving_screen.dart';
@@ -152,17 +153,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/staff/teachers/new',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'New Teacher',
-              route: '/staff/teachers/new',
-            ),
+            builder: (context, state) =>
+                const TeacherProfileScreen(isCreateMode: true),
           ),
           GoRoute(
             path: '/staff/teachers/:id',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Teacher Profile',
-              route: '/staff/teachers/:id',
-            ),
+            builder: (context, state) {
+              final idStr = state.pathParameters['id'];
+              final id = idStr != null ? int.tryParse(idStr) : null;
+              return TeacherProfileScreen(teacherId: id);
+            },
           ),
           GoRoute(
             path: '/staff',

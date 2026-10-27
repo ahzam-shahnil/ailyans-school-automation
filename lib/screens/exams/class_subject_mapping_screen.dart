@@ -35,6 +35,7 @@ class _ClassSubjectMappingScreenState
   final TextEditingController _practicalMarksController = TextEditingController(
     text: '0',
   );
+  int? _fromTeacherId;
 
   @override
   void initState() {
@@ -44,6 +45,21 @@ class _ClassSubjectMappingScreenState
         ref.read(classSubjectMappingProvider.notifier).loadInitialData();
       }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    try {
+      final uri = GoRouterState.of(context).uri;
+      final fromTeacherId = uri.queryParameters['fromTeacherId'];
+      if (fromTeacherId != null && fromTeacherId.isNotEmpty) {
+        final parsed = int.tryParse(fromTeacherId);
+        if (_fromTeacherId != parsed) {
+          setState(() => _fromTeacherId = parsed);
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -261,6 +277,19 @@ class _ClassSubjectMappingScreenState
   Widget _buildPageHeader(BuildContext context) {
     return Row(
       children: [
+        if (_fromTeacherId != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: OutlinedButton.icon(
+              onPressed: () => context.go('/staff/teachers/$_fromTeacherId'),
+              icon: const Icon(Icons.arrow_back, size: 16),
+              label: const Text('Back to Teacher Profile'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.brandPrimary,
+                side: const BorderSide(color: AppColors.borderDefault),
+              ),
+            ),
+          ),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
