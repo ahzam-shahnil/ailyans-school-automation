@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../screens/attendance/attendance_screen.dart';
 import '../../screens/dashboard/dashboard_screen.dart';
+import '../../screens/exams/class_subject_mapping_screen.dart';
 import '../../screens/exams/exam_term_screen.dart';
 import '../../screens/exams/marks_entry_screen.dart';
 import '../../screens/fees/fee_collection_screen.dart';
@@ -134,10 +135,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/exams/subjects',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Class Subject Mapping',
-              route: '/exams/subjects',
-            ),
+            builder: (context, state) => const ClassSubjectMappingScreen(),
           ),
           GoRoute(
             path: '/exams/marks',
