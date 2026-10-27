@@ -333,6 +333,19 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
               ),
             ),
             const SizedBox(width: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: () => context.go('/staff/salary'),
+              icon: const Icon(Icons.payments_outlined, size: 16),
+              label: const Text(
+                'Monthly Payroll',
+                style: TextStyle(fontSize: 12),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: const Size(0, 36),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
             OutlinedButton(
               onPressed: () => _showPhaseEStub(context, 'Export CSV'),
               style: OutlinedButton.styleFrom(

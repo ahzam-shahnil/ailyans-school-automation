@@ -12,6 +12,7 @@ import '../../screens/fees/fee_ledger_screen.dart';
 import '../../screens/fees/fee_parameter_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/login/login_screen.dart';
+import '../../screens/staff/salary_management_screen.dart';
 import '../../screens/staff/teacher_list_screen.dart';
 import '../../screens/staff/teacher_profile_screen.dart';
 import '../../screens/students/batch_promotion_screen.dart';
@@ -155,6 +156,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/staff/teachers/new',
             builder: (context, state) =>
                 const TeacherProfileScreen(isCreateMode: true),
+          ),
+          GoRoute(
+            path: '/staff/salary',
+            builder: (context, state) => const SalaryManagementScreen(),
           ),
           GoRoute(
             path: '/staff/teachers/:id',

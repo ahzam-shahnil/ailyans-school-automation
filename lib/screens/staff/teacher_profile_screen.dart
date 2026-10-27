@@ -1658,12 +1658,8 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                       if (!discard) return;
                     }
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Salary Terminal coming in Phase E'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
+                      final tid = _resolvedId ?? widget.teacherId ?? 1;
+                      context.go('/staff/salary?fromTeacherId=$tid');
                     }
                   },
                   icon: const Icon(Icons.open_in_new, size: 13),

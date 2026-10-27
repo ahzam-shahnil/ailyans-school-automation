@@ -409,6 +409,9 @@ class AppTopBar extends ConsumerWidget {
     if (path.startsWith('/attendance')) {
       return 'Home > Attendance';
     }
+    if (path.startsWith('/staff/salary')) {
+      return 'Home > Staff & Payroll > Monthly Payroll';
+    }
     if (path.startsWith('/staff/teachers')) {
       return 'Home > Staff & Payroll > Faculty Directory';
     }
