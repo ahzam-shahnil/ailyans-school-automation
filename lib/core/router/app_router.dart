@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../screens/academics/class_section_screen.dart';
+import '../../screens/academics/subject_catalog_screen.dart';
 import '../../screens/attendance/attendance_screen.dart';
 import '../../screens/dashboard/dashboard_screen.dart';
 import '../../screens/exams/class_subject_mapping_screen.dart';
@@ -121,10 +122,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/academics/subjects',
-            builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Subject Catalog - Coming in Screen 26',
-              route: '/academics/subjects',
-            ),
+            builder: (context, state) => const SubjectCatalogScreen(),
           ),
           GoRoute(
             path: '/fees/parameters',
@@ -219,6 +217,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 });
 
 /// Generic placeholder screen for secondary shell routes.
+// ignore: unused_element
 class _GenericShellPlaceholder extends StatelessWidget {
   final String title;
   final String route;
