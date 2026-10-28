@@ -419,7 +419,7 @@ class AppTopBar extends ConsumerWidget {
       return 'Home > Staff & Payroll';
     }
     if (path.startsWith('/library')) {
-      return 'Home > Library';
+      return 'Home > Library > Book Catalog';
     }
     if (path.startsWith('/system/permissions')) {
       return 'Home > System Administration > User Access Control Matrix';

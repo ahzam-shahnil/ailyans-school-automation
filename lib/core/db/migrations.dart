@@ -71,6 +71,13 @@ class SchemaMigrations {
       currentVersion = 6;
     }
 
+    // Migration 007: Seed baseline library catalog (5 books across Subjects 1..5)
+    if (currentVersion < 7) {
+      await applyMigration007(db);
+      await db.execute('PRAGMA user_version = 7');
+      currentVersion = 7;
+    }
+
     // Ensure app_config table exists for device-local preferences
     await db.execute('''
       CREATE TABLE IF NOT EXISTS app_config (
@@ -196,6 +203,76 @@ class SchemaMigrations {
         'INSERT INTO ExGrade (ExGradID, CalssID, Grad, GradMinMarks, GradMaxMarks, Remarks) '
         'SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM ExGrade WHERE ExGradID = ?)',
         [row[0], row[1], row[2], row[3], row[4], row[5], row[0]],
+      );
+    }
+  }
+
+  /// Migration 007: Seeds baseline library catalog (5 books across Subjects 1..5).
+  static Future<void> applyMigration007(Database db) async {
+    final books = [
+      // BookID, BookCatSubj, BookName, BAuthor, Pages, PulishedBy, PublishedYr, BookPrice, Detail
+      [
+        1,
+        1,
+        'Islamiat Lazmi Grade 9',
+        'Maulana Muhammad Yousuf',
+        220,
+        'Punjab Textbook Board',
+        2017,
+        250,
+        'Compulsory religious studies - Grade 9 edition',
+      ],
+      [
+        2,
+        2,
+        'Mathematics for Class 9',
+        'Prof. Muhammad Ashraf',
+        380,
+        'Punjab Textbook Board',
+        2017,
+        320,
+        'Algebra and Geometry - Grade 9',
+      ],
+      [
+        3,
+        3,
+        'Urdu Lazmi Grade 9',
+        'Dr. Waheed-uz-Zaman Tariq',
+        300,
+        'Punjab Textbook Board',
+        2017,
+        280,
+        'National language - Grade 9',
+      ],
+      [
+        4,
+        4,
+        'English Grammar & Composition',
+        'Wren & Martin',
+        480,
+        'S. Chand & Company',
+        2015,
+        550,
+        'Reference grammar for secondary classes',
+      ],
+      [
+        5,
+        5,
+        'Computer Science Grade 9',
+        'M. Sohail Afzal',
+        260,
+        'Punjab Textbook Board',
+        2017,
+        350,
+        'Theory + Practical - Grade 9',
+      ],
+    ];
+    for (final b in books) {
+      await db.rawInsert(
+        'INSERT INTO Books (BookID, BookCatSubj, BookName, BAuthor, Pages, PulishedBy, PublishedYr, BookPrice, Detail) '
+        'SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? '
+        'WHERE NOT EXISTS (SELECT 1 FROM Books WHERE BookID = ?)',
+        [b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[0]],
       );
     }
   }

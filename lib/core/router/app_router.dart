@@ -11,6 +11,7 @@ import '../../screens/fees/fee_collection_screen.dart';
 import '../../screens/fees/fee_ledger_screen.dart';
 import '../../screens/fees/fee_parameter_screen.dart';
 import '../../screens/fees/voucher_generation_screen.dart';
+import '../../screens/library/library_books_screen.dart';
 import '../../screens/login/login_screen.dart';
 import '../../screens/staff/salary_management_screen.dart';
 import '../../screens/staff/teacher_list_screen.dart';
@@ -175,9 +176,20 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/library',
+            builder: (context, state) => const LibraryBooksScreen(),
+          ),
+          GoRoute(
+            path: '/library/new',
             builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Library Catalog',
-              route: '/library',
+              title: 'Book Profile - Coming in Screen 24',
+              route: '/library/new',
+            ),
+          ),
+          GoRoute(
+            path: '/library/:id',
+            builder: (context, state) => const _GenericShellPlaceholder(
+              title: 'Book Profile - Coming in Screen 24',
+              route: '/library/:id',
             ),
           ),
           GoRoute(
