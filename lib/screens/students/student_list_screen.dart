@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/providers/student_list_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/student_list_row.dart';
 
@@ -29,6 +30,27 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
   // Selected row IDs for table row checkboxes
   final Set<int> _selectedStuRegIds = <int>{};
+
+  @override
+  void initState() {
+    super.initState();
+    // Sync sessionYr to the app's active session (app_config.default_session_yr)
+    // AFTER first frame so shellMetadataProvider resolves. In production, AppShell
+    // pre-loads shellMetadataProvider before this screen mounts.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final metaAsync = ref.read(shellMetadataProvider);
+      if (!metaAsync.hasValue) return;
+      final meta = metaAsync.valueOrNull;
+      if (meta == null) return;
+      final current = ref.read(studentListFiltersProvider).sessionYr;
+      if (current != meta.sessionYear) {
+        ref
+            .read(studentListFiltersProvider.notifier)
+            .setSessionYr(meta.sessionYear);
+      }
+    });
+  }
 
   @override
   void dispose() {

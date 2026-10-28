@@ -84,6 +84,13 @@ class StudentListFiltersNotifier extends StateNotifier<StudentListFilters> {
     state = state.copyWith(status: status, page: 1);
   }
 
+  /// Syncs the active session year from the app shell (app_config.default_session_yr).
+  /// Called by StudentListScreen on mount to avoid filtering on the constructor default.
+  void setSessionYr(String sessionYr) {
+    if (state.sessionYr == sessionYr) return;
+    state = state.copyWith(sessionYr: sessionYr, page: 1);
+  }
+
   void toggleSort(StudentSortColumn column) {
     if (state.sortColumn == column) {
       final newDir = state.sortDirection == SortDirection.ascending
