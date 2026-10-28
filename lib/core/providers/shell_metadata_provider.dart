@@ -104,12 +104,20 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
   );
   final pendingVouchers = (voucherRows.first['cnt'] as int?) ?? 0;
 
+  // 6. Active Academic Session (app_config key, set via Screen 27 System Settings)
+  final sessionRows = await db.rawQuery(
+    "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
+  );
+  final sessionYear = sessionRows.isNotEmpty
+      ? (sessionRows.first['config_value'] as String? ?? '2017-2018')
+      : '2017-2018';
+
   return ShellMetadata(
     branchName: branchName,
     branchAddress: branchAddress,
     branchPhone: branchPhone,
     branchPrincipal: branchPrincipal,
-    sessionYear: '2017-2018',
+    sessionYear: sessionYear,
     studentCount: studentCount,
     classCount: classCount,
     staffCount: staffCount,

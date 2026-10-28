@@ -12,6 +12,7 @@ import '../../core/utils/fee_head_display.dart';
 import '../../core/utils/voucher_pdf_generator.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../models/voucher_preview_row.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 
 /// Production VoucherGenerationScreen hosted within AppShell.
 /// Matches locked designs:
@@ -47,6 +48,23 @@ class _VoucherGenerationScreenState
   void initState() {
     super.initState();
     _lateFineController = TextEditingController(text: '100');
+    // Sync sessionYr to the app's active session (from app_config default_session_yr).
+    // In production, AppShell pre-loads shellMetadataProvider before any screen mounts,
+    // so the value is available immediately. In tests (no DB), the provider isn't
+    // loaded — skip the sync rather than triggering a DB query that leaves a timer pending.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final metaAsync = ref.read(shellMetadataProvider);
+      if (!metaAsync.hasValue) return; // don't trigger a fresh load in tests
+      final meta = metaAsync.valueOrNull;
+      if (meta == null) return;
+      final current = ref.read(voucherGenFiltersProvider).sessionYr;
+      if (current != meta.sessionYear) {
+        ref
+            .read(voucherGenFiltersProvider.notifier)
+            .setSessionYr(meta.sessionYear);
+      }
+    });
   }
 
   @override
@@ -271,10 +289,11 @@ class _VoucherGenerationScreenState
   Future<void> _pickBillingMonth(BuildContext context) async {
     final filters = ref.read(voucherGenFiltersProvider);
     final parts = filters.billingMonth.trim().split(RegExp(r'\s+'));
-    int selectedYear = 2017;
-    int selectedMonth = 10;
+    final now = DateTime.now();
+    int selectedYear = now.year;
+    int selectedMonth = now.month;
     if (parts.length >= 2) {
-      selectedYear = int.tryParse(parts[1]) ?? 2017;
+      selectedYear = int.tryParse(parts[1]) ?? now.year;
       const monthMap = {
         'january': 1,
         'february': 2,
@@ -734,17 +753,11 @@ class _VoucherGenerationScreenState
                 isExpanded: true,
                 decoration: _inputDecoration(),
                 items: const [
+                  DropdownMenuItem(value: '2026-27', child: Text('2026-27')),
+                  DropdownMenuItem(value: '2025-26', child: Text('2025-26')),
                   DropdownMenuItem(
                     value: '2017-2018',
                     child: Text('2017-2018'),
-                  ),
-                  DropdownMenuItem(
-                    value: '2016-2017',
-                    child: Text('2016-2017'),
-                  ),
-                  DropdownMenuItem(
-                    value: '2018-2019',
-                    child: Text('2018-2019'),
                   ),
                 ],
                 onChanged: isGenerating
