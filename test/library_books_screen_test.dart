@@ -101,11 +101,16 @@ void main() {
           libraryBooksProvider.overrideWith((ref) => LibraryBooksNotifier()),
         sessionProvider.overrideWith((ref) {
           final session = SessionNotifier();
-          session.setSession(
-            testUser,
-            const [3, 8, 9, 10, 12, 13, 14, 20],
-            hasWeakPasswordWarning: hasWeakPasswordWarning,
-          );
+          session.setSession(testUser, const [
+            3,
+            8,
+            9,
+            10,
+            12,
+            13,
+            14,
+            20,
+          ], hasWeakPasswordWarning: hasWeakPasswordWarning);
           return session;
         }),
         shellMetadataProvider.overrideWith((ref) => Future.value(testMetadata)),
@@ -184,33 +189,33 @@ void main() {
       expect(state.rows.first.bookName.contains('Computer'), isTrue);
     });
 
-    test('f) Category filter on empty result and null category validation', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+    test(
+      'f) Category filter on empty result and null category validation',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
 
-      final notifier = container.read(libraryBooksProvider.notifier);
-      await notifier.loadInitialData();
+        final notifier = container.read(libraryBooksProvider.notifier);
+        await notifier.loadInitialData();
 
-      // Test applyCategoryFilter with selectedCategoryId == null
-      final appliedNull = await notifier.applyCategoryFilter();
-      expect(appliedNull, isFalse);
-      expect(
-        container.read(libraryBooksProvider).errorMessage,
-        'Must Select Book Category Please.',
-      );
+        // Test applyCategoryFilter with selectedCategoryId == null
+        final appliedNull = await notifier.applyCategoryFilter();
+        expect(appliedNull, isFalse);
+        expect(
+          container.read(libraryBooksProvider).errorMessage,
+          'Must Select Book Category Please.',
+        );
 
-      // Delete book 5 in test DB
-      await db.delete('Books', where: 'BookID = ?', whereArgs: [5]);
-      await notifier.loadInitialData();
+        // Delete book 5 in test DB
+        await db.delete('Books', where: 'BookID = ?', whereArgs: [5]);
+        await notifier.loadInitialData();
 
-      await notifier.setCategory(5);
-      final state = container.read(libraryBooksProvider);
-      expect(state.allRows.length, 0);
-      expect(
-        state.toast,
-        ' No Books Available in Computer Science Category',
-      );
-    });
+        await notifier.setCategory(5);
+        final state = container.read(libraryBooksProvider);
+        expect(state.allRows.length, 0);
+        expect(state.toast, ' No Books Available in Computer Science Category');
+      },
+    );
 
     test('g) Pagination: setPageSize(2) with 5 books -> totalPages == 3; setPage(3) -> rows.length == 1', () async {
       final container = ProviderContainer();
@@ -230,82 +235,97 @@ void main() {
       expect(state.rows.length, 1);
     });
 
-    test('h) resetFilters(): clears search and category, restores full catalog', () async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+    test(
+      'h) resetFilters(): clears search and category, restores full catalog',
+      () async {
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
 
-      final notifier = container.read(libraryBooksProvider.notifier);
-      await notifier.loadInitialData();
+        final notifier = container.read(libraryBooksProvider.notifier);
+        await notifier.loadInitialData();
 
-      notifier.setSearchQuery('Wren');
-      await Future.delayed(const Duration(milliseconds: 300));
-      await notifier.setCategory(1);
+        notifier.setSearchQuery('Wren');
+        await Future.delayed(const Duration(milliseconds: 300));
+        await notifier.setCategory(1);
 
-      await notifier.resetFilters();
+        await notifier.resetFilters();
 
-      final state = container.read(libraryBooksProvider);
-      expect(state.searchQuery, '');
-      expect(state.selectedCategoryId, isNull);
-      expect(state.allRows.length, 5);
-    });
+        final state = container.read(libraryBooksProvider);
+        expect(state.searchQuery, '');
+        expect(state.selectedCategoryId, isNull);
+        expect(state.allRows.length, 5);
+      },
+    );
   });
 
   group('LibraryBooksScreen Widget & Integration Tests', () {
-    testWidgets('i) [Add New Book] press when readOnly == true (userLvl == 3): Widget tap on button DOES NOT navigate (route stays /library) AND state.errorMessage == "You don\'t have enough rights for purpose"', (tester) async {
-      late LibraryBooksNotifier notifier;
-      await tester.runAsync(() async {
-        notifier = LibraryBooksNotifier();
-        await notifier.loadInitialData();
-      });
+    testWidgets(
+      'i) [Add New Book] press when readOnly == true (userLvl == 3): Widget tap on button DOES NOT navigate (route stays /library) AND state.errorMessage == "You don\'t have enough rights for purpose"',
+      (tester) async {
+        late LibraryBooksNotifier notifier;
+        await tester.runAsync(() async {
+          notifier = LibraryBooksNotifier();
+          await notifier.loadInitialData();
+        });
 
-      await tester.binding.setSurfaceSize(const Size(1440, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.binding.setSurfaceSize(const Size(1440, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildTestScreen(userLevel: 3, notifier: notifier));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          buildTestScreen(userLevel: 3, notifier: notifier),
+        );
+        await tester.pumpAndSettle();
 
-      final addButton = find.widgetWithText(
-        ElevatedButton,
-        'Add New Book (Ctrl+N)',
-      );
-      expect(addButton, findsOneWidget);
-      await tester.tap(addButton);
-      await tester.pumpAndSettle();
+        final addButton = find.widgetWithText(
+          ElevatedButton,
+          'Add New Book (Ctrl+N)',
+        );
+        expect(addButton, findsOneWidget);
+        await tester.tap(addButton);
+        await tester.pumpAndSettle();
 
-      expect(find.text('New Book Stub'), findsNothing);
-      expect(find.text('Library Book Catalog'), findsOneWidget);
-      expect(
-        find.text("You don't have enough rights for purpose"),
-        findsOneWidget,
-      );
-    });
+        expect(find.text('New Book Stub'), findsNothing);
+        expect(find.text('Library Book Catalog'), findsOneWidget);
+        expect(
+          find.text("You don't have enough rights for purpose"),
+          findsOneWidget,
+        );
+      },
+    );
 
-    testWidgets('j) [Add New Book] press when readOnly == false (userLvl == 1): navigates to /library/new', (tester) async {
-      late LibraryBooksNotifier notifier;
-      await tester.runAsync(() async {
-        notifier = LibraryBooksNotifier();
-        await notifier.loadInitialData();
-      });
+    testWidgets(
+      'j) [Add New Book] press when readOnly == false (userLvl == 1): navigates to /library/new',
+      (tester) async {
+        late LibraryBooksNotifier notifier;
+        await tester.runAsync(() async {
+          notifier = LibraryBooksNotifier();
+          await notifier.loadInitialData();
+        });
 
-      await tester.binding.setSurfaceSize(const Size(1440, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.binding.setSurfaceSize(const Size(1440, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildTestScreen(userLevel: 1, notifier: notifier));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          buildTestScreen(userLevel: 1, notifier: notifier),
+        );
+        await tester.pumpAndSettle();
 
-      final addButton = find.widgetWithText(
-        ElevatedButton,
-        'Add New Book (Ctrl+N)',
-      );
-      expect(addButton, findsOneWidget);
-      await tester.tap(addButton);
-      await tester.pumpAndSettle();
+        final addButton = find.widgetWithText(
+          ElevatedButton,
+          'Add New Book (Ctrl+N)',
+        );
+        expect(addButton, findsOneWidget);
+        await tester.tap(addButton);
+        await tester.pumpAndSettle();
 
-      expect(find.text('New Book Stub'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.text('New Book Stub'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
-    testWidgets('k) Row Title InkWell tap: navigates to /library/1', (tester) async {
+    testWidgets('k) Row Title InkWell tap: navigates to /library/1', (
+      tester,
+    ) async {
       late LibraryBooksNotifier notifier;
       await tester.runAsync(() async {
         notifier = LibraryBooksNotifier();
@@ -327,32 +347,37 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('l) Empty state renders "No books match the current search criteria" when allRows.isEmpty', (tester) async {
-      late LibraryBooksNotifier notifier;
-      await tester.runAsync(() async {
-        notifier = LibraryBooksNotifier();
-        await notifier.loadInitialData();
-        notifier.setSearchQuery('zzz');
-        await Future.delayed(const Duration(milliseconds: 300));
-      });
+    testWidgets(
+      'l) Empty state renders "No books match the current search criteria" when allRows.isEmpty',
+      (tester) async {
+        late LibraryBooksNotifier notifier;
+        await tester.runAsync(() async {
+          notifier = LibraryBooksNotifier();
+          await notifier.loadInitialData();
+          notifier.setSearchQuery('zzz');
+          await Future.delayed(const Duration(milliseconds: 300));
+        });
 
-      await tester.binding.setSurfaceSize(const Size(1440, 900));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.binding.setSurfaceSize(const Size(1440, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildTestScreen(notifier: notifier));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(buildTestScreen(notifier: notifier));
+        await tester.pumpAndSettle();
 
-      expect(
-        find.text('No books match the current search criteria'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Adjust filters or clear search to see the full catalog'),
-        findsOneWidget,
-      );
-    });
+        expect(
+          find.text('No books match the current search criteria'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Adjust filters or clear search to see the full catalog'),
+          findsOneWidget,
+        );
+      },
+    );
 
-    testWidgets('m) Fits 1440x900 with tester.takeException() == null', (tester) async {
+    testWidgets('m) Fits 1440x900 with tester.takeException() == null', (
+      tester,
+    ) async {
       late LibraryBooksNotifier notifier;
       await tester.runAsync(() async {
         notifier = LibraryBooksNotifier();
@@ -368,23 +393,25 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('n) Fits 1440x780 (weak-password banner active) with tester.takeException() == null', (tester) async {
-      late LibraryBooksNotifier notifier;
-      await tester.runAsync(() async {
-        notifier = LibraryBooksNotifier();
-        await notifier.loadInitialData();
-      });
+    testWidgets(
+      'n) Fits 1440x780 (weak-password banner active) with tester.takeException() == null',
+      (tester) async {
+        late LibraryBooksNotifier notifier;
+        await tester.runAsync(() async {
+          notifier = LibraryBooksNotifier();
+          await notifier.loadInitialData();
+        });
 
-      await tester.binding.setSurfaceSize(const Size(1440, 780));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
+        await tester.binding.setSurfaceSize(const Size(1440, 780));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
 
-      await tester.pumpWidget(buildTestScreen(
-        notifier: notifier,
-        hasWeakPasswordWarning: true,
-      ));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(
+          buildTestScreen(notifier: notifier, hasWeakPasswordWarning: true),
+        );
+        await tester.pumpAndSettle();
 
-      expect(tester.takeException(), isNull);
-    });
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }

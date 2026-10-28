@@ -418,6 +418,12 @@ class AppTopBar extends ConsumerWidget {
     if (path.startsWith('/staff')) {
       return 'Home > Staff & Payroll';
     }
+    if (path.startsWith('/library/') && path != '/library') {
+      final id = path.split('/').last;
+      return id == 'new'
+          ? 'Home > Library > Book Catalog > New Book'
+          : 'Home > Library > Book Catalog > Book #$id';
+    }
     if (path.startsWith('/library')) {
       return 'Home > Library > Book Catalog';
     }
