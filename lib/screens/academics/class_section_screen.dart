@@ -538,10 +538,9 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                         color: AppColors.textMuted,
                       ),
                       filled: !state.isClassEditMode,
-                      fillColor:
-                          state.isClassEditMode
-                              ? Colors.transparent
-                              : AppColors.surfaceSubtle,
+                      fillColor: state.isClassEditMode
+                          ? Colors.transparent
+                          : AppColors.surfaceSubtle,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 8,

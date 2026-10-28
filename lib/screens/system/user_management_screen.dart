@@ -300,6 +300,18 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                 ),
               ),
               const Spacer(),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.settings_outlined, size: 16),
+                label: const Text('Settings'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8.0,
+                    vertical: 8.0,
+                  ),
+                ),
+                onPressed: () => context.go('/system/settings'),
+              ),
+              const SizedBox(width: AppSpacing.xs),
               ElevatedButton.icon(
                 icon: const Icon(Icons.person_add, size: 16),
                 label: const Text('New User (Ctrl+N)'),

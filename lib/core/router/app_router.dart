@@ -26,6 +26,7 @@ import '../../screens/students/student_list_screen.dart';
 import '../../screens/students/student_profile_screen.dart';
 import '../../screens/students/student_registration_wizard.dart';
 import '../../screens/system/permission_matrix_screen.dart';
+import '../../screens/system/system_settings_screen.dart';
 import '../../screens/system/user_management_screen.dart';
 import '../../widgets/shell/app_shell.dart';
 import '../providers/session_provider.dart';
@@ -200,7 +201,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/system/settings',
-            redirect: (context, state) => '/system/users',
+            builder: (context, state) => const SystemSettingsScreen(),
           ),
           GoRoute(
             path: '/system/users',
