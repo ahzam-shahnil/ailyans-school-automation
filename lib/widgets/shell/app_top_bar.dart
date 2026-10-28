@@ -391,6 +391,12 @@ class AppTopBar extends ConsumerWidget {
     if (path == '/fees/receipts') {
       return 'Home > Fees > Fee Collection';
     }
+    if (path.startsWith('/academics/classes')) {
+      return 'Home > Academics > Classes & Sections';
+    }
+    if (path.startsWith('/academics/subjects')) {
+      return 'Home > Academics > Subject Catalog';
+    }
     if (path.startsWith('/academics')) {
       return 'Home > Academics';
     }

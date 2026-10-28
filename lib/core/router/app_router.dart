@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../screens/academics/class_section_screen.dart';
 import '../../screens/attendance/attendance_screen.dart';
 import '../../screens/dashboard/dashboard_screen.dart';
 import '../../screens/exams/class_subject_mapping_screen.dart';
@@ -112,9 +113,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/academics',
+            redirect: (context, state) => '/academics/classes',
+          ),
+          GoRoute(
+            path: '/academics/classes',
+            builder: (context, state) => const ClassSectionScreen(),
+          ),
+          GoRoute(
+            path: '/academics/subjects',
             builder: (context, state) => const _GenericShellPlaceholder(
-              title: 'Academics & Classes',
-              route: '/academics',
+              title: 'Subject Catalog - Coming in Screen 26',
+              route: '/academics/subjects',
             ),
           ),
           GoRoute(

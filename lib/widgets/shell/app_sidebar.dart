@@ -45,7 +45,7 @@ class AppSidebar extends ConsumerWidget {
     ),
     _NavItemData(
       label: 'Academics',
-      route: '/academics',
+      route: '/academics/classes',
       icon: Icons.menu_book_outlined,
       requiredObjIds: [4, 25],
       getBadgeCount: _getClassCount,
@@ -351,6 +351,9 @@ class AppSidebar extends ConsumerWidget {
   bool _isRouteActive(String currentPath, String itemRoute) {
     if (itemRoute == '/dashboard') {
       return currentPath == '/dashboard';
+    }
+    if (itemRoute.startsWith('/academics')) {
+      return currentPath.startsWith('/academics');
     }
     if (itemRoute.startsWith('/fees')) {
       return currentPath.startsWith('/fees');
