@@ -512,5 +512,44 @@ void main() {
         });
       },
     );
+
+    testWidgets('Tab 4 (Data & Backups) renders at 1440x780 without overflow', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1.0;
+
+      final notifier = SystemSettingsNotifier();
+      await tester.runAsync(() async {
+        await notifier.loadInitialData();
+      });
+      notifier.setActiveTab(4);
+
+      // 1. Test at 1440x780
+      tester.view.physicalSize = const Size(1440, 780);
+      await tester.pumpWidget(
+        buildTestScreen(userLevel: 1, notifier: notifier),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('DATABASE BACKUP & RESTORE'), findsOneWidget);
+      expect(find.text('RESTORE FROM BACKUP'), findsOneWidget);
+      expect(find.text('AVAILABLE BACKUPS'), findsOneWidget);
+
+      // 2. Test at 1440x900
+      tester.view.physicalSize = const Size(1440, 900);
+      await tester.pumpWidget(
+        buildTestScreen(userLevel: 1, notifier: notifier),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('DATABASE BACKUP & RESTORE'), findsOneWidget);
+
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+    });
   });
 }

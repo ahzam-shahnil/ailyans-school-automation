@@ -1,9 +1,13 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:path/path.dart' as p;
 
+import '../../core/db/backup_service.dart';
 import '../../core/providers/available_sessions_provider.dart';
+import '../../core/providers/backup_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/system_settings_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -35,6 +39,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
 
   final ScrollController _panelScrollController = ScrollController();
   bool _isInitialized = false;
+  bool _tab4Refreshed = false;
 
   @override
   void initState() {
@@ -200,6 +205,10 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
           notifier.setActiveTab(3),
       const SingleActivator(LogicalKeyboardKey.digit4, meta: true): () =>
           notifier.setActiveTab(3),
+      const SingleActivator(LogicalKeyboardKey.digit5, control: true): () =>
+          notifier.setActiveTab(4),
+      const SingleActivator(LogicalKeyboardKey.digit5, meta: true): () =>
+          notifier.setActiveTab(4),
     };
 
     return CallbackShortcuts(
@@ -418,6 +427,12 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
         'System Information',
         'Build, database & provenance',
       ),
+      (
+        4,
+        Icons.backup_outlined,
+        'Data & Backups',
+        'Export, restore & auto-backup',
+      ),
     ];
 
     return Container(
@@ -509,6 +524,12 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     SystemSettingsState state,
     SystemSettingsNotifier notifier,
   ) {
+    if (state.activeTab == 4) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: _buildTab4Backups(state),
+      );
+    }
     return Scrollbar(
       controller: _panelScrollController,
       thumbVisibility: true,
@@ -960,6 +981,275 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
         ]),
       ],
     );
+  }
+
+  // --- Tab 4: Data & Backups ---
+
+  Widget _buildTab4Backups(SystemSettingsState state) {
+    final backupState = ref.watch(backupProvider);
+    final backupNotifier = ref.read(backupProvider.notifier);
+
+    if (!_tab4Refreshed) {
+      _tab4Refreshed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(backupProvider.notifier).refreshBackupsList();
+        }
+      });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionTitle(
+          'DATABASE BACKUP & RESTORE',
+          'Export snapshots of the live database, restore from a prior backup, or open the folder.',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // Action row: Export / Open Folder
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            FilledButton.icon(
+              icon: const Icon(Icons.save_alt, size: 16),
+              label: Text(
+                backupState.isExporting ? 'Exporting...' : 'Export Backup Now',
+              ),
+              onPressed: backupState.isExporting || backupState.isRestoring
+                  ? null
+                  : () async {
+                      await backupNotifier.exportNow();
+                      if (mounted) {
+                        final s = ref.read(backupProvider);
+                        if (s.infoMessage != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(s.infoMessage!),
+                              backgroundColor: AppColors.statusSuccessText,
+                            ),
+                          );
+                          backupNotifier.clearMessages();
+                        } else if (s.errorMessage != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(s.errorMessage!),
+                              backgroundColor: AppColors.statusErrorText,
+                            ),
+                          );
+                          backupNotifier.clearMessages();
+                        }
+                      }
+                    },
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.folder_open, size: 16),
+              label: const Text('Open Data Folder'),
+              onPressed: () => backupNotifier.openBackupsFolder(),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+
+        // Restore section
+        _buildSectionTitle(
+          'RESTORE FROM BACKUP',
+          'Select a .db file. All current data will be overwritten after a safety backup is created.',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.upload_file, size: 16),
+              label: Text(
+                backupState.isRestoring
+                    ? 'Restoring...'
+                    : 'Choose Backup File...',
+              ),
+              onPressed: backupState.isRestoring
+                  ? null
+                  : () => _handleRestoreClicked(backupNotifier),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            if (backupState.isRestoring)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // Available backups list (Expanded, scrollable)
+        _buildSectionTitle(
+          'AVAILABLE BACKUPS',
+          'Files in ~/Documents/Ailyans/backups/. Newest first.',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Expanded(
+          child: backupState.availableBackups.isEmpty
+              ? Center(
+                  child: Text(
+                    'No backups yet. Click Export Backup Now.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                )
+              : Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceRaised,
+                    border: Border.all(color: AppColors.borderDefault),
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                  child: ListView.separated(
+                    itemCount: backupState.availableBackups.length,
+                    separatorBuilder: (_, __) => const Divider(
+                      height: 1,
+                      color: AppColors.borderDefault,
+                    ),
+                    itemBuilder: (ctx, i) {
+                      final name = backupState.availableBackups[i];
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.storage_outlined, size: 18),
+                        title: Text(
+                          name,
+                          style: AppTypography.monospace.copyWith(fontSize: 13),
+                        ),
+                        trailing: TextButton.icon(
+                          icon: const Icon(Icons.restore, size: 14),
+                          label: const Text('Restore'),
+                          onPressed: backupState.isRestoring
+                              ? null
+                              : () => _handleRestorePathPicked(
+                                  backupNotifier,
+                                  name,
+                                ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+      ],
+    );
+  }
+
+  Future<void> _handleRestoreClicked(BackupNotifier backupNotifier) async {
+    final files = await FilePicker.pickFiles(
+      dialogTitle: 'Select Database Backup',
+      type: FileType.custom,
+      allowedExtensions: ['db'],
+    );
+    if (files.isEmpty || files.first.path == null) {
+      return;
+    }
+    final path = files.first.path!;
+    if (!mounted) return;
+    await _validateAndConfirm(backupNotifier, path);
+  }
+
+  Future<void> _handleRestorePathPicked(
+    BackupNotifier backupNotifier,
+    String basename,
+  ) async {
+    final dir = await BackupService.instance.backupsDirectory();
+    final fullPath = p.join(dir.path, basename);
+    if (!mounted) return;
+    await _validateAndConfirm(backupNotifier, fullPath);
+  }
+
+  Future<void> _validateAndConfirm(
+    BackupNotifier backupNotifier,
+    String candidatePath,
+  ) async {
+    final validation = await backupNotifier.pickAndValidate(candidatePath);
+    if (!mounted) return;
+    if (validation == null) return;
+    if (!validation.ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(validation.failureReason ?? 'Invalid backup file'),
+          backgroundColor: AppColors.statusErrorText,
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Restore Database?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will overwrite the current database with:',
+              style: AppTypography.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              candidatePath,
+              style: AppTypography.monospace.copyWith(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'A pre-restore safety backup will be saved to:',
+              style: AppTypography.bodySmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '~/Documents/Ailyans/backups/pre_restore_<timestamp>.db',
+              style: AppTypography.monospace.copyWith(fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'You will be logged out and must sign in again.',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusWarningText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.statusErrorText,
+            ),
+            child: const Text('Restore & Log Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+    final success = await backupNotifier.confirmRestore(candidatePath);
+    if (!mounted) return;
+    if (success) {
+      ref.read(sessionProvider.notifier).clear();
+      context.go('/login');
+    } else {
+      final s = ref.read(backupProvider);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(s.errorMessage ?? 'Restore failed'),
+          backgroundColor: AppColors.statusErrorText,
+        ),
+      );
+      backupNotifier.clearMessages();
+    }
   }
 
   // --- Region C: Pinned Bottom Action Bar ---

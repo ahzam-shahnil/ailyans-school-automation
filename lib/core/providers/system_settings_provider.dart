@@ -180,7 +180,7 @@ class AppConfigData {
 /// State for the unified SystemSettingsScreen.
 class SystemSettingsState {
   final bool isLoading;
-  final int activeTab; // 0: Institution, 1: Calendar, 2: Appearance, 3: Info
+  final int activeTab; // 0: Institution, 1: Calendar, 2: Appearance, 3: Info, 4: Data & Backups
   final InstBranchData branch;
   final InstBranchData originalBranch;
   final AppConfigData config;
@@ -254,9 +254,9 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
 
   SystemSettingsNotifier([this._ref]) : super(const SystemSettingsState());
 
-  /// Sets the active tab index (0..3).
+  /// Sets the active tab index (0..4).
   void setActiveTab(int tab) {
-    if (tab < 0 || tab > 3) return;
+    if (tab < 0 || tab > 4) return;
     state = state.copyWith(activeTab: tab);
   }
 
