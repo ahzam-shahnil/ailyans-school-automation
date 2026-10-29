@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../../core/providers/backup_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -138,6 +141,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ref
           .read(sessionProvider.notifier)
           .setSession(user, allowedObjIds, hasWeakPasswordWarning: isWeak);
+
+      // Fire-and-forget daily auto-backup. Never blocks login and never
+      // surfaces errors to the user (logged via debugPrint only).
+      unawaited(
+        ref.read(backupProvider.notifier).runAutoBackupOnLaunch().catchError((
+          Object e,
+          StackTrace st,
+        ) {
+          debugPrint('Auto-backup on login failed (non-fatal): $e');
+        }),
+      );
 
       // e. Navigate to dashboard
       if (mounted) {
