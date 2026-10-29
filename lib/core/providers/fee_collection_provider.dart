@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/fee_receipt_view.dart';
 import '../db/database.dart';
+import 'clock_provider.dart';
 import '../../core/utils/fee_head_display.dart';
 import '../utils/receipt_pdf_generator.dart'
     as rcp
@@ -133,11 +134,16 @@ class FeeCollectionState {
 
 /// State notifier driving fee receipt search, payment posting, and supervisory revocation.
 class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
-  FeeCollectionNotifier([FeeCollectionState? initialState])
-    : super(initialState ?? const FeeCollectionState()) {
+  final Ref? _ref;
+
+  FeeCollectionNotifier([FeeCollectionState? initialState, Ref? ref])
+    : _ref = ref,
+      super(initialState ?? const FeeCollectionState()) {
     // Auto-load unpaid directory on mount so screen is immediately useful.
     Future.microtask(() => lookupVoucherByFilter('unpaid'));
   }
+
+  DateTime _now() => _ref?.read(clockProvider)() ?? DateTime.now();
 
   void setPaymentDate(DateTime date) {
     state = state.copyWith(paymentDate: date);
@@ -334,7 +340,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         isLoadingLookup: false,
         lookupError: () => null,
         currentReceipt: () => receipt,
-        paymentDate: receipt.paidDate ?? DateTime.now(),
+        paymentDate: receipt.paidDate ?? _now(),
         selectedBankId: bankId,
         amountTendered: initialTendered,
         paymentMode: 'Cash',
@@ -534,14 +540,14 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         final tr = transRows.first;
         feeTransId = (tr['FeeTransID'] as num?)?.toInt() ?? 0;
         final dateStr = (tr['SubmissionDate'] as String?)?.trim() ?? '';
-        submissionDate = DateTime.tryParse(dateStr) ?? DateTime.now();
+        submissionDate = DateTime.tryParse(dateStr) ?? _now();
         paidAmount = (tr['PaidAmount'] as num?)?.toInt() ?? 0;
         bankIdForReceipt = (tr['BankID'] as num?)?.toInt() ?? 1;
       } else {
         // Fallback — pre-seeded paid voucher without FeeTransaction row
         feeTransId = 0; // displayed as #00000
         final paidDateStr = (mas['PaidDate'] as String?)?.trim() ?? '';
-        submissionDate = DateTime.tryParse(paidDateStr) ?? DateTime.now();
+        submissionDate = DateTime.tryParse(paidDateStr) ?? _now();
         paidAmount = (mas['PaidAmt'] as num?)?.toInt() ?? masNetPayable;
         bankIdForReceipt = (mas['BankID'] as num?)?.toInt() ?? 1;
       }
@@ -609,7 +615,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     try {
       final db = await DatabaseService.instance.database;
       final submissionDateStr = DateFormat('yyyy-MM-dd')
-          .format(state.paymentDate ?? DateTime.now());
+          .format(state.paymentDate ?? _now());
 
       await db.transaction((txn) async {
         // 1. UPDATE VoucharMas — PaidAmt = cash + advance (full settlement)
@@ -787,7 +793,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       ORDER BY c.ClassID ASC, cs.ClassSecID ASC, sc.ClassRollNo ASC, vm.VoucherMasID DESC
     ''', whereArgs);
 
-    final now = DateTime.now();
+    final now = _now();
     final allRows = <DefaulterListRow>[];
 
     for (final r in rows) {
@@ -888,5 +894,5 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
 
 final feeCollectionProvider =
     StateNotifierProvider<FeeCollectionNotifier, FeeCollectionState>((ref) {
-      return FeeCollectionNotifier();
+      return FeeCollectionNotifier(null, ref);
     });

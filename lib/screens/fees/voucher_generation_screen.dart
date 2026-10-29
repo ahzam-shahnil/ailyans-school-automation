@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
 import '../../core/providers/available_sessions_provider.dart';
+import '../../core/providers/clock_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -55,15 +56,44 @@ class _VoucherGenerationScreenState
     // loaded — skip the sync rather than triggering a DB query that leaves a timer pending.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
+      // 1. Session year
       final metaAsync = ref.read(shellMetadataProvider);
-      if (!metaAsync.hasValue) return; // don't trigger a fresh load in tests
-      final meta = metaAsync.valueOrNull;
-      if (meta == null) return;
-      final current = ref.read(voucherGenFiltersProvider).sessionYr;
-      if (current != meta.sessionYear) {
-        ref
-            .read(voucherGenFiltersProvider.notifier)
-            .setSessionYr(meta.sessionYear);
+      if (metaAsync.hasValue) {
+        final meta = metaAsync.valueOrNull;
+        if (meta != null) {
+          final current = ref.read(voucherGenFiltersProvider).sessionYr;
+          if (current != meta.sessionYear) {
+            ref
+                .read(voucherGenFiltersProvider.notifier)
+                .setSessionYr(meta.sessionYear);
+          }
+        }
+      }
+
+      // 2. Billing month + dates from clockProvider
+      final now = ref.read(clockProvider)();
+      const monthNames = [
+        'January',
+        'February',
+        'March',
+        'April',
+        'May',
+        'June',
+        'July',
+        'August',
+        'September',
+        'October',
+        'November',
+        'December',
+      ];
+      final expectedMonth = '${monthNames[now.month - 1]} ${now.year}';
+      final filters = ref.read(voucherGenFiltersProvider);
+      if (filters.billingMonth != expectedMonth) {
+        final notifier = ref.read(voucherGenFiltersProvider.notifier);
+        notifier.setBillingMonth(expectedMonth);
+        notifier.setIssueDate(DateTime(now.year, now.month, 1));
+        notifier.setDueDate(DateTime(now.year, now.month, 10));
       }
     });
   }
@@ -290,7 +320,7 @@ class _VoucherGenerationScreenState
   Future<void> _pickBillingMonth(BuildContext context) async {
     final filters = ref.read(voucherGenFiltersProvider);
     final parts = filters.billingMonth.trim().split(RegExp(r'\s+'));
-    final now = DateTime.now();
+    final now = ref.read(clockProvider)();
     int selectedYear = now.year;
     int selectedMonth = now.month;
     if (parts.length >= 2) {

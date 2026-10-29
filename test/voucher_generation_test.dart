@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:school_automation/core/db/database.dart';
 import 'package:school_automation/core/db/migrations.dart';
 import 'package:school_automation/core/db/seed_data.dart';
 import 'package:school_automation/core/providers/available_sessions_provider.dart';
+import 'package:school_automation/core/providers/clock_provider.dart';
 import 'package:school_automation/core/providers/shell_metadata_provider.dart';
 import 'package:school_automation/core/providers/student_list_provider.dart';
 import 'package:school_automation/core/providers/voucher_generation_provider.dart';
@@ -20,6 +22,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();
+  GoogleFonts.config.allowRuntimeFetching = false;
 
   late Database db;
 
@@ -337,6 +340,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
               availableSessionsProvider.overrideWith(
                 (ref) async => ['2017-2018', '2026-27'],
               ),
@@ -456,6 +460,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
             availableSessionsProvider.overrideWith(
               (ref) async => ['2017-2018', '2026-27'],
             ),
@@ -557,6 +562,7 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
               availableSessionsProvider.overrideWith(
                 (ref) async => ['2017-2018', '2026-27'],
               ),
@@ -683,6 +689,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
             availableSessionsProvider.overrideWith(
               (ref) async => ['2017-2018', '2026-27'],
             ),

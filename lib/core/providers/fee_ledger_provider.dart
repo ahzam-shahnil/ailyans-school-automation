@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../models/fee_ledger_row.dart';
 import '../db/database.dart';
 import '../utils/fee_head_display.dart';
+import 'clock_provider.dart';
 
 /// Immutable state for FeeLedgerScreen.
 @immutable
@@ -157,9 +158,13 @@ class FeeLedgerState {
 
 /// StateNotifier managing FeeLedger analytics queries, filter mutations, and row pagination.
 class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
-  FeeLedgerNotifier() : super(const FeeLedgerState()) {
+  final Ref? _ref;
+
+  FeeLedgerNotifier([Ref? ref]) : _ref = ref, super(const FeeLedgerState()) {
     init();
   }
+
+  DateTime _now() => _ref?.read(clockProvider)() ?? DateTime.now();
 
   static const _sortMap = {
     'voucher_id': 'vm.VoucherMasID',
@@ -325,7 +330,7 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
       _fetchData();
       return;
     }
-    final now = DateTime.now();
+    final now = _now();
     final monthName = DateFormat('MMMM yyyy').format(now);
     final match = state.months.firstWhere(
       (m) => m.toLowerCase() == monthName.toLowerCase(),
@@ -608,5 +613,5 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
 /// Global provider for the FeeLedger state notifier.
 final feeLedgerProvider =
     StateNotifierProvider<FeeLedgerNotifier, FeeLedgerState>((ref) {
-      return FeeLedgerNotifier();
+      return FeeLedgerNotifier(ref);
     });

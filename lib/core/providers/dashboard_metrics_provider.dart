@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../db/database.dart';
+import 'clock_provider.dart';
 
 /// Single recent fee payment record for the dashboard feed.
 class RecentPaymentItem {
@@ -79,7 +80,10 @@ class DashboardMetrics {
 final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
   final db = await DatabaseService.instance.database;
 
-  final todayIso = DateTime.now().toIso8601String().substring(0, 10);
+  final todayIso = ref
+      .watch(clockProvider)()
+      .toIso8601String()
+      .substring(0, 10);
 
   // 1. Today's Student Attendance
   final attRows = await db.rawQuery(

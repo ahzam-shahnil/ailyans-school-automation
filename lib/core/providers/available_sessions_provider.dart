@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../db/database.dart';
+import 'clock_provider.dart';
 
 /// Distinct session years available for dropdowns.
 ///
@@ -47,7 +48,7 @@ final availableSessionsProvider = FutureProvider<List<String>>((ref) async {
     }
   } catch (_) {}
 
-  final now = DateTime.now();
+  final now = ref.read(clockProvider)();
   final currentYear = now.year;
   final calSessions = <String>{
     '$currentYear-${(currentYear + 1) % 100}',
