@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:school_automation/core/utils/attendance_pdf_generator.dart';
+import 'package:school_automation/core/utils/biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
 import 'package:school_automation/core/utils/voucher_pdf_generator.dart';
 import 'package:school_automation/models/fee_receipt_view.dart';
@@ -82,17 +84,13 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       case ReportType.feeReceipt:
         return _generateFeeReceipt();
       case ReportType.biodata:
-        throw UnimplementedError(
-          '${request.type.displayName} preview will be wired in a later run.',
-        );
+        return _generateBiodata();
       case ReportType.defaulterList:
         throw UnimplementedError(
-          '${request.type.displayName} preview will be wired in a later run.',
+          '${request.type.displayName} preview will be wired in Run E-3c.',
         );
       case ReportType.attendanceRegister:
-        throw UnimplementedError(
-          '${request.type.displayName} preview will be wired in a later run.',
-        );
+        return _generateAttendanceRegister();
     }
   }
 
@@ -196,6 +194,42 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       branchName: request.extraParams['branchName'] as String,
       branchAddress: request.extraParams['branchAddress'] as String,
     );
+  }
+
+  Future<Uint8List> _generateBiodata() async {
+    if (request.vouchers == null || request.vouchers!.isEmpty) {
+      throw StateError('No student data provided for biodata preview.');
+    }
+    const requiredKeys = ['branchName', 'branchAddress'];
+    final missing = requiredKeys
+        .where(
+          (k) =>
+              !request.extraParams.containsKey(k) ||
+              request.extraParams[k] == null ||
+              request.extraParams[k].toString().trim().isEmpty,
+        )
+        .toList();
+    if (missing.isNotEmpty) {
+      throw ArgumentError(
+        'Missing required params for biodata: ${missing.join(", ")}',
+      );
+    }
+    final data = request.vouchers!.first as StudentBiodataPrintData;
+    return BiodataPdfGenerator.generateStudentBiodata(
+      data: data,
+      branchName: request.extraParams['branchName'] as String,
+      branchAddress: request.extraParams['branchAddress'] as String,
+      branchPhone: request.extraParams['branchPhone'] as String?,
+      branchPrincipal: request.extraParams['branchPrincipal'] as String?,
+    );
+  }
+
+  Future<Uint8List> _generateAttendanceRegister() async {
+    final data = request.extraParams['attendanceData'] as AttendancePdfData?;
+    if (data == null) {
+      throw StateError('Missing attendanceData in extraParams.');
+    }
+    return buildAttendancePdf(data);
   }
 }
 

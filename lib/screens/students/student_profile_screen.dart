@@ -10,10 +10,11 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_profile_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
-import '../../core/utils/biodata_pdf_generator.dart';
 import '../../core/utils/photo_picker.dart';
 import '../../models/student.dart';
 import '../../repositories/photo_repository.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Comprehensive 360-degree Student Profile Workstation.
 /// Hosted within [AppShell] at route `/students/:id`.
@@ -733,15 +734,22 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 final stuId = int.tryParse(widget.studentId) ?? -1;
                 final data = await buildBiodataPrintData(stuId, ref);
                 if (!mounted) return;
-                await showBiodataPrintPreviewDialog(
+                await ReportPreviewModal.show(
                   context,
-                  data: data,
-                  branchName:
-                      meta?.branchName ??
-                      "Ailyans's Higher Secondary School Mianwali",
-                  branchAddress: meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  branchPhone: meta?.branchPhone,
-                  branchPrincipal: meta?.branchPrincipal,
+                  request: ReportRequest(
+                    type: ReportType.biodata,
+                    id: stuId.toString(),
+                    vouchers: [data],
+                    extraParams: {
+                      'branchName':
+                          meta?.branchName ??
+                          "Ailyans's Higher Secondary School Mianwali",
+                      'branchAddress':
+                          meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                      'branchPhone': meta?.branchPhone ?? '',
+                      'branchPrincipal': meta?.branchPrincipal ?? '',
+                    },
+                  ),
                 );
               },
             ),

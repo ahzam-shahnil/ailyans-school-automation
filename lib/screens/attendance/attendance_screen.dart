@@ -7,6 +7,8 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/attendance_pdf_generator.dart';
 import '../../models/attendance_roster_row.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Screen 19 — AttendanceScreen at /attendance.
 /// Consolidates legacy frmAttandance (§S23) and frmAttPrint (§S26).
@@ -652,7 +654,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
           // Print Roll Call (S26)
           OutlinedButton.icon(
-            onPressed: () {
+            onPressed: () async {
               final className =
                   state.classes.firstWhere(
                         (c) => c['ClassID'] == state.selectedClassId,
@@ -690,26 +692,32 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       as String? ??
                   '';
 
-              showAttendancePrintPreviewDialog(
+              await ReportPreviewModal.show(
                 context,
-                AttendancePdfData(
-                  branchName:
-                      meta?.branchName ??
-                      "Ailyans's Higher Secondary School Mianwali",
-                  branchAddress: meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  branchPhone: meta?.branchPhone ?? '',
-                  branchPrincipal: meta?.branchPrincipal ?? '',
-                  className: className,
-                  sectionName: sectionName,
-                  teacherName: teacherName,
-                  sessionYear: state.sessionYear,
-                  attDate: state.selectedDate,
-                  roster: state.roster,
-                  presentCount: state.summaryCounts['Present'] ?? 0,
-                  absentCount: state.summaryCounts['Absent'] ?? 0,
-                  leaveCount: state.summaryCounts['Leave'] ?? 0,
-                  lateCount: state.summaryCounts['Late'] ?? 0,
-                  totalCount: state.roster.length,
+                request: ReportRequest(
+                  type: ReportType.attendanceRegister,
+                  extraParams: {
+                    'attendanceData': AttendancePdfData(
+                      branchName:
+                          meta?.branchName ??
+                          "Ailyans's Higher Secondary School Mianwali",
+                      branchAddress:
+                          meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                      branchPhone: meta?.branchPhone ?? '',
+                      branchPrincipal: meta?.branchPrincipal ?? '',
+                      className: className,
+                      sectionName: sectionName,
+                      teacherName: teacherName,
+                      sessionYear: state.sessionYear,
+                      attDate: state.selectedDate,
+                      roster: state.roster,
+                      presentCount: state.summaryCounts['Present'] ?? 0,
+                      absentCount: state.summaryCounts['Absent'] ?? 0,
+                      leaveCount: state.summaryCounts['Leave'] ?? 0,
+                      lateCount: state.summaryCounts['Late'] ?? 0,
+                      totalCount: state.roster.length,
+                    ),
+                  },
                 ),
               );
             },

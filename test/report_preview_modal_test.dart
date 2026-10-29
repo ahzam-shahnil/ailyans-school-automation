@@ -33,6 +33,18 @@ ReportRequest _feeReceiptRequest() => ReportRequest(
       customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
     );
 
+ReportRequest _biodataRequest() => ReportRequest(
+      type: ReportType.biodata,
+      titleOverride: 'Test Biodata',
+      customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+    );
+
+ReportRequest _attendanceRegisterRequest() => ReportRequest(
+      type: ReportType.attendanceRegister,
+      titleOverride: 'Test Attendance',
+      customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+    );
+
 // ---------------------------------------------------------------------------
 // Helper: pump the modal inside a ProviderScope + MaterialApp
 // ---------------------------------------------------------------------------
@@ -150,6 +162,26 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
 
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'biodata report type renders without crash',
+      (tester) async {
+        await _pumpModal(tester, _biodataRequest());
+
+        expect(find.text('Test Biodata'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'attendanceRegister report type renders without crash',
+      (tester) async {
+        await _pumpModal(tester, _attendanceRegisterRequest());
+
+        expect(find.text('Test Attendance'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );
