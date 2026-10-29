@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/leaving_student_row.dart';
 import '../db/database.dart';
+import 'clock_provider.dart';
 
 @immutable
 class SchoolLeavingState {
@@ -85,10 +86,19 @@ class SchoolLeavingState {
 }
 
 class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
-  SchoolLeavingNotifier()
-    : super(SchoolLeavingState(leavingDate: DateTime.now())) {
+  final Ref? _ref;
+
+  SchoolLeavingNotifier([Ref? ref])
+    : _ref = ref,
+      super(
+        SchoolLeavingState(
+          leavingDate: ref?.read(clockProvider)() ?? DateTime.now(),
+        ),
+      ) {
     loadInitialData();
   }
+
+  DateTime _now() => _ref?.read(clockProvider)() ?? DateTime.now();
 
   Future<void> loadInitialData() async {
     if (!mounted) return;
@@ -186,7 +196,7 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
           LeavingStudentRow(stuRegId: stuRegId, nameFirst: 'Student $stuRegId'),
     );
 
-    DateTime initialDate = DateTime.now();
+    DateTime initialDate = _now();
     String? initialReason = 'Leaving';
     String? initialConduct = 'Good ';
     String initialRemarks = '';
@@ -259,7 +269,7 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
 
   void setTodayDate() {
     if (!state.isFormEditable) return;
-    state = state.copyWith(leavingDate: DateTime.now());
+    state = state.copyWith(leavingDate: _now());
   }
 
   void setReason(String? reason) {
@@ -386,5 +396,5 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
 
 final schoolLeavingProvider =
     StateNotifierProvider<SchoolLeavingNotifier, SchoolLeavingState>((ref) {
-      return SchoolLeavingNotifier();
+      return SchoolLeavingNotifier(ref);
     });

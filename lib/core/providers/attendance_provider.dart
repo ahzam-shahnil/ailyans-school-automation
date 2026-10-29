@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/attendance_roster_row.dart';
 import '../db/database.dart';
+import 'clock_provider.dart';
 import 'session_provider.dart';
 import 'shell_metadata_provider.dart';
 
@@ -49,13 +50,14 @@ class AttendanceState {
   });
 
   factory AttendanceState.initial({
+    DateTime? selectedDate,
     List<Map<String, dynamic>> classes = const [],
     List<Map<String, dynamic>> sections = const [],
     List<Map<String, dynamic>> teachers = const [],
     String sessionYear = '2017-2018',
   }) {
     return AttendanceState(
-      selectedDate: DateTime.now(),
+      selectedDate: selectedDate ?? DateTime.now(),
       sessionYear: sessionYear,
       classes: classes,
       sections: sections,
@@ -114,7 +116,8 @@ class AttendanceState {
 class AttendanceNotifier extends StateNotifier<AttendanceState> {
   final Ref ref;
 
-  AttendanceNotifier(this.ref) : super(AttendanceState.initial()) {
+  AttendanceNotifier(this.ref)
+    : super(AttendanceState.initial(selectedDate: ref.read(clockProvider)())) {
     final metaSession =
         ref.read(shellMetadataProvider).value?.sessionYear ?? '2017-2018';
     state = state.copyWith(sessionYear: metaSession);
@@ -561,7 +564,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       );
       final nextMasId = maxMasRow.first['nextId'] as int;
 
-      final now = DateTime.now();
+      final now = ref.read(clockProvider)();
       final attDateStr =
           '${targetDate.year.toString().padLeft(4, '0')}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')} '
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
@@ -647,7 +650,7 @@ class AttendanceNotifier extends StateNotifier<AttendanceState> {
       final masId = state.existingAttMasId!;
 
       final targetDate = state.selectedDate;
-      final now = DateTime.now();
+      final now = ref.read(clockProvider)();
       final attDateStr =
           '${targetDate.year.toString().padLeft(4, '0')}-${targetDate.month.toString().padLeft(2, '0')}-${targetDate.day.toString().padLeft(2, '0')} '
           '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';

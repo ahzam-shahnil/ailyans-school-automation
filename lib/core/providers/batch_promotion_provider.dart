@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/promotion_candidate_row.dart';
 import '../db/database.dart';
+import 'clock_provider.dart';
 
 @immutable
 class BatchPromotionState {
@@ -121,10 +122,19 @@ class BatchPromotionState {
 }
 
 class BatchPromotionNotifier extends StateNotifier<BatchPromotionState> {
-  BatchPromotionNotifier()
-    : super(BatchPromotionState(promotionDate: DateTime.now())) {
+  final Ref? _ref;
+
+  BatchPromotionNotifier([Ref? ref])
+    : _ref = ref,
+      super(
+        BatchPromotionState(
+          promotionDate: ref?.read(clockProvider)() ?? DateTime.now(),
+        ),
+      ) {
     loadInitialData();
   }
+
+  DateTime _now() => _ref?.read(clockProvider)() ?? DateTime.now();
 
   static int parseStartYear(String? session) {
     if (session == null) return 0;
@@ -190,7 +200,7 @@ class BatchPromotionNotifier extends StateNotifier<BatchPromotionState> {
         classes: classRows,
         sourceSessionYr: () => defaultSource,
         targetSessionYr: () => defaultTarget,
-        promotionDate: DateTime.now(),
+        promotionDate: _now(),
         loading: false,
       );
     } catch (e) {
@@ -864,5 +874,5 @@ class BatchPromotionNotifier extends StateNotifier<BatchPromotionState> {
 
 final batchPromotionProvider =
     StateNotifierProvider<BatchPromotionNotifier, BatchPromotionState>((ref) {
-      return BatchPromotionNotifier();
+      return BatchPromotionNotifier(ref);
     });

@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../../models/exam_session_row.dart';
 import '../../models/exam_term_row.dart';
 import '../db/database.dart';
+import 'clock_provider.dart';
 
 /// State object for ExamTermScreen.
 class ExamTermState {
@@ -149,9 +150,13 @@ class ExamTermState {
 /// Riverpod StateNotifier driving Screen 16 ExamTermScreen.
 class ExamTermNotifier extends StateNotifier<ExamTermState> {
   final DateFormat _isoFormat = DateFormat('yyyy-MM-dd');
+  final Ref? _ref;
 
-  ExamTermNotifier([ExamTermState? initialState])
-    : super(initialState ?? const ExamTermState());
+  ExamTermNotifier([ExamTermState? initialState, Ref? ref])
+    : _ref = ref,
+      super(initialState ?? const ExamTermState());
+
+  DateTime _now() => _ref?.read(clockProvider)() ?? DateTime.now();
 
   Future<Database> _getDb() async {
     return DatabaseService.instance.database;
@@ -272,9 +277,9 @@ class ExamTermNotifier extends StateNotifier<ExamTermState> {
           formExamSupervisorId: availableTeachers.isNotEmpty
               ? (availableTeachers.first['TeacherID'] as num).toInt()
               : null,
-          formStartDate: DateTime.now(),
-          formEndDate: DateTime.now().add(const Duration(days: 14)),
-          formResultDate: DateTime.now().add(const Duration(days: 28)),
+          formStartDate: _now(),
+          formEndDate: _now().add(const Duration(days: 14)),
+          formResultDate: _now().add(const Duration(days: 28)),
           formLocation: '',
           formDetail: '',
           isFormDirty: false,
@@ -360,9 +365,9 @@ class ExamTermNotifier extends StateNotifier<ExamTermState> {
           formExamSupervisorId: state.availableTeachers.isNotEmpty
               ? (state.availableTeachers.first['TeacherID'] as num).toInt()
               : null,
-          formStartDate: DateTime.now(),
-          formEndDate: DateTime.now().add(const Duration(days: 14)),
-          formResultDate: DateTime.now().add(const Duration(days: 28)),
+          formStartDate: _now(),
+          formEndDate: _now().add(const Duration(days: 14)),
+          formResultDate: _now().add(const Duration(days: 28)),
           formLocation: '',
           formDetail: '',
           isFormDirty: false,
@@ -425,9 +430,9 @@ class ExamTermNotifier extends StateNotifier<ExamTermState> {
       formExamSupervisorId: state.availableTeachers.isNotEmpty
           ? (state.availableTeachers.first['TeacherID'] as num).toInt()
           : null,
-      formStartDate: DateTime.now(),
-      formEndDate: DateTime.now().add(const Duration(days: 14)),
-      formResultDate: DateTime.now().add(const Duration(days: 28)),
+      formStartDate: _now(),
+      formEndDate: _now().add(const Duration(days: 14)),
+      formResultDate: _now().add(const Duration(days: 28)),
       formLocation: '',
       formDetail: '',
       isFormDirty: false,
@@ -941,6 +946,6 @@ class ExamTermNotifier extends StateNotifier<ExamTermState> {
 /// Provider for ExamTermScreen.
 final examTermProvider = StateNotifierProvider<ExamTermNotifier, ExamTermState>(
   (ref) {
-    return ExamTermNotifier();
+    return ExamTermNotifier(null, ref);
   },
 );

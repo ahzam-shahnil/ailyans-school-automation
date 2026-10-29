@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../models/salary_allowance_item.dart';
 import '../../models/salary_slip_row.dart';
 import '../db/database.dart';
+import 'clock_provider.dart';
 
 /// State object representing the Payroll & Salary Disbursement workstation.
 @immutable
@@ -128,14 +129,21 @@ class SalaryManagementState {
 
 /// Provider orchestrating Screen 22 SalaryManagementScreen logic.
 class SalaryManagementNotifier extends StateNotifier<SalaryManagementState> {
-  SalaryManagementNotifier()
-    : super(
+  final Ref? _ref;
+
+  SalaryManagementNotifier([Ref? ref])
+    : _ref = ref,
+      super(
         SalaryManagementState(
-          selectedMonth: formatMonthYear(DateTime.now()),
-          disbursementDate: DateTime.now(),
+          selectedMonth: formatMonthYear(
+            ref?.read(clockProvider)() ?? DateTime.now(),
+          ),
+          disbursementDate: ref?.read(clockProvider)() ?? DateTime.now(),
           categoryFilter: 'All',
         ),
       );
+
+  DateTime _now() => _ref?.read(clockProvider)() ?? DateTime.now();
 
   static const List<String> _monthNames = [
     'January',
@@ -184,7 +192,7 @@ class SalaryManagementNotifier extends StateNotifier<SalaryManagementState> {
 
   /// Initial load on screen mount.
   Future<void> loadInitialData({int? autoSelectTeacherId}) async {
-    final now = DateTime.now();
+    final now = _now();
     final defaultMonth = formatMonthYear(now);
 
     // Build comprehensive list of available months (2017-2018 range + current year)
@@ -729,5 +737,5 @@ class SalaryManagementNotifier extends StateNotifier<SalaryManagementState> {
 /// Riverpod provider for SalaryManagementScreen.
 final salaryManagementProvider =
     StateNotifierProvider<SalaryManagementNotifier, SalaryManagementState>(
-      (ref) => SalaryManagementNotifier(),
+      (ref) => SalaryManagementNotifier(ref),
     );
