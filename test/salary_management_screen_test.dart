@@ -17,7 +17,17 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();
-  GoogleFonts.config.allowRuntimeFetching = false;
+
+  bool? originalAllowFetching;
+  setUpAll(() {
+    originalAllowFetching = GoogleFonts.config.allowRuntimeFetching;
+    GoogleFonts.config.allowRuntimeFetching = false;
+  });
+  tearDownAll(() {
+    if (originalAllowFetching != null) {
+      GoogleFonts.config.allowRuntimeFetching = originalAllowFetching!;
+    }
+  });
 
   late Database db;
 

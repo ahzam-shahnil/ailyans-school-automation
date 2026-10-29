@@ -94,6 +94,10 @@ class DatabaseService {
     return p.join(ailyansDir.path, 'school_database.db');
   }
 
+  /// Public accessor for the resolved on-disk DB path.
+  /// Kept in sync with _getDatabasePath so BackupService can target the same file.
+  Future<String> getDatabasePath() => _getDatabasePath();
+
   /// Closes the database connection if open.
   Future<void> close() async {
     if (_database != null && _database!.isOpen) {
