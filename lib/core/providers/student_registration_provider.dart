@@ -508,25 +508,66 @@ final feePreviewProvider =
       classId,
     ) async {
       final db = await DatabaseService.instance.database;
-      const session = '2017-2018';
-      final rows = await db.rawQuery(
-        '''
-    SELECT cpf.Fee, fp.ParamDesciption
-    FROM Cls_Param_Fee cpf
-    LEFT JOIN FeeParameters fp ON cpf.FeeParamID = fp.FeeParamID
-    WHERE cpf.ClassID = ? AND cpf.FeeYr = ?
-  ''',
-        [classId, session],
+
+      final sessionRows = await db.rawQuery(
+        "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
       );
+      final activeSession = sessionRows.isNotEmpty
+          ? (sessionRows.first['config_value'] as String? ?? '2026-27')
+          : '2026-27';
+
+      // Query tariffs for active session first
+      var rows = await db.rawQuery(
+        'SELECT cpf.Fee, fp.ParamDesciption FROM Cls_Param_Fee cpf '
+        'LEFT JOIN FeeParameters fp ON cpf.FeeParamID = fp.FeeParamID '
+        'WHERE cpf.ClassID = ? AND cpf.FeeYr = ?',
+        [classId, activeSession],
+      );
+
+      // Fallback: if no tariffs exist for active session, use the most recent
+      // tariff year available for this class (prevents "Rs. 0" preview when
+      // new session starts before tariffs are cloned)
+      if (rows.isEmpty) {
+        rows = await db.rawQuery(
+          'SELECT cpf.Fee, fp.ParamDesciption FROM Cls_Param_Fee cpf '
+          'LEFT JOIN FeeParameters fp ON cpf.FeeParamID = fp.FeeParamID '
+          'WHERE cpf.ClassID = ? AND cpf.FeeYr = ('
+          '  SELECT MAX(FeeYr) FROM Cls_Param_Fee WHERE ClassID = ?'
+          ')',
+          [classId, classId],
+        );
+      }
       return rows;
     });
+
+/// Resolves the active session year:
+///   1. Explicit param if provided
+///   2. app_config.default_session_yr from DB
+///   3. '2017-2018' as fallback when app_config is unconfigured (test DB fixtures)
+Future<String> _resolveActiveSession(Database db, {String? override}) async {
+  if (override != null && override.isNotEmpty) return override;
+  try {
+    final rows = await db.rawQuery(
+      "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
+    );
+    if (rows.isNotEmpty) {
+      final value = (rows.first['config_value'] as String?)?.trim();
+      if (value != null && value.isNotEmpty) return value;
+    }
+  } catch (_) {
+    // app_config may not exist in bare test DBs — fall through
+  }
+  return '2017-2018';
+}
 
 /// Submits the admission transaction to SQLite and returns newly assigned Stu_RegID.
 Future<int> submitStudentAdmission(
   WizardDraft draft, {
+  String? sessionYr,
   Database? dbOverride,
 }) async {
   final db = dbOverride ?? await DatabaseService.instance.database;
+  final resolvedSession = await _resolveActiveSession(db, override: sessionYr);
 
   return await db.transaction<int>((txn) async {
     // 1. Compute nextStuRegId = MAX(Stu_RegID) + 1 (NOT AUTOINCREMENT)
@@ -535,7 +576,7 @@ Future<int> submitStudentAdmission(
     );
     final nextStuRegId = (maxRegResult.first['nextId'] as int?) ?? 1;
 
-    // 2. Compute nextRollNo for Class & Section in Session 2017-2018
+    // 2. Compute nextRollNo for Class & Section in resolved session
     int nextRollNo = 1;
     if (draft.admInClass != null) {
       final secId = draft.classSecId ?? 25;
@@ -543,9 +584,9 @@ Future<int> submitStudentAdmission(
         '''
         SELECT COALESCE(MAX(ClassRollNo), 0) + 1 as nextRoll
         FROM Student_Class
-        WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = '2017-2018'
+        WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
       ''',
-        [draft.admInClass, secId],
+        [draft.admInClass, secId, resolvedSession],
       );
       nextRollNo = (maxRollResult.first['nextRoll'] as int?) ?? 1;
     }
@@ -636,7 +677,7 @@ Future<int> submitStudentAdmission(
         'ClassID': draft.admInClass,
         'ClassSecID': draft.classSecId ?? 25,
         'ClassRollNo': nextRollNo,
-        'SessionYr': '2017-2018',
+        'SessionYr': resolvedSession,
         'Present': 1,
         'PassingMarks': null,
         'PromotionDate': null,
@@ -649,11 +690,15 @@ Future<int> submitStudentAdmission(
 }
 
 /// Function signature for submitting student admission to SQLite.
-typedef StudentAdmissionSubmitter = Future<int> Function(WizardDraft draft);
+typedef StudentAdmissionSubmitter = Future<int> Function(
+  WizardDraft draft, {
+  String? sessionYr,
+});
 
 /// Riverpod provider delivering the admission submission function.
 final studentAdmissionSubmitterProvider = Provider<StudentAdmissionSubmitter>((
   ref,
 ) {
-  return (draft) => submitStudentAdmission(draft);
+  return (draft, {String? sessionYr}) =>
+      submitStudentAdmission(draft, sessionYr: sessionYr);
 });

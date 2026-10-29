@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/fee_parameter_provider.dart';
 import '../../core/providers/session_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart'
     show voucherClassTariffsProvider;
 import '../../core/theme/app_theme_tokens.dart';
@@ -30,8 +32,18 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(feeParameterProvider.notifier).loadInitial();
+      if (!mounted) return;
+      ref.read(feeParameterProvider.notifier).loadInitial();
+
+      final metaAsync = ref.read(shellMetadataProvider);
+      if (!metaAsync.hasValue) return;
+      final meta = metaAsync.valueOrNull;
+      if (meta == null) return;
+      final current = ref.read(feeParameterProvider).selectedFeeYr;
+      if (current != meta.sessionYear) {
+        ref
+            .read(feeParameterProvider.notifier)
+            .setSelectedFeeYr(meta.sessionYear);
       }
     });
   }
@@ -315,6 +327,14 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
       ),
     );
 
+    final sessionYearsAsync = ref.watch(availableSessionsProvider);
+    final sessionYears = sessionYearsAsync.valueOrNull ?? const <String>[];
+    final effectiveSessions = <String>{
+      if (state.selectedFeeYr.isNotEmpty) state.selectedFeeYr,
+      ...sessionYears,
+      '2017-2018',
+    }.toList()..sort((a, b) => b.compareTo(a));
+
     return Row(
       children: [
         // Left Pane: Classes List (300px)
@@ -333,7 +353,12 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
                 child: SizedBox(
                   height: 40,
                   child: DropdownButtonFormField<String>(
-                    initialValue: state.selectedFeeYr,
+                    initialValue:
+                        effectiveSessions.contains(state.selectedFeeYr)
+                        ? state.selectedFeeYr
+                        : (effectiveSessions.isNotEmpty
+                              ? effectiveSessions.first
+                              : '2017-2018'),
                     isExpanded: true,
                     menuMaxHeight: 400,
                     decoration: const InputDecoration(
@@ -346,20 +371,9 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
                       ),
                       border: OutlineInputBorder(),
                     ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: '2017-2018',
-                        child: Text('2017-2018'),
-                      ),
-                      DropdownMenuItem(
-                        value: '2018-2019',
-                        child: Text('2018-2019'),
-                      ),
-                      DropdownMenuItem(
-                        value: '2019-2020',
-                        child: Text('2019-2020'),
-                      ),
-                    ],
+                    items: effectiveSessions.map((s) {
+                      return DropdownMenuItem(value: s, child: Text(s));
+                    }).toList(),
                     onChanged: (val) {
                       if (val != null) notifier.setSelectedFeeYr(val);
                     },

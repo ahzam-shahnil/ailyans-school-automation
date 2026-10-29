@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../db/database.dart';
+import 'available_sessions_provider.dart';
 import 'shell_metadata_provider.dart';
 
 /// Immutable representation of the institution / branch profile from InstBranch (BrnachID = 1).
@@ -237,6 +238,18 @@ class SystemSettingsState {
 
 /// StateNotifier for System Settings management.
 class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
+  /// Normalizes 'YYYY-YYYY' to 'YYYY-YY' to match source .mdb format.
+  /// Used before writing default_session_yr to app_config.
+  String _normalizeSessionYr(String input) {
+    final trimmed = input.trim();
+    final match = RegExp(r'^(\d{4})-(\d{4})$').firstMatch(trimmed);
+    if (match != null) {
+      final endYear = match.group(2)!;
+      return '${match.group(1)}-${endYear.substring(endYear.length - 2)}';
+    }
+    return trimmed;
+  }
+
   final Ref? _ref;
 
   SystemSettingsNotifier([this._ref]) : super(const SystemSettingsState());
@@ -650,7 +663,10 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
         // Update app_config keys (INSERT OR REPLACE)
         final workingDaysStr = state.config.workingDays.join(',');
         final configs = [
-          ('default_session_yr', state.config.defaultSessionYr.trim()),
+          (
+            'default_session_yr',
+            _normalizeSessionYr(state.config.defaultSessionYr.trim()),
+          ),
           ('fiscal_start_month', state.config.fiscalStartMonth.trim()),
           ('working_days', workingDaysStr),
           ('dark_mode', state.config.darkMode ? 'true' : 'false'),
@@ -671,6 +687,7 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
 
       // Invalidate shellMetadataProvider so top-bar immediately displays the updated institution name
       _ref?.invalidate(shellMetadataProvider);
+      _ref?.invalidate(availableSessionsProvider);
 
       final toast = state.config.darkMode != state.originalConfig.darkMode
           ? 'Settings saved successfully (Theme change requires app restart)'

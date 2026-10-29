@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
+import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -730,6 +731,14 @@ class _VoucherGenerationScreenState
     final tariffsAsync = ref.watch(
       voucherClassTariffsProvider(filters.classId),
     );
+    final availableSessionsAsync = ref.watch(availableSessionsProvider);
+    final availableSessions =
+        availableSessionsAsync.valueOrNull ?? const <String>[];
+    final effectiveSessions = <String>{
+      if (filters.sessionYr.isNotEmpty) filters.sessionYr,
+      ...availableSessions,
+      '2017-2018',
+    }.toList()..sort((a, b) => b.compareTo(a));
 
     return Container(
       decoration: _cardDecoration(),
@@ -749,17 +758,16 @@ class _VoucherGenerationScreenState
               'Session Year *',
               DropdownButtonFormField<String>(
                 key: ValueKey(filters.sessionYr),
-                initialValue: filters.sessionYr,
+                initialValue: effectiveSessions.contains(filters.sessionYr)
+                    ? filters.sessionYr
+                    : (effectiveSessions.isNotEmpty
+                          ? effectiveSessions.first
+                          : '2017-2018'),
                 isExpanded: true,
                 decoration: _inputDecoration(),
-                items: const [
-                  DropdownMenuItem(value: '2026-27', child: Text('2026-27')),
-                  DropdownMenuItem(value: '2025-26', child: Text('2025-26')),
-                  DropdownMenuItem(
-                    value: '2017-2018',
-                    child: Text('2017-2018'),
-                  ),
-                ],
+                items: effectiveSessions.map((s) {
+                  return DropdownMenuItem(value: s, child: Text(s));
+                }).toList(),
                 onChanged: isGenerating
                     ? null
                     : (val) {

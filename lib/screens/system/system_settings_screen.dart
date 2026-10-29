@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/system_settings_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -734,19 +735,16 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     SystemSettingsState state,
     SystemSettingsNotifier notifier,
   ) {
-    const sessionYears = [
-      '2016-2017',
+    final sessionYearsAsync = ref.watch(availableSessionsProvider);
+    final sessionYears = sessionYearsAsync.valueOrNull ?? const <String>[];
+
+    // If current defaultSessionYr not in list, prepend it (avoids dropdown assert):
+    final effectiveSessionYears = <String>{
+      if (state.config.defaultSessionYr.isNotEmpty)
+        state.config.defaultSessionYr,
+      ...sessionYears,
       '2017-2018',
-      '2018-2019',
-      '2019-2020',
-      '2020-2021',
-      '2021-2022',
-      '2022-2023',
-      '2023-2024',
-      '2024-2025',
-      '2025-2026',
-      '2026-2027',
-    ];
+    }.toList()..sort((a, b) => b.compareTo(a));
 
     const months = [
       'January',
@@ -786,13 +784,17 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             Expanded(
               child: DropdownButtonFormField<String>(
                 initialValue:
-                    sessionYears.contains(state.config.defaultSessionYr)
+                    effectiveSessionYears.contains(
+                      state.config.defaultSessionYr,
+                    )
                     ? state.config.defaultSessionYr
-                    : '2017-2018',
+                    : (effectiveSessionYears.isNotEmpty
+                          ? effectiveSessionYears.first
+                          : '2017-2018'),
                 decoration: const InputDecoration(
                   labelText: 'Default Academic Session Year',
                 ),
-                items: sessionYears.map((yr) {
+                items: effectiveSessionYears.map((yr) {
                   return DropdownMenuItem(value: yr, child: Text(yr));
                 }).toList(),
                 onChanged: (val) {

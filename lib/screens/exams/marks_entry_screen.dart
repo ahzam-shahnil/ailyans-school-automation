@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/marks_entry_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/marks_entry_row.dart';
 
@@ -26,8 +28,16 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(marksEntryProvider.notifier).loadInitialData();
+      if (!mounted) return;
+      ref.read(marksEntryProvider.notifier).loadInitialData();
+
+      final metaAsync = ref.read(shellMetadataProvider);
+      if (!metaAsync.hasValue) return;
+      final meta = metaAsync.valueOrNull;
+      if (meta == null) return;
+      final current = ref.read(marksEntryProvider).selectedSessionYr;
+      if (current != meta.sessionYear) {
+        ref.read(marksEntryProvider.notifier).setSessionYr(meta.sessionYear);
       }
     });
   }
@@ -310,6 +320,16 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
     MarksEntryState state,
     MarksEntryNotifier notifier,
   ) {
+    final availableSessionsAsync = ref.watch(availableSessionsProvider);
+    final availableSessions =
+        availableSessionsAsync.valueOrNull ?? const <String>[];
+    final effectiveSessions = <String>{
+      if (state.selectedSessionYr.isNotEmpty) state.selectedSessionYr,
+      ...availableSessions,
+      ...state.sessionYears,
+      '2017-2018',
+    }.toList()..sort((a, b) => b.compareTo(a));
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -328,10 +348,12 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                 flex: 2,
                 child: _buildDropdownField<String>(
                   label: 'Session',
-                  value: state.selectedSessionYr.isNotEmpty
+                  value: effectiveSessions.contains(state.selectedSessionYr)
                       ? state.selectedSessionYr
-                      : null,
-                  items: state.sessionYears.map((yr) {
+                      : (effectiveSessions.isNotEmpty
+                            ? effectiveSessions.first
+                            : null),
+                  items: effectiveSessions.map((yr) {
                     return DropdownMenuItem<String>(
                       value: yr,
                       child: Text(yr, style: AppTypography.bodySmall),

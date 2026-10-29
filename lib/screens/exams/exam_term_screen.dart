@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
+import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/exam_term_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/exam_session_row.dart';
@@ -60,6 +61,7 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
     final (ok, msg) = await ref.read(examTermProvider.notifier).saveSession();
     if (!mounted) return;
     if (ok) {
+      ref.invalidate(availableSessionsProvider);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),

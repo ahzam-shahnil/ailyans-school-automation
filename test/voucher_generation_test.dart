@@ -8,6 +8,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:school_automation/core/db/database.dart';
 import 'package:school_automation/core/db/migrations.dart';
 import 'package:school_automation/core/db/seed_data.dart';
+import 'package:school_automation/core/providers/available_sessions_provider.dart';
+import 'package:school_automation/core/providers/shell_metadata_provider.dart';
 import 'package:school_automation/core/providers/student_list_provider.dart';
 import 'package:school_automation/core/providers/voucher_generation_provider.dart';
 import 'package:school_automation/models/school_class.dart';
@@ -335,6 +337,20 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
               classesProvider.overrideWith(
                 (ref) async => [
                   const SchoolClass(classId: 13, cName: 'Class 10'),
@@ -440,6 +456,20 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            availableSessionsProvider.overrideWith(
+              (ref) async => ['2017-2018', '2026-27'],
+            ),
+            shellMetadataProvider.overrideWith(
+              (ref) async => const ShellMetadata(
+                branchName: "Ailyans's Higher Secondary School Mianwali",
+                branchAddress: 'Muslim Bazar Mianwali',
+                sessionYear: '2017-2018',
+                studentCount: 0,
+                classCount: 0,
+                staffCount: 0,
+                pendingVouchers: 0,
+              ),
+            ),
             classesProvider.overrideWith(
               (ref) async => [
                 const SchoolClass(classId: 13, cName: 'Class 10'),
@@ -527,6 +557,20 @@ void main() {
         await tester.pumpWidget(
           ProviderScope(
             overrides: [
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
               classesProvider.overrideWith(
                 (ref) async => [
                   const SchoolClass(classId: 13, cName: 'Class 10'),
@@ -639,6 +683,20 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            availableSessionsProvider.overrideWith(
+              (ref) async => ['2017-2018', '2026-27'],
+            ),
+            shellMetadataProvider.overrideWith(
+              (ref) async => const ShellMetadata(
+                branchName: "Ailyans's Higher Secondary School Mianwali",
+                branchAddress: 'Muslim Bazar Mianwali',
+                sessionYear: '2017-2018',
+                studentCount: 0,
+                classCount: 0,
+                staffCount: 0,
+                pendingVouchers: 0,
+              ),
+            ),
             classesProvider.overrideWith(
               (ref) async => [
                 const SchoolClass(classId: 13, cName: 'Class 10'),

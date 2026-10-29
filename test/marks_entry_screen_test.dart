@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:school_automation/core/db/database.dart';
 import 'package:school_automation/core/db/migrations.dart';
 import 'package:school_automation/core/db/seed_data.dart';
+import 'package:school_automation/core/providers/available_sessions_provider.dart';
 import 'package:school_automation/core/providers/marks_entry_provider.dart';
 import 'package:school_automation/core/providers/session_provider.dart';
 import 'package:school_automation/core/providers/shell_metadata_provider.dart';
@@ -477,6 +478,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            availableSessionsProvider.overrideWith(
+              (ref) async => ['2017-2018'],
+            ),
             sessionProvider.overrideWith((ref) {
               final notifier = SessionNotifier();
               notifier.setSession(testUser, const [10, 23, 24]);
@@ -520,6 +524,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            availableSessionsProvider.overrideWith(
+              (ref) async => ['2017-2018'],
+            ),
             sessionProvider.overrideWith((ref) {
               final notifier = SessionNotifier();
               notifier.setSession(testUser, const [

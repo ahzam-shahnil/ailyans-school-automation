@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/batch_promotion_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/promotion_candidate_row.dart';
@@ -125,6 +126,9 @@ class _BatchPromotionScreenState extends ConsumerState<BatchPromotionScreen> {
           .read(batchPromotionProvider.notifier)
           .promoteSelectedStudents();
       if (!mounted) return;
+      if (ok) {
+        ref.invalidate(availableSessionsProvider);
+      }
       _showSnackBar(msg, isError: !ok);
     }
   }

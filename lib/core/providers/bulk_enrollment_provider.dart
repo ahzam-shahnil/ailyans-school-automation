@@ -19,7 +19,7 @@ class BulkEnrollmentState {
     this.selectedClassId,
     this.selectedSecId,
     this.selectedSessionYr = '2017-2018',
-    this.availableSessions = const ['2017-2018', '2016-2017', '2018-2019'],
+    this.availableSessions = const ['2026-27', '2025-26', '2017-2018'],
     this.roster = const [],
     this.isRosterLoaded = false,
     this.isLoading = false,

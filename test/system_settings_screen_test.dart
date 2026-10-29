@@ -275,7 +275,10 @@ void main() {
         final configRows = await db.rawQuery(
           "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr'",
         );
-        expect(configRows.first['config_value'], '2024-2025');
+        expect(
+          configRows.first['config_value'],
+          '2024-25',
+        ); // normalized from 2024-2025 by _normalizeSessionYr
       },
     );
 

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/bulk_enrollment_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/enrollment_row.dart';
@@ -25,6 +27,24 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
   final TextEditingController _rollNoController = TextEditingController();
   final FocusNode _regIdFocusNode = FocusNode();
   final FocusNode _rollNoFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final metaAsync = ref.read(shellMetadataProvider);
+      if (!metaAsync.hasValue) return;
+      final meta = metaAsync.valueOrNull;
+      if (meta == null) return;
+      final current = ref.read(bulkEnrollmentProvider).selectedSessionYr;
+      if (current != meta.sessionYear) {
+        ref
+            .read(bulkEnrollmentProvider.notifier)
+            .setSessionYr(meta.sessionYear);
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -229,6 +249,13 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
     final state = ref.watch(bulkEnrollmentProvider);
     final classesAsync = ref.watch(classesProvider);
     final sectionsAsync = ref.watch(sectionsProvider);
+    final dynamicSessions = ref.watch(availableSessionsProvider).valueOrNull;
+    final effectiveSessions = <String>{
+      if (state.selectedSessionYr.isNotEmpty) state.selectedSessionYr,
+      ...?dynamicSessions,
+      ...state.availableSessions,
+      '2017-2018',
+    }.toList()..sort((a, b) => b.compareTo(a));
 
     final classes = classesAsync.value ?? <SchoolClass>[];
     final allSections = sectionsAsync.value ?? <ClassSec>[];
@@ -486,10 +513,17 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
                         ),
                         child: DropdownButtonHideUnderline(
                           child: DropdownButton<String>(
-                            value: state.selectedSessionYr,
+                            value:
+                                effectiveSessions.contains(
+                                  state.selectedSessionYr,
+                                )
+                                ? state.selectedSessionYr
+                                : (effectiveSessions.isNotEmpty
+                                      ? effectiveSessions.first
+                                      : '2017-2018'),
                             isDense: true,
                             isExpanded: true,
-                            items: state.availableSessions.map((yr) {
+                            items: effectiveSessions.map((yr) {
                               return DropdownMenuItem<String>(
                                 value: yr,
                                 child: Text(yr),
