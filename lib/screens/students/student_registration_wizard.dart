@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/providers/clock_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_registration_provider.dart';
@@ -234,7 +235,7 @@ class _StudentRegistrationWizardState
       context: context,
       initialDate: initialDate,
       firstDate: DateTime(1990),
-      lastDate: DateTime.now(),
+      lastDate: ref.read(clockProvider)(),
     );
 
     if (picked != null) {

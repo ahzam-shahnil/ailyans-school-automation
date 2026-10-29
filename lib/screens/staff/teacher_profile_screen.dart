@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/providers/clock_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/teacher_profile_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -2219,7 +2220,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         const SizedBox(height: 4),
         InkWell(
           onTap: () async {
-            final now = DateTime.now();
+            final now = ref.read(clockProvider)();
             DateTime initDate = now;
             if (value != null && value.isNotEmpty) {
               final parsed = DateTime.tryParse(value);

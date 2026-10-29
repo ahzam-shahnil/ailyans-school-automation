@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
 import '../../core/providers/available_sessions_provider.dart';
+import '../../core/providers/clock_provider.dart';
 import '../../core/providers/exam_term_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/exam_session_row.dart';
@@ -1516,7 +1517,7 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
           height: 38,
           child: InkWell(
             onTap: () async {
-              final initial = date ?? DateTime.now();
+              final initial = date ?? ref.read(clockProvider)();
               final picked = await showDatePicker(
                 context: context,
                 initialDate: initial,

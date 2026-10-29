@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/providers/clock_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
@@ -68,7 +69,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final metricsAsync = ref.watch(dashboardMetricsProvider);
     final shellMeta = ref.watch(shellMetadataProvider).value;
     final currencyFormatter = NumberFormat('#,##0');
-    final todayFormatted = DateFormat('EEEE, d MMMM y').format(DateTime.now());
+    final todayFormatted = DateFormat('EEEE, d MMMM y')
+        .format(ref.watch(clockProvider)());
 
     final metrics = metricsAsync.value;
     final isLoading = metricsAsync.isLoading && metrics == null;

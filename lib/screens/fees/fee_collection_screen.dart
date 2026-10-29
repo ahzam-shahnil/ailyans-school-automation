@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/providers/clock_provider.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -1503,7 +1504,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         const SizedBox(height: 4),
         InkWell(
           onTap: () async {
-            final now = DateTime.now();
+            final now = ref.read(clockProvider)();
             final picked = await showDatePicker(
               context: context,
               initialDate: state.paymentDate ?? now,
@@ -1530,7 +1531,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  _dateFormat.format(state.paymentDate ?? DateTime.now()),
+                  _dateFormat.format(
+                    state.paymentDate ?? ref.read(clockProvider)(),
+                  ),
                   style: AppTypography.bodySmall,
                 ),
               ],

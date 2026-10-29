@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../repositories/photo_repository.dart';
 import '../db/database.dart';
+import 'clock_provider.dart';
 
 /// Data draft holding all in-progress student admission form state.
 class WizardDraft {
@@ -243,7 +244,15 @@ class WizardDraft {
 
 /// StateNotifier to manage reactive updates to the WizardDraft state.
 class WizardDraftNotifier extends StateNotifier<WizardDraft> {
-  WizardDraftNotifier() : super(WizardDraft());
+  final Ref? _ref;
+
+  WizardDraftNotifier([Ref? ref])
+    : _ref = ref,
+      super(
+        WizardDraft(doAdmission: ref?.read(clockProvider)() ?? DateTime.now()),
+      );
+
+  DateTime _now() => _ref?.read(clockProvider)() ?? DateTime.now();
 
   void update(WizardDraft Function(WizardDraft current) updater) {
     state = updater(state);
@@ -295,13 +304,13 @@ class WizardDraftNotifier extends StateNotifier<WizardDraft> {
   void setFullDiscount(bool val) => state = state.copyWith(fullDiscount: val);
   void setRemarks(String? val) => state = state.copyWith(remarks: val);
 
-  void reset() => state = WizardDraft();
+  void reset() => state = WizardDraft(doAdmission: _now());
 }
 
 /// Global provider for Wizard draft state.
 final wizardDraftProvider =
     StateNotifierProvider<WizardDraftNotifier, WizardDraft>((ref) {
-      return WizardDraftNotifier();
+      return WizardDraftNotifier(ref);
     });
 
 /// Global provider for active wizard step index (0..3).
