@@ -1189,7 +1189,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'This will overwrite the current database with:',
               style: AppTypography.bodySmall,
             ),
@@ -1199,7 +1199,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
               style: AppTypography.monospace.copyWith(fontSize: 12),
             ),
             const SizedBox(height: 12),
-            Text(
+            const Text(
               'A pre-restore safety backup will be saved to:',
               style: AppTypography.bodySmall,
             ),

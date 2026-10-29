@@ -1666,7 +1666,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   height: 40,
                   child: LinearProgressIndicator(),
                 ),
-                error: (_, __) => Text(
+                error: (_, __) => const Text(
                   'Error loading classes',
                   style: AppTypography.bodySmall,
                 ),

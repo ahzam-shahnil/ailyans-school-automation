@@ -797,7 +797,7 @@ class _ReceiptPreviewDialog extends StatelessWidget {
                     size: 22,
                   ),
                   const SizedBox(width: 10),
-                  Text(
+                  const Text(
                     'Official Payment Receipt Preview',
                     style: AppTypography.h3,
                   ),

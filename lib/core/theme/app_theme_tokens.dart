@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Semantic Design Tokens for Ailyans School Management System.
 /// Generated for Flutter Desktop Rebuild.
@@ -158,53 +157,61 @@ abstract class AppDuration {
 }
 
 abstract class AppTypography {
-  static final TextStyle display = GoogleFonts.inter(
+  static const TextStyle display = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 32.0,
     fontWeight: FontWeight.w700,
     height: 40.0 / 32.0,
     letterSpacing: -0.5,
   );
 
-  static final TextStyle h1 = GoogleFonts.inter(
+  static const TextStyle h1 = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 24.0,
     fontWeight: FontWeight.w700,
     height: 32.0 / 24.0,
     letterSpacing: -0.25,
   );
 
-  static final TextStyle h2 = GoogleFonts.inter(
+  static const TextStyle h2 = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 18.0,
     fontWeight: FontWeight.w600,
     height: 24.0 / 18.0,
   );
 
-  static final TextStyle h3 = GoogleFonts.inter(
+  static const TextStyle h3 = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 15.0,
     fontWeight: FontWeight.w600,
     height: 20.0 / 15.0,
   );
 
-  static final TextStyle body = GoogleFonts.inter(
+  static const TextStyle body = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 14.0,
     fontWeight: FontWeight.w400,
     height: 20.0 / 14.0,
   );
 
-  static final TextStyle bodySmall = GoogleFonts.inter(
+  static const TextStyle bodySmall = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 12.0,
     fontWeight: FontWeight.w500,
     height: 16.0 / 12.0,
     letterSpacing: 0.1,
   );
 
-  static final TextStyle label = GoogleFonts.inter(
+  static const TextStyle label = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 13.0,
     fontWeight: FontWeight.w600,
     height: 16.0 / 13.0,
     letterSpacing: 0.2,
   );
 
-  static final TextStyle monospace = GoogleFonts.jetBrainsMono(
+  static const TextStyle monospace = TextStyle(
+    fontFamily: 'JetBrainsMono',
     fontSize: 13.0,
     fontWeight: FontWeight.w500,
     height: 18.0 / 13.0,

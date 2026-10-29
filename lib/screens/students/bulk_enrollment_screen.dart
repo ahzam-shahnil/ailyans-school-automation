@@ -352,7 +352,7 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
+                              const Text(
                                 'This screen lets you manage the student roster for any class.',
                                 style: AppTypography.body,
                               ),
@@ -364,27 +364,27 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              Text(
+                              const Text(
                                 '1. Choose a Class, Section, and Session',
                                 style: AppTypography.bodySmall,
                               ),
-                              Text(
+                              const Text(
                                 '2. Click Load Roster to see currently enrolled students',
                                 style: AppTypography.bodySmall,
                               ),
-                              Text(
+                              const Text(
                                 '3. Use Quick Enroll to add a student by their Reg ID',
                                 style: AppTypography.bodySmall,
                               ),
-                              Text(
+                              const Text(
                                 '4. Auto Re-Roll No renumbers all students 1 to N',
                                 style: AppTypography.bodySmall,
                               ),
-                              Text(
+                              const Text(
                                 '5. Show Missing Students finds dropped students without an SLC',
                                 style: AppTypography.bodySmall,
                               ),
-                              Text(
+                              const Text(
                                 '6. Trash icon removes a student from this section',
                                 style: AppTypography.bodySmall,
                               ),

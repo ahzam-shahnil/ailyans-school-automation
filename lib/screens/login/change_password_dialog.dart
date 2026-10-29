@@ -589,7 +589,7 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
                             vertical: AppSpacing.sm,
                           ),
                         ),
-                        child: Text('Cancel', style: AppTypography.label),
+                        child: const Text('Cancel', style: AppTypography.label),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       ElevatedButton(

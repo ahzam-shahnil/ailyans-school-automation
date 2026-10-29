@@ -1364,7 +1364,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('SubTotal', style: AppTypography.bodySmall),
+            const Text('SubTotal', style: AppTypography.bodySmall),
             Text(
               'Rs. ${_currencyFormat.format(receipt.subtotal)}',
               style: AppTypography.monospace,
@@ -1375,7 +1375,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Total Concession / Discount', style: AppTypography.bodySmall),
+            const Text('Total Concession / Discount', style: AppTypography.bodySmall),
             Text(
               'Rs. ${_currencyFormat.format(receipt.discount)}',
               style: AppTypography.monospace,
@@ -1388,7 +1388,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Net Payable', style: AppTypography.h3),
+            const Text('Net Payable', style: AppTypography.h3),
             Text(
               'Rs. ${_currencyFormat.format(receipt.netPayable)}',
               style: AppTypography.monospace.copyWith(
@@ -1446,7 +1446,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text('Payment Settlement', style: AppTypography.h2),
+                        const Text('Payment Settlement', style: AppTypography.h2),
                         const SizedBox(height: 2),
                         Text(
                           receipt.isFullyPaid
@@ -1760,7 +1760,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               },
             ),
             const SizedBox(width: 4),
-            Expanded(
+            const Expanded(
               child: Text(
                 'Send SMS payment confirmation',
                 style: AppTypography.bodySmall,
@@ -2047,7 +2047,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
+                                const Text(
                                   'Enter Password ?', // Verbatim [Sic]
                                   style: AppTypography.h2,
                                 ),

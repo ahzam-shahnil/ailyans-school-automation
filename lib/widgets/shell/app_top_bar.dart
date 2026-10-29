@@ -262,30 +262,30 @@ class AppTopBar extends ConsumerWidget {
               ),
             ),
             const PopupMenuDivider(),
-            PopupMenuItem(
+            const PopupMenuItem(
               value: 'profile',
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.person_outline,
                     size: 18.0,
                     color: AppColors.textSecondary,
                   ),
-                  const SizedBox(width: AppSpacing.xs),
+                  SizedBox(width: AppSpacing.xs),
                   Text('Profile Information', style: AppTypography.bodySmall),
                 ],
               ),
             ),
-            PopupMenuItem(
+            const PopupMenuItem(
               value: 'change_password',
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.lock_outline,
                     size: 18.0,
                     color: AppColors.textSecondary,
                   ),
-                  const SizedBox(width: AppSpacing.xs),
+                  SizedBox(width: AppSpacing.xs),
                   Text('Change Password', style: AppTypography.bodySmall),
                 ],
               ),

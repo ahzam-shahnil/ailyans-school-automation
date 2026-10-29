@@ -1251,7 +1251,7 @@ class _VoucherGenerationScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (tariffs.isEmpty)
-                          Text(
+                          const Text(
                             'No tariffs defined for this selection',
                             style: AppTypography.bodySmall,
                           )

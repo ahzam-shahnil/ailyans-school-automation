@@ -832,7 +832,7 @@ class _BiodataPreviewDialogState extends State<_BiodataPreviewDialog> {
                     size: 22,
                   ),
                   const SizedBox(width: 10),
-                  Text('Student Biodata Preview', style: AppTypography.h3),
+                  const Text('Student Biodata Preview', style: AppTypography.h3),
                   const SizedBox(width: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(

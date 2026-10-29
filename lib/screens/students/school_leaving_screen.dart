@@ -82,12 +82,12 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                   style: AppTypography.bodySmall,
                 ),
                 const SizedBox(height: 4),
-                Text(
+                const Text(
                   '2. A School Leaving record will be saved with the terms entered.',
                   style: AppTypography.bodySmall,
                 ),
                 const SizedBox(height: 4),
-                Text(
+                const Text(
                   '3. No further fee vouchers will be generated for this student.',
                   style: AppTypography.bodySmall,
                 ),

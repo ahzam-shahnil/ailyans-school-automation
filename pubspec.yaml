@@ -20,7 +20,6 @@ dependencies:
   intl: ^0.19.0
   pdf: ^3.11.0
   printing: ^5.13.0
-  google_fonts: ^6.2.1
   file_picker: ^13.1.0
 
 dev_dependencies:
@@ -32,3 +31,18 @@ flutter:
   uses-material-design: true
   assets:
     - assets/reference/schema.sql
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500

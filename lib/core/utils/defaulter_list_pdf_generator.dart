@@ -836,7 +836,7 @@ class _DefaulterPreviewDialogState
                     size: 24,
                   ),
                   const SizedBox(width: 8),
-                  Text('Fee Defaulters Roster', style: AppTypography.h3),
+                  const Text('Fee Defaulters Roster', style: AppTypography.h3),
                   const SizedBox(width: 10),
 
                   // Interactive Class Filter Dropdown
