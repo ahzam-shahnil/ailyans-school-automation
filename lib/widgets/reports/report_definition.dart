@@ -1,0 +1,65 @@
+import 'dart:typed_data';
+
+enum ReportType {
+  feeVoucher,
+  feeReceipt,
+  biodata,
+  defaulterList,
+  attendanceRegister,
+}
+
+extension ReportTypePath on ReportType {
+  String get path => switch (this) {
+        ReportType.feeVoucher => 'fee-voucher',
+        ReportType.feeReceipt => 'fee-receipt',
+        ReportType.biodata => 'biodata',
+        ReportType.defaulterList => 'defaulter-list',
+        ReportType.attendanceRegister => 'attendance-register',
+      };
+
+  String get displayName => switch (this) {
+        ReportType.feeVoucher => 'Fee Voucher Challan',
+        ReportType.feeReceipt => 'Fee Payment Receipt',
+        ReportType.biodata => 'Student Biodata Dossier',
+        ReportType.defaulterList => 'Fee Defaulter List',
+        ReportType.attendanceRegister => 'Daily Attendance Register',
+      };
+
+  String get defaultFileName => '${path}_report.pdf';
+
+  static ReportType? fromPath(String path) =>
+      ReportType.values.cast<ReportType?>().firstWhere(
+            (t) => t!.path == path,
+            orElse: () => null,
+          );
+}
+
+class ReportRequest {
+  final ReportType type;
+  final String? id;
+  final String? titleOverride;
+  final String? subtitle;
+  final String? fileNameOverride;
+  final List<dynamic>? vouchers;
+  final Map<String, dynamic> extraParams;
+  final Future<Uint8List> Function()? customBytesBuilder;
+
+  const ReportRequest({
+    required this.type,
+    this.id,
+    this.titleOverride,
+    this.subtitle,
+    this.fileNameOverride,
+    this.vouchers,
+    this.extraParams = const {},
+    this.customBytesBuilder,
+  });
+
+  String get effectiveTitle => titleOverride ?? type.displayName;
+
+  String get effectiveFileName =>
+      fileNameOverride ??
+      (id != null && id!.isNotEmpty
+          ? '${type.path}_$id.pdf'
+          : type.defaultFileName);
+}
