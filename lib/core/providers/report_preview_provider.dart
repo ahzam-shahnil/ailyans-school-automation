@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:school_automation/core/utils/attendance_pdf_generator.dart';
 import 'package:school_automation/core/utils/biodata_pdf_generator.dart';
+import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
 import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
 import 'package:school_automation/core/utils/voucher_pdf_generator.dart';
 import 'package:school_automation/models/fee_receipt_view.dart';
@@ -86,9 +87,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       case ReportType.biodata:
         return _generateBiodata();
       case ReportType.defaulterList:
-        throw UnimplementedError(
-          '${request.type.displayName} preview will be wired in Run E-3c.',
-        );
+        return _generateDefaulterList();
       case ReportType.attendanceRegister:
         return _generateAttendanceRegister();
     }
@@ -230,6 +229,40 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       throw StateError('Missing attendanceData in extraParams.');
     }
     return buildAttendancePdf(data);
+  }
+
+  Future<Uint8List> _generateDefaulterList() async {
+    if (request.vouchers == null || request.vouchers!.isEmpty) {
+      throw StateError('No defaulter groups provided for preview.');
+    }
+    const requiredKeys = ['branchName', 'branchAddress'];
+    final missing = requiredKeys
+        .where(
+          (k) =>
+              !request.extraParams.containsKey(k) ||
+              request.extraParams[k] == null ||
+              request.extraParams[k].toString().trim().isEmpty,
+        )
+        .toList();
+    if (missing.isNotEmpty) {
+      throw ArgumentError(
+        'Missing required params for defaulterList: ${missing.join(", ")}',
+      );
+    }
+    final groups = request.vouchers!.cast<DefaulterClassGroup>();
+    final summary =
+        request.extraParams['summary'] as DefaulterListFilterSummary?;
+    if (summary == null) {
+      throw StateError('Missing summary in extraParams for defaulterList.');
+    }
+    return DefaulterListPdfGenerator.generate(
+      groups: groups,
+      summary: summary,
+      branchName: request.extraParams['branchName'] as String,
+      branchAddress: request.extraParams['branchAddress'] as String,
+      branchPhone: request.extraParams['branchPhone'] as String?,
+      branchPrincipal: request.extraParams['branchPrincipal'] as String?,
+    );
   }
 }
 

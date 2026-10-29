@@ -185,5 +185,16 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+
+    testWidgets('defaulterList report type renders without crash', (tester) async {
+      final request = ReportRequest(
+        type: ReportType.defaulterList,
+        titleOverride: 'Test Defaulters',
+        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      );
+      await _pumpModal(tester, request);
+      expect(find.text('Test Defaulters'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
