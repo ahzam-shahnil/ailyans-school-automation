@@ -47,6 +47,10 @@ class ReportPreviewModal extends ConsumerStatefulWidget {
 class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   final FocusNode _focusNode = FocusNode();
 
+  // Local mode selection — only used when request.type == feeVoucher.
+  // 0 = Three-Copy Slips, 1 = Cohort Ledger.
+  int _selectedFeeMode = 0;
+
   @override
   void dispose() {
     _focusNode.dispose();
@@ -82,6 +86,31 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   }
 
   void _handleClose() => Navigator.of(context).pop();
+
+  // ---------------------------------------------------------------------------
+  // Voucher mode toggle helper
+  // ---------------------------------------------------------------------------
+
+  Widget _buildVoucherModeToggle() {
+    return SegmentedButton<int>(
+      style: SegmentedButton.styleFrom(
+        visualDensity: VisualDensity.compact,
+        textStyle: AppTypography.bodySmall,
+      ),
+      segments: const [
+        ButtonSegment<int>(value: 0, label: Text('3-Copy Slips')),
+        ButtonSegment<int>(value: 1, label: Text('Cohort Ledger')),
+      ],
+      selected: {_selectedFeeMode},
+      onSelectionChanged: (s) {
+        final newMode = s.first;
+        setState(() => _selectedFeeMode = newMode);
+        ref
+            .read(reportPreviewProvider(widget.request).notifier)
+            .regenerateWithMode(newMode);
+      },
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Build
@@ -192,6 +221,12 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
           // --- Optional caller-supplied controls ------------------------------
           if (widget.headerControls != null) ...[
             widget.headerControls!,
+            const SizedBox(width: AppSpacing.sm),
+          ],
+
+          // --- Voucher mode toggle (feeVoucher only) --------------------------
+          if (widget.request.type == ReportType.feeVoucher) ...[
+            _buildVoucherModeToggle(),
             const SizedBox(width: AppSpacing.sm),
           ],
 

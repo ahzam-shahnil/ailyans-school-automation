@@ -11,10 +11,11 @@ import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/fee_head_display.dart';
-import '../../core/utils/voucher_pdf_generator.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../models/voucher_preview_row.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Production VoucherGenerationScreen hosted within AppShell.
 /// Matches locked designs:
@@ -208,14 +209,19 @@ class _VoucherGenerationScreenState
       return;
     }
     if (!mounted) return;
-    await showVoucherPrintPreviewDialog(
+    await ReportPreviewModal.show(
       context,
-      vouchers: receipts,
-      branchName: 'Ailyans Higher Secondary School',
-      branchAddress: 'Muslim Bazar Mianwali',
-      bankName: 'Askari Bank Limited',
-      bankBranch: 'Ballo Khel Road',
-      bankAcctNo: '4528',
+      request: ReportRequest(
+        type: ReportType.feeVoucher,
+        vouchers: receipts,
+        extraParams: const {
+          'branchName': 'Ailyans Higher Secondary School',
+          'branchAddress': 'Muslim Bazar Mianwali',
+          'bankName': 'Askari Bank Limited',
+          'bankBranch': 'Ballo Khel Road',
+          'bankAcctNo': '4528',
+        },
+      ),
     );
   }
 

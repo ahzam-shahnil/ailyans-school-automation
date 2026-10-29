@@ -10,9 +10,10 @@ import '../../core/providers/clock_provider.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
-import '../../core/utils/receipt_pdf_generator.dart' as rcp;
 import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../models/fee_receipt_view.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Production FeeCollectionScreen hosted within AppShell at route `/fees/receipts`.
 /// Matches Behavior Spec §S19 (frmVoucharRecipt @ 0x0041c754) and locked design references:
@@ -192,11 +193,16 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       return;
     }
 
-    await rcp.showReceiptPrintPreviewDialog(
+    await ReportPreviewModal.show(
       context,
-      receipts: [printData],
-      branchName: branchName,
-      branchAddress: branchAddress,
+      request: ReportRequest(
+        type: ReportType.feeReceipt,
+        vouchers: [printData],
+        extraParams: {
+          'branchName': branchName,
+          'branchAddress': branchAddress,
+        },
+      ),
     );
   }
 
