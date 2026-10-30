@@ -16,6 +16,7 @@ import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/library/book_profile_screen.dart';
 import '../../screens/library/library_books_screen.dart';
 import '../../screens/login/login_screen.dart';
+import '../../screens/search/global_search_screen.dart';
 import '../../screens/staff/salary_management_screen.dart';
 import '../../screens/staff/teacher_list_screen.dart';
 import '../../screens/staff/teacher_profile_screen.dart';
@@ -79,6 +80,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
+          GoRoute(
+            path: '/search',
+            builder: (context, state) {
+              final q = state.uri.queryParameters['q'] ?? '';
+              final from = state.uri.queryParameters['from'];
+              return GlobalSearchScreen(initialQuery: q, fromOrigin: from);
+            },
+          ),
           GoRoute(
             path: '/dashboard',
             builder: (context, state) => const DashboardScreen(),
