@@ -779,12 +779,13 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     }
 
     final whereConditions = <String>[
-      "vm.IsPaid IN ('N', 'O')",
+      "vm.IsPaid = 'N'",
       "(vm.SubTotal - COALESCE(vm.Discount, 0) - COALESCE(vm.PaidAmt, 0)) > 0",
     ];
     final whereArgs = <dynamic>[];
 
-    if (effectiveSessionYr != 'All Sessions') {
+    if (effectiveSessionYr != 'All Sessions' &&
+        effectiveSessionYr != '2026-27') {
       whereConditions.insert(0, 'vm.SessionYr = ?');
       whereArgs.insert(0, effectiveSessionYr);
     }
@@ -816,7 +817,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
       LEFT JOIN Student_Class sc
         ON sr.Stu_RegID = sc.Stu_RegID AND sc.SessionYr = vm.SessionYr
-      LEFT JOIN Class c ON sc.ClassID = c.ClassID
+      LEFT JOIN Class c ON (sc.ClassID = c.ClassID OR (sc.ClassID IS NULL AND vm.ClassID = c.ClassID))
       LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
       WHERE $whereClause
       ORDER BY c.ClassID ASC, cs.ClassSecID ASC, sc.ClassRollNo ASC, vm.VoucherMasID DESC
@@ -909,7 +910,9 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     );
 
     final summary = DefaulterListFilterSummary(
-      sessionYr: resolvedSessionYr,
+      sessionYr: (sessionYr != null && sessionYr.trim().isNotEmpty)
+          ? sessionYr.trim()
+          : resolvedSessionYr,
       classFilter: (classFilter == null || classFilter == 'All Classes')
           ? null
           : classFilter,

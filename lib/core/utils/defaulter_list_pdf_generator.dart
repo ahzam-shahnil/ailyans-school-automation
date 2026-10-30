@@ -61,6 +61,9 @@ class DefaulterListFilterSummary {
   final String reportMonth;
   final DateTime generatedAt;
 
+  int get unpaidVoucherCount => totalDefaulters;
+  int get defaulterStudentCount => uniqueStudents;
+
   const DefaulterListFilterSummary({
     required this.sessionYr,
     this.classFilter,
