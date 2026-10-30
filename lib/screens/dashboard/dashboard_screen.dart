@@ -9,7 +9,8 @@ import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
-import '../../core/utils/defaulter_list_pdf_generator.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Central Executive Dashboard Cockpit for School Administration.
 ///
@@ -411,17 +412,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                             final meta = ref
                                                 .read(shellMetadataProvider)
                                                 .value;
-                                            await showDefaulterListPrintPreviewDialog(
+                                            await ReportPreviewModal.show(
                                               context,
-                                              initialGroups: buildData.groups,
-                                              initialSummary: buildData.summary,
-                                              branchName: meta?.branchName ?? "Ailyans's Higher Secondary School Mianwali",
-                                              branchAddress:
-                                                  meta?.branchAddress ??
-                                                  'Muslim Bazar Mianwali',
-                                              branchPhone: meta?.branchPhone,
-                                              branchPrincipal:
-                                                  meta?.branchPrincipal,
+                                              request: ReportRequest(
+                                                type: ReportType.defaulterList,
+                                                vouchers: buildData.groups,
+                                                extraParams: {
+                                                  'summary': buildData.summary,
+                                                  'branchName': meta?.branchName ??
+                                                      "Ailyans's Higher Secondary School Mianwali",
+                                                  'branchAddress':
+                                                      meta?.branchAddress ??
+                                                          'Muslim Bazar Mianwali',
+                                                  'branchPhone': meta?.branchPhone,
+                                                  'branchPrincipal':
+                                                      meta?.branchPrincipal,
+                                                },
+                                              ),
                                             );
                                           },
                                           borderRadius: BorderRadius.circular(

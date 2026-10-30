@@ -443,14 +443,32 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               final branchPrincipal = meta?.branchPrincipal ?? 'Nasir ali';
 
               if (!mounted) return;
-              await showDefaulterListPrintPreviewDialog(
+              await ReportPreviewModal.show(
                 context,
-                initialGroups: buildData.groups,
-                initialSummary: buildData.summary,
-                branchName: branchName,
-                branchAddress: branchAddress,
-                branchPhone: branchPhone,
-                branchPrincipal: branchPrincipal,
+                request: ReportRequest(
+                  type: ReportType.defaulterList,
+                  vouchers: buildData.groups,
+                  extraParams: {
+                    'summary': buildData.summary,
+                    'branchName': branchName,
+                    'branchAddress': branchAddress,
+                    'branchPhone': branchPhone,
+                    'branchPrincipal': branchPrincipal,
+                  },
+                ),
+                headerControls: DefaulterFilterControls(
+                  initialClassId: null,
+                  initialMonth: null,
+                  onFiltersChanged: ({int? classId, String? month}) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Close preview and change filters on the screen to update the PDF.',
+                        ),
+                      ),
+                    );
+                  },
+                ),
               );
             },
             icon: const Icon(

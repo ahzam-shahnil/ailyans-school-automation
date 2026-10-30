@@ -10,7 +10,6 @@ import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
-import '../../core/utils/receipt_pdf_generator.dart';
 import '../../models/fee_ledger_row.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
@@ -275,11 +274,16 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     }
 
     final meta = ref.read(shellMetadataProvider).value;
-    await showReceiptPrintPreviewDialog(
+    await ReportPreviewModal.show(
       context,
-      receipts: [receiptData],
-      branchName: meta?.branchName ?? "Ailyans's Higher Secondary School",
-      branchAddress: meta?.branchAddress ?? 'Main Campus Mianwali',
+      request: ReportRequest(
+        type: ReportType.feeReceipt,
+        vouchers: [receiptData],
+        extraParams: {
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Main Campus Mianwali',
+        },
+      ),
     );
   }
 
