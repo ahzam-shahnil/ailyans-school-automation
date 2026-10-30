@@ -26,6 +26,7 @@ class DefaulterListRow {
   final int discount;
   final int paidAmt;
   final int netPayable;
+  final int balance;
   final String isPaid;
   final DateTime? dueDate;
   final int daysOverdue;
@@ -44,10 +45,11 @@ class DefaulterListRow {
     required this.discount,
     required this.paidAmt,
     required this.netPayable,
+    int? balance,
     required this.isPaid,
     this.dueDate,
     required this.daysOverdue,
-  });
+  }) : balance = balance ?? netPayable;
 }
 
 class DefaulterListFilterSummary {
@@ -532,7 +534,7 @@ class DefaulterListPdfGenerator {
           isBold: isOverdue,
         ),
         _tdCell(
-          ReportTheme.formatCurrency(row.netPayable),
+          ReportTheme.formatCurrency(row.balance),
           alignment: pw.Alignment.centerRight,
           color: _dangerText,
           isBold: true,

@@ -556,6 +556,35 @@ class TeacherProfileNotifier extends StateNotifier<TeacherProfileState> {
       return null;
     }
   }
+
+  /// Deletes the teacher record from the Teachers table.
+  Future<void> deleteTeacher(int teacherId) async {
+    final db = await _getDb();
+    await db.delete(
+      'Teachers',
+      where: 'TeacherID = ?',
+      whereArgs: [teacherId],
+    );
+  }
+
+  /// Directly updates and persists the active status (TIsPresent) for a teacher.
+  Future<void> toggleActiveStatus(int teacherId, bool isActive) async {
+    final db = await _getDb();
+    final status = isActive ? 'Y' : 'N';
+    await db.update(
+      'Teachers',
+      {'TIsPresent': status},
+      where: 'TeacherID = ?',
+      whereArgs: [teacherId],
+    );
+    if (state.teacherId == teacherId && state.loadedTeacher != null) {
+      final updated = state.loadedTeacher!.copyWith(tIsPresent: status);
+      state = state.copyWith(
+        loadedTeacher: updated,
+        draft: state.draft?.copyWith(tIsPresent: status) ?? updated,
+      );
+    }
+  }
 }
 
 /// Family provider keyed by teacherId (null for /staff/teachers/new).

@@ -7,6 +7,7 @@ import '../../core/providers/clock_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/teacher_profile_provider.dart';
+import '../../core/providers/teacher_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
@@ -264,7 +265,62 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       if (!discard) return;
     }
     if (mounted) {
+      ref.read(teacherListProvider.notifier).loadInitialData();
       context.go('/staff/teachers');
+    }
+  }
+
+  Future<void> _handleDeleteTeacher(
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+  ) async {
+    final teacherId = state.currentTeacher?.teacherId ??
+        state.teacherId ??
+        _resolvedId ??
+        widget.teacherId;
+    if (teacherId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Delete Staff Member'),
+          content: const Text(
+            'Are you sure you want to delete this staff member? This action cannot be undone.',
+            style: AppTypography.body,
+          ),
+          actions: [
+            OutlinedButton(
+              autofocus: true,
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.statusErrorText,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      await notifier.deleteTeacher(teacherId);
+      if (mounted) {
+        ref.read(teacherListProvider.notifier).loadInitialData();
+        context.go('/staff/teachers');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Staff member deleted successfully'),
+            backgroundColor: AppColors.statusSuccessBg,
+          ),
+        );
+      }
     }
   }
 
@@ -759,6 +815,26 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             child: const Text('Cancel Edits'),
           ),
           const SizedBox(width: AppSpacing.xs),
+          OutlinedButton.icon(
+            onPressed: isReadOnlyUser
+                ? null
+                : () => _handleDeleteTeacher(state, notifier),
+            icon: const Icon(
+              Icons.delete_outline,
+              size: 14,
+              color: AppColors.statusErrorText,
+            ),
+            label: const Text(
+              'Delete Staff',
+              style: TextStyle(color: AppColors.statusErrorText),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              minimumSize: const Size(0, 36),
+              side: const BorderSide(color: AppColors.statusErrorBorder),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
           OutlinedButton(
             onPressed: () => _handleBackToDirectory(state, notifier),
             style: OutlinedButton.styleFrom(
@@ -861,6 +937,26 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           style: OutlinedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             minimumSize: const Size(0, 36),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        OutlinedButton.icon(
+          onPressed: isReadOnlyUser
+              ? null
+              : () => _handleDeleteTeacher(state, notifier),
+          icon: const Icon(
+            Icons.delete_outline,
+            size: 14,
+            color: AppColors.statusErrorText,
+          ),
+          label: const Text(
+            'Delete Staff',
+            style: TextStyle(color: AppColors.statusErrorText),
+          ),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            minimumSize: const Size(0, 36),
+            side: const BorderSide(color: AppColors.statusErrorBorder),
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
@@ -1038,6 +1134,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
   ) {
     final current = state.currentTeacher;
     final isEdit = state.isEditMode;
+    final isReadOnlyUser = ref.watch(sessionProvider)?.user.userLevel == 3;
 
     return Scrollbar(
       controller: _tab1ScrollController,
@@ -1048,6 +1145,71 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Top Status Bar: Active Employment Status Toggle
+            if (!state.isNew && current != null)
+              Container(
+                margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.xs,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceRaised,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  border: Border.all(color: AppColors.borderDefault),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      current.isActive
+                          ? Icons.check_circle_outline
+                          : Icons.pause_circle_outline,
+                      size: 18,
+                      color: current.isActive
+                          ? AppColors.statusSuccessText
+                          : AppColors.statusErrorText,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      'Employment Status: ${current.isActive ? "Active Faculty Member" : "Relieved / Inactive"}',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: current.isActive
+                            ? AppColors.statusSuccessText
+                            : AppColors.statusErrorText,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Active',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch(
+                      value: current.isActive,
+                      activeThumbColor: AppColors.brandPrimary,
+                      onChanged: isReadOnlyUser
+                          ? null
+                          : (active) async {
+                              final tid = current.teacherId;
+                              if (tid != null) {
+                                await notifier.toggleActiveStatus(
+                                  tid,
+                                  active,
+                                );
+                                ref
+                                    .read(teacherListProvider.notifier)
+                                    .loadInitialData();
+                              }
+                            },
+                    ),
+                  ],
+                ),
+              ),
+
             // Section A: PERSONAL & CONTACT INFORMATION
             _buildSectionHeader('PERSONAL & CONTACT INFORMATION'),
             const SizedBox(height: AppSpacing.sm),
@@ -1301,14 +1463,29 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                             Switch(
                               value: current?.isActive ?? true,
                               activeThumbColor: AppColors.brandPrimary,
-                              onChanged: isEdit
-                                  ? (active) {
-                                      notifier.updateField(
-                                        'TIsPresent',
-                                        active ? 'Y' : 'N',
-                                      );
-                                    }
-                                  : null,
+                              onChanged: isReadOnlyUser
+                                  ? null
+                                  : (active) async {
+                                      if (isEdit) {
+                                        notifier.updateField(
+                                          'TIsPresent',
+                                          active ? 'Y' : 'N',
+                                        );
+                                      } else {
+                                        final tid = current?.teacherId;
+                                        if (tid != null) {
+                                          await notifier.toggleActiveStatus(
+                                            tid,
+                                            active,
+                                          );
+                                          ref
+                                              .read(
+                                                teacherListProvider.notifier,
+                                              )
+                                              .loadInitialData();
+                                        }
+                                      }
+                                    },
                             ),
                           ],
                         ),

@@ -60,6 +60,16 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   }
 
   @override
+  void activate() {
+    super.activate();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(teacherListProvider.notifier).loadInitialData();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _debounceTimer?.cancel();
     _searchController.dispose();

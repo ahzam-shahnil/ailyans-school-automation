@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../models/fee_receipt_view.dart';
 import '../db/database.dart';
 import 'clock_provider.dart';
+import 'shell_metadata_provider.dart';
 import '../../core/utils/fee_head_display.dart';
 import '../utils/receipt_pdf_generator.dart'
     as rcp
@@ -752,14 +753,41 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
   Future<
     ({List<DefaulterClassGroup> groups, DefaulterListFilterSummary summary})
   >
-  buildDefaulterList({String? classFilter, String? monthFilter}) async {
+  buildDefaulterList({
+    String? classFilter,
+    String? monthFilter,
+    String? sessionYr,
+  }) async {
     final db = await DatabaseService.instance.database;
+
+    String effectiveSessionYr = sessionYr?.trim() ?? '';
+    if (effectiveSessionYr.isEmpty) {
+      final meta = _ref?.read(shellMetadataProvider).value;
+      if (meta != null && meta.sessionYear.trim().isNotEmpty) {
+        effectiveSessionYr = meta.sessionYear.trim();
+      } else {
+        final confRows = await db.rawQuery(
+          "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
+        );
+        if (confRows.isNotEmpty && confRows.first['config_value'] != null) {
+          effectiveSessionYr =
+              (confRows.first['config_value'] as String).trim();
+        } else {
+          effectiveSessionYr = '2026-27';
+        }
+      }
+    }
 
     final whereConditions = <String>[
       "vm.IsPaid IN ('N', 'O')",
       "(vm.SubTotal - COALESCE(vm.Discount, 0) - COALESCE(vm.PaidAmt, 0)) > 0",
     ];
     final whereArgs = <dynamic>[];
+
+    if (effectiveSessionYr != 'All Sessions') {
+      whereConditions.insert(0, 'vm.SessionYr = ?');
+      whereArgs.insert(0, effectiveSessionYr);
+    }
 
     if (classFilter != null &&
         classFilter.trim().isNotEmpty &&
@@ -782,7 +810,8 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
              sr.NameFirst, sr.NameLast, sr.F_Name, sr.Mobile1,
              c.CName AS class_name, cs.SecName AS section_name,
              sc.ClassRollNo, vm.ForMonth, vm.SubTotal, vm.Discount,
-             vm.PaidAmt, vm.IsPaid, vm.DueDate, vm.SessionYr
+             vm.PaidAmt, vm.IsPaid, vm.DueDate, vm.SessionYr,
+             (vm.SubTotal - COALESCE(vm.Discount, 0) - COALESCE(vm.PaidAmt, 0)) AS balance
       FROM VoucharMas vm
       JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
       LEFT JOIN Student_Class sc
@@ -803,7 +832,9 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final subtotal = (r['SubTotal'] as num?)?.toInt() ?? 0;
       final discount = (r['Discount'] as num?)?.toInt() ?? 0;
       final paidAmt = (r['PaidAmt'] as num?)?.toInt() ?? 0;
-      final netPayable = subtotal - discount - paidAmt;
+      final balance =
+          (r['balance'] as num?)?.toInt() ?? (subtotal - discount - paidAmt);
+      final netPayable = balance;
 
       DateTime? dueDate;
       final dueDateRaw = r['DueDate'];
@@ -831,6 +862,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           discount: discount,
           paidAmt: paidAmt,
           netPayable: netPayable,
+          balance: balance,
           isPaid: (r['IsPaid'] as String?)?.trim() ?? 'N',
           dueDate: dueDate,
           daysOverdue: daysOverdue,
@@ -852,7 +884,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final groupRows = entry.value;
       final groupSubtotal = groupRows.fold<int>(
         0,
-        (sum, r) => sum + r.netPayable,
+        (sum, r) => sum + r.balance,
       );
       groups.add(
         DefaulterClassGroup(
@@ -863,9 +895,9 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       );
     }
 
-    final sessionYr = rows.isNotEmpty
-        ? (rows.first['SessionYr'] as String?) ?? '2017-2018'
-        : '2017-2018';
+    final resolvedSessionYr = rows.isNotEmpty
+        ? ((rows.first['SessionYr'] as String?) ?? effectiveSessionYr)
+        : effectiveSessionYr;
     final reportMonth = (monthFilter == null || monthFilter == 'All Months')
         ? 'All Billing Months'
         : monthFilter;
@@ -873,11 +905,11 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     final uniqueStudents = allRows.map((r) => r.stuRegId).toSet().length;
     final totalOutstanding = allRows.fold<int>(
       0,
-      (sum, r) => sum + r.netPayable,
+      (sum, r) => sum + r.balance,
     );
 
     final summary = DefaulterListFilterSummary(
-      sessionYr: sessionYr,
+      sessionYr: resolvedSessionYr,
       classFilter: (classFilter == null || classFilter == 'All Classes')
           ? null
           : classFilter,
