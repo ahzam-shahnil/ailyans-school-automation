@@ -18,6 +18,8 @@ class VoucherGenFilters {
   final bool includeArrears;
   final int lateFineAmount;
   final Set<int> excludedFeeParamIds;
+  final String mode;
+  final int? selectedStuRegId;
 
   VoucherGenFilters({
     this.sessionYr = '2017-2018',
@@ -30,6 +32,8 @@ class VoucherGenFilters {
     this.includeArrears = true,
     this.lateFineAmount = 100,
     this.excludedFeeParamIds = const {},
+    this.mode = 'batch',
+    this.selectedStuRegId,
   }) : issueDate = issueDate ?? DateTime(2017, 10, 1),
        dueDate = dueDate ?? DateTime(2017, 10, 10);
 
@@ -46,6 +50,9 @@ class VoucherGenFilters {
     bool? includeArrears,
     int? lateFineAmount,
     Set<int>? excludedFeeParamIds,
+    String? mode,
+    int? selectedStuRegId,
+    bool clearSelectedStudent = false,
   }) {
     return VoucherGenFilters(
       sessionYr: sessionYr ?? this.sessionYr,
@@ -58,6 +65,10 @@ class VoucherGenFilters {
       includeArrears: includeArrears ?? this.includeArrears,
       lateFineAmount: lateFineAmount ?? this.lateFineAmount,
       excludedFeeParamIds: excludedFeeParamIds ?? this.excludedFeeParamIds,
+      mode: mode ?? this.mode,
+      selectedStuRegId: clearSelectedStudent
+          ? null
+          : (selectedStuRegId ?? this.selectedStuRegId),
     );
   }
 }
@@ -169,8 +180,26 @@ String billingMonthToYyMm(String billingMonth) {
 class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
   VoucherGenFiltersNotifier() : super(VoucherGenFilters());
 
+  void setMode(String mode) {
+    if (mode != 'batch' && mode != 'single') return;
+    state = state.copyWith(
+      mode: mode,
+      clearSelectedStudent: mode == 'batch',
+    );
+  }
+
+  void setSelectedStuRegId(int? stuRegId) {
+    state = state.copyWith(
+      selectedStuRegId: stuRegId,
+      clearSelectedStudent: stuRegId == null,
+    );
+  }
+
   void setSessionYr(String sessionYr) {
-    state = state.copyWith(sessionYr: sessionYr);
+    state = state.copyWith(
+      sessionYr: sessionYr,
+      clearSelectedStudent: true,
+    );
   }
 
   void setClassId(int? classId) {
@@ -179,6 +208,7 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
       clearClassId: classId == null,
       clearClassSecId: true,
       excludedFeeParamIds: const {},
+      clearSelectedStudent: true,
     );
   }
 
@@ -197,7 +227,11 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
   }
 
   void setClassSecId(int? secId) {
-    state = state.copyWith(classSecId: secId, clearClassSecId: secId == null);
+    state = state.copyWith(
+      classSecId: secId,
+      clearClassSecId: secId == null,
+      clearSelectedStudent: true,
+    );
   }
 
   void setBillingMonth(String billingMonth) {
@@ -302,6 +336,37 @@ final voucherClassTariffsProvider =
       }).toList();
     });
 
+/// Provider that fetches active students enrolled in the currently filtered cohort.
+final voucherCohortStudentsProvider =
+    FutureProvider<List<Map<String, dynamic>>>((ref) async {
+  final filters = ref.watch(voucherGenFiltersProvider);
+  final db = await DatabaseService.instance.database;
+
+  final whereClauses = <String>[
+    'sc.Present = 1',
+    'sc.SessionYr = ?',
+  ];
+  final whereArgs = <dynamic>[filters.sessionYr];
+
+  if (filters.classId != null) {
+    whereClauses.add('sc.ClassID = ?');
+    whereArgs.add(filters.classId);
+  }
+
+  if (filters.classSecId != null) {
+    whereClauses.add('sc.ClassSecID = ?');
+    whereArgs.add(filters.classSecId);
+  }
+
+  return db.rawQuery('''
+    SELECT sc.Stu_RegID, sc.ClassRollNo, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name
+    FROM Student_Class sc
+    JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
+    WHERE ${whereClauses.join(' AND ')}
+    ORDER BY sc.ClassID ASC, sc.ClassRollNo ASC, sc.Stu_RegID ASC
+  ''', whereArgs);
+});
+
 /// Provider that calculates in-memory preview rows for the cohort.
 final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
   ref,
@@ -325,6 +390,14 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
   if (filters.classSecId != null) {
     whereClauses.add('sc.ClassSecID = ?');
     whereArgs.add(filters.classSecId);
+  }
+
+  if (filters.mode == 'single') {
+    if (filters.selectedStuRegId == null) {
+      return const <VoucherPreviewRow>[];
+    }
+    whereClauses.add('sc.Stu_RegID = ?');
+    whereArgs.add(filters.selectedStuRegId);
   }
 
   final candidates = await db.rawQuery('''
@@ -842,6 +915,8 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     final db = await DatabaseService.instance.database;
     final sectionFilter = filters.classSecId;
     final billingMonthPrefix = _yyMmPrefix(filters.billingMonth);
+    final isSingle = filters.mode == 'single' && filters.selectedStuRegId != null;
+    final singleStudentFilter = isSingle ? filters.selectedStuRegId : null;
 
     // 1. Block if any paid voucher exists in cohort
     final paidCheck = await db.rawQuery(
@@ -852,6 +927,7 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
         AND vm.ForMonth = ?
         AND vm.SessionYr = ?
         AND vm.IsPaid = 'Y'
+        AND (? IS NULL OR vm.Student_Class_StuRegID = ?)
         AND (? IS NULL OR vm.Student_Class_StuRegID IN (
           SELECT Stu_RegID FROM Student_Class
           WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
@@ -861,6 +937,8 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
         filters.classId,
         filters.billingMonth,
         filters.sessionYr,
+        singleStudentFilter,
+        singleStudentFilter,
         sectionFilter,
         filters.classId,
         sectionFilter ?? 0,
@@ -885,10 +963,12 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
         SET IsPaid = 'N'
         WHERE IsPaid = 'O'
           AND SUBSTR(VoucherMasID, 1, 4) < ?
+          AND (? IS NULL OR Student_Class_StuRegID = ?)
           AND Student_Class_StuRegID IN (
             SELECT Student_Class_StuRegID FROM VoucharMas
             WHERE ClassID = ? AND ForMonth = ? AND SessionYr = ?
               AND IsPaid IN ('N', 'O')
+              AND (? IS NULL OR Student_Class_StuRegID = ?)
               AND (? IS NULL OR Student_Class_StuRegID IN (
                 SELECT Stu_RegID FROM Student_Class
                 WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
@@ -897,9 +977,13 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
         ''',
         [
           billingMonthPrefix,
+          singleStudentFilter,
+          singleStudentFilter,
           filters.classId,
           filters.billingMonth,
           filters.sessionYr,
+          singleStudentFilter,
+          singleStudentFilter,
           sectionFilter,
           filters.classId,
           sectionFilter ?? 0,
@@ -915,6 +999,7 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
           SELECT VoucherMasID FROM VoucharMas
           WHERE ClassID = ? AND ForMonth = ? AND SessionYr = ?
             AND IsPaid IN ('N', 'O')
+            AND (? IS NULL OR Student_Class_StuRegID = ?)
             AND (? IS NULL OR Student_Class_StuRegID IN (
               SELECT Stu_RegID FROM Student_Class
               WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
@@ -925,6 +1010,8 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
           filters.classId,
           filters.billingMonth,
           filters.sessionYr,
+          singleStudentFilter,
+          singleStudentFilter,
           sectionFilter,
           filters.classId,
           sectionFilter ?? 0,
@@ -938,6 +1025,7 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
         DELETE FROM VoucharMas
         WHERE ClassID = ? AND ForMonth = ? AND SessionYr = ?
           AND IsPaid IN ('N', 'O')
+          AND (? IS NULL OR Student_Class_StuRegID = ?)
           AND (? IS NULL OR Student_Class_StuRegID IN (
             SELECT Stu_RegID FROM Student_Class
             WHERE ClassID = ? AND ClassSecID = ? AND SessionYr = ?
@@ -947,6 +1035,8 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
           filters.classId,
           filters.billingMonth,
           filters.sessionYr,
+          singleStudentFilter,
+          singleStudentFilter,
           sectionFilter,
           filters.classId,
           sectionFilter ?? 0,

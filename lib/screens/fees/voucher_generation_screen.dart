@@ -229,6 +229,9 @@ class _VoucherGenerationScreenState
     final filters = ref.read(voucherGenFiltersProvider);
     final db = await DatabaseService.instance.database;
     final classIdParam = filters.classId;
+    final isSingle = filters.mode == 'single' && filters.selectedStuRegId != null;
+    final stuRegIdParam = isSingle ? filters.selectedStuRegId : null;
+
     final rows = await db.rawQuery(
       '''
       SELECT vm.*, sr.NameFirst, sr.NameLast, sr.F_Name,
@@ -242,9 +245,16 @@ class _VoucherGenerationScreenState
       LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
       WHERE vm.ForMonth = ?
         AND (? IS NULL OR vm.ClassID = ?)
+        AND (? IS NULL OR vm.Student_Class_StuRegID = ?)
       ORDER BY sc.ClassRollNo ASC
     ''',
-      [filters.billingMonth, classIdParam, classIdParam],
+      [
+        filters.billingMonth,
+        classIdParam,
+        classIdParam,
+        stuRegIdParam,
+        stuRegIdParam,
+      ],
     );
 
     final out = <FeeReceiptView>[];
@@ -626,6 +636,7 @@ class _VoucherGenerationScreenState
   // ---------------------------------------------------------------------------
 
   Widget _buildHeader(int eligibleCount) {
+    final filters = ref.watch(voucherGenFiltersProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -684,19 +695,15 @@ class _VoucherGenerationScreenState
                 ),
                 ButtonSegment<String>(
                   value: 'single',
-                  label: Tooltip(
-                    message: 'Phase 2',
-                    child: Text(
-                      'Single Student Voucher',
-                      style: TextStyle(color: AppColors.textDisabled),
-                    ),
-                  ),
-                  enabled: false,
+                  label: Text('Single Student Voucher'),
                   icon: Icon(Icons.person_outline, size: 16),
                 ),
               ],
-              selected: const {'batch'},
-              onSelectionChanged: (_) {},
+              selected: {filters.mode},
+              onSelectionChanged: (s) {
+                ref.read(voucherGenFiltersProvider.notifier).setMode(s.first);
+                ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+              },
             ),
             const SizedBox(width: AppSpacing.sm),
             OutlinedButton.icon(
@@ -911,6 +918,79 @@ class _VoucherGenerationScreenState
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
+
+          if (filters.mode == 'single') ...[
+            _buildFieldLabel('Target Student *'),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 38,
+              child: ref.watch(voucherCohortStudentsProvider).when(
+                data: (students) {
+                  final validVal = students.any((s) => s['Stu_RegID'] == filters.selectedStuRegId)
+                      ? filters.selectedStuRegId
+                      : null;
+                  return DropdownButtonFormField<int?>(
+                    key: ValueKey(validVal),
+                    initialValue: validVal,
+                    isExpanded: true,
+                    isDense: true,
+                    menuMaxHeight: 400,
+                    dropdownColor: AppColors.surfaceRaised,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                    ),
+                    decoration: _inputDecoration(),
+                    hint: const Text(
+                      'Select student...',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                    items: students.map((s) {
+                      final regId = s['Stu_RegID'] as int;
+                      final roll = s['ClassRollNo'];
+                      final first = (s['NameFirst'] as String? ?? '').trim();
+                      final mid = (s['NameMiddle'] as String? ?? '').trim();
+                      final last = (s['NameLast'] as String? ?? '').trim();
+                      final name = [first, mid, last]
+                          .where((p) => p.isNotEmpty)
+                          .join(' ');
+                      final label = '#$regId - $name (Roll: ${roll ?? "-"})';
+                      return DropdownMenuItem<int?>(
+                        value: regId,
+                        child: Text(
+                          label,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: isGenerating
+                        ? null
+                        : (val) {
+                            ref
+                                .read(voucherGenFiltersProvider.notifier)
+                                .setSelectedStuRegId(val);
+                            ref
+                                .read(voucherGenExecutionProvider.notifier)
+                                .clearSummary();
+                          },
+                  );
+                },
+                loading: () => const SizedBox(
+                  height: 38,
+                  child: Center(child: LinearProgressIndicator()),
+                ),
+                error: (_, __) => const Text('Error loading students'),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
 
           // Group 3: Issue + Due
           _buildFieldGroup(
