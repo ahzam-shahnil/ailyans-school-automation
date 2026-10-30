@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/providers/school_leaving_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 class SchoolLeavingScreen extends ConsumerStatefulWidget {
   const SchoolLeavingScreen({super.key});
@@ -123,12 +126,57 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   }
 
   void _handlePrintCertificate() {
-    final state = ref.read(schoolLeavingProvider);
-    if (!state.hasExistingSlc && state.committedSlc == null) {
+    final slcState = ref.read(schoolLeavingProvider);
+    if (!slcState.hasExistingSlc && slcState.committedSlc == null) {
       _showSnackBar('No leaving record available to print', isError: true);
       return;
     }
-    _showSnackBar('Coming in Phase E');
+
+    final student = slcState.selectedStudent!;
+    final meta = ref.read(shellMetadataProvider).valueOrNull;
+
+    // Build the slcData map from available state.
+    // Prefer the committedSlc map (just-committed) over the existingSlc fields.
+    final String leavingDate;
+    final String conduct;
+    final String reason;
+    final String remarks;
+
+    if (slcState.committedSlc != null) {
+      leavingDate = slcState.committedSlc!['LeftDate'] as String? ?? '';
+      conduct = slcState.conduct?.trim() ?? '';
+      reason = slcState.reason?.trim() ?? '';
+      remarks = slcState.remarks;
+    } else {
+      leavingDate = student.existingSlcDate ?? '';
+      conduct = student.existingSlcConduct?.trim() ?? '';
+      reason = student.existingSlcTerm?.trim() ?? '';
+      remarks = student.existingSlcRemarks ?? '';
+    }
+
+    final slcData = <String, dynamic>{
+      'studentName': student.studentName,
+      'fatherName': student.fatherName ?? '',
+      'className': student.classSecDisplay,
+      'admissionDate': student.admissionDate ?? '',
+      'leavingDate': leavingDate,
+      'conduct': conduct,
+      'reason': reason,
+      'remarks': remarks,
+    };
+
+    ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.slc,
+        id: '${student.stuRegId}',
+        extraParams: {
+          'slcData': slcData,
+          'branchName': meta?.branchName ?? '',
+          'branchAddress': meta?.branchAddress ?? '',
+        },
+      ),
+    );
   }
 
   void _handlePrintRegister() {

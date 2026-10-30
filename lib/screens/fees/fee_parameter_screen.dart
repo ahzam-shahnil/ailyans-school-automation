@@ -15,6 +15,8 @@ import '../../core/utils/fee_head_display.dart';
 import '../../models/bank_account_row.dart';
 import '../../models/class_fee_summary.dart';
 import '../../models/fee_parameter_row.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Screen 12 - FeeParameterScreen at /fees/parameters.
 /// Consolidates legacy SCHfrmFeeParameter (§S15) and SCHfrmBankInfo (§S16).
@@ -518,10 +520,28 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
                     const SizedBox(width: AppSpacing.sm),
                     OutlinedButton.icon(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Fee schedule PDF coming in Phase E'),
-                            duration: Duration(seconds: 2),
+                        final meta =
+                            ref.read(shellMetadataProvider).valueOrNull;
+                        final feeRows = state.currentClassRows
+                            .map(
+                              (r) => <String, dynamic>{
+                                'displayName': r.displayName,
+                                'fee': r.fee,
+                              },
+                            )
+                            .toList();
+                        ReportPreviewModal.show(
+                          context,
+                          request: ReportRequest(
+                            type: ReportType.feeSchedule,
+                            id:
+                                '${selectedClass.classId}_${state.selectedFeeYr}',
+                            extraParams: {
+                              'feeRows': feeRows,
+                              'sessionYear': state.selectedFeeYr,
+                              'className': selectedClass.cName,
+                              'branchName': meta?.branchName ?? '',
+                            },
                           ),
                         );
                       },
