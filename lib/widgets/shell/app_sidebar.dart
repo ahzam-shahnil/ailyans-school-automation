@@ -190,6 +190,7 @@ class AppSidebar extends ConsumerWidget {
                       color: AppColors.textPrimary,
                     ),
                     overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                   Text(
                     'Automation v2.0',
@@ -198,6 +199,7 @@ class AppSidebar extends ConsumerWidget {
                       fontSize: 11.0,
                     ),
                     overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 ],
               ),
@@ -229,74 +231,82 @@ class AppSidebar extends ConsumerWidget {
               : Colors.transparent,
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
-        child: Row(
-          mainAxisAlignment: isExpanded
-              ? MainAxisAlignment.start
-              : MainAxisAlignment.center,
-          mainAxisSize: isExpanded ? MainAxisSize.max : MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Active left indicator bar (3px when active, 0px when inactive)
-            SizedBox(
-              width: isActive ? 3.0 : 0.0,
-              height: 24.0,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: isActive ? AppColors.brandPrimary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                ),
-              ),
-            ),
-            if (isExpanded) const SizedBox(width: AppSpacing.xs),
-            // Icon (fixed 20px)
-            Icon(
-              item.icon,
-              size: 20.0,
-              color: isActive
-                  ? AppColors.brandPrimary
-                  : AppColors.textSecondary,
-            ),
-            if (isExpanded) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  item.label,
-                  style: AppTypography.label.copyWith(
-                    color: isActive
-                        ? AppColors.brandPrimary
-                        : AppColors.textPrimary,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ),
-              if (badgeCount > 0)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7.0,
-                    vertical: 2.0,
-                  ),
-                  margin: const EdgeInsets.only(right: AppSpacing.xs),
-                  decoration: BoxDecoration(
-                    color: isActive
-                        ? AppColors.brandPrimary
-                        : AppColors.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(AppRadius.full),
-                  ),
-                  child: Text(
-                    badgeCount.toString(),
-                    style: AppTypography.bodySmall.copyWith(
-                      color: isActive
-                          ? AppColors.surfaceRaised
-                          : AppColors.textSecondary,
-                      fontSize: 11.0,
-                      fontWeight: FontWeight.w600,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isCollapsed = !isExpanded || constraints.maxWidth <= 60;
+            return Row(
+              mainAxisAlignment: isCollapsed
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
+              mainAxisSize: isCollapsed ? MainAxisSize.min : MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Active left indicator bar (3px when active, 0px when inactive)
+                SizedBox(
+                  width: isActive ? 3.0 : 0.0,
+                  height: 24.0,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color:
+                          isActive ? AppColors.brandPrimary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                   ),
                 ),
-            ],
-          ],
+                if (!isCollapsed) const SizedBox(width: AppSpacing.xs),
+                // Icon (fixed 20px)
+                Icon(
+                  item.icon,
+                  size: 20.0,
+                  color: isActive
+                      ? AppColors.brandPrimary
+                      : AppColors.textSecondary,
+                ),
+                if (!isCollapsed) ...[
+                  const SizedBox(width: 8.0),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      style: AppTypography.label.copyWith(
+                        color: isActive
+                            ? AppColors.brandPrimary
+                            : AppColors.textPrimary,
+                        fontWeight:
+                            isActive ? FontWeight.w600 : FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
+                    ),
+                  ),
+                  if (badgeCount > 0)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7.0,
+                        vertical: 2.0,
+                      ),
+                      margin: const EdgeInsets.only(right: AppSpacing.xs),
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? AppColors.brandPrimary
+                            : AppColors.surfaceSubtle,
+                        borderRadius: BorderRadius.circular(AppRadius.full),
+                      ),
+                      child: Text(
+                        badgeCount.toString(),
+                        style: AppTypography.bodySmall.copyWith(
+                          color: isActive
+                              ? AppColors.surfaceRaised
+                              : AppColors.textSecondary,
+                          fontSize: 11.0,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -339,6 +349,7 @@ class AppSidebar extends ConsumerWidget {
                     color: AppColors.textSecondary,
                   ),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
             ],
