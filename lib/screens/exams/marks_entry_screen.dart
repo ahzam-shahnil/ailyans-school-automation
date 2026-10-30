@@ -8,6 +8,8 @@ import '../../core/providers/marks_entry_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/marks_entry_row.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Screen 18 - MarksEntryScreen at /exams/marks.
 /// Consolidates legacy frmExamMarks (lpObjectInfo VA 0x0042ab68, ObjID: 24).
@@ -1468,11 +1470,55 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
               visualDensity: VisualDensity.compact,
             ),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Student Mark Sheets report (\\Rpt31_StuMarkSheet.rpt) will be available in Phase E.',
+              final meta = ref.read(shellMetadataProvider).value;
+              final curState = ref.read(marksEntryProvider);
+
+              if (curState.roster.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Load students first to generate mark sheets.'),
                   ),
+                );
+                return;
+              }
+
+              final examDetail = curState.examInfos.firstWhere(
+                (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+                orElse: () => {'Detail': 'Examination'},
+              )['Detail'] ?? 'Examination';
+
+              final className = curState.classes.firstWhere(
+                (c) => c['ClassID'] == curState.selectedClassId,
+                orElse: () => {'CName': 'Class'},
+              )['CName'] ?? 'Class';
+
+              final subjName = curState.subjects.firstWhere(
+                (s) => s['SubjID'] == curState.selectedSubjId,
+                orElse: () => {'SubjName': ''},
+              )['SubjName'] ?? '';
+
+              final students = curState.roster.map((row) => {
+                'rollNo': row.rollNo,
+                'name': row.studentName,
+                'subject': subjName,
+                'obtained': row.totalObtained,
+                'total': row.totalMax,
+                'grade': row.computeGrade(curState.exGradeRows),
+                'isAbsent': row.isAbsent,
+              }).toList();
+
+              ReportPreviewModal.show(
+                context,
+                request: ReportRequest(
+                  type: ReportType.examMarksheet,
+                  titleOverride: 'Marksheet - $examDetail',
+                  extraParams: {
+                    'examName': examDetail,
+                    'className': className,
+                    'students': students,
+                    'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+                    'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                  },
                 ),
               );
             },
@@ -1502,11 +1548,66 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
               visualDensity: VisualDensity.compact,
             ),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Exam Statistics report (\\Rpt35_ExamSTAT.rpt) will be available in Phase E.',
+              final meta = ref.read(shellMetadataProvider).value;
+              final curState = ref.read(marksEntryProvider);
+
+              if (curState.roster.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Load students first to generate statistics.'),
                   ),
+                );
+                return;
+              }
+
+              final examDetail = curState.examInfos.firstWhere(
+                (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+                orElse: () => {'Detail': 'Examination'},
+              )['Detail'] ?? 'Examination';
+
+              final subjName = curState.subjects.firstWhere(
+                (s) => s['SubjID'] == curState.selectedSubjId,
+                orElse: () => {'SubjName': 'Current Subject'},
+              )['SubjName'] ?? 'Current Subject';
+
+              int totalStudents = curState.roster.length;
+              int passed = 0;
+              int failed = 0;
+              for (final r in curState.roster) {
+                if (r.isAbsent) {
+                  failed++;
+                } else {
+                  final grade = r.computeGrade(curState.exGradeRows);
+                  if (grade == 'F') {
+                    failed++;
+                  } else {
+                    passed++;
+                  }
+                }
+              }
+              final passPct = totalStudents > 0 ? (passed / totalStudents) * 100.0 : 0.0;
+
+              final subjects = <Map<String, dynamic>>[
+                {
+                  'subject': subjName,
+                  'totalStudents': totalStudents,
+                  'passed': passed,
+                  'failed': failed,
+                  'passPercentage': passPct,
+                },
+              ];
+
+              ReportPreviewModal.show(
+                context,
+                request: ReportRequest(
+                  type: ReportType.examSummary,
+                  titleOverride: 'Exam Summary - $examDetail',
+                  extraParams: {
+                    'examName': examDetail,
+                    'subjects': subjects,
+                    'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+                    'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                  },
                 ),
               );
             },

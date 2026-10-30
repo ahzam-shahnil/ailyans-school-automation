@@ -262,5 +262,27 @@ void main() {
       expect(find.text('Test Daily Collection'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('examMarksheet report type renders without crash', (tester) async {
+      final request = ReportRequest(
+        type: ReportType.examMarksheet,
+        titleOverride: 'Test Exam Marksheet',
+        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      );
+      await _pumpModal(tester, request);
+      expect(find.text('Test Exam Marksheet'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('examSummary report type renders without crash', (tester) async {
+      final request = ReportRequest(
+        type: ReportType.examSummary,
+        titleOverride: 'Test Exam Summary',
+        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      );
+      await _pumpModal(tester, request);
+      expect(find.text('Test Exam Summary'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

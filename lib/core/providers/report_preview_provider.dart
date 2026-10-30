@@ -6,6 +6,8 @@ import 'package:school_automation/core/utils/biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/class_syllabus_pdf_generator.dart';
 import 'package:school_automation/core/utils/daily_collection_pdf_generator.dart';
 import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
+import 'package:school_automation/core/utils/exam_marksheet_pdf_generator.dart';
+import 'package:school_automation/core/utils/exam_summary_pdf_generator.dart';
 import 'package:school_automation/core/utils/fee_schedule_pdf_generator.dart';
 import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
 import 'package:school_automation/core/utils/salary_slip_pdf_generator.dart';
@@ -113,6 +115,10 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateSalaryRegister();
       case ReportType.dailyCollection:
         return _generateDailyCollection();
+      case ReportType.examMarksheet:
+        return _generateExamMarksheet();
+      case ReportType.examSummary:
+        return _generateExamSummary();
     }
   }
 
@@ -389,6 +395,37 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     return DailyCollectionPdfGenerator.generate(
       date: request.extraParams['date'] as String? ?? '',
       collections: collections.cast<Map<String, dynamic>>(),
+      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+    );
+  }
+
+  Future<Uint8List> _generateExamMarksheet() async {
+    final students = request.extraParams['students'] as List<dynamic>?;
+    if (students == null || students.isEmpty) {
+      throw StateError(
+        'Missing or empty students in extraParams for examMarksheet.',
+      );
+    }
+    return ExamMarksheetPdfGenerator.generate(
+      examName: request.extraParams['examName'] as String? ?? '',
+      className: request.extraParams['className'] as String? ?? '',
+      students: students.cast<Map<String, dynamic>>(),
+      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+    );
+  }
+
+  Future<Uint8List> _generateExamSummary() async {
+    final subjects = request.extraParams['subjects'] as List<dynamic>?;
+    if (subjects == null || subjects.isEmpty) {
+      throw StateError(
+        'Missing or empty subjects in extraParams for examSummary.',
+      );
+    }
+    return ExamSummaryPdfGenerator.generate(
+      examName: request.extraParams['examName'] as String? ?? '',
+      subjects: subjects.cast<Map<String, dynamic>>(),
       branchName: request.extraParams['branchName'] as String? ?? '',
       branchAddress: request.extraParams['branchAddress'] as String? ?? '',
     );
