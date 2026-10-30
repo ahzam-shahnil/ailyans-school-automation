@@ -5,8 +5,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/providers/clock_provider.dart';
 import '../../core/providers/session_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/teacher_profile_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Screen 21 — TeacherProfileScreen (`/staff/teachers/:id` and `/staff/teachers/new`).
 /// Implements §S25 (`frmTeachers` at `0x00431fec`, `ObjID: 14`) in edit/detail mode.
@@ -817,7 +820,42 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           ),
         const SizedBox(width: AppSpacing.xs),
         OutlinedButton.icon(
-          onPressed: _showPrintStub,
+          onPressed: () {
+            final meta = ref.read(shellMetadataProvider).valueOrNull;
+            final teacher = ref
+                .read(teacherProfileProvider(_resolvedId))
+                .currentTeacher;
+            if (teacher == null) return;
+
+            final teacherData = <String, dynamic>{
+              'name': teacher.tName,
+              'fatherName': teacher.tFName,
+              'designation': teacher.tCat,
+              'cnic': teacher.tCnic,
+              'phone': teacher.tContactNo1,
+              'phone2': teacher.tContactNo2 ?? '',
+              'address': teacher.tAddress ?? '',
+              'joiningDate': teacher.doJoing ?? '',
+              'subject': teacher.tSubject ?? '',
+              'qualification': teacher.tQualification ?? '',
+              'photoPath': teacher.officeFile,
+            };
+
+            ReportPreviewModal.show(
+              context,
+              request: ReportRequest(
+                type: ReportType.teacherBiodata,
+                titleOverride: 'Teacher Biodata - ${teacher.tName}',
+                extraParams: {
+                  'teacherData': teacherData,
+                  'branchName': meta?.branchName ??
+                      "Ailyans's Higher Secondary School Mianwali",
+                  'branchAddress':
+                      meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                },
+              ),
+            );
+          },
           icon: const Icon(Icons.print_outlined, size: 14),
           label: const Text('Print Biodata'),
           style: OutlinedButton.styleFrom(

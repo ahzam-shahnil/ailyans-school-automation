@@ -7,6 +7,7 @@ import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
 import 'package:school_automation/core/utils/fee_schedule_pdf_generator.dart';
 import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
 import 'package:school_automation/core/utils/slc_pdf_generator.dart';
+import 'package:school_automation/core/utils/teacher_biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/voucher_pdf_generator.dart';
 import 'package:school_automation/models/fee_receipt_view.dart';
 import 'package:school_automation/widgets/reports/report_definition.dart';
@@ -96,6 +97,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateSlc();
       case ReportType.feeSchedule:
         return _generateFeeSchedule();
+      case ReportType.teacherBiodata:
+        return _generateTeacherBiodata();
     }
   }
 
@@ -293,6 +296,16 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       sessionYear: request.extraParams['sessionYear'] as String? ?? '',
       className: request.extraParams['className'] as String? ?? '',
       branchName: request.extraParams['branchName'] as String? ?? '',
+    );
+  }
+
+  Future<Uint8List> _generateTeacherBiodata() async {
+    final data = request.extraParams['teacherData'] as Map<String, dynamic>?;
+    if (data == null) throw StateError('Missing teacherData in extraParams');
+    return TeacherBiodataPdfGenerator.generate(
+      teacherData: data,
+      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
     );
   }
 }
