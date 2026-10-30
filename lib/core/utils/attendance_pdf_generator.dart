@@ -1,13 +1,11 @@
 // ignore_for_file: public_member_api_docs
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../models/attendance_roster_row.dart';
-import '../theme/app_theme_tokens.dart';
 
 /// Data bundle passed to the institutional attendance roll-call PDF generator.
 class AttendancePdfData {
@@ -385,136 +383,4 @@ Future<Uint8List> buildAttendancePdf(AttendancePdfData data) async {
   );
 
   return doc.save();
-}
-
-/// Displays the institutional print preview modal for attendance roll call.
-void showAttendancePrintPreviewDialog(
-  BuildContext context,
-  AttendancePdfData data,
-) {
-  final printButtonKey = GlobalKey();
-
-  showDialog(
-    context: context,
-    barrierDismissible: true,
-    builder: (ctx) {
-      return Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
-        child: Container(
-          width: 1180,
-          height: 820,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-          ),
-          child: Column(
-            children: [
-              // Dialog Action Header
-              Container(
-                height: 56,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.xs,
-                ),
-                decoration: const BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(color: AppColors.borderDefault),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.print_outlined,
-                      size: 20,
-                      color: AppColors.brandPrimary,
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(
-                      'Attendance Roll Call - ${data.className} (${data.sectionName})',
-                      style: AppTypography.h3.copyWith(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const Spacer(),
-
-                    // Share Button
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final bytes = await buildAttendancePdf(data);
-                        final box =
-                            printButtonKey.currentContext?.findRenderObject()
-                                as RenderBox?;
-                        final bounds = box != null
-                            ? box.localToGlobal(Offset.zero) & box.size
-                            : const Rect.fromLTWH(0, 0, 100, 100);
-
-                        await Printing.sharePdf(
-                          bytes: bytes,
-                          filename:
-                              'attendance_roll_call_${data.className}_${data.sectionName}.pdf',
-                          bounds: bounds,
-                        );
-                      },
-                      icon: const Icon(Icons.share_outlined, size: 16),
-                      label: const Text('Share PDF'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textPrimary,
-                        side: const BorderSide(color: AppColors.borderDefault),
-                        minimumSize: const Size(0, 36),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Print Button
-                    ElevatedButton.icon(
-                      key: printButtonKey,
-                      onPressed: () async {
-                        final bytes = await buildAttendancePdf(data);
-                        await Printing.layoutPdf(
-                          onLayout: (_) => bytes,
-                          name:
-                              'attendance_${data.className}_${data.sectionName}',
-                        );
-                      },
-                      icon: const Icon(Icons.print, size: 16),
-                      label: const Text('Print (Ctrl+P)'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brandPrimary,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(0, 36),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-
-                    // Close Button
-                    Tooltip(
-                      message: 'Close (Esc)',
-                      child: IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(ctx).pop(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // PDF Preview Body
-              Expanded(
-                child: PdfPreview(
-                  build: (_) => buildAttendancePdf(data),
-                  useActions: false,
-                  canChangeOrientation: false,
-                  canChangePageFormat: false,
-                  canDebug: false,
-                  pdfFileName:
-                      'attendance_${data.className}_${data.sectionName}_${DateTime.now().millisecondsSinceEpoch}.pdf',
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    },
-  );
 }

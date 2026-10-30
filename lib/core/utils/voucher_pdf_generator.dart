@@ -1,11 +1,9 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
 import '../../models/fee_receipt_view.dart';
 import 'fee_head_display.dart';
@@ -2001,110 +1999,4 @@ class ThreeCopyVouchersPdf {
       ),
     );
   }
-}
-
-// ============================================================================
-// PRINT PREVIEW HELPER
-// ============================================================================
-
-Future<void> showVoucherPrintPreviewDialog(
-  BuildContext context, {
-  required List<FeeReceiptView> vouchers,
-  required String branchName,
-  required String branchAddress,
-  required String bankName,
-  required String bankBranch,
-  required String bankAcctNo,
-}) async {
-  await showDialog<void>(
-    context: context,
-    builder: (ctx) {
-      int mode = 0; // 0 = 3-copy slips, 1 = cohort ledger
-      return StatefulBuilder(
-        builder: (ctx, setState) {
-          return Dialog(
-            child: SizedBox(
-              width: 1000,
-              height: 760,
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Color(0xFFE2E8F0)),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          'Print Preview - ${vouchers.length} Voucher(s)',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Spacer(),
-                        SegmentedButton<int>(
-                          segments: const [
-                            ButtonSegment(
-                              value: 0,
-                              label: Text('3-Copy Slips'),
-                            ),
-                            ButtonSegment(
-                              value: 1,
-                              label: Text('Cohort Ledger'),
-                            ),
-                          ],
-                          selected: {mode},
-                          onSelectionChanged: (s) =>
-                              setState(() => mode = s.first),
-                        ),
-                        const SizedBox(width: 12),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.of(ctx).pop(),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: PdfPreview(
-                      build: (format) => mode == 0
-                          ? ThreeCopyVouchersPdf.generate(
-                              vouchers: vouchers,
-                              branchName: branchName,
-                              branchAddress: branchAddress,
-                              bankName: bankName,
-                              bankBranch: bankBranch,
-                              bankAcctNo: bankAcctNo,
-                            )
-                          : FeeLedgerVoucherGenerator(
-                              institutionName: branchName,
-                              ledgerPeriodTitle:
-                                  'Cohort Ledger - ${vouchers.isNotEmpty ? vouchers.first.forMonth : ""}',
-                              transactions: vouchers
-                                  .map(
-                                    (v) =>
-                                        FeeVoucherTransactionRecord.fromFeeReceipt(
-                                          v,
-                                          className: v.className ?? '',
-                                        ),
-                                  )
-                                  .toList(),
-                            ).generatePdf(),
-                      canChangeOrientation: true,
-                      canDebug: false,
-                      pdfFileName:
-                          'ailyans_vouchers_${DateTime.now().millisecondsSinceEpoch}.pdf',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
-    },
-  );
 }
