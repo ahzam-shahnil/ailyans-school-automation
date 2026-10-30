@@ -180,7 +180,44 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   }
 
   void _handlePrintRegister() {
-    _showSnackBar('Coming in Phase E');
+    final meta = ref.read(shellMetadataProvider).valueOrNull;
+    final state = ref.read(schoolLeavingProvider);
+
+    final leavers = state.students
+        .where((s) => s.hasSLC)
+        .map((s) => <String, dynamic>{
+              'stuRegId': s.stuRegId.toString(),
+              'regId': s.stuRegId.toString(),
+              'name': s.studentName,
+              'studentName': s.studentName,
+              'father': s.fatherName ?? '',
+              'fatherName': s.fatherName ?? '',
+              'className': s.classSecDisplay,
+              'classLeft': s.classSecDisplay,
+              'dateLeft': s.existingSlcDate ?? '',
+              'leavingDate': s.existingSlcDate ?? '',
+              'reason': s.existingSlcTerm ?? '',
+            })
+        .toList();
+
+    if (leavers.isEmpty) {
+      _showSnackBar('No leaving records available to print', isError: true);
+      return;
+    }
+
+    ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.slcRegister,
+        titleOverride: 'SLC Register',
+        extraParams: {
+          'sessionYear': meta?.sessionYear ?? '2026-27',
+          'leavers': leavers,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+        },
+      ),
+    );
   }
 
   Future<void> _selectLeavingDate() async {

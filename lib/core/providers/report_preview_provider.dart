@@ -3,10 +3,12 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:school_automation/core/utils/attendance_pdf_generator.dart';
 import 'package:school_automation/core/utils/biodata_pdf_generator.dart';
+import 'package:school_automation/core/utils/class_syllabus_pdf_generator.dart';
 import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
 import 'package:school_automation/core/utils/fee_schedule_pdf_generator.dart';
 import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
 import 'package:school_automation/core/utils/slc_pdf_generator.dart';
+import 'package:school_automation/core/utils/slc_register_pdf_generator.dart';
 import 'package:school_automation/core/utils/teacher_biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/voucher_pdf_generator.dart';
 import 'package:school_automation/models/fee_receipt_view.dart';
@@ -99,6 +101,10 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateFeeSchedule();
       case ReportType.teacherBiodata:
         return _generateTeacherBiodata();
+      case ReportType.classSyllabus:
+        return _generateClassSyllabus();
+      case ReportType.slcRegister:
+        return _generateSlcRegister();
     }
   }
 
@@ -304,6 +310,37 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     if (data == null) throw StateError('Missing teacherData in extraParams');
     return TeacherBiodataPdfGenerator.generate(
       teacherData: data,
+      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+    );
+  }
+
+  Future<Uint8List> _generateClassSyllabus() async {
+    final subjects = request.extraParams['subjects'] as List<dynamic>?;
+    if (subjects == null || subjects.isEmpty) {
+      throw StateError(
+        'Missing or empty subjects in extraParams for classSyllabus.',
+      );
+    }
+    return ClassSyllabusPdfGenerator.generate(
+      className: request.extraParams['className'] as String? ?? '',
+      sessionYear: request.extraParams['sessionYear'] as String? ?? '',
+      subjects: subjects.cast<Map<String, dynamic>>(),
+      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+    );
+  }
+
+  Future<Uint8List> _generateSlcRegister() async {
+    final leavers = request.extraParams['leavers'] as List<dynamic>?;
+    if (leavers == null || leavers.isEmpty) {
+      throw StateError(
+        'Missing or empty leavers in extraParams for slcRegister.',
+      );
+    }
+    return SlcRegisterPdfGenerator.generate(
+      sessionYear: request.extraParams['sessionYear'] as String? ?? '',
+      leavers: leavers.cast<Map<String, dynamic>>(),
       branchName: request.extraParams['branchName'] as String? ?? '',
       branchAddress: request.extraParams['branchAddress'] as String? ?? '',
     );

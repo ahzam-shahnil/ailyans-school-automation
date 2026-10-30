@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers/class_subject_mapping_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/subject_mapping_row.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 class _SaveIntent extends Intent {
   const _SaveIntent();
@@ -134,6 +137,48 @@ class _ClassSubjectMappingScreenState
     }
   }
 
+  void _handlePrintSyllabus() {
+    final meta = ref.read(shellMetadataProvider).valueOrNull;
+    final state = ref.read(classSubjectMappingProvider);
+
+    final subjects = state.mappings
+        .map((row) => <String, dynamic>{
+              'subject': row.subjName,
+              'subjName': row.subjName,
+              'subjectName': row.subjName,
+              'teacher': row.teacherName,
+              'teacherName': row.teacherName,
+              'totalMarks': row.totalMarks,
+              'practicalMarks': row.totalPracticalMarks,
+            })
+        .toList();
+
+    if (subjects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No subjects mapped for this class to print'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.classSyllabus,
+        titleOverride: 'Class Syllabus',
+        extraParams: {
+          'className': state.selectedClassName,
+          'sessionYear': meta?.sessionYear ?? '2026-27',
+          'subjects': subjects,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(classSubjectMappingProvider);
@@ -157,12 +202,7 @@ class _ClassSubjectMappingScreenState
           ),
           _PrintIntent: CallbackAction<_PrintIntent>(
             onInvoke: (_) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Coming in Phase E'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              _handlePrintSyllabus();
               return null;
             },
           ),
@@ -481,14 +521,7 @@ class _ClassSubjectMappingScreenState
               ),
               const Spacer(),
               OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Coming in Phase E'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
+                onPressed: _handlePrintSyllabus,
                 icon: const Icon(Icons.print_outlined, size: 14),
                 label: const Text(
                   'Print Class Syllabus',

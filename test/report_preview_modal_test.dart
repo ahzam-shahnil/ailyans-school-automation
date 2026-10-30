@@ -207,5 +207,27 @@ void main() {
       expect(find.text('Test Teacher Biodata'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('classSyllabus report type renders without crash', (tester) async {
+      final request = ReportRequest(
+        type: ReportType.classSyllabus,
+        titleOverride: 'Test Class Syllabus',
+        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      );
+      await _pumpModal(tester, request);
+      expect(find.text('Test Class Syllabus'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('slcRegister report type renders without crash', (tester) async {
+      final request = ReportRequest(
+        type: ReportType.slcRegister,
+        titleOverride: 'Test SLC Register',
+        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      );
+      await _pumpModal(tester, request);
+      expect(find.text('Test SLC Register'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
