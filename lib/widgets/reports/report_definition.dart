@@ -11,6 +11,8 @@ enum ReportType {
   teacherBiodata,
   classSyllabus,
   slcRegister,
+  salarySlip,
+  salaryRegister,
 }
 
 extension ReportTypePath on ReportType {
@@ -25,6 +27,8 @@ extension ReportTypePath on ReportType {
         ReportType.teacherBiodata => 'teacher-biodata',
         ReportType.classSyllabus => 'class-syllabus',
         ReportType.slcRegister => 'slc-register',
+        ReportType.salarySlip => 'salary-slip',
+        ReportType.salaryRegister => 'salary-register',
       };
 
   String get displayName => switch (this) {
@@ -38,6 +42,8 @@ extension ReportTypePath on ReportType {
         ReportType.teacherBiodata => 'Teacher Biodata',
         ReportType.classSyllabus => 'Class Subject Syllabus',
         ReportType.slcRegister => 'SLC Register',
+        ReportType.salarySlip => 'Salary Slip',
+        ReportType.salaryRegister => 'Salary Register',
       };
 
   String get defaultFileName => '${path}_report.pdf';

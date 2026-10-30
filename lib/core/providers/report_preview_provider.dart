@@ -7,6 +7,7 @@ import 'package:school_automation/core/utils/class_syllabus_pdf_generator.dart';
 import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
 import 'package:school_automation/core/utils/fee_schedule_pdf_generator.dart';
 import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
+import 'package:school_automation/core/utils/salary_slip_pdf_generator.dart';
 import 'package:school_automation/core/utils/slc_pdf_generator.dart';
 import 'package:school_automation/core/utils/slc_register_pdf_generator.dart';
 import 'package:school_automation/core/utils/teacher_biodata_pdf_generator.dart';
@@ -105,6 +106,10 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateClassSyllabus();
       case ReportType.slcRegister:
         return _generateSlcRegister();
+      case ReportType.salarySlip:
+        return _generateSalarySlip();
+      case ReportType.salaryRegister:
+        return _generateSalaryRegister();
     }
   }
 
@@ -343,6 +348,31 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       leavers: leavers.cast<Map<String, dynamic>>(),
       branchName: request.extraParams['branchName'] as String? ?? '',
       branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+    );
+  }
+
+  Future<Uint8List> _generateSalarySlip() async {
+    final data = request.extraParams['salaryData'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw StateError('Missing salaryData in extraParams for salarySlip.');
+    }
+    return SalarySlipPdfGenerator.generateSlip(
+      salaryData: data,
+      branchName: request.extraParams['branchName'] as String? ?? '',
+    );
+  }
+
+  Future<Uint8List> _generateSalaryRegister() async {
+    final salaries = request.extraParams['salaries'] as List<dynamic>?;
+    if (salaries == null || salaries.isEmpty) {
+      throw StateError(
+        'Missing or empty salaries in extraParams for salaryRegister.',
+      );
+    }
+    return SalarySlipPdfGenerator.generateRegister(
+      salaries: salaries.cast<Map<String, dynamic>>(),
+      month: request.extraParams['month'] as String? ?? '',
+      branchName: request.extraParams['branchName'] as String? ?? '',
     );
   }
 }

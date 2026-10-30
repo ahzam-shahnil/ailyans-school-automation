@@ -6,8 +6,11 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers/salary_management_provider.dart';
 import '../../core/providers/session_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/salary_slip_row.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Screen 22 — SalaryManagementScreen at `/staff/salary`.
 /// Implements §S24 (`frmTSal` at `0x00428b50`, `ObjID: 22`).
@@ -108,9 +111,11 @@ class _SalaryManagementScreenState
     ref.read(salaryManagementProvider.notifier).commitSlip(userLvl: userLvl);
   }
 
-  void _handlePrint() {
+  void _handlePrint([SalarySlipRow? optionalRow]) {
     final state = ref.read(salaryManagementProvider);
-    if (state.selectedTeacherId == null || state.selectedSlipId == null) {
+    final row = optionalRow ?? state.selectedTeacher;
+
+    if (row == null || (optionalRow == null && state.selectedSlipId == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No Salary Slip to Print '),
@@ -119,10 +124,73 @@ class _SalaryManagementScreenState
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Coming in Phase E'),
-        duration: Duration(seconds: 2),
+
+    final meta = ref.read(shellMetadataProvider).valueOrNull;
+    final salaryData = <String, dynamic>{
+      'teacherName': row.teacherName,
+      'gross': row.paidAmt ?? row.grossFromDet,
+      'deductions': row.tDeductions ?? 0,
+      'net': row.netAmount,
+      'month': row.salMonth,
+      'paidDate': row.paidDate ?? row.disbursDate ?? '',
+      'designation': row.teacherCat ?? 'Staff',
+      'cnic': row.teacherCnic ?? '',
+    };
+
+    ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.salarySlip,
+        titleOverride: 'Salary Slip - ${row.teacherName}',
+        extraParams: {
+          'salaryData': salaryData,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+        },
+      ),
+    );
+  }
+
+  void _handlePrintRegister() {
+    final meta = ref.read(shellMetadataProvider).valueOrNull;
+    final state = ref.read(salaryManagementProvider);
+
+    if (state.roster.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No payroll records to print for this month'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final salaries = state.roster
+        .map((r) => <String, dynamic>{
+              'teacherName': r.teacherName,
+              'name': r.teacherName,
+              'gross': r.paidAmt ?? r.grossFromDet,
+              'paidAmt': r.paidAmt ?? r.grossFromDet,
+              'deductions': r.tDeductions ?? 0,
+              'tDeductions': r.tDeductions ?? 0,
+              'net': r.netAmount,
+              'netAmount': r.netAmount,
+              'paidDate': r.paidDate ?? r.disbursDate ?? '',
+              'isPaid': r.isPaid,
+            })
+        .toList();
+
+    ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.salaryRegister,
+        titleOverride: 'Salary Register - ${state.selectedMonth}',
+        extraParams: {
+          'salaries': salaries,
+          'month': state.selectedMonth,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+        },
       ),
     );
   }
@@ -815,6 +883,19 @@ class _SalaryManagementScreenState
                     color: AppColors.textPrimary,
                   ),
                   overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: _handlePrintRegister,
+                icon: const Icon(Icons.print_outlined, size: 12),
+                label: const Text(
+                  'Print Register',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 26),
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
               ),
               const SizedBox(width: 8),

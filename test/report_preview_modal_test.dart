@@ -229,5 +229,27 @@ void main() {
       expect(find.text('Test SLC Register'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('salarySlip report type renders without crash', (tester) async {
+      final request = ReportRequest(
+        type: ReportType.salarySlip,
+        titleOverride: 'Test Salary Slip',
+        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      );
+      await _pumpModal(tester, request);
+      expect(find.text('Test Salary Slip'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('salaryRegister report type renders without crash', (tester) async {
+      final request = ReportRequest(
+        type: ReportType.salaryRegister,
+        titleOverride: 'Test Salary Register',
+        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      );
+      await _pumpModal(tester, request);
+      expect(find.text('Test Salary Register'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }
