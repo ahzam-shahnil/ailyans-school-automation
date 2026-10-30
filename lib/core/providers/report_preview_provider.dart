@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:school_automation/core/utils/attendance_pdf_generator.dart';
 import 'package:school_automation/core/utils/biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/class_syllabus_pdf_generator.dart';
+import 'package:school_automation/core/utils/daily_collection_pdf_generator.dart';
 import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
 import 'package:school_automation/core/utils/fee_schedule_pdf_generator.dart';
 import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
@@ -110,6 +111,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateSalarySlip();
       case ReportType.salaryRegister:
         return _generateSalaryRegister();
+      case ReportType.dailyCollection:
+        return _generateDailyCollection();
     }
   }
 
@@ -373,6 +376,21 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       salaries: salaries.cast<Map<String, dynamic>>(),
       month: request.extraParams['month'] as String? ?? '',
       branchName: request.extraParams['branchName'] as String? ?? '',
+    );
+  }
+
+  Future<Uint8List> _generateDailyCollection() async {
+    final collections = request.extraParams['collections'] as List<dynamic>?;
+    if (collections == null || collections.isEmpty) {
+      throw StateError(
+        'Missing or empty collections in extraParams for dailyCollection.',
+      );
+    }
+    return DailyCollectionPdfGenerator.generate(
+      date: request.extraParams['date'] as String? ?? '',
+      collections: collections.cast<Map<String, dynamic>>(),
+      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
     );
   }
 }

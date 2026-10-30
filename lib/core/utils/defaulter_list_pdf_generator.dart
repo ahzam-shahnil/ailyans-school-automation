@@ -1054,3 +1054,76 @@ class _DefaulterPreviewDialogState
     );
   }
 }
+
+// ============================================================================
+// HEADER FILTER CONTROLS FOR REPORT PREVIEW MODAL
+// ============================================================================
+
+class DefaulterFilterControls extends StatefulWidget {
+  final int? initialClassId;
+  final String? initialMonth;
+  final void Function({int? classId, String? month})? onFiltersChanged;
+
+  const DefaulterFilterControls({
+    super.key,
+    this.initialClassId,
+    this.initialMonth,
+    this.onFiltersChanged,
+  });
+
+  @override
+  State<DefaulterFilterControls> createState() =>
+      _DefaulterFilterControlsState();
+}
+
+class _DefaulterFilterControlsState extends State<DefaulterFilterControls> {
+  int? _classId;
+  String? _month;
+
+  @override
+  void initState() {
+    super.initState();
+    _classId = widget.initialClassId;
+    _month = widget.initialMonth;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        widget.onFiltersChanged?.call(
+          classId: _classId,
+          month: _month,
+        );
+      },
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Container(
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSubtle,
+          border: Border.all(color: AppColors.borderDefault),
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.filter_list,
+              size: 14,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              _month ?? 'Defaulter Filters',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

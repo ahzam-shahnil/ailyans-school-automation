@@ -251,5 +251,16 @@ void main() {
       expect(find.text('Test Salary Register'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('dailyCollection report type renders without crash', (tester) async {
+      final request = ReportRequest(
+        type: ReportType.dailyCollection,
+        titleOverride: 'Test Daily Collection',
+        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+      );
+      await _pumpModal(tester, request);
+      expect(find.text('Test Daily Collection'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

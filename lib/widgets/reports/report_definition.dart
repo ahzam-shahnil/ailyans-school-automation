@@ -13,6 +13,7 @@ enum ReportType {
   slcRegister,
   salarySlip,
   salaryRegister,
+  dailyCollection,
 }
 
 extension ReportTypePath on ReportType {
@@ -29,6 +30,7 @@ extension ReportTypePath on ReportType {
         ReportType.slcRegister => 'slc-register',
         ReportType.salarySlip => 'salary-slip',
         ReportType.salaryRegister => 'salary-register',
+        ReportType.dailyCollection => 'daily-collection',
       };
 
   String get displayName => switch (this) {
@@ -44,6 +46,7 @@ extension ReportTypePath on ReportType {
         ReportType.slcRegister => 'SLC Register',
         ReportType.salarySlip => 'Salary Slip',
         ReportType.salaryRegister => 'Salary Register',
+        ReportType.dailyCollection => 'Daily Fee Collection',
       };
 
   String get defaultFileName => '${path}_report.pdf';

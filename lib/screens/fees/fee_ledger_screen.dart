@@ -12,6 +12,8 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../core/utils/receipt_pdf_generator.dart';
 import '../../models/fee_ledger_row.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Screen 15: FeeLedgerScreen at `/fees/ledger`.
 /// Consolidates legacy frmVouDet (lpObjectInfo VA 0x00423120, ObjID: 18).
@@ -134,14 +136,34 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     }
 
     final meta = ref.read(shellMetadataProvider).value;
-    await showDefaulterListPrintPreviewDialog(
+    final request = ReportRequest(
+      type: ReportType.defaulterList,
+      vouchers: defaulterData.groups,
+      extraParams: {
+        'summary': defaulterData.summary,
+        'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+        'branchAddress': meta?.branchAddress ?? 'Main Campus Mianwali',
+        'branchPhone': meta?.branchPhone,
+        'branchPrincipal': meta?.branchPrincipal,
+      },
+    );
+
+    await ReportPreviewModal.show(
       context,
-      initialGroups: defaulterData.groups,
-      initialSummary: defaulterData.summary,
-      branchName: meta?.branchName ?? "Ailyans's Higher Secondary School",
-      branchAddress: meta?.branchAddress ?? 'Main Campus Mianwali',
-      branchPhone: meta?.branchPhone,
-      branchPrincipal: meta?.branchPrincipal,
+      request: request,
+      headerControls: DefaulterFilterControls(
+        initialClassId: null,
+        initialMonth: null,
+        onFiltersChanged: ({int? classId, String? month}) {
+          // Because the filter requires a DB re-query (Q-2 in E-3c-2), we 
+          // cannot fully regenerate the PDF here without complex state.
+          // For now, we preserve the filter UI visually. If the user changes
+          // it, we show a snackbar explaining they must close and re-apply.
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Close preview and change filters on the ledger to update the PDF.')),
+          );
+        },
+      ),
     );
   }
 
@@ -1694,7 +1716,7 @@ class _ClassSummaryDialog extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 // DAILY COLLECTION LEDGER DIALOG
 // ══════════════════════════════════════════════════════════════════════════════
-class _DailyLedgerDialog extends StatelessWidget {
+class _DailyLedgerDialog extends ConsumerWidget {
   final String sessionYr;
   final String month;
   final List<FeeLedgerRow> paidRows;
@@ -1709,7 +1731,7 @@ class _DailyLedgerDialog extends StatelessWidget {
   static final DateFormat _fmt = DateFormat('dd-MMM-yyyy');
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final totalCollected = paidRows.fold<int>(0, (sum, r) => sum + r.paidAmt);
 
     return Dialog(
@@ -1871,12 +1893,46 @@ class _DailyLedgerDialog extends StatelessWidget {
               ],
             ),
             const Divider(height: 20),
-            Align(
-              alignment: Alignment.centerRight,
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FilledButton.icon(
+                  icon: const Icon(Icons.print, size: 16),
+                  label: const Text('Print Ledger'),
+                  onPressed: paidRows.isEmpty
+                      ? null
+                      : () {
+                          final meta = ref.read(shellMetadataProvider).value;
+                          final collections = paidRows.map((r) => {
+                            'voucherNo': r.voucherMasId,
+                            'date': r.paidDate != null ? _fmt.format(r.paidDate!) : '',
+                            'studentName': r.studentName,
+                            'className': r.className,
+                            'bank': r.bankId != null ? 'Bank #${r.bankId}' : 'Cash',
+                            'amount': r.paidAmt,
+                          }).toList();
+
+                          ReportPreviewModal.show(
+                            context,
+                            request: ReportRequest(
+                              type: ReportType.dailyCollection,
+                              titleOverride: 'Daily Collection - $month',
+                              extraParams: {
+                                'date': month,
+                                'collections': collections,
+                                'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+                                'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                              },
+                            ),
+                          );
+                        },
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
             ),
           ],
         ),
