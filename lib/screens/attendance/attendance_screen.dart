@@ -677,6 +677,14 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               }
 
               final meta = ref.read(shellMetadataProvider).value;
+              final safeBranchName = (meta?.branchName != null &&
+                      meta!.branchName.trim().isNotEmpty)
+                  ? meta.branchName.trim()
+                  : "Ailyans's Higher Secondary School Mianwali";
+              final safeBranchAddress = (meta?.branchAddress != null &&
+                      meta!.branchAddress.trim().isNotEmpty)
+                  ? meta.branchAddress.trim()
+                  : 'Muslim Bazar Mianwali';
               final sectionName =
                   state.sections.firstWhere(
                         (s) => s['ClassSecID'] == state.selectedClassSecId,
@@ -698,11 +706,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   type: ReportType.attendanceRegister,
                   extraParams: {
                     'attendanceData': AttendancePdfData(
-                      branchName:
-                          meta?.branchName ??
-                          "Ailyans's Higher Secondary School Mianwali",
-                      branchAddress:
-                          meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                      branchName: safeBranchName,
+                      branchAddress: safeBranchAddress,
                       branchPhone: meta?.branchPhone ?? '',
                       branchPrincipal: meta?.branchPrincipal ?? '',
                       className: className,

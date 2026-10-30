@@ -67,14 +67,21 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
   final branchRows = await db.rawQuery(
     'SELECT BranchName, BranchAddress, BrPhone, BrPrincipal FROM InstBranch WHERE BrnachID = 1 LIMIT 1',
   );
-  final branchName = branchRows.isNotEmpty
-      ? (branchRows.first['BranchName'] as String? ??
-            "Ailyans's Higher Secondary School Mianwali")
+  final rawBranchName = branchRows.isNotEmpty
+      ? (branchRows.first['BranchName'] as String?)
+      : null;
+  final branchName = (rawBranchName != null && rawBranchName.trim().isNotEmpty)
+      ? rawBranchName.trim()
       : "Ailyans's Higher Secondary School Mianwali";
-  final branchAddress = branchRows.isNotEmpty
-      ? (branchRows.first['BranchAddress'] as String? ??
-            'Muslim Bazar Mianwali')
-      : 'Muslim Bazar Mianwali';
+
+  final rawBranchAddress = branchRows.isNotEmpty
+      ? (branchRows.first['BranchAddress'] as String?)
+      : null;
+  final branchAddress =
+      (rawBranchAddress != null && rawBranchAddress.trim().isNotEmpty)
+          ? rawBranchAddress.trim()
+          : 'Muslim Bazar Mianwali';
+
   final branchPhone = branchRows.isNotEmpty
       ? (branchRows.first['BrPhone'] as String?)
       : null;

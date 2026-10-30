@@ -734,6 +734,14 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 final stuId = int.tryParse(widget.studentId) ?? -1;
                 final data = await buildBiodataPrintData(stuId, ref);
                 if (!mounted) return;
+                final safeBranchName = (meta?.branchName != null &&
+                        meta!.branchName.trim().isNotEmpty)
+                    ? meta.branchName.trim()
+                    : "Ailyans's Higher Secondary School Mianwali";
+                final safeBranchAddress = (meta?.branchAddress != null &&
+                        meta!.branchAddress.trim().isNotEmpty)
+                    ? meta.branchAddress.trim()
+                    : 'Muslim Bazar Mianwali';
                 await ReportPreviewModal.show(
                   context,
                   request: ReportRequest(
@@ -741,11 +749,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     id: stuId.toString(),
                     vouchers: [data],
                     extraParams: {
-                      'branchName':
-                          meta?.branchName ??
-                          "Ailyans's Higher Secondary School Mianwali",
-                      'branchAddress':
-                          meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                      'branchName': safeBranchName,
+                      'branchAddress': safeBranchAddress,
                       'branchPhone': meta?.branchPhone ?? '',
                       'branchPrincipal': meta?.branchPrincipal ?? '',
                     },

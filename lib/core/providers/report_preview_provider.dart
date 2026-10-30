@@ -144,10 +144,24 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     }
   }
 
+  String _safeBranchName() {
+    final raw = request.extraParams['branchName']?.toString();
+    if (raw != null && raw.trim().isNotEmpty) {
+      return raw.trim();
+    }
+    return "Ailyans's Higher Secondary School Mianwali";
+  }
+
+  String _safeBranchAddress() {
+    final raw = request.extraParams['branchAddress']?.toString();
+    if (raw != null && raw.trim().isNotEmpty) {
+      return raw.trim();
+    }
+    return 'Muslim Bazar Mianwali';
+  }
+
   Future<Uint8List> _generateFeeVoucher(int mode) async {
     const requiredKeys = [
-      'branchName',
-      'branchAddress',
       'bankName',
       'bankBranch',
       'bankAcctNo',
@@ -167,13 +181,15 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
 
     final vouchers = voucherList.cast<FeeReceiptView>();
     final extra = request.extraParams;
+    final branchName = _safeBranchName();
+    final branchAddress = _safeBranchAddress();
 
     if (mode == 0) {
       // Three-Copy Slips (one page per student, 3 columns: Student/School/Bank)
       return ThreeCopyVouchersPdf.generate(
         vouchers: vouchers,
-        branchName: extra['branchName'] as String,
-        branchAddress: extra['branchAddress'] as String,
+        branchName: branchName,
+        branchAddress: branchAddress,
         bankName: extra['bankName'] as String,
         bankBranch: extra['bankBranch'] as String,
         bankAcctNo: extra['bankAcctNo'] as String,
@@ -181,7 +197,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     } else {
       // Cohort Ledger — summary table of all vouchers
       return FeeLedgerVoucherGenerator(
-        institutionName: extra['branchName'] as String,
+        institutionName: branchName,
         ledgerPeriodTitle:
             'Cohort Ledger - ${vouchers.isNotEmpty ? vouchers.first.forMonth : ""}',
         transactions: vouchers
@@ -197,21 +213,6 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   }
 
   Future<Uint8List> _generateFeeReceipt() async {
-    const requiredKeys = ['branchName', 'branchAddress'];
-    final missing = requiredKeys
-        .where(
-          (k) =>
-              !request.extraParams.containsKey(k) ||
-              request.extraParams[k] == null ||
-              request.extraParams[k].toString().trim().isEmpty,
-        )
-        .toList();
-    if (missing.isNotEmpty) {
-      throw ArgumentError(
-        'Missing required params for feeReceipt: ${missing.join(", ")}',
-      );
-    }
-
     final receiptList = request.vouchers;
     if (receiptList == null || receiptList.isEmpty) {
       throw ArgumentError('feeReceipt requires a non-empty vouchers list.');
@@ -219,8 +220,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
 
     return ReceiptPdfGenerator.generateThreeCopyReceipts(
       receipts: receiptList.cast<FeeReceiptPrintData>(),
-      branchName: request.extraParams['branchName'] as String,
-      branchAddress: request.extraParams['branchAddress'] as String,
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
     );
   }
 
@@ -228,25 +229,11 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     if (request.vouchers == null || request.vouchers!.isEmpty) {
       throw StateError('No student data provided for biodata preview.');
     }
-    const requiredKeys = ['branchName', 'branchAddress'];
-    final missing = requiredKeys
-        .where(
-          (k) =>
-              !request.extraParams.containsKey(k) ||
-              request.extraParams[k] == null ||
-              request.extraParams[k].toString().trim().isEmpty,
-        )
-        .toList();
-    if (missing.isNotEmpty) {
-      throw ArgumentError(
-        'Missing required params for biodata: ${missing.join(", ")}',
-      );
-    }
     final data = request.vouchers!.first as StudentBiodataPrintData;
     return BiodataPdfGenerator.generateStudentBiodata(
       data: data,
-      branchName: request.extraParams['branchName'] as String,
-      branchAddress: request.extraParams['branchAddress'] as String,
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
       branchPhone: request.extraParams['branchPhone'] as String?,
       branchPrincipal: request.extraParams['branchPrincipal'] as String?,
     );
@@ -257,38 +244,52 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     if (data == null) {
       throw StateError('Missing attendanceData in extraParams.');
     }
-    return buildAttendancePdf(data);
+    final safeName = data.branchName.trim().isNotEmpty
+        ? data.branchName.trim()
+        : _safeBranchName();
+    final safeAddress = data.branchAddress.trim().isNotEmpty
+        ? data.branchAddress.trim()
+        : _safeBranchAddress();
+
+    final safeData =
+        (safeName != data.branchName || safeAddress != data.branchAddress)
+            ? AttendancePdfData(
+                branchName: safeName,
+                branchAddress: safeAddress,
+                branchPhone: data.branchPhone,
+                branchPrincipal: data.branchPrincipal,
+                className: data.className,
+                sectionName: data.sectionName,
+                teacherName: data.teacherName,
+                sessionYear: data.sessionYear,
+                attDate: data.attDate,
+                roster: data.roster,
+                presentCount: data.presentCount,
+                absentCount: data.absentCount,
+                leaveCount: data.leaveCount,
+                lateCount: data.lateCount,
+                totalCount: data.totalCount,
+              )
+            : data;
+
+    return buildAttendancePdf(safeData);
   }
 
   Future<Uint8List> _generateDefaulterList() async {
     if (request.vouchers == null || request.vouchers!.isEmpty) {
       throw StateError('No defaulter groups provided for preview.');
     }
-    const requiredKeys = ['branchName', 'branchAddress'];
-    final missing = requiredKeys
-        .where(
-          (k) =>
-              !request.extraParams.containsKey(k) ||
-              request.extraParams[k] == null ||
-              request.extraParams[k].toString().trim().isEmpty,
-        )
-        .toList();
-    if (missing.isNotEmpty) {
-      throw ArgumentError(
-        'Missing required params for defaulterList: ${missing.join(", ")}',
-      );
-    }
-    final groups = request.vouchers!.cast<DefaulterClassGroup>();
     final summary =
         request.extraParams['summary'] as DefaulterListFilterSummary?;
     if (summary == null) {
       throw StateError('Missing summary in extraParams for defaulterList.');
     }
+    final groups = request.vouchers!.cast<DefaulterClassGroup>();
     return DefaulterListPdfGenerator.generate(
       groups: groups,
       summary: summary,
-      branchName: request.extraParams['branchName'] as String,
-      branchAddress: request.extraParams['branchAddress'] as String,
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
       branchPhone: request.extraParams['branchPhone'] as String?,
       branchPrincipal: request.extraParams['branchPrincipal'] as String?,
     );
@@ -301,8 +302,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     }
     return SlcPdfGenerator.generate(
       slcData: data,
-      branchName: request.extraParams['branchName'] as String? ?? '',
-      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
     );
   }
 
@@ -315,7 +316,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       feeRows: rows.cast<Map<String, dynamic>>(),
       sessionYear: request.extraParams['sessionYear'] as String? ?? '',
       className: request.extraParams['className'] as String? ?? '',
-      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchName: _safeBranchName(),
     );
   }
 
@@ -324,8 +325,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     if (data == null) throw StateError('Missing teacherData in extraParams');
     return TeacherBiodataPdfGenerator.generate(
       teacherData: data,
-      branchName: request.extraParams['branchName'] as String? ?? '',
-      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
     );
   }
 
@@ -340,8 +341,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       className: request.extraParams['className'] as String? ?? '',
       sessionYear: request.extraParams['sessionYear'] as String? ?? '',
       subjects: subjects.cast<Map<String, dynamic>>(),
-      branchName: request.extraParams['branchName'] as String? ?? '',
-      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
     );
   }
 
@@ -355,8 +356,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     return SlcRegisterPdfGenerator.generate(
       sessionYear: request.extraParams['sessionYear'] as String? ?? '',
       leavers: leavers.cast<Map<String, dynamic>>(),
-      branchName: request.extraParams['branchName'] as String? ?? '',
-      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
     );
   }
 
@@ -367,7 +368,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     }
     return SalarySlipPdfGenerator.generateSlip(
       salaryData: data,
-      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchName: _safeBranchName(),
     );
   }
 
@@ -381,7 +382,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     return SalarySlipPdfGenerator.generateRegister(
       salaries: salaries.cast<Map<String, dynamic>>(),
       month: request.extraParams['month'] as String? ?? '',
-      branchName: request.extraParams['branchName'] as String? ?? '',
+      branchName: _safeBranchName(),
     );
   }
 
@@ -395,8 +396,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     return DailyCollectionPdfGenerator.generate(
       date: request.extraParams['date'] as String? ?? '',
       collections: collections.cast<Map<String, dynamic>>(),
-      branchName: request.extraParams['branchName'] as String? ?? '',
-      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
     );
   }
 
@@ -411,8 +412,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       examName: request.extraParams['examName'] as String? ?? '',
       className: request.extraParams['className'] as String? ?? '',
       students: students.cast<Map<String, dynamic>>(),
-      branchName: request.extraParams['branchName'] as String? ?? '',
-      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
     );
   }
 
@@ -426,8 +427,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     return ExamSummaryPdfGenerator.generate(
       examName: request.extraParams['examName'] as String? ?? '',
       subjects: subjects.cast<Map<String, dynamic>>(),
-      branchName: request.extraParams['branchName'] as String? ?? '',
-      branchAddress: request.extraParams['branchAddress'] as String? ?? '',
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
     );
   }
 }

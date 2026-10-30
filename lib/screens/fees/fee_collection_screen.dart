@@ -174,8 +174,13 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
 
     final meta = ref.read(shellMetadataProvider).value;
     final branchName =
-        meta?.branchName ?? "Ailyans's Higher Secondary School Mianwali";
-    final branchAddress = meta?.branchAddress ?? 'Muslim Bazar Mianwali';
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+            ? meta.branchName.trim()
+            : "Ailyans's Higher Secondary School Mianwali";
+    final branchAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+            ? meta.branchAddress.trim()
+            : 'Muslim Bazar Mianwali';
 
     final paymentMode = ref.read(feeCollectionProvider).paymentMode;
     final printData = await ref
@@ -434,11 +439,14 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               final notifier = ref.read(feeCollectionProvider.notifier);
               final buildData = await notifier.buildDefaulterList();
               final meta = ref.read(shellMetadataProvider).value;
-              final branchName =
-                  meta?.branchName ??
-                  "Ailyans's Higher Secondary School Mianwali";
-              final branchAddress =
-                  meta?.branchAddress ?? 'Muslim Bazar Mianwali';
+              final branchName = (meta?.branchName != null &&
+                      meta!.branchName.trim().isNotEmpty)
+                  ? meta.branchName.trim()
+                  : "Ailyans's Higher Secondary School Mianwali";
+              final branchAddress = (meta?.branchAddress != null &&
+                      meta!.branchAddress.trim().isNotEmpty)
+                  ? meta.branchAddress.trim()
+                  : 'Muslim Bazar Mianwali';
               final branchPhone = meta?.branchPhone ?? '03334449993';
               final branchPrincipal = meta?.branchPrincipal ?? 'Nasir ali';
 
