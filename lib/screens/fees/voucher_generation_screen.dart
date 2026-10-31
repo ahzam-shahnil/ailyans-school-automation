@@ -72,7 +72,7 @@ class _VoucherGenerationScreenState
         }
       }
 
-      // 2. Billing month + dates from clockProvider
+      // 2. Billing month + dates from clockProvider in MMM-yyyy format (e.g. Oct-2026)
       final now = ref.read(clockProvider)();
       const monthNames = [
         'January',
@@ -88,7 +88,9 @@ class _VoucherGenerationScreenState
         'November',
         'December',
       ];
-      final expectedMonth = '${monthNames[now.month - 1]} ${now.year}';
+      final expectedMonth = now.year >= 2020
+          ? DateFormat('MMM-yyyy').format(DateTime(now.year, now.month, 1))
+          : '${monthNames[now.month - 1]} ${now.year}';
       final filters = ref.read(voucherGenFiltersProvider);
       if (filters.billingMonth != expectedMonth) {
         final notifier = ref.read(voucherGenFiltersProvider.notifier);
@@ -228,9 +230,10 @@ class _VoucherGenerationScreenState
   Future<List<FeeReceiptView>> _loadGeneratedVouchers() async {
     final filters = ref.read(voucherGenFiltersProvider);
     final db = await DatabaseService.instance.database;
-    final classIdParam = filters.classId;
+    final yyMm = billingMonthToYyMm(filters.billingMonth);
     final isSingle = filters.mode == 'single' && filters.selectedStuRegId != null;
     final stuRegIdParam = isSingle ? filters.selectedStuRegId : null;
+    final classIdParam = isSingle ? null : filters.classId;
 
     final rows = await db.rawQuery(
       '''
@@ -244,12 +247,14 @@ class _VoucherGenerationScreenState
       LEFT JOIN Class c ON sc.ClassID = c.ClassID
       LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
       WHERE vm.ForMonth = ?
+        AND SUBSTR(vm.VoucherMasID, 1, 4) = ?
         AND (? IS NULL OR vm.ClassID = ?)
         AND (? IS NULL OR vm.Student_Class_StuRegID = ?)
       ORDER BY sc.ClassRollNo ASC
     ''',
       [
         filters.billingMonth,
+        yyMm,
         classIdParam,
         classIdParam,
         stuRegIdParam,
@@ -335,27 +340,30 @@ class _VoucherGenerationScreenState
 
   Future<void> _pickBillingMonth(BuildContext context) async {
     final filters = ref.read(voucherGenFiltersProvider);
-    final parts = filters.billingMonth.trim().split(RegExp(r'\s+'));
+    final parts = filters.billingMonth.trim().split(RegExp(r'[\s\-/]+'));
     final now = ref.read(clockProvider)();
     int selectedYear = now.year;
     int selectedMonth = now.month;
     if (parts.length >= 2) {
-      selectedYear = int.tryParse(parts[1]) ?? now.year;
+      selectedYear = int.tryParse(parts[1]) ?? (int.tryParse(parts[0]) ?? now.year);
+      final monthStr = int.tryParse(parts[0]) == null
+          ? parts[0].toLowerCase()
+          : parts[1].toLowerCase();
       const monthMap = {
-        'january': 1,
-        'february': 2,
-        'march': 3,
-        'april': 4,
+        'jan': 1, 'january': 1,
+        'feb': 2, 'february': 2,
+        'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4,
         'may': 5,
-        'june': 6,
-        'july': 7,
-        'august': 8,
-        'september': 9,
-        'october': 10,
-        'november': 11,
-        'december': 12,
+        'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8,
+        'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'dec': 12, 'december': 12,
       };
-      selectedMonth = monthMap[parts[0].toLowerCase()] ?? 10;
+      selectedMonth = monthMap[monthStr] ?? now.month;
     }
 
     final monthNames = [
@@ -457,8 +465,10 @@ class _VoucherGenerationScreenState
                     backgroundColor: AppColors.brandPrimary,
                   ),
                   onPressed: () {
-                    final newMonthStr =
-                        '${monthNames[tempMonth - 1]} $tempYear';
+                    final newDate = DateTime(tempYear, tempMonth, 1);
+                    final newMonthStr = tempYear >= 2020
+                        ? DateFormat('MMM-yyyy').format(newDate)
+                        : '${monthNames[tempMonth - 1]} $tempYear';
                     ref
                         .read(voucherGenFiltersProvider.notifier)
                         .setBillingMonth(newMonthStr);
@@ -2123,9 +2133,12 @@ class _VoucherGenerationScreenState
               tooltip: 'Print this voucher',
               padding: EdgeInsets.zero,
               onPressed: () async {
+                final filters = ref.read(voucherGenFiltersProvider);
                 final all = await _loadGeneratedVouchers();
                 final match = all
-                    .where((r) => r.stuRegId == row.stuRegId)
+                    .where((r) =>
+                        r.stuRegId == row.stuRegId &&
+                        r.forMonth == filters.billingMonth)
                     .toList();
                 if (match.isNotEmpty && mounted) {
                   await _openPrintPreview(specific: match);

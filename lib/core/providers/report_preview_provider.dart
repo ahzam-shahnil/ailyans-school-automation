@@ -296,7 +296,13 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   }
 
   Future<Uint8List> _generateSlc() async {
-    final data = request.extraParams['slcData'] as Map<String, dynamic>?;
+    final data = (request.extraParams['slcData'] as Map<String, dynamic>?) ??
+        (request.extraParams.containsKey('studentName') ||
+                request.extraParams.containsKey('name') ||
+                request.extraParams.containsKey('stuRegId') ||
+                request.extraParams.containsKey('Stu_Name')
+            ? request.extraParams
+            : null);
     if (data == null) {
       throw StateError('Missing slcData in extraParams for slc report.');
     }

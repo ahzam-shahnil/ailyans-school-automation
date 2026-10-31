@@ -515,7 +515,11 @@ void main() {
         await tester.sendKeyDownEvent(LogicalKeyboardKey.control);
         await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
         await tester.sendKeyUpEvent(LogicalKeyboardKey.control);
-        await tester.pumpAndSettle();
+        await tester.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
 
         // Dialog or preview opened
         expect(tester.takeException(), isNull);

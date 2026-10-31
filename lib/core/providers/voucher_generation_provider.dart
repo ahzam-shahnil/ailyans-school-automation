@@ -107,27 +107,41 @@ class BankOption {
 
 /// Helper method to compute a 4-char yyMM prefix for the selected billing month.
 String _yyMmPrefix(String monthName) {
-  // monthName format: 'September 2017', 'October 2017'
-  const monthNumbers = {
-    'January': '01',
-    'February': '02',
-    'March': '03',
-    'April': '04',
-    'May': '05',
-    'June': '06',
-    'July': '07',
-    'August': '08',
-    'September': '09',
-    'October': '10',
-    'November': '11',
-    'December': '12',
-  };
-  final parts = monthName.trim().split(RegExp(r'\s+'));
-  if (parts.length != 2) return '0000';
-  final mm = monthNumbers[parts[0]] ?? '00';
-  final yyyy = parts[1];
-  final yy = yyyy.length == 4 ? yyyy.substring(2) : '00';
-  return '$yy$mm';
+  return billingMonthToYyMm(monthName);
+}
+
+/// Helper to normalize full month names (e.g., "October 2026") to 3-letter format ("Oct-2026").
+String normalizeBillingMonthForStorage(String monthStr) {
+  final parts = monthStr.trim().split(RegExp(r'[\s\-/]+'));
+  if (parts.length >= 2) {
+    int? year = int.tryParse(parts[1]);
+    String monthPart = parts[0];
+    if (year == null) {
+      year = int.tryParse(parts[0]);
+      monthPart = parts[1];
+    }
+    if (year != null && year >= 2020) {
+      const monthMap = {
+        'jan': 'Jan', 'january': 'Jan',
+        'feb': 'Feb', 'february': 'Feb',
+        'mar': 'Mar', 'march': 'Mar',
+        'apr': 'Apr', 'april': 'Apr',
+        'may': 'May',
+        'jun': 'Jun', 'june': 'Jun',
+        'jul': 'Jul', 'july': 'Jul',
+        'aug': 'Aug', 'august': 'Aug',
+        'sep': 'Sep', 'september': 'Sep',
+        'oct': 'Oct', 'october': 'Oct',
+        'nov': 'Nov', 'november': 'Nov',
+        'dec': 'Dec', 'december': 'Dec',
+      };
+      final m = monthMap[monthPart.toLowerCase()];
+      if (m != null) {
+        return '$m-$year';
+      }
+    }
+  }
+  return monthStr;
 }
 
 /// Execution summary displayed in the Batch Complete Dialog.
@@ -149,26 +163,30 @@ class BatchGenerationSummary {
   });
 }
 
-/// Helper to convert "Month YYYY" (e.g. "October 2017") to "yyMM" (e.g. "1710").
+/// Helper to convert "Month YYYY" (e.g. "October 2017") or "MMM-yyyy" (e.g. "Oct-2026") to "yyMM" (e.g. "1710", "2610").
 String billingMonthToYyMm(String billingMonth) {
-  final parts = billingMonth.trim().split(RegExp(r'\s+'));
+  final parts = billingMonth.trim().split(RegExp(r'[\s\-/]+'));
   if (parts.length >= 2) {
-    final monthName = parts[0].toLowerCase();
-    final year = int.tryParse(parts[1]) ?? 2017;
+    int? year = int.tryParse(parts[1]);
+    String monthName = parts[0].toLowerCase();
+    if (year == null) {
+      year = int.tryParse(parts[0]) ?? 2017;
+      monthName = parts[1].toLowerCase();
+    }
     final yy = (year % 100).toString().padLeft(2, '0');
     const monthMap = {
-      'january': '01',
-      'february': '02',
-      'march': '03',
-      'april': '04',
+      'jan': '01', 'january': '01',
+      'feb': '02', 'february': '02',
+      'mar': '03', 'march': '03',
+      'apr': '04', 'april': '04',
       'may': '05',
-      'june': '06',
-      'july': '07',
-      'august': '08',
-      'september': '09',
-      'october': '10',
-      'november': '11',
-      'december': '12',
+      'jun': '06', 'june': '06',
+      'jul': '07', 'july': '07',
+      'aug': '08', 'august': '08',
+      'sep': '09', 'september': '09',
+      'oct': '10', 'october': '10',
+      'nov': '11', 'november': '11',
+      'dec': '12', 'december': '12',
     };
     final mm = monthMap[monthName] ?? '10';
     return '$yy$mm';
@@ -236,35 +254,40 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
 
   void setBillingMonth(String billingMonth) {
     // Also sync issueDate and dueDate to the selected month
-    final parts = billingMonth.trim().split(RegExp(r'\s+'));
+    final normalized = normalizeBillingMonthForStorage(billingMonth);
+    final parts = normalized.trim().split(RegExp(r'[\s\-/]+'));
     if (parts.length >= 2) {
-      final monthName = parts[0].toLowerCase();
-      final year = int.tryParse(parts[1]) ?? 2017;
+      int? year = int.tryParse(parts[1]);
+      String monthName = parts[0].toLowerCase();
+      if (year == null) {
+        year = int.tryParse(parts[0]) ?? 2017;
+        monthName = parts[1].toLowerCase();
+      }
       const monthMap = {
-        'january': 1,
-        'february': 2,
-        'march': 3,
-        'april': 4,
+        'jan': 1, 'january': 1,
+        'feb': 2, 'february': 2,
+        'mar': 3, 'march': 3,
+        'apr': 4, 'april': 4,
         'may': 5,
-        'june': 6,
-        'july': 7,
-        'august': 8,
-        'september': 9,
-        'october': 10,
-        'november': 11,
-        'december': 12,
+        'jun': 6, 'june': 6,
+        'jul': 7, 'july': 7,
+        'aug': 8, 'august': 8,
+        'sep': 9, 'september': 9,
+        'oct': 10, 'october': 10,
+        'nov': 11, 'november': 11,
+        'dec': 12, 'december': 12,
       };
       final m = monthMap[monthName] ?? 10;
       final newIssue = DateTime(year, m, 1);
       final newDue = DateTime(year, m, 10);
       state = state.copyWith(
-        billingMonth: billingMonth,
+        billingMonth: normalized,
         issueDate: newIssue,
         dueDate: newDue,
       );
       return;
     }
-    state = state.copyWith(billingMonth: billingMonth);
+    state = state.copyWith(billingMonth: normalized);
   }
 
   void setIssueDate(DateTime date) {
@@ -401,7 +424,9 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
   }
 
   final candidates = await db.rawQuery('''
-    SELECT sc.Stu_RegID, sr.NameFirst, sr.NameLast, sc.ClassID, sc.ClassSecID, sr.FullDiscount
+    SELECT sc.Stu_RegID, sr.NameFirst, sr.NameLast, sc.ClassID, sc.ClassSecID,
+           sr.FullDiscount,
+           COALESCE(NULLIF(sr.VMDiscount, 0), sr.Discount, 0) AS StudentDiscount
     FROM Student_Class sc
     JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
     WHERE ${whereClauses.join(' AND ')}
@@ -420,6 +445,8 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
     final stuRegId = student['Stu_RegID'] as int;
     final classId = student['ClassID'] as int;
     final fullDiscount = (student['FullDiscount'] as int? ?? 0) == 1;
+    final studentConcession =
+        ((student['StudentDiscount'] as num?)?.toDouble() ?? 0.0).round();
 
     final nameFirst = (student['NameFirst'] as String? ?? '').trim();
     final nameLast = (student['NameLast'] as String? ?? '').trim();
@@ -480,8 +507,7 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
       }
     }
 
-    // 4. Full Discount Rule (VA 0x005ec16c)
-    // Tuition fee line-item (FeeParamID=2) discount = Amount
+    // 4. Discount Rule: Full Waiver or Student Concession (Stu_Reg.Discount)
     int discount = 0;
     VoucherPreviewStatus status;
 
@@ -492,6 +518,11 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
       );
       discount = (tuitionTariff['Fee'] as num?)?.toInt() ?? 0;
       status = VoucherPreviewStatus.fullWaiver;
+    } else if (studentConcession > 0) {
+      discount = studentConcession.clamp(0, subtotal);
+      status = arrears > 0
+          ? VoucherPreviewStatus.arrearsRollover
+          : VoucherPreviewStatus.ready;
     } else {
       discount = 0;
       status = arrears > 0
@@ -719,7 +750,7 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
             'VDate': vDateStr,
             'Student_Class_StuRegID': row.stuRegId,
             'SubTotal': 0,
-            'ForMonth': filters.billingMonth,
+            'ForMonth': normalizeBillingMonthForStorage(filters.billingMonth),
             'ClassID': studentClassId,
             'Remarks': null,
             'Discount': 0,
@@ -765,7 +796,7 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
             });
           }
 
-          // 5. Full Discount rule adjustments
+          // 5. Discount adjustments (Full Waiver or Student Concession)
           if (isFullWaiver) {
             await txn.rawUpdate(
               'UPDATE VoucharDet SET Discount = Amount '
@@ -777,6 +808,26 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
               'WHERE VoucherMasID = ?',
               [row.voucherId, row.voucherId],
             );
+          } else if (row.discount > 0) {
+            final hasTuition =
+                activeTariffs.any((t) => (t['FeeParamID'] as int) == 2);
+            if (hasTuition) {
+              await txn.rawUpdate(
+                'UPDATE VoucharDet SET Discount = ? '
+                'WHERE VoucharMasID = ? AND feeParameterID = 2',
+                [row.discount.toDouble(), row.voucherId],
+              );
+              await txn.rawUpdate(
+                'UPDATE VoucharMas SET Discount = (SELECT COALESCE(SUM(Discount), 0) FROM VoucharDet WHERE VoucharMasID = ?) '
+                'WHERE VoucherMasID = ?',
+                [row.voucherId, row.voucherId],
+              );
+            } else {
+              await txn.rawUpdate(
+                'UPDATE VoucharMas SET Discount = ? WHERE VoucherMasID = ?',
+                [row.discount, row.voucherId],
+              );
+            }
           }
 
           // 6. Final reconcile UPDATE (single source of truth):

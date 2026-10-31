@@ -936,5 +936,47 @@ void main() {
         expect(otherVouchers.first['cnt'], 9);
       },
     );
+
+    test('4h. Student concession in Stu_Reg (500) is applied to preview, VoucharMas, and VoucharDet', () async {
+      // Set student 4414 Discount = 500 in Stu_Reg
+      await db.rawUpdate(
+        'UPDATE Stu_Reg SET Discount = 500 WHERE Stu_RegID = 4414',
+      );
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      container.read(voucherGenFiltersProvider.notifier).setClassId(13);
+
+      final previewRows = await container.read(
+        voucherGenPreviewProvider.future,
+      );
+      final s4414 = previewRows.firstWhere((r) => r.stuRegId == 4414);
+
+      // SubTotal 1920, Discount 500, NetPayable 1420
+      expect(s4414.subtotal, 1920);
+      expect(s4414.discount, 500);
+      expect(s4414.netPayable, 1420);
+
+      // Execute generation
+      final summary = await container
+          .read(voucherGenExecutionProvider.notifier)
+          .generateVouchers();
+      expect(summary, isNotNull);
+
+      // Check VoucharMas
+      final mas = await db.rawQuery(
+        "SELECT SubTotal, Discount FROM VoucharMas WHERE VoucherMasID = '1710-4414'",
+      );
+      expect(mas.first['SubTotal'], 1920);
+      expect(mas.first['Discount'], 500);
+
+      // Check VoucharDet for Head 2 (Tuition)
+      final det = await db.rawQuery(
+        "SELECT Amount, Discount FROM VoucharDet WHERE VoucharMasID = '1710-4414' AND feeParameterID = 2",
+      );
+      expect(det.first['Amount'], 1500.0);
+      expect(det.first['Discount'], 500.0);
+    });
   });
 }

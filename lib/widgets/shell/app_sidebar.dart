@@ -40,21 +40,21 @@ class AppSidebar extends ConsumerWidget {
       label: 'Students',
       route: '/students',
       icon: Icons.people_outline,
-      requiredObjIds: [12, 13, 20, 26],
+      requiredObjIds: [8, 9, 11, 12, 13, 20, 26],
       getBadgeCount: _getStudentCount,
     ),
     _NavItemData(
       label: 'Academics',
       route: '/academics/classes',
       icon: Icons.menu_book_outlined,
-      requiredObjIds: [4, 25],
+      requiredObjIds: [4],
       getBadgeCount: _getClassCount,
     ),
     _NavItemData(
       label: 'Fees & Billing',
       route: '/fees/vouchers',
       icon: Icons.payments_outlined,
-      requiredObjIds: [16, 17, 18, 21],
+      requiredObjIds: [16, 17, 18, 19, 21],
       getBadgeCount: _getPendingVoucherCount,
     ),
     _NavItemData(
@@ -135,14 +135,14 @@ class AppSidebar extends ConsumerWidget {
           const Divider(height: 1.0, color: AppColors.borderDefault),
 
           // 3. Footer: System Settings & Rail Collapse Toggle
-          if (_isAllowed(session, const [15]))
+          if (session == null || session.user.userLevel == 1)
             _buildNavItem(
               context: context,
               item: const _NavItemData(
                 label: 'System Settings',
                 route: '/system/settings',
                 icon: Icons.settings_outlined,
-                requiredObjIds: [15],
+                requiredObjIds: [],
               ),
               isExpanded: isExpanded,
               isActive: _isRouteActive(currentPath, '/system'),
@@ -156,57 +156,65 @@ class AppSidebar extends ConsumerWidget {
   }
 
   Widget _buildBrandHeader(bool isExpanded) {
-    return Container(
-      height: 64.0,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      child: Row(
-        mainAxisAlignment: isExpanded
-            ? MainAxisAlignment.start
-            : MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 36.0,
-            height: 36.0,
-            decoration: BoxDecoration(
-              color: AppColors.brandPrimary,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: const Icon(
-              Icons.school,
-              color: AppColors.surfaceRaised,
-              size: 20.0,
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCollapsed = constraints.maxWidth < 60 || !isExpanded;
+        return Container(
+          height: 64.0,
+          padding: EdgeInsets.symmetric(
+            horizontal: isCollapsed ? 0.0 : AppSpacing.sm,
           ),
-          if (isExpanded) ...[
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Ailyans School',
-                    style: AppTypography.h3.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                  Text(
-                    'Automation v2.0',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                      fontSize: 11.0,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ],
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: isCollapsed
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
+            children: [
+              Container(
+                width: 36.0,
+                height: 36.0,
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary,
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                child: const Icon(
+                  Icons.school,
+                  color: AppColors.surfaceRaised,
+                  size: 20.0,
+                ),
               ),
-            ),
-          ],
-        ],
-      ),
+              if (!isCollapsed) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Ailyans School',
+                        style: AppTypography.h3.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                      Text(
+                        'Automation v2.0',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                          fontSize: 11.0,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -376,8 +384,9 @@ class AppSidebar extends ConsumerWidget {
   }
 
   bool _isAllowed(UserSession? session, List<int> requiredObjIds) {
-    if (requiredObjIds.isEmpty) return true;
     if (session == null) return true;
+    if (session.user.userLevel == 1) return true;
+    if (requiredObjIds.isEmpty) return false;
     return requiredObjIds.any((id) => session.allowedObjIds.contains(id));
   }
 }

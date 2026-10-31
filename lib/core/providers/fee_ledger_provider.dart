@@ -178,6 +178,73 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
     'due_date': 'vm.DueDate',
   };
 
+  static String _normalizeMonth(String m) {
+    final trimmed = m.trim();
+    final parts = trimmed.split(RegExp(r'[\s\-/]+'));
+    if (parts.length >= 2) {
+      final year = int.tryParse(parts[1]) ?? int.tryParse(parts[0]);
+      if (year != null && year >= 2020) {
+        const monthMap = {
+          'jan': 'Jan', 'january': 'Jan',
+          'feb': 'Feb', 'february': 'Feb',
+          'mar': 'Mar', 'march': 'Mar',
+          'apr': 'Apr', 'april': 'Apr',
+          'may': 'May',
+          'jun': 'Jun', 'june': 'Jun',
+          'jul': 'Jul', 'july': 'Jul',
+          'aug': 'Aug', 'august': 'Aug',
+          'sep': 'Sep', 'september': 'Sep',
+          'oct': 'Oct', 'october': 'Oct',
+          'nov': 'Nov', 'november': 'Nov',
+          'dec': 'Dec', 'december': 'Dec',
+        };
+        final monthStr = int.tryParse(parts[0]) == null
+            ? parts[0].toLowerCase()
+            : parts[1].toLowerCase();
+        final shortM = monthMap[monthStr];
+        if (shortM != null) {
+          return '$shortM-$year';
+        }
+      }
+    }
+    return trimmed;
+  }
+
+  static String? _getAlternateMonthName(String m) {
+    final parts = m.trim().split(RegExp(r'[\s\-/]+'));
+    if (parts.length >= 2) {
+      final year = int.tryParse(parts[1]) ?? int.tryParse(parts[0]);
+      if (year != null && year >= 2020) {
+        const fullMonthMap = {
+          'jan': 'January', 'january': 'Jan',
+          'feb': 'February', 'february': 'Feb',
+          'mar': 'March', 'march': 'Mar',
+          'apr': 'April', 'april': 'Apr',
+          'may': 'May',
+          'jun': 'June', 'june': 'Jun',
+          'jul': 'July', 'july': 'Jul',
+          'aug': 'August', 'august': 'Aug',
+          'sep': 'September', 'september': 'Sep',
+          'oct': 'October', 'october': 'Oct',
+          'nov': 'November', 'november': 'Nov',
+          'dec': 'December', 'december': 'Dec',
+        };
+        final monthStr = int.tryParse(parts[0]) == null
+            ? parts[0].toLowerCase()
+            : parts[1].toLowerCase();
+        final mapped = fullMonthMap[monthStr];
+        if (mapped != null) {
+          if (mapped.length == 3) {
+            return '$mapped-$year';
+          } else {
+            return '$mapped $year';
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   void clearToast() {
     if (state.toast != null) {
       state = state.copyWith(clearToast: true);
@@ -211,10 +278,17 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
       final monthRows = await db.rawQuery(
         "SELECT DISTINCT ForMonth FROM VoucharMas WHERE ForMonth IS NOT NULL AND ForMonth != '' ORDER BY VoucherMasID DESC",
       );
-      final months = monthRows
+      final rawMonths = monthRows
           .map((r) => (r['ForMonth'] as String).trim())
           .where((m) => m.isNotEmpty)
           .toList();
+      final months = <String>[];
+      for (final m in rawMonths) {
+        final norm = _normalizeMonth(m);
+        if (!months.contains(norm)) {
+          months.add(norm);
+        }
+      }
       final defaultMonth = months.isNotEmpty ? months.first : null;
 
       // 3. Load Classes
@@ -422,8 +496,16 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
         args.add(state.selectedSessionYr);
       }
       if (state.selectedMonth != null && state.selectedMonth != 'All Months') {
-        whereClauses.add('vm.ForMonth = ?');
-        args.add(state.selectedMonth);
+        final sel = state.selectedMonth!.trim();
+        final alt = _getAlternateMonthName(sel);
+        if (alt != null) {
+          whereClauses.add('(vm.ForMonth = ? OR vm.ForMonth = ?)');
+          args.add(sel);
+          args.add(alt);
+        } else {
+          whereClauses.add('vm.ForMonth = ?');
+          args.add(sel);
+        }
       }
 
       final whereSql = whereClauses.isNotEmpty
@@ -471,8 +553,16 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
       if (state.selectedMonth != null &&
           state.selectedMonth != 'All Months' &&
           state.selectedMonth!.trim().isNotEmpty) {
-        whereConditions.add('vm.ForMonth = ?');
-        whereArgs.add(state.selectedMonth!.trim());
+        final sel = state.selectedMonth!.trim();
+        final alt = _getAlternateMonthName(sel);
+        if (alt != null) {
+          whereConditions.add('(vm.ForMonth = ? OR vm.ForMonth = ?)');
+          whereArgs.add(sel);
+          whereArgs.add(alt);
+        } else {
+          whereConditions.add('vm.ForMonth = ?');
+          whereArgs.add(sel);
+        }
       }
 
       if (state.selectedClassId != null) {

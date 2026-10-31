@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/providers/student_list_provider.dart';
+import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/student_list_row.dart';
@@ -144,10 +145,30 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
         paginatedStudents.isNotEmpty &&
         paginatedStudents.every((s) => _selectedStuRegIds.contains(s.stuRegId));
 
+    final session = ref.watch(sessionProvider);
+    final canNewAdmission =
+        session == null ||
+        session.user.userLevel == 1 ||
+        session.hasAccess(26) ||
+        session.hasAccess(12);
+    final canBulkEnrollment =
+        session == null ||
+        session.user.userLevel == 1 ||
+        session.hasAccess(20);
+    final canBatchPromotion =
+        session == null ||
+        session.user.userLevel == 1 ||
+        session.hasAccess(8);
+    final canSchoolLeaving =
+        session == null ||
+        session.user.userLevel == 1 ||
+        session.hasAccess(9);
+
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.keyN, control: true): () =>
-            context.go('/students/new'),
+        const SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
+          if (canNewAdmission) context.go('/students/new');
+        },
         const SingleActivator(LogicalKeyboardKey.escape): () {
           if (_searchController.text.isNotEmpty) {
             _searchController.clear();
@@ -207,61 +228,64 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                         spacing: AppSpacing.sm,
                         runSpacing: AppSpacing.xs,
                         children: [
-                          OutlinedButton.icon(
-                            onPressed: () =>
-                                context.go('/students/enrollment/bulk'),
-                            icon: const Icon(
-                              Icons.group_add_outlined,
-                              size: 16.0,
-                            ),
-                            label: const Text('Bulk Enrollment'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.textPrimary,
-                              side: const BorderSide(
-                                color: AppColors.borderDefault,
+                          if (canBulkEnrollment)
+                            OutlinedButton.icon(
+                              onPressed: () =>
+                                  context.go('/students/enrollment/bulk'),
+                              icon: const Icon(
+                                Icons.group_add_outlined,
+                                size: 16.0,
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.md,
+                              label: const Text('Bulk Enrollment'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.textPrimary,
+                                side: const BorderSide(
+                                  color: AppColors.borderDefault,
                                 ),
-                              ),
-                              minimumSize: const Size(0, 40),
-                            ),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: () => context.go('/students/promote'),
-                            icon: const Icon(Icons.trending_up, size: 16.0),
-                            label: const Text('Batch Promotion'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.textPrimary,
-                              side: const BorderSide(
-                                color: AppColors.borderDefault,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.md,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
                                 ),
+                                minimumSize: const Size(0, 40),
                               ),
-                              minimumSize: const Size(0, 40),
                             ),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: () => context.go('/students/leaving'),
-                            icon: const Icon(Icons.exit_to_app, size: 16.0),
-                            label: const Text('School Leaving'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.textPrimary,
-                              side: const BorderSide(
-                                color: AppColors.borderDefault,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.md,
+                          if (canBatchPromotion)
+                            OutlinedButton.icon(
+                              onPressed: () => context.go('/students/promote'),
+                              icon: const Icon(Icons.trending_up, size: 16.0),
+                              label: const Text('Batch Promotion'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.textPrimary,
+                                side: const BorderSide(
+                                  color: AppColors.borderDefault,
                                 ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                ),
+                                minimumSize: const Size(0, 40),
                               ),
-                              minimumSize: const Size(0, 40),
                             ),
-                          ),
+                          if (canSchoolLeaving)
+                            OutlinedButton.icon(
+                              onPressed: () => context.go('/students/leaving'),
+                              icon: const Icon(Icons.exit_to_app, size: 16.0),
+                              label: const Text('School Leaving'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.textPrimary,
+                                side: const BorderSide(
+                                  color: AppColors.borderDefault,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                ),
+                                minimumSize: const Size(0, 40),
+                              ),
+                            ),
                           OutlinedButton.icon(
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -289,25 +313,26 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                               minimumSize: const Size(0, 40),
                             ),
                           ),
-                          ElevatedButton.icon(
-                            onPressed: () => context.go('/students/new'),
-                            icon: const Icon(
-                              Icons.person_add_outlined,
-                              size: 16.0,
-                            ),
-                            label: const Text('+ New Student (Ctrl+N)'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.brandPrimary,
-                              foregroundColor: AppColors.textOnPrimary,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.md,
-                                ),
+                          if (canNewAdmission)
+                            ElevatedButton.icon(
+                              onPressed: () => context.go('/students/new'),
+                              icon: const Icon(
+                                Icons.person_add_outlined,
+                                size: 16.0,
                               ),
-                              minimumSize: const Size(0, 40),
-                              elevation: AppElevation.flat,
+                              label: const Text('+ New Student (Ctrl+N)'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.brandPrimary,
+                                foregroundColor: AppColors.textOnPrimary,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                ),
+                                minimumSize: const Size(0, 40),
+                                elevation: AppElevation.flat,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
