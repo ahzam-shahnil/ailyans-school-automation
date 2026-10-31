@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/providers/clock_provider.dart';
+import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/fee_collection_provider.dart';
+import '../../core/providers/fee_ledger_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
@@ -47,6 +49,24 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   };
 
   String? _originScreen; // valid key from _originConfig | null
+  String? _customBackRoute;
+
+  String _formatInstallmentDate(String rawDate) {
+    final trimmed = rawDate.trim();
+    if (trimmed.isEmpty) return '—';
+    try {
+      final parsed = DateTime.tryParse(trimmed);
+      if (parsed != null) {
+        return _dateFormat.format(parsed);
+      }
+      final datePart = trimmed.split(' ').first;
+      final parsedDatePart = DateTime.tryParse(datePart);
+      if (parsedDatePart != null) {
+        return _dateFormat.format(parsedDatePart);
+      }
+    } catch (_) {}
+    return trimmed;
+  }
 
   @override
   void dispose() {
@@ -110,6 +130,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         .postPayment();
     if (!mounted) return;
     if (success) {
+      ref.invalidate(dashboardMetricsProvider);
+      ref.invalidate(feeLedgerProvider);
+      ref.invalidate(shellMetadataProvider);
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Payment Posted Successfully'),
@@ -226,16 +250,28 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       if (!mounted) return;
       try {
         final uri = GoRouterState.of(context).uri;
+        final voucherId = uri.queryParameters['voucherId'];
         final studentId = uri.queryParameters['studentId'];
         final from = uri.queryParameters['from'];
 
-        if (from != null && _originConfig.containsKey(from)) {
-          setState(() {
-            _originScreen = from;
-          });
+        if (from != null) {
+          if (_originConfig.containsKey(from)) {
+            setState(() {
+              _originScreen = from;
+              _customBackRoute = null;
+            });
+          } else if (from.startsWith('/students/') || from.startsWith('/')) {
+            setState(() {
+              _originScreen = 'students';
+              _customBackRoute = from;
+            });
+          }
         }
 
-        if (studentId != null && studentId.isNotEmpty) {
+        if (voucherId != null && voucherId.isNotEmpty) {
+          _lookupController.text = voucherId;
+          await _onLookup();
+        } else if (studentId != null && studentId.isNotEmpty) {
           _lookupController.text = studentId;
           await _onLookup();
         }
@@ -247,6 +283,25 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(
+      feeCollectionProvider.select((s) => s.amountTendered),
+      (prev, next) {
+        final currentVal = int.tryParse(_amountController.text.trim());
+        if (currentVal != next) {
+          _amountController.text = next.toString();
+        }
+      },
+    );
+    ref.listen<String?>(
+      feeCollectionProvider.select((s) => s.currentReceipt?.voucherMasId),
+      (prev, next) {
+        if (next != null) {
+          final amt = ref.read(feeCollectionProvider).amountTendered;
+          _amountController.text = amt.toString();
+        }
+      },
+    );
+
     final state = ref.watch(feeCollectionProvider);
     final bankListAsync = ref.watch(bankListProvider);
     final receipt = state.currentReceipt;
@@ -263,7 +318,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           control: true,
           shift: true,
         ): () {
-          if (receipt != null && receipt.isFullyPaid) {
+          if (receipt != null &&
+              (receipt.isFullyPaid || receipt.paidAmount > 0)) {
             _openRevokeModal(context, receipt);
           }
         },
@@ -286,7 +342,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                   children: [
                     OutlinedButton.icon(
                       onPressed: () =>
-                          context.go(_originConfig[_originScreen!]!.route),
+                          context.go(_customBackRoute ?? _originConfig[_originScreen!]!.route),
                       icon: const Icon(Icons.arrow_back, size: 16),
                       label: Text(_originConfig[_originScreen!]!.label),
                       style: OutlinedButton.styleFrom(
@@ -997,6 +1053,42 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           ),
         ],
 
+        // Partially Paid settlement strip
+        if (receipt.isPartiallyPaid) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.statusWarningBg,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.statusWarningBorder),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.timelapse,
+                  size: 16,
+                  color: AppColors.statusWarningText,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'PARTIALLY PAID (Paid: Rs. ${_currencyFormat.format(receipt.paidAmount)} | Due: Rs. ${_currencyFormat.format(receipt.remainingBalance)})',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.statusWarningText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         const SizedBox(height: AppSpacing.sm),
 
         // Voucher metadata bar
@@ -1220,6 +1312,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       label = '• PAID';
       bg = AppColors.statusSuccessBg;
       fg = AppColors.statusSuccessText;
+    } else if (receipt.isPartiallyPaid) {
+      label = '• PARTIALLY PAID';
+      bg = AppColors.statusWarningBg;
+      fg = AppColors.statusWarningText;
     } else if (receipt.isOverdue) {
       label = '• OVERDUE';
       bg = AppColors.statusErrorBg;
@@ -1430,6 +1526,100 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             ),
           ],
         ),
+        if (receipt.paidAmount > 0) ...[
+          const SizedBox(height: 6),
+          const Divider(height: 1, color: AppColors.borderSubtle),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Amount Paid So Far', style: AppTypography.bodySmall),
+              Text(
+                'Rs. ${_currencyFormat.format(receipt.paidAmount)}',
+                style: AppTypography.monospace.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.statusSuccessText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Remaining Balance Due',
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                'Rs. ${_currencyFormat.format(receipt.remainingBalance)}',
+                style: AppTypography.monospace.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: receipt.remainingBalance > 0
+                      ? AppColors.statusWarningText
+                      : AppColors.statusSuccessText,
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (receipt.paymentHistory.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceSubtle,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.borderSubtle),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Text(
+                    'PAYMENT INSTALLMENT HISTORY (${receipt.paymentHistory.length})',
+                    style: AppTypography.label.copyWith(fontSize: 10),
+                  ),
+                ),
+                ...receipt.paymentHistory.map((inst) {
+                  final bankPart =
+                      (inst.bankName != null && inst.bankName!.isNotEmpty)
+                          ? ' - ${inst.bankName}'
+                          : '';
+                  return Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Receipt #${inst.feeTransId} (${_formatInstallmentDate(inst.submissionDate)})$bankPart',
+                            style:
+                                AppTypography.bodySmall.copyWith(fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          'Rs. ${_currencyFormat.format(inst.paidAmount)}',
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -1519,7 +1709,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   ) {
     final effectivePayable = state.useAdvanceCredit
         ? receipt.remainingAfterAdvance
-        : receipt.netPayable;
+        : receipt.remainingBalance;
     final remainingBalance = (effectivePayable - state.amountTendered).clamp(
       0,
       effectivePayable,
@@ -1528,6 +1718,73 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Partially Paid banner inside form
+        if (receipt.isPartiallyPaid) ...[
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.statusWarningBg,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.statusWarningBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.timelapse,
+                      size: 16,
+                      color: AppColors.statusWarningText,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'PARTIALLY PAID (Paid: Rs. ${_currencyFormat.format(receipt.paidAmount)} | Due: Rs. ${_currencyFormat.format(receipt.remainingBalance)})',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.statusWarningText,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Remaining Balance Due: Rs. ${_currencyFormat.format(receipt.remainingBalance)}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.statusWarningText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _openRevokeModal(context, receipt),
+                  icon: const Icon(
+                    Icons.undo,
+                    color: AppColors.statusErrorText,
+                    size: 14,
+                  ),
+                  label: const Text(
+                    'Revoke Paid Status',
+                    style: TextStyle(
+                      color: AppColors.statusErrorText,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.statusErrorBorder),
+                    minimumSize: const Size.fromHeight(34),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+
         // 1. Payment Date selector
         Text(
           'Payment Date *',
@@ -1710,7 +1967,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Pre-filled with net payable${state.useAdvanceCredit ? " minus advance credit" : ""}',
+          receipt.isPartiallyPaid
+              ? 'Pre-filled with remaining balance due: Rs. ${_currencyFormat.format(receipt.remainingBalance)}'
+              : 'Pre-filled with net payable${state.useAdvanceCredit ? " minus advance credit" : ""}',
           style: AppTypography.bodySmall.copyWith(
             color: AppColors.textMuted,
             fontSize: 11,
@@ -1745,7 +2004,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               ),
               const SizedBox(width: 6),
               Text(
-                'Remaining Balance Due: Rs. ${_currencyFormat.format(remainingBalance)}',
+                'Balance After This Payment: Rs. ${_currencyFormat.format(remainingBalance)}',
                 style: AppTypography.bodySmall.copyWith(
                   fontWeight: FontWeight.w600,
                   color: remainingBalance == 0
@@ -2215,6 +2474,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                                         modalError = 'Wrong Man. Try Agnain.'; // Verbatim [Sic]
                                       });
                                     } else if (result == RevokeResult.success) {
+                                      ref.invalidate(dashboardMetricsProvider);
+                                      ref.invalidate(feeLedgerProvider);
+                                      ref.invalidate(shellMetadataProvider);
+
                                       if (context.mounted) {
                                         Navigator.of(dialogContext).pop();
                                         ScaffoldMessenger.of(context)

@@ -170,7 +170,8 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     final receipt = state.currentReceipt;
     final int newAmount;
     if (receipt != null) {
-      newAmount = value ? receipt.remainingAfterAdvance : receipt.netPayable;
+      newAmount =
+          value ? receipt.remainingAfterAdvance : receipt.remainingBalance;
     } else {
       newAmount = 0;
     }
@@ -274,16 +275,29 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final studentRows = await db.rawQuery(
         '''
         SELECT sr.Stu_RegID, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name, sr.photo_path,
-               c.CName, cs.SecName, sc.ClassRollNo, sc.SessionYr
+               COALESCE(c_pres.CName, c_sess.CName, c_vm.CName, c_any.CName) AS CName,
+               COALESCE(c_pres.CName, c_sess.CName, c_vm.CName, c_any.CName) AS className,
+               COALESCE(cs_pres.SecName, cs_sess.SecName, cs_any.SecName, 'A') AS SecName,
+               COALESCE(cs_pres.SecName, cs_sess.SecName, cs_any.SecName, 'A') AS classSecName,
+               COALESCE(sc_pres.ClassRollNo, sc_sess.ClassRollNo, sc_any.ClassRollNo) AS ClassRollNo,
+               COALESCE(sc_pres.ClassRollNo, sc_sess.ClassRollNo, sc_any.ClassRollNo) AS rollNo,
+               COALESCE(sc_pres.SessionYr, sc_sess.SessionYr, sc_any.SessionYr) AS SessionYr
         FROM Stu_Reg sr
-        LEFT JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID
-        LEFT JOIN Class c ON sc.ClassID = c.ClassID
-        LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+        LEFT JOIN Student_Class sc_sess ON sc_sess.Stu_RegID = sr.Stu_RegID AND sc_sess.SessionYr = ?
+        LEFT JOIN Class c_sess ON c_sess.ClassID = sc_sess.ClassID
+        LEFT JOIN ClassSec cs_sess ON cs_sess.ClassSecID = sc_sess.ClassSecID
+        LEFT JOIN Student_Class sc_pres ON sc_pres.Stu_RegID = sr.Stu_RegID AND sc_pres.Present = 1
+        LEFT JOIN Class c_pres ON c_pres.ClassID = sc_pres.ClassID
+        LEFT JOIN ClassSec cs_pres ON cs_pres.ClassSecID = sc_pres.ClassSecID
+        LEFT JOIN Class c_vm ON c_vm.ClassID = ?
+        LEFT JOIN Student_Class sc_any ON sc_any.Stu_RegID = sr.Stu_RegID
+        LEFT JOIN Class c_any ON c_any.ClassID = sc_any.ClassID
+        LEFT JOIN ClassSec cs_any ON cs_any.ClassSecID = sc_any.ClassSecID
         WHERE sr.Stu_RegID = ?
-        ORDER BY sc.SessionYr DESC
+        ORDER BY sc_sess.SessionYr DESC, sc_any.SessionYr DESC
         LIMIT 1
         ''',
-        [stuRegId],
+        [voucherRow['SessionYr'], voucherRow['ClassID'], stuRegId],
       );
       final studentRow = studentRows.isNotEmpty
           ? studentRows.first
@@ -300,9 +314,24 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         ''',
         [voucherMasId],
       );
-      final lineItems = itemRows
+      var lineItems = itemRows
           .map((r) => FeeReceiptLineItem.fromMap(r))
           .toList();
+
+      // Fallback line item when VoucharDet is empty for a historical voucher
+      final subtotal = (voucherRow['SubTotal'] as num?)?.toInt() ?? 0;
+      final discount = (voucherRow['Discount'] as num?)?.toInt() ?? 0;
+      final forMonth = (voucherRow['ForMonth'] as String?)?.trim() ?? '';
+      if (lineItems.isEmpty && subtotal > 0) {
+        lineItems = [
+          FeeReceiptLineItem(
+            feeParamId: 1,
+            headName: 'Consolidated Voucher Fee ($forMonth)',
+            amount: subtotal,
+            discount: discount,
+          ),
+        ];
+      }
 
       // 5. Query advance balance from StuAdv
       final advRows = await db.rawQuery(
@@ -312,12 +341,30 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final advanceBalance =
           (advRows.first['AdvBalance'] as num?)?.toInt() ?? 0;
 
+      // 6. Query payment installment history from FeeTransaction
+      final transRows = await db.rawQuery(
+        '''
+        SELECT ft.FeeTransID, ft.BankID, ft.SubmissionDate,
+               ft.TotalAmount, ft.PaidAmount, ft.Detail,
+               bi.BankName
+        FROM FeeTransaction ft
+        LEFT JOIN BankInfo bi ON ft.BankID = bi.BankInfoID
+        WHERE ft.VoucharNo = ?
+        ORDER BY ft.FeeTransID ASC
+        ''',
+        [voucherMasId],
+      );
+      final paymentHistory = transRows
+          .map((r) => VoucherPaymentInstallment.fromMap(r))
+          .toList();
+
       // Assemble receipt view
       final receipt = FeeReceiptView.fromJoinedMap(
         voucherRow: voucherRow,
         studentRow: studentRow,
         items: lineItems,
         advanceBalance: advanceBalance,
+        paymentHistory: paymentHistory,
       );
 
       // Determine default bank if not already assigned
@@ -335,7 +382,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final useAdv = advanceBalance > 0;
       final initialTendered = useAdv
           ? receipt.remainingAfterAdvance
-          : receipt.netPayable;
+          : receipt.remainingBalance;
 
       state = state.copyWith(
         isLoadingLookup: false,
@@ -376,7 +423,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
                sr.NameFirst, sr.NameLast, sr.F_Name,
                c.CName AS class_name, cs.SecName AS section_name,
                sc.ClassRollNo, vm.ForMonth, vm.SubTotal, vm.Discount,
-               vm.IsPaid, vm.DueDate
+               vm.PaidAmt, vm.IsPaid, vm.DueDate
         FROM VoucharMas vm
         JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
         LEFT JOIN Student_Class sc
@@ -403,6 +450,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         final studentName = [first, last].where((s) => s.isNotEmpty).join(' ');
         final subtotal = (r['SubTotal'] as num?)?.toInt() ?? 0;
         final discount = (r['Discount'] as num?)?.toInt() ?? 0;
+        final paidAmt = (r['PaidAmt'] as num?)?.toInt() ?? 0;
         final dueDateRaw = r['DueDate'];
         DateTime? dueDate;
         if (dueDateRaw != null) {
@@ -418,6 +466,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           rollNo: (r['ClassRollNo'] as num?)?.toInt(),
           forMonth: (r['ForMonth'] as String?)?.trim() ?? '',
           netPayable: subtotal - discount,
+          paidAmt: paidAmt,
           isPaid: (r['IsPaid'] as String?)?.trim() ?? 'N',
           dueDate: dueDate,
         );
@@ -455,16 +504,27 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
                vm.ForMonth, vm.Discount, vm.IsPaid, vm.PaidAmt, vm.PaidDate,
                vm.BankID, vm.SessionYr,
                sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
-               c.CName AS class_name,
-               cs.SecName AS section_name,
-               sc.ClassRollNo, sc.SessionYr AS sc_session
+               COALESCE(c_pres.CName, c_sess.CName, c_vm.CName, c_any.CName) AS class_name,
+               COALESCE(c_pres.CName, c_sess.CName, c_vm.CName, c_any.CName) AS className,
+               COALESCE(cs_pres.SecName, cs_sess.SecName, cs_any.SecName, 'A') AS section_name,
+               COALESCE(cs_pres.SecName, cs_sess.SecName, cs_any.SecName, 'A') AS classSecName,
+               COALESCE(sc_pres.ClassRollNo, sc_sess.ClassRollNo, sc_any.ClassRollNo) AS rollNo,
+               COALESCE(sc_pres.ClassRollNo, sc_sess.ClassRollNo, sc_any.ClassRollNo) AS ClassRollNo,
+               COALESCE(sc_pres.SessionYr, sc_sess.SessionYr, vm.SessionYr) AS sc_session
         FROM VoucharMas vm
         LEFT JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
-        LEFT JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID
-        LEFT JOIN Class c ON sc.ClassID = c.ClassID
-        LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+        LEFT JOIN Student_Class sc_sess ON sc_sess.Stu_RegID = sr.Stu_RegID AND sc_sess.SessionYr = vm.SessionYr
+        LEFT JOIN Class c_sess ON c_sess.ClassID = sc_sess.ClassID
+        LEFT JOIN ClassSec cs_sess ON cs_sess.ClassSecID = sc_sess.ClassSecID
+        LEFT JOIN Student_Class sc_pres ON sc_pres.Stu_RegID = sr.Stu_RegID AND sc_pres.Present = 1
+        LEFT JOIN Class c_pres ON c_pres.ClassID = sc_pres.ClassID
+        LEFT JOIN ClassSec cs_pres ON cs_pres.ClassSecID = sc_pres.ClassSecID
+        LEFT JOIN Class c_vm ON c_vm.ClassID = vm.ClassID
+        LEFT JOIN Student_Class sc_any ON sc_any.Stu_RegID = sr.Stu_RegID
+        LEFT JOIN Class c_any ON c_any.ClassID = sc_any.ClassID
+        LEFT JOIN ClassSec cs_any ON cs_any.ClassSecID = sc_any.ClassSecID
         WHERE vm.VoucherMasID = ?
-        ORDER BY sc.SessionYr DESC
+        ORDER BY sc_sess.SessionYr DESC, sc_any.SessionYr DESC
         LIMIT 1
         ''',
         [voucherMasId],
@@ -480,9 +540,12 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final sessionYr =
           (mas['sc_session'] as String?)?.trim() ??
           (mas['SessionYr'] as String?)?.trim();
-      final className = (mas['class_name'] as String?)?.trim();
-      final sectionName = (mas['section_name'] as String?)?.trim();
-      final rollNo = (mas['ClassRollNo'] as num?)?.toInt();
+      final className =
+          (mas['className'] ?? mas['class_name']) as String?;
+      final sectionName =
+          (mas['classSecName'] ?? mas['section_name']) as String?;
+      final rollNo =
+          ((mas['rollNo'] ?? mas['ClassRollNo']) as num?)?.toInt();
 
       // Assemble student name
       final nameFirst = (mas['NameFirst'] as String?)?.trim() ?? '';
@@ -509,7 +572,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         ''',
         [voucherMasId],
       );
-      final lineItems = detRows.map((r) {
+      var lineItems = detRows.map((r) {
         return rcp.FeeReceiptLineItem(
           feeParamId: (r['feeParameterID'] as num?)?.toInt() ?? 0,
           headName: FeeHeadDisplay.of(r['ParamDesciption'] as String?),
@@ -518,40 +581,67 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         );
       }).toList();
 
-      // 3. Try FeeTransaction first (has official receipt ID + cash amount)
+      if (lineItems.isEmpty && subtotal > 0) {
+        lineItems = [
+          rcp.FeeReceiptLineItem(
+            feeParamId: 1,
+            headName: 'Consolidated Voucher Fee ($forMonth)',
+            amount: subtotal,
+            discount: discount,
+          ),
+        ];
+      }
+
+      // 3. Load all FeeTransaction rows for this voucher (ordered chronologically)
       final transRows = await db.rawQuery(
         '''
         SELECT ft.FeeTransID, ft.BankID, ft.SubmissionDate,
-               ft.TotalAmount, ft.PaidAmount, ft.Detail
+               ft.TotalAmount, ft.PaidAmount, ft.Detail,
+               bi.BankName
         FROM FeeTransaction ft
+        LEFT JOIN BankInfo bi ON ft.BankID = bi.BankInfoID
         WHERE ft.VoucharNo = ?
-        ORDER BY ft.FeeTransID DESC
-        LIMIT 1
+        ORDER BY ft.FeeTransID ASC
         ''',
         [voucherMasId],
       );
+      final allInstallments = transRows
+          .map((r) => VoucherPaymentInstallment.fromMap(r))
+          .toList();
+
+      final totalPaidAmount = (mas['PaidAmt'] as num?)?.toInt() ?? 0;
+      final netPayable = masNetPayable;
+      final remainingBalance = max(0, netPayable - totalPaidAmount);
 
       int feeTransId;
       DateTime submissionDate;
-      int paidAmount;
+      int latestInstallmentAmount;
       int bankIdForReceipt;
 
       if (transRows.isNotEmpty) {
-        // Preferred path — FeeTransaction row exists
-        final tr = transRows.first;
-        feeTransId = (tr['FeeTransID'] as num?)?.toInt() ?? 0;
-        final dateStr = (tr['SubmissionDate'] as String?)?.trim() ?? '';
+        final latest = transRows.last;
+        feeTransId = (latest['FeeTransID'] as num?)?.toInt() ?? 0;
+        final dateStr = (latest['SubmissionDate'] as String?)?.trim() ?? '';
         submissionDate = DateTime.tryParse(dateStr) ?? _now();
-        paidAmount = (tr['PaidAmount'] as num?)?.toInt() ?? 0;
-        bankIdForReceipt = (tr['BankID'] as num?)?.toInt() ?? 1;
+        latestInstallmentAmount =
+            (latest['PaidAmount'] as num?)?.toInt() ?? totalPaidAmount;
+        bankIdForReceipt = (latest['BankID'] as num?)?.toInt() ?? 1;
       } else {
-        // Fallback — pre-seeded paid voucher without FeeTransaction row
-        feeTransId = 0; // displayed as #00000
+        feeTransId = 0;
         final paidDateStr = (mas['PaidDate'] as String?)?.trim() ?? '';
         submissionDate = DateTime.tryParse(paidDateStr) ?? _now();
-        paidAmount = (mas['PaidAmt'] as num?)?.toInt() ?? masNetPayable;
+        latestInstallmentAmount =
+            totalPaidAmount > 0 ? totalPaidAmount : masNetPayable;
         bankIdForReceipt = (mas['BankID'] as num?)?.toInt() ?? 1;
       }
+
+      final previousPaidAmount =
+          max(0, totalPaidAmount - latestInstallmentAmount);
+
+      // Separate prior installments from current payment to avoid duplication
+      final previousInstallments = allInstallments
+          .where((tx) => tx.feeTransId != feeTransId)
+          .toList();
 
       // 4. Load bank info
       final bankRows = await db.rawQuery(
@@ -576,6 +666,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         fatherName: fatherName,
         className: className,
         sectionName: sectionName,
+        classSecName: sectionName,
         rollNo: rollNo,
         sessionYr: sessionYr,
         forMonth: forMonth,
@@ -583,7 +674,11 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         subtotal: subtotal,
         discount: discount,
         totalAmount: masNetPayable,
-        paidAmount: paidAmount,
+        paidAmount: latestInstallmentAmount,
+        totalPaidToDate: totalPaidAmount,
+        previousPaidAmount: previousPaidAmount,
+        remainingBalance: remainingBalance,
+        paymentHistory: previousInstallments,
         paymentMode: paymentMode,
         bankName: bankName,
         bankBranch: bankBranch,
@@ -607,9 +702,10 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     // Compute advance deduction
     final cashReceived = state.amountTendered;
     final advanceApplied = state.useAdvanceCredit
-        ? min(receipt.advanceBalance, receipt.netPayable)
+        ? min(receipt.advanceBalance, receipt.remainingBalance)
         : 0;
-    final totalPaidAmt = cashReceived + advanceApplied;
+    final paidAmountNow = cashReceived + advanceApplied;
+    if (paidAmountNow <= 0) return false;
 
     state = state.copyWith(isPosting: true, postError: () => null);
 
@@ -619,18 +715,48 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           .format(state.paymentDate ?? _now());
 
       await db.transaction((txn) async {
-        // 1. UPDATE VoucharMas — PaidAmt = cash + advance (full settlement)
+        // Query current SubTotal, Discount, and PaidAmt directly from VoucharMas
+        final currentRows = await txn.rawQuery(
+          '''
+          SELECT SubTotal, COALESCE(Discount, 0) AS Discount, COALESCE(PaidAmt, 0) AS PrevPaid
+          FROM VoucharMas
+          WHERE VoucherMasID = ?
+          LIMIT 1
+          ''',
+          [receipt.voucherMasId],
+        );
+        if (currentRows.isEmpty) {
+          throw StateError(
+            'Voucher ${receipt.voucherMasId} not found in database',
+          );
+        }
+
+        final currentRow = currentRows.first;
+        final subTotal =
+            (currentRow['SubTotal'] as num?)?.toInt() ?? receipt.subtotal;
+        final discount =
+            (currentRow['Discount'] as num?)?.toInt() ?? receipt.discount;
+        final prevPaid = (currentRow['PrevPaid'] as num?)?.toInt() ?? 0;
+
+        final newTotalPaid = prevPaid + paidAmountNow;
+        final netBilled = subTotal - discount;
+        final remainingBalance = netBilled - newTotalPaid;
+
+        final isPaidFlag = remainingBalance <= 0 ? 'Y' : 'N';
+
+        // 1. UPDATE VoucharMas — PaidAmt = newTotalPaid; IsPaid = 'Y' if remaining <= 0, else 'N'
         await txn.rawUpdate(
           '''
           UPDATE VoucharMas
-          SET IsPaid = 'Y',
+          SET IsPaid = ?,
               PaidAmt = ?,
               PaidDate = ?,
               BankID = ?
           WHERE VoucherMasID = ?
           ''',
           [
-            totalPaidAmt,
+            isPaidFlag,
+            newTotalPaid,
             submissionDateStr,
             state.selectedBankId,
             receipt.voucherMasId,

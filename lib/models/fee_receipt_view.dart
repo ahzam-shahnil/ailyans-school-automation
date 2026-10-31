@@ -1,5 +1,7 @@
 library fee_receipt_view;
 
+import 'dart:math';
+
 import 'package:school_automation/core/utils/fee_head_display.dart';
 
 /// Production Fee Receipt Model for FeeCollectionScreen (/fees/receipts).
@@ -30,6 +32,36 @@ class FeeReceiptLineItem {
   }
 }
 
+/// Lightweight model representing an individual payment installment transaction.
+class VoucherPaymentInstallment {
+  final int feeTransId;
+  final String submissionDate;
+  final int paidAmount;
+  final int? bankId;
+  final String? bankName;
+  final String? detail;
+
+  const VoucherPaymentInstallment({
+    required this.feeTransId,
+    required this.submissionDate,
+    required this.paidAmount,
+    this.bankId,
+    this.bankName,
+    this.detail,
+  });
+
+  factory VoucherPaymentInstallment.fromMap(Map<String, dynamic> map) {
+    return VoucherPaymentInstallment(
+      feeTransId: (map['FeeTransID'] as num?)?.toInt() ?? 0,
+      submissionDate: (map['SubmissionDate'] as String?)?.trim() ?? '',
+      paidAmount: (map['PaidAmount'] as num?)?.toInt() ?? 0,
+      bankId: (map['BankID'] as num?)?.toInt(),
+      bankName: (map['BankName'] as String?)?.trim(),
+      detail: (map['Detail'] as String?)?.trim(),
+    );
+  }
+}
+
 class FeeReceiptView {
   final String voucherMasId;
   final int stuRegId;
@@ -51,6 +83,7 @@ class FeeReceiptView {
   final String isPaid; // 'Y' | 'N' | 'O'
   final List<FeeReceiptLineItem> lineItems;
   final int advanceBalance; // SUM(StuAdv.AdvAmount) for this student
+  final List<VoucherPaymentInstallment> paymentHistory;
 
   const FeeReceiptView({
     required this.voucherMasId,
@@ -73,15 +106,25 @@ class FeeReceiptView {
     required this.isPaid,
     required this.lineItems,
     this.advanceBalance = 0,
+    this.paymentHistory = const [],
   });
 
   int get netPayable => subtotal - discount;
+  int get paidAmt => paidAmount;
+  int get remainingBalance => max(0, (subtotal - discount) - paidAmount);
   int get remainingAfterAdvance =>
-      (netPayable - advanceBalance).clamp(0, netPayable);
-  bool get isFullyPaid => isPaid == 'Y';
+      max(0, remainingBalance - advanceBalance);
+  bool get isFullyPaid => isPaid == 'Y' && remainingBalance == 0;
+  bool get isPartiallyPaid => paidAmount > 0 && remainingBalance > 0;
   bool get isOverdue =>
       isPaid == 'O' ||
-      (dueDate != null && DateTime.now().isAfter(dueDate!) && isPaid == 'N');
+      (dueDate != null && DateTime.now().isAfter(dueDate!) && !isFullyPaid);
+  String get status {
+    if (isFullyPaid) return 'Paid';
+    if (isPartiallyPaid) return 'Partially Paid';
+    if (isOverdue) return 'Overdue';
+    return 'Unpaid';
+  }
 
   FeeReceiptView copyWith({
     String? voucherMasId,
@@ -104,6 +147,7 @@ class FeeReceiptView {
     String? isPaid,
     List<FeeReceiptLineItem>? lineItems,
     int? advanceBalance,
+    List<VoucherPaymentInstallment>? paymentHistory,
   }) {
     return FeeReceiptView(
       voucherMasId: voucherMasId ?? this.voucherMasId,
@@ -126,6 +170,7 @@ class FeeReceiptView {
       isPaid: isPaid ?? this.isPaid,
       lineItems: lineItems ?? this.lineItems,
       advanceBalance: advanceBalance ?? this.advanceBalance,
+      paymentHistory: paymentHistory ?? this.paymentHistory,
     );
   }
 
@@ -134,6 +179,7 @@ class FeeReceiptView {
   factory FeeReceiptView.fromFlatMap(
     Map<String, dynamic> row, {
     required List<Map<String, dynamic>> lineItems,
+    List<VoucherPaymentInstallment> paymentHistory = const [],
   }) {
     DateTime? parseDate(dynamic val) {
       if (val == null) return null;
@@ -174,6 +220,7 @@ class FeeReceiptView {
       isPaid: (row['IsPaid'] as String?) ?? 'N',
       lineItems: lineItems.map((m) => FeeReceiptLineItem.fromMap(m)).toList(),
       advanceBalance: 0,
+      paymentHistory: paymentHistory,
     );
   }
 
@@ -182,6 +229,7 @@ class FeeReceiptView {
     required Map<String, dynamic> studentRow,
     required List<FeeReceiptLineItem> items,
     int advanceBalance = 0,
+    List<VoucherPaymentInstallment> paymentHistory = const [],
   }) {
     DateTime? parseDate(dynamic val) {
       if (val == null) return null;
@@ -216,6 +264,7 @@ class FeeReceiptView {
       isPaid: (voucherRow['IsPaid'] as String?) ?? 'N',
       lineItems: items,
       advanceBalance: advanceBalance,
+      paymentHistory: paymentHistory,
     );
   }
 }
@@ -232,6 +281,7 @@ class FeeReceiptSummaryRow {
   final int? rollNo;
   final String forMonth;
   final int netPayable;
+  final int paidAmt;
   final String isPaid;
   final DateTime? dueDate;
 
@@ -245,6 +295,7 @@ class FeeReceiptSummaryRow {
     this.rollNo,
     required this.forMonth,
     required this.netPayable,
+    this.paidAmt = 0,
     required this.isPaid,
     this.dueDate,
   });
@@ -253,8 +304,11 @@ class FeeReceiptSummaryRow {
   String get classSecDisplay =>
       sectionName.isEmpty ? className : '$className-$sectionName';
 
+  int get remainingBalance => max(0, netPayable - paidAmt);
+
   String get statusLabel {
-    if (isPaid == 'Y') return 'PAID';
+    if (isPaid == 'Y' && remainingBalance == 0) return 'PAID';
+    if (paidAmt > 0 && remainingBalance > 0) return 'PARTIALLY PAID';
     if (isPaid == 'O') return 'OVERDUE';
     if (dueDate != null && DateTime.now().isAfter(dueDate!)) return 'OVERDUE';
     return 'UNPAID';

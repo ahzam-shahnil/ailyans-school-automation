@@ -297,6 +297,11 @@ void main() {
       expect(find.text('September 2017'), findsOneWidget);
       expect(find.text('Paid'), findsOneWidget);
       expect(find.text('Overdue'), findsOneWidget);
+
+      // Verify actions: Print Receipt for paid voucher, Collect Fee for overdue voucher
+      expect(find.text('Print Receipt'), findsOneWidget);
+      expect(find.text('Collect Fee'), findsOneWidget);
+      expect(find.byTooltip('View in Fee Collection'), findsNWidgets(2));
     });
 
     testWidgets(

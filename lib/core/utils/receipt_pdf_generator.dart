@@ -1,9 +1,11 @@
 // ignore_for_file: public_member_api_docs
 import 'dart:typed_data';
 
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../models/fee_receipt_view.dart' show VoucherPaymentInstallment;
 import 'fee_head_display.dart';
 
 // ============================================================================
@@ -36,6 +38,7 @@ class FeeReceiptPrintData {
   final String? fatherName;
   final String? className;
   final String? sectionName;
+  final String? classSecName;
   final int? rollNo;
   final String? sessionYr;
   final String forMonth;
@@ -44,6 +47,10 @@ class FeeReceiptPrintData {
   final int discount;
   final int totalAmount;
   final int paidAmount;
+  final int totalPaidToDate;
+  final int previousPaidAmount;
+  final int remainingBalance;
+  final List<VoucherPaymentInstallment> paymentHistory;
   final String paymentMode;
   final String bankName;
   final String? bankBranch;
@@ -59,6 +66,7 @@ class FeeReceiptPrintData {
     this.fatherName,
     this.className,
     this.sectionName,
+    String? classSecName,
     this.rollNo,
     this.sessionYr,
     required this.forMonth,
@@ -67,13 +75,23 @@ class FeeReceiptPrintData {
     required this.discount,
     required this.totalAmount,
     required this.paidAmount,
+    int? totalPaidToDate,
+    int? previousPaidAmount,
+    int? remainingBalance,
+    this.paymentHistory = const [],
     required this.paymentMode,
     required this.bankName,
     this.bankBranch,
     this.bankAcctNo,
     this.remarks,
     required this.lineItems,
-  });
+  })  : classSecName = classSecName ?? sectionName,
+        totalPaidToDate = totalPaidToDate ?? paidAmount,
+        previousPaidAmount = previousPaidAmount ?? 0,
+        remainingBalance = remainingBalance ??
+            ((totalAmount - (totalPaidToDate ?? paidAmount)) < 0
+                ? 0
+                : (totalAmount - (totalPaidToDate ?? paidAmount)));
 }
 
 // ============================================================================
@@ -86,6 +104,10 @@ class _Clr {
   static const teal = PdfColor.fromInt(0xFF0F766E);
   static const slate = PdfColor.fromInt(0xFF334155);
   static const emerald700 = PdfColor.fromInt(0xFF047857);
+  static const amber700 = PdfColor.fromInt(0xFFB45309);
+  static const amberTint = PdfColor.fromInt(0xFFFFFBEB);
+  static const amberBorder = PdfColor.fromInt(0xFFFCD34D);
+  static const red700 = PdfColor.fromInt(0xFFB91C1C);
   static const surface = PdfColor.fromInt(0xFFF8FAFC);
   static const borderLight = PdfColor.fromInt(0xFFCBD5E1);
   static const greenTint = PdfColor.fromInt(0xFFF0FDF4);
@@ -427,8 +449,29 @@ class ReceiptPdfGenerator {
     );
   }
 
+  static String _formatInstallmentDate(String rawDate) {
+    final trimmed = rawDate.trim();
+    if (trimmed.isEmpty) return '-';
+    try {
+      final parsed = DateTime.tryParse(trimmed);
+      if (parsed != null) {
+        return DateFormat('dd-MMM-yyyy').format(parsed);
+      }
+      final datePart = trimmed.split(' ').first;
+      final parsedDatePart = DateTime.tryParse(datePart);
+      if (parsedDatePart != null) {
+        return DateFormat('dd-MMM-yyyy').format(parsedDatePart);
+      }
+    } catch (_) {}
+    return trimmed;
+  }
+
   static pw.Widget _buildStudentBox(FeeReceiptPrintData r) {
-    final classSection = '${r.className ?? 'N/A'}-${r.sectionName ?? 'A'}';
+    final sec = (r.classSecName ?? r.sectionName)?.trim();
+    final cls = r.className?.trim();
+    final classSection = (cls != null && cls.isNotEmpty)
+        ? ((sec != null && sec.isNotEmpty && sec != 'N/A') ? '$cls-$sec' : cls)
+        : 'Unknown';
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
       decoration: pw.BoxDecoration(
@@ -564,68 +607,170 @@ class ReceiptPdfGenerator {
   }
 
   static pw.Widget _buildSettlementBox(FeeReceiptPrintData r) {
-    final rows = <pw.Widget>[
+    final isPartial = r.remainingBalance > 0;
+    final highlightBg = isPartial ? _Clr.amberTint : _Clr.greenTint;
+    final highlightBorder = isPartial ? _Clr.amberBorder : _Clr.greenBorder;
+    final badgeColor = isPartial ? _Clr.amber700 : _Clr.emerald700;
+    final badgeText = isPartial ? '[ PARTIAL PAID ]' : '[ PAID IN FULL ]';
+    final receiptNoStr = '#${r.feeTransId.toString().padLeft(5, '0')}';
+
+    final accountingRows = <pw.Widget>[
       _summaryRow('Gross SubTotal:', 'Rs. ${_fmt(r.subtotal)}'),
       if (r.discount > 0)
-        _summaryRow('Fee Concession:', '- Rs. ${_fmt(r.discount)}'),
-      _summaryRow('Net Billable:', 'Rs. ${_fmt(r.totalAmount)}'),
-      pw.Container(
-        height: 0.5,
-        margin: const pw.EdgeInsets.symmetric(vertical: 2),
-        color: _Clr.greenBorder,
-      ),
-      // PAID row + stamp
-      pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
-            'AMOUNT RECEIVED: Rs. ${_fmt(r.paidAmount)}',
-            style: const pw.TextStyle(
-              fontSize: 10,
-              fontWeight: pw.FontWeight.bold,
-              color: _Clr.emerald700,
+        _summaryRow('Less Concession / Discount:', '- Rs. ${_fmt(r.discount)}'),
+      pw.Padding(
+        padding: const pw.EdgeInsets.symmetric(vertical: 1),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(
+              'Net Billable Fee:',
+              style:
+                  const pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
             ),
-          ),
-          // [ PAID ] stamp badge
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: _Clr.emerald700, width: 1.2),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+            pw.Text(
+              'Rs. ${_fmt(r.totalAmount)}',
+              style:
+                  const pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
             ),
-            child: pw.Text(
-              '[ PAID ]',
-              style: const pw.TextStyle(
-                fontSize: 8,
-                fontWeight: pw.FontWeight.bold,
-                color: _Clr.emerald700,
-              ),
-            ),
-          ),
-        ],
-      ),
-      pw.SizedBox(height: 2),
-      // Amount in words
-      pw.Text(
-        'In Words: ${amountToWords(r.paidAmount)}',
-        style: const pw.TextStyle(
-          fontSize: 6.5,
-          fontStyle: pw.FontStyle.italic,
-          color: _Clr.slate,
+          ],
         ),
       ),
+      if (r.previousPaidAmount > 0) ...[
+        _summaryRow(
+          'Previous Installment(s) Paid:',
+          'Rs. ${_fmt(r.previousPaidAmount)}',
+        ),
+        if (r.paymentHistory.isNotEmpty)
+          ...r.paymentHistory
+              .where((inst) => inst.feeTransId != r.feeTransId)
+              .map((inst) {
+            final formattedDate = _formatInstallmentDate(inst.submissionDate);
+            final bank = (inst.bankName != null && inst.bankName!.isNotEmpty)
+                ? ' (${inst.bankName})'
+                : '';
+            return pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 4, bottom: 0.5),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    '  * Rcpt #${inst.feeTransId} ($formattedDate)$bank:',
+                    style: const pw.TextStyle(
+                      fontSize: 6.5,
+                      color: _Clr.slate,
+                    ),
+                  ),
+                  pw.Text(
+                    'Rs. ${_fmt(inst.paidAmount)}',
+                    style: const pw.TextStyle(
+                      fontSize: 6.5,
+                      color: _Clr.slate,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        _summaryRow(
+          'Paid This Receipt ($receiptNoStr):',
+          'Rs. ${_fmt(r.paidAmount)}',
+        ),
+        pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 1),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Total Paid to Date:',
+                style: const pw.TextStyle(
+                  fontSize: 7.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.Text(
+                'Rs. ${_fmt(r.totalPaidToDate)}',
+                style: const pw.TextStyle(
+                  fontSize: 7.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     ];
 
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: pw.BoxDecoration(
-        color: _Clr.greenTint,
-        border: pw.Border.all(color: _Clr.greenBorder, width: 0.8),
+        color: highlightBg,
+        border: pw.Border.all(color: highlightBorder, width: 0.8),
         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-        children: rows,
+        children: [
+          ...accountingRows,
+          pw.Container(
+            height: 0.5,
+            margin: const pw.EdgeInsets.symmetric(vertical: 2.5),
+            color: highlightBorder,
+          ),
+          // Highlight Box: Amount Received + Status Badge
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'AMOUNT RECEIVED: Rs. ${_fmt(r.paidAmount)}',
+                style: pw.TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: badgeColor,
+                ),
+              ),
+              pw.Container(
+                padding:
+                    const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: badgeColor, width: 1.2),
+                  borderRadius:
+                      const pw.BorderRadius.all(pw.Radius.circular(2)),
+                ),
+                child: pw.Text(
+                  badgeText,
+                  style: pw.TextStyle(
+                    fontSize: 7.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: badgeColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 2),
+          // Remaining balance line
+          pw.Text(
+            isPartial
+                ? 'REMAINING BALANCE DUE: Rs. ${_fmt(r.remainingBalance)} (UNSETTLED)'
+                : 'REMAINING BALANCE DUE: Rs. 0 (FULLY SETTLED)',
+            style: pw.TextStyle(
+              fontSize: 7,
+              fontWeight: pw.FontWeight.bold,
+              color: isPartial ? _Clr.red700 : _Clr.emerald700,
+            ),
+          ),
+          pw.SizedBox(height: 1.5),
+          // Amount in words
+          pw.Text(
+            'In Words: ${amountToWords(r.paidAmount)}',
+            style: const pw.TextStyle(
+              fontSize: 6.5,
+              fontStyle: pw.FontStyle.italic,
+              color: _Clr.slate,
+            ),
+          ),
+        ],
       ),
     );
   }

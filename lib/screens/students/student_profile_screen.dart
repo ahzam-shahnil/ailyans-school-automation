@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/providers/fee_collection_provider.dart';
+import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_profile_provider.dart';
@@ -203,6 +205,42 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     );
   }
 
+  Future<void> _onPrintReceipt(String voucherMasId) async {
+    final meta = ref.read(shellMetadataProvider).value;
+    final printData = await ref
+        .read(feeCollectionProvider.notifier)
+        .loadReceiptPrintData(voucherMasId);
+
+    if (!mounted) return;
+
+    if (printData == null) {
+      _showSnackBar('Could not load receipt data for printing.', isError: true);
+      return;
+    }
+
+    final safeBranchName = (meta?.branchName != null &&
+            meta!.branchName.trim().isNotEmpty)
+        ? meta.branchName.trim()
+        : "Ailyans's Higher Secondary School Mianwali";
+    final safeBranchAddress = (meta?.branchAddress != null &&
+            meta!.branchAddress.trim().isNotEmpty)
+        ? meta.branchAddress.trim()
+        : 'Muslim Bazar Mianwali';
+
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.feeReceipt,
+        id: voucherMasId,
+        vouchers: [printData],
+        extraParams: {
+          'branchName': safeBranchName,
+          'branchAddress': safeBranchAddress,
+        },
+      ),
+    );
+  }
+
   Future<void> _handleSave(Student currentStudent) async {
     // Step 1: NameFirst not empty → "Enter Fisrt Name Please " (verbatim typo)
     if (_firstNameController.text.trim().isEmpty) {
@@ -349,6 +387,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final profileAsync = ref.watch(studentProfileProvider(stuRegId));
     final isEditMode = ref.watch(studentEditModeProvider);
     final activeTab = ref.watch(selectedStudentTabProvider);
+    final session = ref.watch(sessionProvider);
+    final canEditBiodata =
+        session == null ||
+        session.user.userLevel == 1 ||
+        session.hasAccess(12);
 
     return profileAsync.when(
       loading: () => _buildLoadingSkeleton(),
@@ -363,7 +406,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.f2): () {
-              ref.read(studentEditModeProvider.notifier).state = !isEditMode;
+              if (canEditBiodata) {
+                ref.read(studentEditModeProvider.notifier).state = !isEditMode;
+              }
             },
             const SingleActivator(LogicalKeyboardKey.keyS, control: true): () {
               if (isEditMode) _handleSave(bundle.student);
@@ -390,7 +435,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     const SizedBox(height: AppSpacing.md),
 
                     // Top Hero Profile Card
-                    _buildHeroCard(bundle, isEditMode),
+                    _buildHeroCard(bundle, isEditMode, canEditBiodata),
                     const SizedBox(height: AppSpacing.md),
 
                     // Tab Switcher
@@ -516,7 +561,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   // ─────────────────────────────────────────────────────────────────────────
   // HERO CARD (TOP)
   // ─────────────────────────────────────────────────────────────────────────
-  Widget _buildHeroCard(StudentProfileBundle bundle, bool isEditMode) {
+  Widget _buildHeroCard(
+    StudentProfileBundle bundle,
+    bool isEditMode,
+    bool canEditBiodata,
+  ) {
     final student = bundle.student;
     final isLeft = student.remarls?.toLowerCase().contains('left') ?? false;
 
@@ -717,15 +766,17 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
           // Action Buttons
           if (!isEditMode) ...[
-            ElevatedButton.icon(
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Edit Profile (F2)'),
-              onPressed: () {
-                _populateForm(student);
-                ref.read(studentEditModeProvider.notifier).state = true;
-              },
-            ),
-            const SizedBox(width: AppSpacing.sm),
+            if (canEditBiodata) ...[
+              ElevatedButton.icon(
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Edit Profile (F2)'),
+                onPressed: () {
+                  _populateForm(student);
+                  ref.read(studentEditModeProvider.notifier).state = true;
+                },
+              ),
+              const SizedBox(width: AppSpacing.sm),
+            ],
             OutlinedButton.icon(
               icon: const Icon(Icons.print_outlined, size: 16),
               label: const Text('Print Biodata'),
@@ -1962,6 +2013,12 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   // STICKY BOTTOM BAR (OVERVIEW TAB)
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildOverviewBottomBar(Student student, bool isEditMode) {
+    final session = ref.watch(sessionProvider);
+    final canEditBiodata =
+        session == null ||
+        session.user.userLevel == 1 ||
+        session.hasAccess(12);
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
@@ -2006,7 +2063,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    'View Mode — Press F2 or click Edit Profile to unlock and modify student registration fields.',
+                    canEditBiodata
+                        ? 'View Mode — Press F2 or click Edit Profile to unlock and modify student registration fields.'
+                        : 'Read-Only View - Modification requires #12 access.',
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textMuted,
                     ),
@@ -2020,15 +2079,18 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                       child: const Text('Print Biodossier'),
                       onPressed: () => _showSnackBar('Print coming in Phase 2'),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.edit_outlined, size: 16),
-                      label: const Text('Edit Profile (F2)'),
-                      onPressed: () {
-                        _populateForm(student);
-                        ref.read(studentEditModeProvider.notifier).state = true;
-                      },
-                    ),
+                    if (canEditBiodata) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Edit Profile (F2)'),
+                        onPressed: () {
+                          _populateForm(student);
+                          ref.read(studentEditModeProvider.notifier).state =
+                              true;
+                        },
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -2355,16 +2417,16 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         ),
                         child: Table(
                           columnWidths: const {
-                            0: FlexColumnWidth(1.8),
-                            1: FlexColumnWidth(1.8),
-                            2: FlexColumnWidth(1.5),
-                            3: FlexColumnWidth(1.5),
-                            4: FlexColumnWidth(1.5),
-                            5: FlexColumnWidth(1.3),
-                            6: FlexColumnWidth(1.5),
-                            7: FlexColumnWidth(1.5),
-                            8: FlexColumnWidth(1.3),
-                            9: FlexColumnWidth(1.6),
+                            0: FlexColumnWidth(1.4),
+                            1: FlexColumnWidth(1.5),
+                            2: FlexColumnWidth(1.2),
+                            3: FlexColumnWidth(1.2),
+                            4: FlexColumnWidth(1.3),
+                            5: FlexColumnWidth(1.1),
+                            6: FlexColumnWidth(1.3),
+                            7: FlexColumnWidth(1.2),
+                            8: FlexColumnWidth(1.1),
+                            9: FlexColumnWidth(2.8),
                           },
                           children: [
                             TableRow(
@@ -2385,7 +2447,13 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                               ],
                             ),
                             ...vouchers.map((v) {
-                              final isPaid = v.isPaid == 'Y';
+                              final remainingBalance =
+                                  (v.subtotal - v.discount) -
+                                      (v.paidAmount ?? 0);
+                              final isFullyPaid =
+                                  v.isPaid == 'Y' && remainingBalance <= 0;
+                              final canCollect = !isFullyPaid;
+                              final isPaid = isFullyPaid;
                               return TableRow(
                                 decoration: const BoxDecoration(
                                   border: Border(
@@ -2454,25 +2522,137 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                   ),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
+                                      horizontal: 4,
+                                      vertical: 3,
                                     ),
-                                    child: TextButton(
-                                      style: TextButton.styleFrom(
-                                        padding: EdgeInsets.zero,
-                                        minimumSize: const Size(50, 30),
-                                      ),
-                                      child: Text(
-                                        'Print Receipt →',
-                                        style: AppTypography.label.copyWith(
-                                          fontSize: 11,
-                                          color: AppColors.brandPrimary,
-                                        ),
-                                      ),
-                                      onPressed: () => _showSnackBar(
-                                        'Print coming in Phase 2',
-                                      ),
-                                    ),
+                                    child: canCollect
+                                        ? Wrap(
+                                            spacing: 4,
+                                            runSpacing: 2,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            children: [
+                                              ElevatedButton.icon(
+                                                icon: const Icon(
+                                                  Icons.payments_outlined,
+                                                  size: 12,
+                                                ),
+                                                label: const Text(
+                                                  'Collect Fee',
+                                                  style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                                style:
+                                                    ElevatedButton.styleFrom(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
+                                                  minimumSize:
+                                                      const Size(0, 26),
+                                                ),
+                                                onPressed: () {
+                                                  final fromPath =
+                                                      Uri.encodeComponent(
+                                                    '/students/${widget.studentId}',
+                                                  );
+                                                  context.go(
+                                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
+                                                  );
+                                                },
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.visibility_outlined,
+                                                  size: 15,
+                                                  color: AppColors.textMuted,
+                                                ),
+                                                tooltip:
+                                                    'View in Fee Collection',
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints(
+                                                  minWidth: 26,
+                                                  minHeight: 26,
+                                                ),
+                                                onPressed: () {
+                                                  final fromPath =
+                                                      Uri.encodeComponent(
+                                                    '/students/${widget.studentId}',
+                                                  );
+                                                  context.go(
+                                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          )
+                                        : Wrap(
+                                            spacing: 4,
+                                            runSpacing: 2,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            children: [
+                                              OutlinedButton.icon(
+                                                icon: const Icon(
+                                                  Icons.print_outlined,
+                                                  size: 12,
+                                                ),
+                                                label: const Text(
+                                                  'Print Receipt',
+                                                  style: TextStyle(
+                                                    fontSize: 10.5,
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                style:
+                                                    OutlinedButton.styleFrom(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 2,
+                                                  ),
+                                                  minimumSize:
+                                                      const Size(0, 26),
+                                                ),
+                                                onPressed: () =>
+                                                    _onPrintReceipt(
+                                                  v.voucherMasId,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.visibility_outlined,
+                                                  size: 15,
+                                                  color: AppColors.textMuted,
+                                                ),
+                                                tooltip:
+                                                    'View in Fee Collection',
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                padding: EdgeInsets.zero,
+                                                constraints:
+                                                    const BoxConstraints(
+                                                  minWidth: 26,
+                                                  minHeight: 26,
+                                                ),
+                                                onPressed: () {
+                                                  final fromPath =
+                                                      Uri.encodeComponent(
+                                                    '/students/${widget.studentId}',
+                                                  );
+                                                  context.go(
+                                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          ),
                                   ),
                                 ],
                               );
