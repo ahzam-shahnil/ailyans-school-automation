@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -26,13 +27,77 @@ final branchListProvider = FutureProvider<List<Map<String, dynamic>>>((
 final currentBranchProvider = StateProvider<String?>((ref) => null);
 
 /// Persistent top bar of the desktop application shell.
-class AppTopBar extends ConsumerWidget {
-  final FocusNode searchFocusNode;
+class AppTopBar extends ConsumerStatefulWidget {
+  final FocusNode? searchFocusNode;
 
-  const AppTopBar({super.key, required this.searchFocusNode});
+  const AppTopBar({super.key, this.searchFocusNode});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppTopBar> createState() => _AppTopBarState();
+}
+
+class _AppTopBarState extends ConsumerState<AppTopBar> {
+  late final TextEditingController _searchController;
+  late final FocusNode _internalFocusNode;
+
+  FocusNode get _effectiveFocusNode =>
+      widget.searchFocusNode ?? _internalFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _internalFocusNode = FocusNode();
+    _effectiveFocusNode.addListener(_onFocusChange);
+    HardwareKeyboard.instance.addHandler(_handleGlobalKeyEvent);
+  }
+
+  void _onFocusChange() {
+    if (_effectiveFocusNode.hasFocus && _searchController.text.isNotEmpty) {
+      _searchController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _searchController.text.length,
+      );
+    }
+  }
+
+  bool _handleGlobalKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.keyK) {
+      if (HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isMetaPressed) {
+        _effectiveFocusNode.requestFocus();
+        _searchController.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: _searchController.text.length,
+        );
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  void didUpdateWidget(covariant AppTopBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.searchFocusNode != widget.searchFocusNode) {
+      (oldWidget.searchFocusNode ?? _internalFocusNode).removeListener(
+        _onFocusChange,
+      );
+      _effectiveFocusNode.addListener(_onFocusChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalKeyEvent);
+    _effectiveFocusNode.removeListener(_onFocusChange);
+    _searchController.dispose();
+    _internalFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     final metadataAsync = ref.watch(shellMetadataProvider);
     final metadata = metadataAsync.valueOrNull ?? ShellMetadata.empty();
@@ -132,7 +197,15 @@ class AppTopBar extends ConsumerWidget {
           const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: TextField(
-              focusNode: searchFocusNode,
+              controller: _searchController,
+              focusNode: _effectiveFocusNode,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (value) {
+                final query = value.trim();
+                if (query.isNotEmpty) {
+                  context.go('/search?q=${Uri.encodeComponent(query)}');
+                }
+              },
               style: AppTypography.bodySmall.copyWith(
                 color: AppColors.textPrimary,
               ),
@@ -358,6 +431,9 @@ class AppTopBar extends ConsumerWidget {
   }
 
   String _getBreadcrumb(String path) {
+    if (path.startsWith('/search')) {
+      return 'Home > Global Search';
+    }
     if (path == '/dashboard') {
       return 'Home > Dashboard';
     }

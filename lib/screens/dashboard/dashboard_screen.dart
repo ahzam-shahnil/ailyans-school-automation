@@ -402,16 +402,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                         ),
                                         InkWell(
                                           onTap: () async {
+                                            final meta = ref
+                                                .read(shellMetadataProvider)
+                                                .value;
+                                            final sessionYr =
+                                                meta?.sessionYear ?? '2026-27';
                                             final buildData = await ref
                                                 .read(
                                                   feeCollectionProvider
                                                       .notifier,
                                                 )
-                                                .buildDefaulterList();
+                                                .buildDefaulterList(
+                                                  sessionYr: sessionYr,
+                                                );
                                             if (!context.mounted) return;
-                                            final meta = ref
-                                                .read(shellMetadataProvider)
-                                                .value;
+                                            final safeBranchName =
+                                                (meta?.branchName != null &&
+                                                        meta!.branchName
+                                                            .trim()
+                                                            .isNotEmpty)
+                                                    ? meta.branchName.trim()
+                                                    : "Ailyans's Higher Secondary School Mianwali";
+                                            final safeBranchAddress =
+                                                (meta?.branchAddress != null &&
+                                                        meta!.branchAddress
+                                                            .trim()
+                                                            .isNotEmpty)
+                                                    ? meta.branchAddress.trim()
+                                                    : 'Muslim Bazar Mianwali';
                                             await ReportPreviewModal.show(
                                               context,
                                               request: ReportRequest(
@@ -419,14 +437,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                                 vouchers: buildData.groups,
                                                 extraParams: {
                                                   'summary': buildData.summary,
-                                                  'branchName': meta?.branchName ??
-                                                      "Ailyans's Higher Secondary School Mianwali",
+                                                  'branchName': safeBranchName,
                                                   'branchAddress':
-                                                      meta?.branchAddress ??
-                                                          'Muslim Bazar Mianwali',
-                                                  'branchPhone': meta?.branchPhone,
+                                                      safeBranchAddress,
+                                                  'branchPhone':
+                                                      meta?.branchPhone,
                                                   'branchPrincipal':
                                                       meta?.branchPrincipal,
+                                                  'sessionYr': sessionYr,
                                                 },
                                               ),
                                             );
