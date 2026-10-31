@@ -17,13 +17,15 @@ void main() async {
 
     const windowOptions = WindowOptions(
       size: Size(1440, 900),
-      minimumSize: Size(1280, 800),
+      minimumSize: Size(1024, 680),
       center: true,
       title: "Ailyans School Automation System",
+      titleBarStyle: TitleBarStyle.normal,
     );
 
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
+      await windowManager.maximize();
       await windowManager.focus();
     });
   }

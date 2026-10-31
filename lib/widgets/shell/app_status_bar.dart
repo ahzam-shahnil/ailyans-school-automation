@@ -5,6 +5,7 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
 /// Contextual bottom status bar of the desktop application shell.
+/// Fixed 28px height, pinned at the bottom of the AppShell root Column.
 class AppStatusBar extends ConsumerWidget {
   const AppStatusBar({super.key});
 
