@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -35,219 +36,227 @@ class SlcPdfGenerator {
     final regularFont = pw.Font.helvetica();
     final italicFont = pw.Font.helveticaOblique();
 
-    final String studentName = (slcData['studentName'] as String?) ?? '';
-    final String fatherName = (slcData['fatherName'] as String?) ?? '';
-    final String className = (slcData['className'] as String?) ?? '';
-    final String admissionDate = (slcData['admissionDate'] as String?) ?? '';
-    final String leavingDate = (slcData['leavingDate'] as String?) ?? '';
-    final String conduct = (slcData['conduct'] as String?)?.trim() ?? '';
-    final String reason = (slcData['reason'] as String?)?.trim() ?? '';
-    final String remarks = (slcData['remarks'] as String?) ?? '';
+    final String studentName = (slcData['studentName'] ??
+            slcData['name'] ??
+            slcData['stuName'] ??
+            slcData['Stu_Name'] ??
+            '')
+        .toString()
+        .trim();
+    final String fatherName = (slcData['fatherName'] ??
+            slcData['father'] ??
+            slcData['fName'] ??
+            slcData['F_Name'] ??
+            '')
+        .toString()
+        .trim();
+    final String className = (slcData['className'] ??
+            slcData['classLeft'] ??
+            slcData['leftClass'] ??
+            slcData['LeftClass'] ??
+            slcData['cName'] ??
+            slcData['CName'] ??
+            '')
+        .toString()
+        .trim();
+    final String admissionDate = (slcData['admissionDate'] ??
+            slcData['admDate'] ??
+            slcData['admission_date'] ??
+            slcData['DOAdmission'] ??
+            '')
+        .toString()
+        .trim();
+    final String leavingDate = (slcData['leavingDate'] ??
+            slcData['leftDate'] ??
+            slcData['LeftDate'] ??
+            slcData['dateLeft'] ??
+            '')
+        .toString()
+        .trim();
+    final String conduct = (slcData['conduct'] ??
+            slcData['charactor'] ??
+            slcData['Charactor'] ??
+            slcData['character'] ??
+            '')
+        .toString()
+        .trim();
+    final String reason = (slcData['reason'] ??
+            slcData['termOfLeaving'] ??
+            slcData['TermOfLeavign'] ??
+            slcData['term'] ??
+            '')
+        .toString()
+        .trim();
+    final String remarks = (slcData['remarks'] ??
+            slcData['slRemarks'] ??
+            slcData['Remarks'] ??
+            '')
+        .toString()
+        .trim();
+
+    final sName = studentName.isEmpty ? '__________________' : studentName;
+    final fName = fatherName.isEmpty ? '__________________' : fatherName;
 
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
+        margin: const pw.EdgeInsets.all(24),
         build: (pw.Context context) {
           return pw.Container(
+            width: double.infinity,
+            height: double.infinity,
             decoration: pw.BoxDecoration(
-              border: pw.Border.all(
-                color: PdfColors.blueGrey800,
-                width: 2.5,
-              ),
+              border: pw.Border.all(color: PdfColors.blue900, width: 4),
             ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-              children: [
-                // ── Outer border accent top strip ──
-                pw.Container(
-                  height: 6,
-                  color: PdfColors.blueGrey800,
-                ),
-
-                pw.Padding(
-                  padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 24,
+            padding: const pw.EdgeInsets.all(8),
+            child: pw.Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.blue900, width: 1),
+              ),
+              padding: const pw.EdgeInsets.all(24),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+                children: [
+                  // ── Logo Placeholder ──
+                  pw.Center(
+                    child: pw.Container(
+                      width: 60,
+                      height: 60,
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.grey300,
+                        shape: pw.BoxShape.circle,
+                      ),
+                      alignment: pw.Alignment.center,
+                      child: pw.Text(
+                        'LOGO',
+                        style: pw.TextStyle(
+                          font: boldFont,
+                          fontSize: 10,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                    ),
                   ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                    children: [
-                      // ── HEADER: Institution name + address ──
-                      pw.Center(
-                        child: pw.Column(
-                          children: [
-                            pw.Text(
-                              branchName,
-                              style: pw.TextStyle(
-                                font: boldFont,
-                                fontSize: 16,
-                                letterSpacing: 0.5,
-                              ),
-                              textAlign: pw.TextAlign.center,
-                            ),
-                            pw.SizedBox(height: 4),
-                            pw.Text(
-                              branchAddress,
-                              style: pw.TextStyle(
-                                font: regularFont,
-                                fontSize: 11,
-                                color: PdfColors.blueGrey700,
-                              ),
-                              textAlign: pw.TextAlign.center,
-                            ),
-                          ],
-                        ),
+
+                  pw.SizedBox(height: 10),
+
+                  // ── Institution Name + Address ──
+                  pw.Center(
+                    child: pw.Text(
+                      branchName,
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 22,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.blue900,
                       ),
-
-                      pw.SizedBox(height: 16),
-                      pw.Divider(color: PdfColors.blueGrey300, thickness: 0.8),
-                      pw.SizedBox(height: 12),
-
-                      // ── DOCUMENT TITLE ──
-                      pw.Center(
-                        child: pw.Column(
-                          children: [
-                            pw.Text(
-                              'SCHOOL LEAVING CERTIFICATE',
-                              style: pw.TextStyle(
-                                font: boldFont,
-                                fontSize: 18,
-                                letterSpacing: 2.0,
-                              ),
-                              textAlign: pw.TextAlign.center,
-                            ),
-                            pw.SizedBox(height: 4),
-                            pw.Container(
-                              height: 2,
-                              width: 260,
-                              color: PdfColors.blueGrey800,
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      pw.SizedBox(height: 28),
-
-                      // ── INTRODUCTORY PARAGRAPH ──
-                      pw.RichText(
-                        text: pw.TextSpan(
-                          style: pw.TextStyle(
-                            font: regularFont,
-                            fontSize: 12,
-                            lineSpacing: 4,
-                          ),
-                          children: [
-                            const pw.TextSpan(
-                              text: 'This is to certify that ',
-                            ),
-                            pw.TextSpan(
-                              text: studentName.isEmpty ? '__________________' : studentName,
-                              style: pw.TextStyle(
-                                font: boldFont,
-                                fontSize: 12,
-                                decoration: pw.TextDecoration.underline,
-                              ),
-                            ),
-                            const pw.TextSpan(
-                              text: ', son/daughter of ',
-                            ),
-                            pw.TextSpan(
-                              text: fatherName.isEmpty ? '__________________' : fatherName,
-                              style: pw.TextStyle(
-                                font: boldFont,
-                                fontSize: 12,
-                                decoration: pw.TextDecoration.underline,
-                              ),
-                            ),
-                            const pw.TextSpan(
-                              text:
-                                  ', was a bonafide student of this institution '
-                                  'and has been duly enrolled in our records.',
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      pw.SizedBox(height: 24),
-
-                      // ── DETAIL TABLE ──
-                      _buildDetailTable(
-                        regularFont: regularFont,
-                        boldFont: boldFont,
-                        className: className,
-                        admissionDate: admissionDate,
-                        leavingDate: leavingDate,
-                        conduct: conduct,
-                        reason: reason,
-                      ),
-
-                      pw.SizedBox(height: 20),
-
-                      // ── REMARKS ──
-                      if (remarks.trim().isNotEmpty) ...[
-                        pw.Container(
-                          padding: const pw.EdgeInsets.all(10),
-                          decoration: pw.BoxDecoration(
-                            border: pw.Border.all(
-                              color: PdfColors.blueGrey200,
-                              width: 0.8,
-                            ),
-                          ),
-                          child: pw.Column(
-                            crossAxisAlignment: pw.CrossAxisAlignment.start,
-                            children: [
-                              pw.Text(
-                                'Administrative Remarks:',
-                                style: pw.TextStyle(
-                                  font: boldFont,
-                                  fontSize: 11,
-                                ),
-                              ),
-                              pw.SizedBox(height: 4),
-                              pw.Text(
-                                remarks,
-                                style: pw.TextStyle(
-                                  font: italicFont,
-                                  fontSize: 11,
-                                  color: PdfColors.blueGrey700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        pw.SizedBox(height: 20),
-                      ],
-
-                      // ── SIGNATURE SECTION ──
-                      pw.Spacer(),
-                      pw.SizedBox(height: 40),
-                      _buildSignatureRow(boldFont: boldFont, regularFont: regularFont),
-
-                      pw.SizedBox(height: 16),
-
-                      // ── FOOTER NOTE ──
-                      pw.Center(
-                        child: pw.Text(
-                          'This certificate is issued on the request of the student/guardian.',
-                          style: pw.TextStyle(
-                            font: italicFont,
-                            fontSize: 9,
-                            color: PdfColors.blueGrey500,
-                          ),
-                          textAlign: pw.TextAlign.center,
-                        ),
-                      ),
-                    ],
+                      textAlign: pw.TextAlign.center,
+                    ),
                   ),
-                ),
+                  pw.SizedBox(height: 4),
+                  pw.Center(
+                    child: pw.Text(
+                      branchAddress,
+                      style: pw.TextStyle(
+                        font: regularFont,
+                        fontSize: 12,
+                        color: PdfColors.grey700,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
 
-                // ── Outer border accent bottom strip ──
-                pw.Container(
-                  height: 6,
-                  color: PdfColors.blueGrey800,
-                ),
-              ],
+                  pw.SizedBox(height: 16),
+
+                  // ── Document Title & Divider ──
+                  pw.Center(
+                    child: pw.Text(
+                      'SCHOOL LEAVING CERTIFICATE',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                        letterSpacing: 2,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                  pw.Center(
+                    child: pw.Container(
+                      height: 2,
+                      width: 150,
+                      color: PdfColors.blue900,
+                      margin: const pw.EdgeInsets.symmetric(vertical: 10),
+                    ),
+                  ),
+
+                  pw.SizedBox(height: 14),
+
+                  // ── Body Certification Paragraph ──
+                  pw.Text(
+                    'This is to certify that Mr./Ms. $sName, son/daughter of Mr. $fName, was a bonafide student of this institution and has been duly enrolled in our records.',
+                    style: pw.TextStyle(
+                      font: regularFont,
+                      fontSize: 14,
+                      lineSpacing: 1.5,
+                    ),
+                    textAlign: pw.TextAlign.center,
+                  ),
+
+                  pw.SizedBox(height: 20),
+
+                  // ── Detail Table ──
+                  _buildDetailTable(
+                    regularFont: regularFont,
+                    boldFont: boldFont,
+                    className: className,
+                    admissionDate: _formatDate(admissionDate),
+                    leavingDate: _formatDate(leavingDate),
+                    conduct: conduct,
+                    reason: reason,
+                  ),
+
+                  // ── Optional Remarks ──
+                  if (remarks.isNotEmpty) ...[
+                    pw.SizedBox(height: 12),
+                    pw.Center(
+                      child: pw.Text(
+                        'Remarks: $remarks',
+                        style: pw.TextStyle(
+                          font: italicFont,
+                          fontSize: 10,
+                          color: PdfColors.grey700,
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // ── Signatures Pushed to Bottom ──
+                  pw.Spacer(),
+                  _buildSignatureRow(
+                    boldFont: boldFont,
+                    regularFont: regularFont,
+                  ),
+
+                  pw.SizedBox(height: 16),
+
+                  // ── Footer Note ──
+                  pw.Center(
+                    child: pw.Text(
+                      'This certificate is issued on the request of the student/guardian.',
+                      style: pw.TextStyle(
+                        font: italicFont,
+                        fontSize: 10,
+                        fontStyle: pw.FontStyle.italic,
+                        color: PdfColors.grey600,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
@@ -261,6 +270,41 @@ class SlcPdfGenerator {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  static String _formatDate(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty || trimmed == '-') return '-';
+
+    DateTime? dt = DateTime.tryParse(trimmed);
+
+    if (dt == null) {
+      final datePart = trimmed.split(' ').first;
+      final slashParts = datePart.split('/');
+      if (slashParts.length == 3) {
+        final p0 = int.tryParse(slashParts[0]);
+        final p1 = int.tryParse(slashParts[1]);
+        var p2 = int.tryParse(slashParts[2]);
+        if (p0 != null && p1 != null && p2 != null) {
+          if (p2 < 100) p2 += 2000;
+          if (p0 > 12) {
+            // dd/MM/yyyy
+            dt = DateTime(p2, p1, p0);
+          } else {
+            // MM/dd/yy (e.g. 04/02/24 -> 02-Apr-2024)
+            dt = DateTime(p2, p0, p1);
+          }
+        }
+      }
+    }
+
+    if (dt != null) {
+      try {
+        return DateFormat('dd-MMM-yyyy').format(dt);
+      } catch (_) {}
+    }
+
+    return trimmed;
+  }
+
   static pw.Widget _buildDetailTable({
     required pw.Font regularFont,
     required pw.Font boldFont,
@@ -271,21 +315,17 @@ class SlcPdfGenerator {
     required String reason,
   }) {
     final rows = <_SlcField>[
-      _SlcField('Class / Grade', className),
-      _SlcField('Date of Admission', admissionDate),
-      _SlcField('Date of Leaving', leavingDate),
-      _SlcField('Character & Conduct', conduct),
-      _SlcField('Reason for Leaving', reason),
+      _SlcField('Class / Grade:', className),
+      _SlcField('Date of Admission:', admissionDate),
+      _SlcField('Date of Leaving:', leavingDate),
+      _SlcField('Character & Conduct:', conduct),
+      _SlcField('Reason for Leaving:', reason),
     ];
 
     return pw.Table(
-      border: pw.TableBorder.all(
-        color: PdfColors.blueGrey200,
-        width: 0.6,
-      ),
       columnWidths: const {
-        0: pw.FlexColumnWidth(2),
-        1: pw.FlexColumnWidth(3),
+        0: pw.FlexColumnWidth(2.2),
+        1: pw.FlexColumnWidth(3.8),
       },
       children: rows.map((field) {
         return pw.TableRow(
@@ -293,20 +333,26 @@ class SlcPdfGenerator {
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(
                 horizontal: 10,
-                vertical: 7,
+                vertical: 6,
               ),
               child: pw.Text(
                 field.label,
-                style: pw.TextStyle(font: boldFont, fontSize: 11),
+                textAlign: pw.TextAlign.right,
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
             ),
             pw.Padding(
               padding: const pw.EdgeInsets.symmetric(
                 horizontal: 10,
-                vertical: 7,
+                vertical: 6,
               ),
               child: pw.Text(
                 field.value.isEmpty ? '-' : field.value,
+                textAlign: pw.TextAlign.left,
                 style: pw.TextStyle(font: regularFont, fontSize: 11),
               ),
             ),
@@ -324,17 +370,20 @@ class SlcPdfGenerator {
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
         _signatureBlock(
-          label: 'Class Teacher',
+          title: 'Class Teacher',
+          subtitle: 'Stamp & Signature',
           boldFont: boldFont,
           regularFont: regularFont,
         ),
         _signatureBlock(
-          label: 'Head of Department',
+          title: 'Head of Department',
+          subtitle: 'Stamp & Signature',
           boldFont: boldFont,
           regularFont: regularFont,
         ),
         _signatureBlock(
-          label: 'Principal',
+          title: 'Principal',
+          subtitle: 'Stamp & Signature',
           boldFont: boldFont,
           regularFont: regularFont,
         ),
@@ -343,28 +392,33 @@ class SlcPdfGenerator {
   }
 
   static pw.Widget _signatureBlock({
-    required String label,
+    required String title,
+    required String subtitle,
     required pw.Font boldFont,
     required pw.Font regularFont,
   }) {
     return pw.Column(
       children: [
         pw.Container(
-          width: 130,
+          width: 120,
           height: 1,
-          color: PdfColors.blueGrey600,
-        ),
-        pw.SizedBox(height: 4),
-        pw.Text(
-          label,
-          style: pw.TextStyle(font: boldFont, fontSize: 10),
+          color: PdfColors.black,
+          margin: const pw.EdgeInsets.only(bottom: 4),
         ),
         pw.Text(
-          'Stamp & Signature',
+          title,
+          style: pw.TextStyle(
+            font: boldFont,
+            fontSize: 10,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+        pw.Text(
+          subtitle,
           style: pw.TextStyle(
             font: regularFont,
             fontSize: 9,
-            color: PdfColors.blueGrey500,
+            color: PdfColors.grey700,
           ),
         ),
       ],

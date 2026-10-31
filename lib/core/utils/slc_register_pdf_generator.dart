@@ -37,6 +37,7 @@ class SlcRegisterPdfGenerator {
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4.landscape,
+        maxPages: 500,
         margin: const pw.EdgeInsets.all(28),
         header: (context) => _buildHeader(
           branchName: branchName,
@@ -113,21 +114,44 @@ class SlcRegisterPdfGenerator {
                   final idx = entry.key;
                   final l = entry.value;
 
-                  final regId =
-                      (l['regId'] ?? l['stuRegId'] ?? '-').toString();
+                  final regId = (l['regId'] ??
+                          l['stuRegId'] ??
+                          l['StuRegID'] ??
+                          l['Stu_RegID'] ??
+                          '-')
+                      .toString();
                   final studentName = (l['name'] ??
-                      l['studentName'] ??
-                      'Student $regId') as String;
-                  final fatherName =
-                      (l['fatherName'] ?? l['fName'] ?? '-') as String;
-                  final classLeft =
-                      (l['classLeft'] ?? l['className'] ?? '-') as String;
-                  final dateLeft =
-                      (l['dateLeft'] ?? l['leavingDate'] ?? '-') as String;
+                          l['studentName'] ??
+                          l['stuName'] ??
+                          l['Stu_Name'] ??
+                          'Student $regId')
+                      .toString();
+                  final fatherName = (l['fatherName'] ??
+                          l['father'] ??
+                          l['fName'] ??
+                          l['F_Name'] ??
+                          '-')
+                      .toString();
+                  final classLeft = (l['classLeft'] ??
+                          l['className'] ??
+                          l['leftClass'] ??
+                          l['LeftClass'] ??
+                          l['cName'] ??
+                          l['CName'] ??
+                          '-')
+                      .toString();
+                  final dateLeft = (l['dateLeft'] ??
+                          l['leavingDate'] ??
+                          l['leftDate'] ??
+                          l['LeftDate'] ??
+                          '-')
+                      .toString();
                   final reason = (l['reason'] ??
-                      l['termOfLeaving'] ??
-                      l['term'] ??
-                      '-') as String;
+                          l['termOfLeaving'] ??
+                          l['TermOfLeavign'] ??
+                          l['term'] ??
+                          '-')
+                      .toString();
 
                   final isEven = idx.isEven;
 

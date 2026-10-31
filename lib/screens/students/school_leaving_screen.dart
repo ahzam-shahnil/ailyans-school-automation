@@ -163,6 +163,10 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       'conduct': conduct,
       'reason': reason,
       'remarks': remarks,
+      'leftDate': leavingDate,
+      'leftClass': student.classSecDisplay,
+      'charactor': conduct,
+      'termOfLeaving': reason,
     };
 
     ReportPreviewModal.show(
@@ -667,53 +671,68 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                   borderRadius: BorderRadius.circular(AppRadius.md),
                   border: Border.all(color: AppColors.borderDefault),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _handlePrintRegister,
-                      icon: const Icon(Icons.print_outlined, size: 16),
-                      label: const Text('Print SLC Register'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textPrimary,
-                        minimumSize: const Size(150, 36),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _handlePrintRegister,
+                        icon: const Icon(Icons.print_outlined, size: 16),
+                        label: const Text('Print SLC Register'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textPrimary,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    OutlinedButton.icon(
-                      onPressed: printEnabled ? _handlePrintCertificate : null,
-                      icon: const Icon(Icons.description_outlined, size: 16),
-                      label: Text(
-                        state.hasExistingSlc
-                            ? 'Reprint Leaving Certificate'
-                            : 'Print Leaving Certificate',
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textPrimary,
-                        minimumSize: const Size(180, 36),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
+                      const SizedBox(width: AppSpacing.sm),
+                      OutlinedButton.icon(
+                        onPressed: printEnabled ? _handlePrintCertificate : null,
+                        icon: const Icon(Icons.description_outlined, size: 16),
+                        label: Text(
+                          state.hasExistingSlc
+                              ? 'Reprint Leaving Certificate'
+                              : 'Print Leaving Certificate',
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textPrimary,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    ElevatedButton.icon(
-                      onPressed: commitDisabled ? null : _handleCommit,
-                      icon: const Icon(Icons.exit_to_app, size: 16),
-                      label: const Text('Commit School Leaving'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.statusErrorText,
-                        foregroundColor: AppColors.textOnPrimary,
-                        minimumSize: const Size(190, 36),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
+                      const SizedBox(width: AppSpacing.sm),
+                      ElevatedButton.icon(
+                        onPressed: commitDisabled ? null : _handleCommit,
+                        icon: const Icon(Icons.exit_to_app, size: 16),
+                        label: const Text('Commit School Leaving'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.statusErrorText,
+                          foregroundColor: AppColors.textOnPrimary,
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
