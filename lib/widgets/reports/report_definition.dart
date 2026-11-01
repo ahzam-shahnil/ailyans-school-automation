@@ -18,6 +18,8 @@ enum ReportType {
   examSummary,
   libraryCatalog,
   examAwardList,
+  teacherAttendanceRegister,
+  awardCertificate,
 }
 
 extension ReportTypePath on ReportType {
@@ -39,6 +41,8 @@ extension ReportTypePath on ReportType {
     ReportType.examSummary => 'exam-summary',
     ReportType.libraryCatalog => 'library-catalog',
     ReportType.examAwardList => 'exam-award-list',
+    ReportType.teacherAttendanceRegister => 'teacher-attendance-register',
+    ReportType.awardCertificate => 'award-certificate',
   };
 
   String get displayName => switch (this) {
@@ -59,6 +63,8 @@ extension ReportTypePath on ReportType {
     ReportType.examSummary => 'Exam Summary',
     ReportType.libraryCatalog => 'Library Books Catalog',
     ReportType.examAwardList => 'Exam Award List',
+    ReportType.teacherAttendanceRegister => 'Teacher Attendance Register',
+    ReportType.awardCertificate => 'Award Certificate',
   };
 
   String get defaultFileName => '${path}_report.pdf';

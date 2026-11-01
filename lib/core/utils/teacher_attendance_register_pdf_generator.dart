@@ -1,0 +1,374 @@
+import 'dart:typed_data';
+
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+
+import 'voucher_pdf_generator.dart' show ReportTheme;
+
+/// Generates an A4 portrait Teacher Attendance Register PDF report.
+class TeacherAttendanceRegisterPdfGenerator {
+  TeacherAttendanceRegisterPdfGenerator._();
+
+  /// Generates the complete PDF document as bytes.
+  static Future<Uint8List> generate({
+    required String month,
+    required List<Map<String, dynamic>> staffAttendance,
+    required String branchName,
+    required String branchAddress,
+  }) async {
+    final doc = pw.Document();
+
+    final boldFont = pw.Font.helveticaBold();
+    final regularFont = pw.Font.helvetica();
+    final italicFont = pw.Font.helveticaOblique();
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) => _buildHeader(
+          branchName: branchName,
+          branchAddress: branchAddress,
+          month: month,
+          totalStaff: staffAttendance.length,
+          boldFont: boldFont,
+          regularFont: regularFont,
+        ),
+        footer: (context) => _buildFooter(
+          context: context,
+          regularFont: regularFont,
+          italicFont: italicFont,
+        ),
+        build: (context) => [
+          pw.SizedBox(height: 10),
+          _buildTable(
+            staffAttendance: staffAttendance,
+            boldFont: boldFont,
+            regularFont: regularFont,
+          ),
+          pw.SizedBox(height: 24),
+          _buildSignatures(regularFont: regularFont),
+        ],
+      ),
+    );
+
+    return doc.save();
+  }
+
+  static pw.Widget _buildHeader({
+    required String branchName,
+    required String branchAddress,
+    required String month,
+    required int totalStaff,
+    required pw.Font boldFont,
+    required pw.Font regularFont,
+  }) {
+    final titleText = 'STAFF ATTENDANCE REGISTER - $month';
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      children: [
+        pw.Text(
+          branchName.isNotEmpty ? branchName.toUpperCase() : 'SCHOOL AUTOMATION',
+          style: pw.TextStyle(
+            font: boldFont,
+            fontSize: 14,
+            color: ReportTheme.primaryColor,
+          ),
+          textAlign: pw.TextAlign.center,
+        ),
+        if (branchAddress.isNotEmpty) ...[
+          pw.SizedBox(height: 2),
+          pw.Text(
+            branchAddress,
+            style: pw.TextStyle(
+              font: regularFont,
+              fontSize: 8.5,
+              color: ReportTheme.secondaryColor,
+            ),
+            textAlign: pw.TextAlign.center,
+          ),
+        ],
+        pw.SizedBox(height: 8),
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          decoration: const pw.BoxDecoration(
+            color: ReportTheme.bannerBgColor,
+            border: pw.Border(
+              top: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+              bottom: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+            ),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                titleText,
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 10,
+                  color: ReportTheme.primaryColor,
+                ),
+              ),
+              pw.Text(
+                'Total Staff: $totalStaff',
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 9,
+                  color: ReportTheme.secondaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 6),
+      ],
+    );
+  }
+
+  static pw.Widget _buildFooter({
+    required pw.Context context,
+    required pw.Font regularFont,
+    required pw.Font italicFont,
+  }) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(top: 8),
+      padding: const pw.EdgeInsets.only(top: 4),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(
+          top: pw.BorderSide(color: ReportTheme.borderRuleColor, width: 0.5),
+        ),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'Generated on: ${ReportTheme.formatDate(DateTime.now())}',
+            style: pw.TextStyle(
+              font: italicFont,
+              fontSize: 7.5,
+              color: PdfColors.grey700,
+            ),
+          ),
+          pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: pw.TextStyle(
+              font: regularFont,
+              fontSize: 7.5,
+              color: PdfColors.grey700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildTable({
+    required List<Map<String, dynamic>> staffAttendance,
+    required pw.Font boldFont,
+    required pw.Font regularFont,
+  }) {
+    const headers = [
+      '#',
+      'Staff Name',
+      'Designation',
+      'Present',
+      'Absent',
+      'Leave',
+      'Total',
+      '%',
+    ];
+
+    return pw.Table(
+      columnWidths: const {
+        0: pw.FixedColumnWidth(28),
+        1: pw.FlexColumnWidth(3.0),
+        2: pw.FlexColumnWidth(2.0),
+        3: pw.FixedColumnWidth(48),
+        4: pw.FixedColumnWidth(48),
+        5: pw.FixedColumnWidth(48),
+        6: pw.FixedColumnWidth(48),
+        7: pw.FixedColumnWidth(52),
+      },
+      border: pw.TableBorder.all(
+        color: ReportTheme.borderRuleColor,
+        width: 0.5,
+      ),
+      children: [
+        // Header Row
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: ReportTheme.tableHeaderBg),
+          children: headers.map((h) {
+            final isRight = h == 'Present' ||
+                h == 'Absent' ||
+                h == 'Leave' ||
+                h == 'Total' ||
+                h == '%';
+            final isCenter = h == '#';
+            return pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              alignment: isRight
+                  ? pw.Alignment.centerRight
+                  : (isCenter ? pw.Alignment.center : pw.Alignment.centerLeft),
+              child: pw.Text(
+                h,
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 8.5,
+                  color: PdfColors.white,
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+
+        // Data Rows
+        ...staffAttendance.asMap().entries.map((entry) {
+          final index = entry.key;
+          final s = entry.value;
+
+          final name =
+              (s['teacherName'] ?? s['name'] ?? s['tName'] ?? '—').toString();
+          final desig =
+              (s['designation'] ?? s['tCat'] ?? 'Staff').toString();
+          final present =
+              (s['presentDays'] ?? s['present'] ?? 0) as num;
+          final absent =
+              (s['absentDays'] ?? s['absent'] ?? 0) as num;
+          final leave =
+              (s['leaveDays'] ?? s['leave'] ?? 0) as num;
+          final total =
+              (s['totalDays'] ?? s['total'] ?? (present + absent + leave)) as num;
+          final pct = total > 0 ? (present / total) * 100.0 : 0.0;
+
+          final isAlt = index.isOdd;
+          final rowBg = isAlt ? ReportTheme.tableRowAltBg : PdfColors.white;
+
+          return pw.TableRow(
+            decoration: pw.BoxDecoration(color: rowBg),
+            children: [
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 2, vertical: 3.5),
+                alignment: pw.Alignment.center,
+                child: pw.Text(
+                  '${index + 1}',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  name,
+                  style: pw.TextStyle(font: boldFont, fontSize: 8),
+                ),
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
+                alignment: pw.Alignment.centerLeft,
+                child: pw.Text(
+                  desig,
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  '$present',
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: 8,
+                    color: ReportTheme.successTextColor,
+                  ),
+                ),
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  '$absent',
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: 8,
+                    color: absent > 0
+                        ? ReportTheme.dangerTextColor
+                        : PdfColors.black,
+                  ),
+                ),
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  '$leave',
+                  style: pw.TextStyle(font: regularFont, fontSize: 8),
+                ),
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  '$total',
+                  style: pw.TextStyle(font: boldFont, fontSize: 8),
+                ),
+              ),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  '${pct.toStringAsFixed(1)}%',
+                  style: pw.TextStyle(
+                    font: boldFont,
+                    fontSize: 8,
+                    color: pct < 75.0
+                        ? ReportTheme.dangerTextColor
+                        : ReportTheme.primaryColor,
+                  ),
+                ),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  static pw.Widget _buildSignatures({required pw.Font regularFont}) {
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        _signatureBox(label: 'Admin Incharge', regularFont: regularFont),
+        _signatureBox(label: 'Accounts Officer', regularFont: regularFont),
+        _signatureBox(label: 'Principal', regularFont: regularFont),
+      ],
+    );
+  }
+
+  static pw.Widget _signatureBox({
+    required String label,
+    required pw.Font regularFont,
+  }) {
+    return pw.Column(
+      children: [
+        pw.Container(
+          width: 130,
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(
+              top: pw.BorderSide(color: ReportTheme.borderRuleColor, width: 0.8),
+            ),
+          ),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Text(
+          label,
+          style: pw.TextStyle(
+            font: regularFont,
+            fontSize: 8,
+            color: ReportTheme.secondaryColor,
+          ),
+        ),
+      ],
+    );
+  }
+}

@@ -1451,20 +1451,26 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
       color: AppColors.surfaceRaised,
       child: Row(
         children: [
-          // Left: Tally (Expanded pushes right buttons to the right edge)
-          Expanded(
-            child: Text(
-              '$enteredCnt Entered, $modifiedCnt Changed, $absentCnt Absent',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
+          // Left: Tally
+          Text(
+            '$enteredCnt Entered, $modifiedCnt Changed, $absentCnt Absent',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w500,
             ),
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(width: AppSpacing.sm),
 
           // Reports placeholders and primary save button
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               visualDensity: VisualDensity.compact,
@@ -1598,6 +1604,68 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
           ),
           const SizedBox(width: AppSpacing.xs),
 
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+            ),
+            icon: const Icon(Icons.workspace_premium, size: 16),
+            label: const Text('Award Certificate'),
+            onPressed: () async {
+              final curState = ref.read(marksEntryProvider);
+              if (curState.roster.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Load students first.')),
+                );
+                return;
+              }
+
+              final topStudent = curState.roster.reduce(
+                (a, b) => a.totalObtained > b.totalObtained ? a : b,
+              );
+              final meta = ref.read(shellMetadataProvider).value;
+
+              final examDetail =
+                  curState.examInfos.firstWhere(
+                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+                    orElse: () => {'Detail': 'Examination'},
+                  )['Detail'] ??
+                  (curState.selectedExamInfoId?.toString() ?? 'Examination');
+
+              final className =
+                  curState.classes.firstWhere(
+                    (c) => c['ClassID'] == curState.selectedClassId,
+                    orElse: () => {'CName': 'Class'},
+                  )['CName'] ??
+                  (curState.selectedClassId?.toString() ?? 'Class');
+
+              await ReportPreviewModal.show(
+                context,
+                request: ReportRequest(
+                  type: ReportType.awardCertificate,
+                  titleOverride: 'Award Certificate',
+                  extraParams: {
+                    'examName': examDetail,
+                    'className': className,
+                    'student': {
+                      'rollNo': topStudent.rollNo.toString(),
+                      'studentName': topStudent.studentName,
+                      'totalObtained': topStudent.totalObtained,
+                      'totalMax': topStudent.totalMax,
+                      'percentage': topStudent.totalMax > 0
+                          ? (topStudent.totalObtained * 100.0 / topStudent.totalMax).toStringAsFixed(1)
+                          : '0.0',
+                      'grade': topStudent.computeGrade(curState.exGradeRows).toString(),
+                    },
+                    'rank': 1,
+                    'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+                    'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                  },
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: AppSpacing.xs),
+
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               visualDensity: VisualDensity.compact,
@@ -1715,6 +1783,11 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                     ))
                 ? null
                 : _handleSave,
+          ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),

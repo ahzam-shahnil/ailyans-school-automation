@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:school_automation/core/utils/attendance_pdf_generator.dart';
+import 'package:school_automation/core/utils/award_certificate_pdf_generator.dart';
 import 'package:school_automation/core/utils/biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/class_syllabus_pdf_generator.dart';
 import 'package:school_automation/core/utils/daily_collection_pdf_generator.dart';
@@ -15,6 +16,7 @@ import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
 import 'package:school_automation/core/utils/salary_slip_pdf_generator.dart';
 import 'package:school_automation/core/utils/slc_pdf_generator.dart';
 import 'package:school_automation/core/utils/slc_register_pdf_generator.dart';
+import 'package:school_automation/core/utils/teacher_attendance_register_pdf_generator.dart';
 import 'package:school_automation/core/utils/teacher_biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/voucher_pdf_generator.dart';
 import 'package:school_automation/models/fee_receipt_view.dart';
@@ -119,6 +121,10 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateLibraryCatalog();
       case ReportType.examAwardList:
         return _generateExamAwardList();
+      case ReportType.teacherAttendanceRegister:
+        return _generateTeacherAttendanceRegister();
+      case ReportType.awardCertificate:
+        return _generateAwardCertificate();
     }
   }
 
@@ -460,6 +466,46 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       examName: request.extraParams['examName'] as String? ?? '',
       className: request.extraParams['className'] as String? ?? '',
       students: students.cast<Map<String, dynamic>>(),
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
+    );
+  }
+
+  Future<Uint8List> _generateTeacherAttendanceRegister() async {
+    final staff =
+        request.extraParams['staffAttendance'] as List<dynamic>?;
+    if (staff == null || staff.isEmpty) {
+      throw StateError(
+        'Missing or empty staffAttendance in extraParams for teacherAttendanceRegister.',
+      );
+    }
+    return TeacherAttendanceRegisterPdfGenerator.generate(
+      month: request.extraParams['month'] as String? ?? '',
+      staffAttendance: staff.cast<Map<String, dynamic>>(),
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
+    );
+  }
+
+  Future<Uint8List> _generateAwardCertificate() async {
+    final student =
+        request.extraParams['student'] as Map<String, dynamic>?;
+    final rank = (request.extraParams['rank'] as num?)?.toInt() ?? 0;
+    if (student == null) {
+      throw StateError(
+        'Missing student in extraParams for awardCertificate.',
+      );
+    }
+    if (rank <= 0) {
+      throw StateError(
+        'Invalid or missing rank in extraParams for awardCertificate (must be > 0).',
+      );
+    }
+    return AwardCertificatePdfGenerator.generate(
+      examName: request.extraParams['examName'] as String? ?? 'Examination',
+      className: request.extraParams['className'] as String? ?? 'Class',
+      student: student,
+      rank: rank,
       branchName: _safeBranchName(),
       branchAddress: _safeBranchAddress(),
     );

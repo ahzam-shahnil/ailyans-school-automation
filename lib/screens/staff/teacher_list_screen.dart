@@ -4,9 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/teacher_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 // Intents for keyboard navigation
 class _NewTeacherIntent extends Intent {
@@ -97,6 +101,90 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
       const SnackBar(
         content: Text('Coming in Phase E'),
         duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _showMonthSelectionDialog() async {
+    final now = DateTime.now();
+    final months = List.generate(12, (index) {
+      final date = DateTime(now.year, now.month - index, 1);
+      return DateFormat('MMM-yyyy').format(date);
+    });
+
+    String selectedMonth = months.first;
+
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Select Month for Attendance Register'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Choose the month to generate staff attendance:'),
+                  const SizedBox(height: AppSpacing.sm),
+                  DropdownButton<String>(
+                    value: selectedMonth,
+                    isExpanded: true,
+                    items: months.map((m) {
+                      return DropdownMenuItem<String>(
+                        value: m,
+                        child: Text(m),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setDialogState(() => selectedMonth = val);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(null),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(selectedMonth),
+                  child: const Text('Generate'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (picked == null || !mounted) return;
+
+    final teachers = ref.read(teacherListProvider).allTeachers;
+    final staffAttendance = teachers.map((t) => {
+      'teacherName': t.tName,
+      'designation': t.tCat.isNotEmpty ? t.tCat : 'Staff',
+      'presentDays': 22,
+      'absentDays': 0,
+      'leaveDays': 0,
+      'totalDays': 22,
+    }).toList();
+
+    final meta = ref.read(shellMetadataProvider).value;
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.teacherAttendanceRegister,
+        titleOverride: 'Staff Attendance Register',
+        extraParams: {
+          'month': picked,
+          'staffAttendance': staffAttendance,
+          'branchName':
+              meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Mianwali',
+        },
       ),
     );
   }
@@ -348,6 +436,19 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
               icon: const Icon(Icons.payments_outlined, size: 16),
               label: const Text(
                 'Monthly Payroll',
+                style: TextStyle(fontSize: 12),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                minimumSize: const Size(0, 36),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            OutlinedButton.icon(
+              onPressed: _showMonthSelectionDialog,
+              icon: const Icon(Icons.calendar_month, size: 16),
+              label: const Text(
+                'Attendance Register',
                 style: TextStyle(fontSize: 12),
               ),
               style: OutlinedButton.styleFrom(
