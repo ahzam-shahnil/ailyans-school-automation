@@ -694,7 +694,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
             pw.Text(
-              branchName.toUpperCase(),
+              branchName.isNotEmpty ? branchName.toUpperCase() : 'SCHOOL AUTOMATION',
               style: pw.TextStyle(
                 font: boldFont,
                 fontSize: 14,
@@ -728,7 +728,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'FEE COLLECTION REGISTER',
+                    'DAILY COLLECTION LEDGER',
                     style: pw.TextStyle(
                       font: boldFont,
                       fontSize: 10,
@@ -759,24 +759,38 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
             pw.TableHelper.fromTextArray(
               headers: [
                 'Time',
-                'Student',
+                'Student Name',
                 'Class',
-                'Voucher',
+                'Voucher ID',
                 'Amount',
                 'Bank',
                 'Collected By',
               ],
               data: rows.map((r) {
                 final time = r['time']?.toString() ?? '';
-                final student = r['studentName']?.toString() ?? '';
-                final className = r['className']?.toString() ?? '';
-                final voucher = r['voucherNo']?.toString() ?? '';
+                final student = r['studentName']?.toString() ??
+                    r['student']?.toString() ??
+                    '';
+                final className = r['className']?.toString() ??
+                    r['class']?.toString() ??
+                    '';
+                final voucher = r['voucherId']?.toString() ??
+                    r['voucherNo']?.toString() ??
+                    '';
                 final amt = r['amount'] is num
                     ? ReportTheme.formatCurrency(r['amount'] as num)
                     : (r['amount']?.toString() ?? '0.00');
                 final bank = r['bank']?.toString() ?? '';
                 final collectedBy = r['collectedBy']?.toString() ?? '';
-                return [time, student, className, voucher, amt, bank, collectedBy];
+                return [
+                  time,
+                  student,
+                  className,
+                  voucher,
+                  amt,
+                  bank,
+                  collectedBy,
+                ];
               }).toList(),
               border: pw.TableBorder.all(
                 color: ReportTheme.borderRuleColor,
@@ -784,7 +798,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
               ),
               headerStyle: ReportTheme.tableHeaderStyle,
               headerDecoration: const pw.BoxDecoration(
-                color: ReportTheme.primaryColor,
+                color: PdfColors.blue900,
               ),
               cellStyle: ReportTheme.tableCellStyle,
               cellAlignment: pw.Alignment.centerLeft,
@@ -807,7 +821,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
                 6: pw.Alignment.centerLeft,
               },
               rowDecoration: const pw.BoxDecoration(
-                color: ReportTheme.tableRowAltBg,
+                color: PdfColors.grey100,
               ),
               oddRowDecoration: const pw.BoxDecoration(
                 color: PdfColors.white,
@@ -816,18 +830,243 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
             pw.SizedBox(height: 8),
             pw.Container(
               alignment: pw.Alignment.centerRight,
+              padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: pw.BoxDecoration(
+                color: ReportTheme.bannerBgColor,
+                border: pw.Border.all(
+                  color: ReportTheme.borderRuleColor,
+                  width: 0.5,
+                ),
+              ),
+              child: pw.Text(
+                'TOTAL COLLECTED: Rs. ${ReportTheme.formatCurrency(totalAmount)}',
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 10,
+                  color: ReportTheme.successTextColor,
+                ),
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    return doc.save();
+  }
+
+  Future<Uint8List> generateClassCollectionSummary() async {
+    final rowsData = (request.extraParams['summaryRows'] as List<dynamic>?) ??
+        (request.extraParams['rows'] as List<dynamic>?) ??
+        (request.extraParams['classes'] as List<dynamic>?);
+    if (rowsData == null || rowsData.isEmpty) {
+      throw StateError(
+        'Missing or empty summaryRows in extraParams for classCollectionSummary.',
+      );
+    }
+    final month = request.extraParams['month'] as String? ?? '';
+    final sessionYr = request.extraParams['sessionYr'] as String? ?? '';
+    final branchName = _safeBranchName();
+    final branchAddress = _safeBranchAddress();
+
+    final doc = pw.Document();
+    final boldFont = pw.Font.helveticaBold();
+    final regularFont = pw.Font.helvetica();
+
+    final rows = rowsData.cast<Map<String, dynamic>>();
+    int totalBilled = 0;
+    num totalGross = 0;
+    num totalDisc = 0;
+    num totalColl = 0;
+    num totalDues = 0;
+
+    for (final r in rows) {
+      totalBilled += (r['billedCount'] as num?)?.toInt() ??
+          (r['totalBilled'] as num?)?.toInt() ??
+          0;
+      totalGross += (r['gross'] as num?) ??
+          (r['grossReceivable'] as num?) ??
+          0;
+      totalDisc += (r['discounts'] as num?) ??
+          (r['totalDiscounts'] as num?) ??
+          0;
+      totalColl += (r['collected'] as num?) ??
+          (r['cashCollected'] as num?) ??
+          0;
+      totalDues += (r['dues'] as num?) ??
+          (r['outstandingDues'] as num?) ??
+          0;
+    }
+    final overallPct = totalGross > 0
+        ? ((totalColl / totalGross) * 100).toStringAsFixed(1)
+        : '0.0';
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Text(
+              branchName.isNotEmpty ? branchName.toUpperCase() : 'SCHOOL AUTOMATION',
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 14,
+                color: ReportTheme.primaryColor,
+              ),
+              textAlign: pw.TextAlign.center,
+            ),
+            if (branchAddress.isNotEmpty) ...[
+              pw.SizedBox(height: 2),
+              pw.Text(
+                branchAddress,
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: 8,
+                  color: ReportTheme.secondaryColor,
+                ),
+                textAlign: pw.TextAlign.center,
+              ),
+            ],
+            pw.SizedBox(height: 8),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              decoration: const pw.BoxDecoration(
+                color: ReportTheme.bannerBgColor,
+                border: pw.Border(
+                  top: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+                  bottom: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+                ),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'CLASS COLLECTION SUMMARY',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 10,
+                      color: ReportTheme.primaryColor,
+                    ),
+                  ),
+                  pw.Text(
+                    [
+                      if (month.isNotEmpty) 'Month: $month',
+                      if (sessionYr.isNotEmpty) 'Session: $sessionYr',
+                    ].join(' | '),
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 9,
+                      color: ReportTheme.secondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        footer: (context) => ReportTheme.buildStandardFooter(
+          context,
+          branchName: branchName,
+        ),
+        build: (context) {
+          final tableData = rows.map((r) {
+            final cls = (r['className'] as String?) ?? 'Unknown';
+            final billed = ((r['billedCount'] as num?)?.toInt() ??
+                    (r['totalBilled'] as num?)?.toInt() ??
+                    0)
+                .toString();
+            final gross = ReportTheme.formatCurrency(
+                (r['gross'] as num?) ?? (r['grossReceivable'] as num?) ?? 0);
+            final disc = ReportTheme.formatCurrency((r['discounts'] as num?) ??
+                (r['totalDiscounts'] as num?) ??
+                0);
+            final coll = ReportTheme.formatCurrency((r['collected'] as num?) ??
+                (r['cashCollected'] as num?) ??
+                0);
+            final dues = ReportTheme.formatCurrency(
+                (r['dues'] as num?) ?? (r['outstandingDues'] as num?) ?? 0);
+            final pct = r['recoveryPercent']?.toString() ?? '0.0';
+            final pctStr = pct.endsWith('%') ? pct : '$pct%';
+            return [cls, billed, gross, disc, coll, dues, pctStr];
+          }).toList();
+
+          return [
+            pw.TableHelper.fromTextArray(
+              headers: [
+                'Class',
+                'Billed',
+                'Gross',
+                'Discounts',
+                'Collected',
+                'Dues',
+                'Recovery %',
+              ],
+              data: tableData,
+              border: pw.TableBorder.all(
+                color: ReportTheme.borderRuleColor,
+                width: 0.5,
+              ),
+              headerStyle: ReportTheme.tableHeaderStyle,
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.blue900,
+              ),
+              cellStyle: ReportTheme.tableCellStyle,
+              cellAlignment: pw.Alignment.centerLeft,
+              cellAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerRight,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerRight,
+                6: pw.Alignment.centerRight,
+              },
+              headerAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerRight,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerRight,
+                6: pw.Alignment.centerRight,
+              },
+              rowDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey100,
+              ),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColors.white,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(
               padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: pw.BoxDecoration(
                 color: ReportTheme.bannerBgColor,
                 border: pw.Border.all(color: ReportTheme.borderRuleColor, width: 0.5),
               ),
-              child: pw.Text(
-                'Total Collected: ${ReportTheme.formatCurrency(totalAmount)}',
-                style: pw.TextStyle(
-                  font: boldFont,
-                  fontSize: 10,
-                  color: ReportTheme.primaryColor,
-                ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'TOTALS: Billed: $totalBilled | Gross: Rs. ${ReportTheme.formatCurrency(totalGross)} | Discounts: Rs. ${ReportTheme.formatCurrency(totalDisc)}',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 8.5,
+                      color: ReportTheme.primaryColor,
+                    ),
+                  ),
+                  pw.Text(
+                    'Collected: Rs. ${ReportTheme.formatCurrency(totalColl)} | Dues: Rs. ${ReportTheme.formatCurrency(totalDues)} | Recovery: $overallPct%',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 8.5,
+                      color: ReportTheme.successTextColor,
+                    ),
+                  ),
+                ],
               ),
             ),
           ];

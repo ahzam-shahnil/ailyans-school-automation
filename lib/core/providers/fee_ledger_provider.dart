@@ -550,7 +550,32 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
         GROUP BY c.ClassID, c.CName
         ORDER BY c.ClassID ASC
         ''', args);
-      return rows;
+      return rows.map((r) {
+        final totalBilled = (r['totalBilled'] as num?)?.toInt() ?? 0;
+        final grossReceivable = (r['grossReceivable'] as num?)?.toInt() ?? 0;
+        final totalDiscounts = (r['totalDiscounts'] as num?)?.toInt() ?? 0;
+        final cashCollected = (r['cashCollected'] as num?)?.toInt() ?? 0;
+        final outstandingDues = (r['outstandingDues'] as num?)?.toInt() ?? 0;
+        final recoveryPercent = grossReceivable > 0
+            ? ((cashCollected / grossReceivable) * 100).toStringAsFixed(1)
+            : '0.0';
+
+        return <String, dynamic>{
+          ...r,
+          'className': (r['className'] as String?) ?? 'Unassigned',
+          'totalBilled': totalBilled,
+          'billedCount': totalBilled,
+          'grossReceivable': grossReceivable,
+          'gross': grossReceivable,
+          'totalDiscounts': totalDiscounts,
+          'discounts': totalDiscounts,
+          'cashCollected': cashCollected,
+          'collected': cashCollected,
+          'outstandingDues': outstandingDues,
+          'dues': outstandingDues,
+          'recoveryPercent': recoveryPercent,
+        };
+      }).toList();
     } catch (e) {
       debugPrint('Error generating class collection summary: $e');
       return [];
@@ -684,10 +709,12 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
           vm.IsPaid,
           vm.DueDate,
           vm.PaidDate,
+          ft.SubmissionDate,
           vm.ForMonth,
           vm.SessionYr,
           vm.BankID
         $fromClause
+        LEFT JOIN FeeTransaction ft ON ft.VoucharNo = vm.VoucherMasID
         $whereClause
         ORDER BY $orderCol $orderDir
         LIMIT ? OFFSET ?
@@ -697,7 +724,13 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
         ..addAll([state.pageSize, offset]);
       final rawRows = await db.rawQuery(rowsSql, rowQueryArgs);
       if (!mounted) return;
-      final ledgerRows = rawRows.map((r) => FeeLedgerRow.fromMap(r)).toList();
+      final ledgerRows = rawRows.map((r) {
+        final paidDateStr =
+            r['SubmissionDate'] as String? ?? r['PaidDate'] as String? ?? '';
+        final map = Map<String, dynamic>.from(r);
+        map['PaidDate'] = paidDateStr;
+        return FeeLedgerRow.fromMap(map);
+      }).toList();
 
       state = state.copyWith(
         isLoading: false,

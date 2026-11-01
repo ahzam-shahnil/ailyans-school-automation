@@ -46,10 +46,10 @@ class ShellMetadata {
   /// Fallback defaults when database is loading or unavailable.
   factory ShellMetadata.empty() {
     return const ShellMetadata(
-      branchName: "Ailyans's Higher Secondary School Mianwali",
-      branchAddress: 'Muslim Bazar Mianwali',
-      branchPhone: null,
-      branchPrincipal: null,
+      branchName: '',
+      branchAddress: '',
+      branchPhone: '',
+      branchPrincipal: '',
       sessionYear: '2017-2018',
       studentCount: 0,
       classCount: 0,
@@ -70,24 +70,22 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
   final rawBranchName = branchRows.isNotEmpty
       ? (branchRows.first['BranchName'] as String?)
       : null;
-  final branchName = (rawBranchName != null && rawBranchName.trim().isNotEmpty)
-      ? rawBranchName.trim()
-      : "Ailyans's Higher Secondary School Mianwali";
+  final branchName = rawBranchName?.trim() ?? '';
 
   final rawBranchAddress = branchRows.isNotEmpty
       ? (branchRows.first['BranchAddress'] as String?)
       : null;
-  final branchAddress =
-      (rawBranchAddress != null && rawBranchAddress.trim().isNotEmpty)
-      ? rawBranchAddress.trim()
-      : 'Muslim Bazar Mianwali';
+  final branchAddress = rawBranchAddress?.trim() ?? '';
 
-  final branchPhone = branchRows.isNotEmpty
+  final rawBranchPhone = branchRows.isNotEmpty
       ? (branchRows.first['BrPhone'] as String?)
       : null;
-  final branchPrincipal = branchRows.isNotEmpty
+  final branchPhone = rawBranchPhone?.trim() ?? '';
+
+  final rawBranchPrincipal = branchRows.isNotEmpty
       ? (branchRows.first['BrPrincipal'] as String?)
       : null;
+  final branchPrincipal = rawBranchPrincipal?.trim() ?? '';
 
   // 2. Active Academic Session (app_config key, set via Screen 27 System Settings)
   final sessionRows = await db.rawQuery(
