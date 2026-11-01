@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:school_automation/core/utils/attendance_pdf_generator.dart';
 import 'package:school_automation/core/utils/award_certificate_pdf_generator.dart';
 import 'package:school_automation/core/utils/biodata_pdf_generator.dart';
@@ -125,6 +127,14 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateTeacherAttendanceRegister();
       case ReportType.awardCertificate:
         return _generateAwardCertificate();
+      case ReportType.studentMarksheet:
+        return _generateStudentMarksheet();
+      case ReportType.feeCollectionRegister:
+        return _generateFeeCollectionRegister();
+      case ReportType.classDefaulters:
+        return _generateClassDefaulters();
+      case ReportType.examStatus:
+        return _generateExamStatus();
     }
   }
 
@@ -509,6 +519,542 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       branchName: _safeBranchName(),
       branchAddress: _safeBranchAddress(),
     );
+  }
+
+  Future<Uint8List> _generateStudentMarksheet() async {
+    final subjects = request.extraParams['subjects'] as List<dynamic>?;
+    if (subjects == null || subjects.isEmpty) {
+      throw StateError(
+        'Missing or empty subjects in extraParams for studentMarksheet.',
+      );
+    }
+    final studentName =
+        request.extraParams['studentName'] as String? ?? 'Student';
+    final examName =
+        request.extraParams['examName'] as String? ?? 'Examination';
+    final className =
+        request.extraParams['className'] as String? ?? 'Class';
+    final branchName = _safeBranchName();
+    final branchAddress = _safeBranchAddress();
+
+    final doc = pw.Document();
+    final boldFont = pw.Font.helveticaBold();
+    final regularFont = pw.Font.helvetica();
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Text(
+              branchName.toUpperCase(),
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 14,
+                color: ReportTheme.primaryColor,
+              ),
+              textAlign: pw.TextAlign.center,
+            ),
+            if (branchAddress.isNotEmpty) ...[
+              pw.SizedBox(height: 2),
+              pw.Text(
+                branchAddress,
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: 8,
+                  color: ReportTheme.secondaryColor,
+                ),
+                textAlign: pw.TextAlign.center,
+              ),
+            ],
+            pw.SizedBox(height: 8),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              decoration: const pw.BoxDecoration(
+                color: ReportTheme.bannerBgColor,
+                border: pw.Border(
+                  top: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+                  bottom: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+                ),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'STUDENT MARKSHEET - $examName',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 10,
+                      color: ReportTheme.primaryColor,
+                    ),
+                  ),
+                  pw.Text(
+                    'Student: $studentName | Class: $className',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 9,
+                      color: ReportTheme.secondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        footer: (context) => ReportTheme.buildStandardFooter(
+          context,
+          branchName: branchName,
+        ),
+        build: (context) {
+          final rows = subjects.cast<Map<String, dynamic>>();
+          return [
+            pw.TableHelper.fromTextArray(
+              headers: ['Subject', 'Obtained', 'Total', 'Grade', 'Result'],
+              data: rows.map((r) {
+                final subj = r['subject']?.toString() ?? '';
+                final obtained = r['obtained']?.toString() ?? '0';
+                final total = r['total']?.toString() ?? '0';
+                final grade = r['grade']?.toString() ?? '';
+                final result = r['pass']?.toString() ?? r['result']?.toString() ?? '';
+                return [subj, obtained, total, grade, result];
+              }).toList(),
+              border: pw.TableBorder.all(
+                color: ReportTheme.borderRuleColor,
+                width: 0.5,
+              ),
+              headerStyle: ReportTheme.tableHeaderStyle,
+              headerDecoration: const pw.BoxDecoration(
+                color: ReportTheme.primaryColor,
+              ),
+              cellStyle: ReportTheme.tableCellStyle,
+              cellAlignment: pw.Alignment.centerLeft,
+              cellAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerRight,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.center,
+                4: pw.Alignment.center,
+              },
+              headerAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerRight,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.center,
+                4: pw.Alignment.center,
+              },
+              rowDecoration: const pw.BoxDecoration(
+                color: ReportTheme.tableRowAltBg,
+              ),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColors.white,
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    return doc.save();
+  }
+
+  Future<Uint8List> _generateFeeCollectionRegister() async {
+    final collections = request.extraParams['collections'] as List<dynamic>?;
+    if (collections == null || collections.isEmpty) {
+      throw StateError(
+        'Missing or empty collections in extraParams for feeCollectionRegister.',
+      );
+    }
+    final date = request.extraParams['date'] as String? ?? '';
+    final branchName = _safeBranchName();
+    final branchAddress = _safeBranchAddress();
+
+    final doc = pw.Document();
+    final boldFont = pw.Font.helveticaBold();
+    final regularFont = pw.Font.helvetica();
+
+    final rows = collections.cast<Map<String, dynamic>>();
+    num totalAmount = 0;
+    for (final r in rows) {
+      final amt = r['amount'];
+      if (amt is num) {
+        totalAmount += amt;
+      } else if (amt != null) {
+        totalAmount += num.tryParse(amt.toString()) ?? 0;
+      }
+    }
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4.landscape,
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Text(
+              branchName.toUpperCase(),
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 14,
+                color: ReportTheme.primaryColor,
+              ),
+              textAlign: pw.TextAlign.center,
+            ),
+            if (branchAddress.isNotEmpty) ...[
+              pw.SizedBox(height: 2),
+              pw.Text(
+                branchAddress,
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: 8,
+                  color: ReportTheme.secondaryColor,
+                ),
+                textAlign: pw.TextAlign.center,
+              ),
+            ],
+            pw.SizedBox(height: 8),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              decoration: const pw.BoxDecoration(
+                color: ReportTheme.bannerBgColor,
+                border: pw.Border(
+                  top: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+                  bottom: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+                ),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'FEE COLLECTION REGISTER',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 10,
+                      color: ReportTheme.primaryColor,
+                    ),
+                  ),
+                  if (date.isNotEmpty)
+                    pw.Text(
+                      'Date: $date',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 9,
+                        color: ReportTheme.secondaryColor,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        footer: (context) => ReportTheme.buildStandardFooter(
+          context,
+          branchName: branchName,
+        ),
+        build: (context) {
+          return [
+            pw.TableHelper.fromTextArray(
+              headers: [
+                'Time',
+                'Student',
+                'Class',
+                'Voucher',
+                'Amount',
+                'Bank',
+                'Collected By',
+              ],
+              data: rows.map((r) {
+                final time = r['time']?.toString() ?? '';
+                final student = r['studentName']?.toString() ?? '';
+                final className = r['className']?.toString() ?? '';
+                final voucher = r['voucherNo']?.toString() ?? '';
+                final amt = r['amount'] is num
+                    ? ReportTheme.formatCurrency(r['amount'] as num)
+                    : (r['amount']?.toString() ?? '0.00');
+                final bank = r['bank']?.toString() ?? '';
+                final collectedBy = r['collectedBy']?.toString() ?? '';
+                return [time, student, className, voucher, amt, bank, collectedBy];
+              }).toList(),
+              border: pw.TableBorder.all(
+                color: ReportTheme.borderRuleColor,
+                width: 0.5,
+              ),
+              headerStyle: ReportTheme.tableHeaderStyle,
+              headerDecoration: const pw.BoxDecoration(
+                color: ReportTheme.primaryColor,
+              ),
+              cellStyle: ReportTheme.tableCellStyle,
+              cellAlignment: pw.Alignment.centerLeft,
+              cellAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerLeft,
+                2: pw.Alignment.centerLeft,
+                3: pw.Alignment.center,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerLeft,
+                6: pw.Alignment.centerLeft,
+              },
+              headerAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerLeft,
+                2: pw.Alignment.centerLeft,
+                3: pw.Alignment.center,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerLeft,
+                6: pw.Alignment.centerLeft,
+              },
+              rowDecoration: const pw.BoxDecoration(
+                color: ReportTheme.tableRowAltBg,
+              ),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColors.white,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(
+              alignment: pw.Alignment.centerRight,
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: pw.BoxDecoration(
+                color: ReportTheme.bannerBgColor,
+                border: pw.Border.all(color: ReportTheme.borderRuleColor, width: 0.5),
+              ),
+              child: pw.Text(
+                'Total Collected: ${ReportTheme.formatCurrency(totalAmount)}',
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 10,
+                  color: ReportTheme.primaryColor,
+                ),
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    return doc.save();
+  }
+
+  Future<Uint8List> _generateClassDefaulters() async {
+    final rawGroups = (request.extraParams['groups'] as List<dynamic>?) ??
+        (request.extraParams['defaulterGroups'] as List<dynamic>?) ??
+        request.vouchers;
+    if (rawGroups == null || rawGroups.isEmpty) {
+      throw StateError(
+        'No defaulter groups provided for classDefaulters preview.',
+      );
+    }
+    final summary =
+        request.extraParams['summary'] as DefaulterListFilterSummary?;
+    if (summary == null) {
+      throw StateError(
+        'Missing summary in extraParams for classDefaulters.',
+      );
+    }
+    final groups = rawGroups.cast<DefaulterClassGroup>();
+    return DefaulterListPdfGenerator.generate(
+      groups: groups,
+      summary: summary,
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
+      branchPhone: request.extraParams['branchPhone'] as String?,
+      branchPrincipal: request.extraParams['branchPrincipal'] as String?,
+    );
+  }
+
+  Future<Uint8List> _generateExamStatus() async {
+    final subjects = request.extraParams['subjects'] as List<dynamic>?;
+    if (subjects == null || subjects.isEmpty) {
+      throw StateError(
+        'Missing or empty subjects in extraParams for examStatus.',
+      );
+    }
+    final examName =
+        request.extraParams['examName'] as String? ?? 'Examination';
+    final branchName = _safeBranchName();
+    final branchAddress = _safeBranchAddress();
+
+    final doc = pw.Document();
+    final boldFont = pw.Font.helveticaBold();
+    final regularFont = pw.Font.helvetica();
+
+    final rows = subjects.cast<Map<String, dynamic>>();
+    int totalEnrolled = 0;
+    int totalAppeared = 0;
+    int totalPassed = 0;
+    int totalFailed = 0;
+
+    for (final r in rows) {
+      totalEnrolled += (r['enrolled'] as num?)?.toInt() ?? 0;
+      totalAppeared += (r['appeared'] as num?)?.toInt() ?? 0;
+      totalPassed += (r['passed'] as num?)?.toInt() ?? 0;
+      totalFailed += (r['failed'] as num?)?.toInt() ?? 0;
+    }
+    final overallPassPct = totalAppeared > 0
+        ? (totalPassed * 100.0 / totalAppeared).toStringAsFixed(1)
+        : '0.0';
+
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Text(
+              branchName.toUpperCase(),
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 14,
+                color: ReportTheme.primaryColor,
+              ),
+              textAlign: pw.TextAlign.center,
+            ),
+            if (branchAddress.isNotEmpty) ...[
+              pw.SizedBox(height: 2),
+              pw.Text(
+                branchAddress,
+                style: pw.TextStyle(
+                  font: regularFont,
+                  fontSize: 8,
+                  color: ReportTheme.secondaryColor,
+                ),
+                textAlign: pw.TextAlign.center,
+              ),
+            ],
+            pw.SizedBox(height: 8),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              decoration: const pw.BoxDecoration(
+                color: ReportTheme.bannerBgColor,
+                border: pw.Border(
+                  top: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+                  bottom: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+                ),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'EXAM STATUS REPORT - $examName',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 10,
+                      color: ReportTheme.primaryColor,
+                    ),
+                  ),
+                  pw.Text(
+                    'Subjects: ${rows.length}',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 9,
+                      color: ReportTheme.secondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 8),
+          ],
+        ),
+        footer: (context) => ReportTheme.buildStandardFooter(
+          context,
+          branchName: branchName,
+        ),
+        build: (context) {
+          return [
+            pw.TableHelper.fromTextArray(
+              headers: [
+                'Subject',
+                'Enrolled',
+                'Appeared',
+                'Passed',
+                'Failed',
+                'Pass %',
+              ],
+              data: rows.map((r) {
+                final subj = r['subject']?.toString() ?? '';
+                final enrolled = (r['enrolled'] ?? 0).toString();
+                final appeared = (r['appeared'] ?? 0).toString();
+                final passed = (r['passed'] ?? 0).toString();
+                final failed = (r['failed'] ?? 0).toString();
+                final rawPct = r['passPercent']?.toString() ??
+                    r['passPercentage']?.toString() ??
+                    '0.0';
+                final passPercent = rawPct.endsWith('%') ? rawPct : '$rawPct%';
+                return [subj, enrolled, appeared, passed, failed, passPercent];
+              }).toList(),
+              border: pw.TableBorder.all(
+                color: ReportTheme.borderRuleColor,
+                width: 0.5,
+              ),
+              headerStyle: ReportTheme.tableHeaderStyle,
+              headerDecoration: const pw.BoxDecoration(
+                color: ReportTheme.primaryColor,
+              ),
+              cellStyle: ReportTheme.tableCellStyle,
+              cellAlignment: pw.Alignment.centerLeft,
+              cellAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerRight,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerRight,
+              },
+              headerAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerRight,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerRight,
+                5: pw.Alignment.centerRight,
+              },
+              rowDecoration: const pw.BoxDecoration(
+                color: ReportTheme.tableRowAltBg,
+              ),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColors.white,
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: pw.BoxDecoration(
+                color: ReportTheme.bannerBgColor,
+                border: pw.Border.all(color: ReportTheme.borderRuleColor, width: 0.5),
+              ),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Overall Totals:',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 9,
+                      color: ReportTheme.primaryColor,
+                    ),
+                  ),
+                  pw.Text(
+                    'Enrolled: $totalEnrolled  |  Appeared: $totalAppeared  |  Passed: $totalPassed  |  Failed: $totalFailed  |  Pass: $overallPassPct%',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 9,
+                      color: ReportTheme.primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ];
+        },
+      ),
+    );
+
+    return doc.save();
   }
 }
 

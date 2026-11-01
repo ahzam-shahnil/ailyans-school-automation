@@ -20,6 +20,10 @@ enum ReportType {
   examAwardList,
   teacherAttendanceRegister,
   awardCertificate,
+  studentMarksheet,
+  feeCollectionRegister,
+  classDefaulters,
+  examStatus,
 }
 
 extension ReportTypePath on ReportType {
@@ -43,6 +47,10 @@ extension ReportTypePath on ReportType {
     ReportType.examAwardList => 'exam-award-list',
     ReportType.teacherAttendanceRegister => 'teacher-attendance-register',
     ReportType.awardCertificate => 'award-certificate',
+    ReportType.studentMarksheet => 'student-marksheet',
+    ReportType.feeCollectionRegister => 'fee-collection-register',
+    ReportType.classDefaulters => 'class-defaulters',
+    ReportType.examStatus => 'exam-status',
   };
 
   String get displayName => switch (this) {
@@ -65,6 +73,10 @@ extension ReportTypePath on ReportType {
     ReportType.examAwardList => 'Exam Award List',
     ReportType.teacherAttendanceRegister => 'Teacher Attendance Register',
     ReportType.awardCertificate => 'Award Certificate',
+    ReportType.studentMarksheet => 'Student Marksheet',
+    ReportType.feeCollectionRegister => 'Fee Collection Register',
+    ReportType.classDefaulters => 'Class Defaulters',
+    ReportType.examStatus => 'Exam Status Report',
   };
 
   String get defaultFileName => '${path}_report.pdf';
