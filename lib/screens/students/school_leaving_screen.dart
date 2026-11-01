@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../core/providers/school_leaving_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../models/leaving_student_row.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -183,6 +184,11 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       'studentName': student.studentName,
       'fatherName': student.fatherName ?? '',
       'className': student.classSecDisplay,
+      'dob': (slcState.committedSlc?['DOB'] ??
+              slcState.committedSlc?['dob'] ??
+              student.dob ??
+              '')
+          .toString(),
       'admissionDate': student.admissionDate ?? '',
       'leavingDate': leavingDate,
       'conduct': conduct,
@@ -1340,4 +1346,8 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       ),
     );
   }
+}
+
+extension on LeavingStudentRow {
+  String? get dob => null;
 }

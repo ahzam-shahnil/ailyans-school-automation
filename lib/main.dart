@@ -16,7 +16,7 @@ void main() async {
     await windowManager.ensureInitialized();
 
     const windowOptions = WindowOptions(
-      size: Size(1440, 900),
+      size: Size(1024, 680),
       minimumSize: Size(1024, 680),
       center: true,
       title: "Ailyans School Automation System",

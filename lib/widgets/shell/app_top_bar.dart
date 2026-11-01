@@ -305,8 +305,12 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
           ),
           onSelected: (value) {
             if (value == 'logout') {
-              ref.read(sessionProvider.notifier).clear();
-              context.go('/login');
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  ref.read(sessionProvider.notifier).clear();
+                  context.go('/login');
+                }
+              });
             } else if (value == 'change_password') {
               ChangePasswordDialog.show(context, username: session?.user.name);
             } else if (value == 'profile') {

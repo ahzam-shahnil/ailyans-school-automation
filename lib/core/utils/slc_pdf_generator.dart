@@ -18,6 +18,7 @@ class SlcPdfGenerator {
   ///   - studentName (String)
   ///   - fatherName  (String)
   ///   - className   (String)
+  ///   - dob         (String, optional)
   ///   - admissionDate (String)
   ///   - leavingDate   (String)
   ///   - conduct       (String)
@@ -59,6 +60,13 @@ class SlcPdfGenerator {
                 slcData['LeftClass'] ??
                 slcData['cName'] ??
                 slcData['CName'] ??
+                '')
+            .toString()
+            .trim();
+    final String dob =
+        (slcData['dob'] ??
+                slcData['dateOfBirth'] ??
+                slcData['DOB'] ??
                 '')
             .toString()
             .trim();
@@ -217,6 +225,9 @@ class SlcPdfGenerator {
                     regularFont: regularFont,
                     boldFont: boldFont,
                     className: className,
+                    dob: (dob.isEmpty || _formatDate(dob) == '-' || _formatDate(dob).isEmpty)
+                        ? 'As per Admission Register'
+                        : _formatDate(dob),
                     admissionDate: _formatDate(admissionDate),
                     leavingDate: _formatDate(leavingDate),
                     conduct: conduct,
@@ -314,6 +325,7 @@ class SlcPdfGenerator {
     required pw.Font regularFont,
     required pw.Font boldFont,
     required String className,
+    required String dob,
     required String admissionDate,
     required String leavingDate,
     required String conduct,
@@ -321,6 +333,7 @@ class SlcPdfGenerator {
   }) {
     final rows = <_SlcField>[
       _SlcField('Class / Grade:', className),
+      _SlcField('Date of Birth:', dob),
       _SlcField('Date of Admission:', admissionDate),
       _SlcField('Date of Leaving:', leavingDate),
       _SlcField('Character & Conduct:', conduct),
