@@ -1545,11 +1545,52 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
               visualDensity: VisualDensity.compact,
             ),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Class Award List report (\\Rpt32_ClassMark.rpt) will be available in Phase E.',
-                  ),
+              final curState = ref.read(marksEntryProvider);
+              final meta = ref.read(shellMetadataProvider).value;
+
+              final students = curState.roster.map((row) {
+                return {
+                  'rollNo': row.rollNo.toString(),
+                  'studentName': row.studentName,
+                  'totalObtained': row.totalObtained,
+                  'totalMax': row.totalMax,
+                  'percentage': row.totalMax > 0
+                      ? (row.totalObtained * 100.0 / row.totalMax).toStringAsFixed(1)
+                      : '0.0',
+                  'grade': row.computeGrade(curState.exGradeRows).toString(),
+                };
+              }).toList();
+
+              students.sort((a, b) => (b['totalObtained'] as num).compareTo(a['totalObtained'] as num));
+
+              final examDetail =
+                  curState.examInfos.firstWhere(
+                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+                    orElse: () => {'Detail': 'Examination'},
+                  )['Detail'] ??
+                  (curState.selectedExamInfoId?.toString() ?? 'Examination');
+
+              final className =
+                  curState.classes.firstWhere(
+                    (c) => c['ClassID'] == curState.selectedClassId,
+                    orElse: () => {'CName': 'Class'},
+                  )['CName'] ??
+                  (curState.selectedClassId?.toString() ?? 'Class');
+
+              ReportPreviewModal.show(
+                context,
+                request: ReportRequest(
+                  type: ReportType.examAwardList,
+                  titleOverride: 'Award List',
+                  extraParams: {
+                    'examName': examDetail,
+                    'className': className,
+                    'students': students,
+                    'branchName':
+                        meta?.branchName ?? "Ailyans's Higher Secondary School",
+                    'branchAddress':
+                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                  },
                 ),
               );
             },

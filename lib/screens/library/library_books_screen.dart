@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/providers/library_books_provider.dart';
 import '../../core/providers/session_provider.dart';
+import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Screen 23 - LibraryBooksScreen at `/library`.
 /// Implements S27 (`frmBooks` at `0x00412598`, `ObjID: 3`) per behavior and UI specs.
@@ -60,11 +63,29 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
     }
   }
 
-  void _printCatalog() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Catalog print coming in Phase E'),
-        duration: Duration(seconds: 2),
+  Future<void> _printCatalog() async {
+    final state = ref.read(libraryBooksProvider);
+    final books = state.allRows.map((b) => {
+      'bookId': b.bookId.toString(),
+      'bookName': b.bookName,
+      'author': b.bAuthor ?? '',
+      'publisher': b.pulishedBy ?? '',
+      'category': b.categoryName ?? '',
+      'price': (b.bookPrice ?? 0).toStringAsFixed(2),
+      'status': 'Available',
+    }).toList();
+    final meta = ref.read(shellMetadataProvider).value;
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.libraryCatalog,
+        titleOverride: 'Library Books Catalog',
+        extraParams: {
+          'books': books,
+          'branchName':
+              meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Mianwali',
+        },
       ),
     );
   }

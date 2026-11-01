@@ -6,9 +6,11 @@ import 'package:school_automation/core/utils/biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/class_syllabus_pdf_generator.dart';
 import 'package:school_automation/core/utils/daily_collection_pdf_generator.dart';
 import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
+import 'package:school_automation/core/utils/exam_award_list_pdf_generator.dart';
 import 'package:school_automation/core/utils/exam_marksheet_pdf_generator.dart';
 import 'package:school_automation/core/utils/exam_summary_pdf_generator.dart';
 import 'package:school_automation/core/utils/fee_schedule_pdf_generator.dart';
+import 'package:school_automation/core/utils/library_catalog_pdf_generator.dart';
 import 'package:school_automation/core/utils/receipt_pdf_generator.dart';
 import 'package:school_automation/core/utils/salary_slip_pdf_generator.dart';
 import 'package:school_automation/core/utils/slc_pdf_generator.dart';
@@ -113,6 +115,10 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateExamMarksheet();
       case ReportType.examSummary:
         return _generateExamSummary();
+      case ReportType.libraryCatalog:
+        return _generateLibraryCatalog();
+      case ReportType.examAwardList:
+        return _generateExamAwardList();
     }
   }
 
@@ -424,6 +430,36 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     return ExamSummaryPdfGenerator.generate(
       examName: request.extraParams['examName'] as String? ?? '',
       subjects: subjects.cast<Map<String, dynamic>>(),
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
+    );
+  }
+
+  Future<Uint8List> _generateLibraryCatalog() async {
+    final books = request.extraParams['books'] as List<dynamic>?;
+    if (books == null || books.isEmpty) {
+      throw StateError(
+        'Missing or empty books in extraParams for libraryCatalog.',
+      );
+    }
+    return LibraryCatalogPdfGenerator.generate(
+      books: books.cast<Map<String, dynamic>>(),
+      branchName: _safeBranchName(),
+      branchAddress: _safeBranchAddress(),
+    );
+  }
+
+  Future<Uint8List> _generateExamAwardList() async {
+    final students = request.extraParams['students'] as List<dynamic>?;
+    if (students == null || students.isEmpty) {
+      throw StateError(
+        'Missing or empty students in extraParams for examAwardList.',
+      );
+    }
+    return ExamAwardListPdfGenerator.generate(
+      examName: request.extraParams['examName'] as String? ?? '',
+      className: request.extraParams['className'] as String? ?? '',
+      students: students.cast<Map<String, dynamic>>(),
       branchName: _safeBranchName(),
       branchAddress: _safeBranchAddress(),
     );

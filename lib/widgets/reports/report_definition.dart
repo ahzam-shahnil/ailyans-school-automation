@@ -16,6 +16,8 @@ enum ReportType {
   dailyCollection,
   examMarksheet,
   examSummary,
+  libraryCatalog,
+  examAwardList,
 }
 
 extension ReportTypePath on ReportType {
@@ -35,6 +37,8 @@ extension ReportTypePath on ReportType {
     ReportType.dailyCollection => 'daily-collection',
     ReportType.examMarksheet => 'exam-marksheet',
     ReportType.examSummary => 'exam-summary',
+    ReportType.libraryCatalog => 'library-catalog',
+    ReportType.examAwardList => 'exam-award-list',
   };
 
   String get displayName => switch (this) {
@@ -53,6 +57,8 @@ extension ReportTypePath on ReportType {
     ReportType.dailyCollection => 'Daily Fee Collection',
     ReportType.examMarksheet => 'Exam Marksheet',
     ReportType.examSummary => 'Exam Summary',
+    ReportType.libraryCatalog => 'Library Books Catalog',
+    ReportType.examAwardList => 'Exam Award List',
   };
 
   String get defaultFileName => '${path}_report.pdf';
