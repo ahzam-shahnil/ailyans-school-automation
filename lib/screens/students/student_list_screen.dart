@@ -73,6 +73,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     _searchController.clear();
     _selectedStuRegIds.clear();
     ref.read(studentListFiltersProvider.notifier).reset();
+    ref.invalidate(studentListProvider);
   }
 
   String _getStudentInitials(String fullName) {
@@ -152,17 +153,11 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
         session.hasAccess(26) ||
         session.hasAccess(12);
     final canBulkEnrollment =
-        session == null ||
-        session.user.userLevel == 1 ||
-        session.hasAccess(20);
+        session == null || session.user.userLevel == 1 || session.hasAccess(20);
     final canBatchPromotion =
-        session == null ||
-        session.user.userLevel == 1 ||
-        session.hasAccess(8);
+        session == null || session.user.userLevel == 1 || session.hasAccess(8);
     final canSchoolLeaving =
-        session == null ||
-        session.user.userLevel == 1 ||
-        session.hasAccess(9);
+        session == null || session.user.userLevel == 1 || session.hasAccess(9);
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
@@ -212,7 +207,12 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             border: Border.all(color: AppColors.borderDefault),
                           ),
                           child: Text(
-                            '$totalCount Active Students',
+                            switch (filters.status) {
+                              'Active' => '$totalCount Active Students',
+                              'Left' => '$totalCount Left Students',
+                              'All' => '$totalCount Total Students',
+                              _ => '$totalCount Students',
+                            },
                             style: AppTypography.bodySmall.copyWith(
                               color: AppColors.textSecondary,
                               fontWeight: FontWeight.w600,
@@ -795,6 +795,19 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
+                                width: 80.0,
+                                child: Center(
+                                  child: Text(
+                                    'SIBLINGS',
+                                    style: AppTypography.label.copyWith(
+                                      fontSize: 11.0,
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
                                 width: 100.0,
                                 child: Align(
                                   alignment: Alignment.centerRight,
@@ -1071,6 +1084,16 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                             ),
                                           ),
 
+                                          // Sibling Count Badge
+                                          SizedBox(
+                                            width: 80.0,
+                                            child: Center(
+                                              child: _buildSiblingBadge(
+                                                student.siblingCount,
+                                              ),
+                                            ),
+                                          ),
+
                                           // Actions Button
                                           SizedBox(
                                             width: 100.0,
@@ -1320,6 +1343,53 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           fontSize: 11.0,
           fontWeight: FontWeight.w600,
           color: textColor,
+        ),
+      ),
+    );
+  }
+
+  /// Builds the sibling count indicator badge ('-', '1', 'N').
+  Widget _buildSiblingBadge(int count) {
+    if (count == 0) {
+      return Text(
+        '-',
+        style: AppTypography.bodySmall.copyWith(
+          color: AppColors.textMuted,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+    if (count == 1) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSubtle,
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Text(
+          '1',
+          style: AppTypography.label.copyWith(
+            fontSize: 11.0,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+      decoration: BoxDecoration(
+        color: AppColors.statusInfoBg,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        border: Border.all(color: AppColors.statusInfoBorder),
+      ),
+      child: Text(
+        '$count',
+        style: AppTypography.label.copyWith(
+          fontSize: 11.0,
+          fontWeight: FontWeight.w600,
+          color: AppColors.statusInfoText,
         ),
       ),
     );

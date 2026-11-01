@@ -307,6 +307,7 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
+      expect(find.text('10 Total Students'), findsOneWidget);
       expect(find.text('Showing 1-10 of 10 students'), findsOneWidget);
     });
 

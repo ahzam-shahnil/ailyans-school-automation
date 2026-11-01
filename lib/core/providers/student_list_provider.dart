@@ -114,8 +114,12 @@ class StudentListFiltersNotifier extends StateNotifier<StudentListFilters> {
     state = state.copyWith(pageSize: pageSize, page: 1);
   }
 
-  void reset() {
-    state = const StudentListFilters();
+  void reset({String? sessionYr}) {
+    final activeSession = sessionYr ?? state.sessionYr;
+    state = StudentListFilters(
+      sessionYr: activeSession,
+      pageSize: state.pageSize,
+    );
   }
 }
 
@@ -183,9 +187,12 @@ final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
       sc.ClassRollNo,
       sc.SessionYr,
       CASE
-        WHEN sl.StuRegID IS NOT NULL THEN 'Left'
+        WHEN sc.Present = 1 THEN 'Active'
+        WHEN sc.Present = 0 OR sl.StuRegID IS NOT NULL THEN 'Left'
         ELSE 'Active'
-      END as status
+      END as status,
+      (SELECT COUNT(*) FROM Sibling_Links
+       WHERE Stu1_RegID = sc.Stu_RegID OR Stu2_RegID = sc.Stu_RegID) AS siblingCount
     FROM Stu_Reg sr
     JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID
     JOIN Class c ON sc.ClassID = c.ClassID
@@ -194,7 +201,7 @@ final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
     WHERE sc.SessionYr = ?
       AND (? IS NULL OR sc.ClassID = ?)
       AND (? IS NULL OR sc.ClassSecID = ?)
-      AND (? = 'All' OR (CASE WHEN sl.StuRegID IS NOT NULL THEN 'Left' ELSE 'Active' END) = ?)
+      AND (? = 'All' OR (CASE WHEN sc.Present = 1 THEN 'Active' WHEN sc.Present = 0 OR sl.StuRegID IS NOT NULL THEN 'Left' ELSE 'Active' END) = ?)
       AND (? = '' OR LOWER(sr.NameFirst || ' ' || COALESCE(sr.NameLast, '')) LIKE LOWER('%' || ? || '%')
            OR CAST(sr.Stu_RegID AS TEXT) LIKE '%' || ? || '%'
            OR LOWER(COALESCE(sr.F_Name, '')) LIKE LOWER('%' || ? || '%')
