@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/providers/attendance_provider.dart';
@@ -108,6 +109,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   ) {
     final dateDisplay = DateFormat('dd-MMM-yyyy').format(state.selectedDate);
     final leaveCount = state.summaryCounts['Leave'] ?? 0;
+    final from = _getFromOrigin(context);
 
     return Container(
       height: 72,
@@ -115,6 +117,26 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       color: AppColors.surface,
       child: Row(
         children: [
+          if (from != null && from.isNotEmpty) ...[
+            OutlinedButton.icon(
+              onPressed: () => context.go(from),
+              icon: const Icon(Icons.arrow_back, size: 14),
+              label: Text(
+                from.contains('dashboard') ? 'Back to Dashboard' : 'Back',
+                style: const TextStyle(fontSize: 12),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                minimumSize: const Size(0, 32),
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.borderDefault),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
           // Class Dropdown
           SizedBox(
             width: 155,
@@ -1230,5 +1252,13 @@ class _AttendanceRowItemState extends State<_AttendanceRowItem> {
         ),
       ),
     );
+  }
+}
+
+String? _getFromOrigin(BuildContext context) {
+  try {
+    return GoRouterState.of(context).uri.queryParameters['from'];
+  } catch (_) {
+    return null;
   }
 }

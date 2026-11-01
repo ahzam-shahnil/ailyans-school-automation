@@ -381,7 +381,12 @@ class _StudentRegistrationWizardState
     ref.read(wizardDraftProvider.notifier).reset();
     ref.read(wizardStepProvider.notifier).state = 0;
     if (mounted) {
-      context.go('/students');
+      final from = _getFromOrigin(context);
+      if (from != null && from.isNotEmpty) {
+        context.go(from);
+      } else {
+        context.go('/students');
+      }
     }
   }
 
@@ -545,6 +550,9 @@ class _StudentRegistrationWizardState
   }
 
   Widget _buildBreadcrumbRow() {
+    final from = _getFromOrigin(context);
+    final isFromDashboard = from != null && from.contains('dashboard');
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -552,6 +560,23 @@ class _StudentRegistrationWizardState
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (from != null && from.isNotEmpty) ...[
+                OutlinedButton.icon(
+                  onPressed: () => context.go(from),
+                  icon: const Icon(Icons.arrow_back, size: 14),
+                  label: Text(
+                    isFromDashboard ? 'Back to Dashboard' : 'Back to Students',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    minimumSize: const Size(0, 32),
+                    foregroundColor: AppColors.textPrimary,
+                    side: const BorderSide(color: AppColors.borderDefault),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
               InkWell(
                 onTap: () => context.go('/dashboard'),
                 child: Text(
@@ -2059,5 +2084,13 @@ class _StudentRegistrationWizardState
         ),
       ],
     );
+  }
+}
+
+String? _getFromOrigin(BuildContext context) {
+  try {
+    return GoRouterState.of(context).uri.queryParameters['from'];
+  } catch (_) {
+    return null;
   }
 }

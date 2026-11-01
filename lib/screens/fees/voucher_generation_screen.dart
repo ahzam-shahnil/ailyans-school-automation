@@ -660,6 +660,7 @@ class _VoucherGenerationScreenState
 
   Widget _buildHeader(int eligibleCount) {
     final filters = ref.watch(voucherGenFiltersProvider);
+    final from = _getFromOrigin(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -673,6 +674,28 @@ class _VoucherGenerationScreenState
             Expanded(
               child: Row(
                 children: [
+                  if (from != null && from.isNotEmpty) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => context.go(from),
+                      icon: const Icon(Icons.arrow_back, size: 14),
+                      label: Text(
+                        from.contains('dashboard')
+                            ? 'Back to Dashboard'
+                            : 'Back',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 32),
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.borderDefault),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
                   Flexible(
                     child: Text(
                       'Monthly Voucher Generation Engine',
@@ -2584,5 +2607,13 @@ class _VoucherGenerationScreenState
         borderSide: const BorderSide(color: AppColors.borderFocus, width: 1.5),
       ),
     );
+  }
+}
+
+String? _getFromOrigin(BuildContext context) {
+  try {
+    return GoRouterState.of(context).uri.queryParameters['from'];
+  } catch (_) {
+    return null;
   }
 }

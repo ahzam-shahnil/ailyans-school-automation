@@ -258,7 +258,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.keyR, control: true): _refresh,
         const SingleActivator(LogicalKeyboardKey.keyN, control: true): () =>
-            context.go('/students/new'),
+            context.go('/students/new?from=/dashboard'),
       },
       child: Focus(
         autofocus: true,
@@ -464,7 +464,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               icon: Icons.payments_outlined,
               iconColor: AppColors.chartTeal,
               isLoading: isLoading,
-              onTap: () => context.go('/fees/ledger'),
+              onTap: () => context.go('/fees/ledger?from=/dashboard'),
               mainWidget: Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: AppSpacing.xs,
@@ -561,7 +561,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               icon: Icons.receipt_long_outlined,
               iconColor: AppColors.chartRose,
               isLoading: isLoading,
-              onTap: () => context.go('/fees/ledger?status=Unpaid'),
+              onTap: () => context.go('/fees/ledger?status=Unpaid&from=/dashboard'),
               mainWidget: Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: AppSpacing.xs,
@@ -721,7 +721,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => context.go('/students/new'),
+                  onPressed: () => context.go('/students/new?from=/dashboard'),
                   icon: const Icon(Icons.person_add_alt_outlined, size: 18),
                   label: const Text(
                     '+ New Admission (Ctrl+N)',
@@ -769,7 +769,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => context.go('/attendance'),
+                  onPressed: () => context.go('/attendance?from=/dashboard'),
                   icon: const Icon(Icons.check_circle_outlined, size: 18),
                   label: const Text(
                     'Mark Roll Call',
@@ -792,7 +792,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => context.go('/fees/vouchers'),
+                  onPressed: () => context.go('/fees/vouchers?from=/dashboard'),
                   icon: const Icon(Icons.receipt_long_outlined, size: 18),
                   label: const Text(
                     'Batch Voucher',
@@ -1107,7 +1107,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.go('/fees/ledger'),
+                  onPressed: () => context.go('/fees/ledger?from=/dashboard'),
                   child: Text(
                     'Open Fee Ledger →',
                     style: AppTypography.label.copyWith(
@@ -1315,7 +1315,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 TextButton(
-                  onPressed: () => context.go('/fees/ledger'),
+                  onPressed: () => context.go('/fees/ledger?from=/dashboard'),
                   child: Text(
                     'View Fee Analytics →',
                     style: AppTypography.label.copyWith(

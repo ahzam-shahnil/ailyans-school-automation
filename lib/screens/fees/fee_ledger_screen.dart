@@ -195,12 +195,29 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
         .loadClassCollectionSummary();
     if (!mounted) return;
 
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => _ClassSummaryDialog(
-        month: state.selectedMonth!,
-        sessionYr: state.selectedSessionYr,
-        summaryRows: summary,
+    final meta = ref.read(shellMetadataProvider).value;
+    final summaryRows = summary.map((r) => {
+      'className': r['className'] ?? 'Unassigned',
+      'billedCount': r['billedCount'] ?? r['totalBilled'] ?? 0,
+      'gross': r['gross'] ?? r['grossReceivable'] ?? 0,
+      'discounts': r['discounts'] ?? r['totalDiscounts'] ?? 0,
+      'collected': r['collected'] ?? r['cashCollected'] ?? 0,
+      'dues': r['dues'] ?? r['outstandingDues'] ?? 0,
+      'recoveryPercent': r['recoveryPercent'] ?? '0.0',
+    }).toList();
+
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.classCollectionSummary,
+        titleOverride: 'Class Collection Summary',
+        extraParams: {
+          'className': state.selectedClassId?.toString() ?? 'All Classes',
+          'month': state.selectedMonth ?? '',
+          'rows': summaryRows,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? '',
+        },
       ),
     );
   }
@@ -208,13 +225,38 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
   void _onDailyLedger() async {
     final state = ref.read(feeLedgerProvider);
     final paidRows = state.rows.where((r) => r.isPaid == 'Y').toList();
+    if (paidRows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No paid records found to print.'),
+          backgroundColor: AppColors.statusWarningBorder,
+        ),
+      );
+      return;
+    }
 
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => _DailyLedgerDialog(
-        sessionYr: state.selectedSessionYr,
-        month: state.selectedMonth ?? 'All Months',
-        paidRows: paidRows,
+    final meta = ref.read(shellMetadataProvider).value;
+    final collections = paidRows.map((r) => {
+      'time': r.paidDate != null ? DateFormat('dd-MMM-yyyy HH:mm').format(r.paidDate!) : '',
+      'studentName': r.studentName,
+      'className': r.className,
+      'voucherNo': r.voucherMasId,
+      'amount': r.paidAmt,
+      'bank': r.bankId != null ? 'Bank #${r.bankId}' : 'Cash',
+      'collectedBy': 'Admin',
+    }).toList();
+
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.feeCollectionRegister,
+        titleOverride: 'Daily Collection Ledger',
+        extraParams: {
+          'date': state.selectedMonth ?? '',
+          'collections': collections,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? '',
+        },
       ),
     );
   }
@@ -401,6 +443,7 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
 
   // ── HEADER & TOOLBAR ────────────────────────────────────────────────────────
   Widget _buildHeader(FeeLedgerState state) {
+    final from = _getFromOrigin(context);
     return SizedBox(
       height: 48,
       child: LayoutBuilder(
@@ -414,6 +457,28 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
                 children: [
                   Row(
                     children: [
+                      if (from != null && from.isNotEmpty) ...[
+                        OutlinedButton.icon(
+                          onPressed: () => context.go(from),
+                          icon: const Icon(Icons.arrow_back, size: 14),
+                          label: Text(
+                            from.contains('dashboard')
+                                ? 'Back to Dashboard'
+                                : 'Back',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            minimumSize: const Size(0, 32),
+                            foregroundColor: AppColors.textPrimary,
+                            side: const BorderSide(color: AppColors.borderDefault),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                      ],
                       const Icon(
                         Icons.assessment_outlined,
                         size: 24,
@@ -1525,6 +1590,7 @@ class _VoucherDetailDialog extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 // CLASS COLLECTION SUMMARY DIALOG
 // ══════════════════════════════════════════════════════════════════════════════
+// ignore: unused_element
 class _ClassSummaryDialog extends StatelessWidget {
   final String month;
   final String sessionYr;
@@ -1740,6 +1806,7 @@ class _ClassSummaryDialog extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 // DAILY COLLECTION LEDGER DIALOG
 // ══════════════════════════════════════════════════════════════════════════════
+// ignore: unused_element
 class _DailyLedgerDialog extends ConsumerWidget {
   final String sessionYr;
   final String month;
@@ -1981,5 +2048,13 @@ class _DailyLedgerDialog extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+String? _getFromOrigin(BuildContext context) {
+  try {
+    return GoRouterState.of(context).uri.queryParameters['from'];
+  } catch (_) {
+    return null;
   }
 }
