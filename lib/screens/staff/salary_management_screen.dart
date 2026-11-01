@@ -166,18 +166,20 @@ class _SalaryManagementScreenState
     }
 
     final salaries = state.roster
-        .map((r) => <String, dynamic>{
-              'teacherName': r.teacherName,
-              'name': r.teacherName,
-              'gross': r.paidAmt ?? r.grossFromDet,
-              'paidAmt': r.paidAmt ?? r.grossFromDet,
-              'deductions': r.tDeductions ?? 0,
-              'tDeductions': r.tDeductions ?? 0,
-              'net': r.netAmount,
-              'netAmount': r.netAmount,
-              'paidDate': r.paidDate ?? r.disbursDate ?? '',
-              'isPaid': r.isPaid,
-            })
+        .map(
+          (r) => <String, dynamic>{
+            'teacherName': r.teacherName,
+            'name': r.teacherName,
+            'gross': r.paidAmt ?? r.grossFromDet,
+            'paidAmt': r.paidAmt ?? r.grossFromDet,
+            'deductions': r.tDeductions ?? 0,
+            'tDeductions': r.tDeductions ?? 0,
+            'net': r.netAmount,
+            'netAmount': r.netAmount,
+            'paidDate': r.paidDate ?? r.disbursDate ?? '',
+            'isPaid': r.isPaid,
+          },
+        )
         .toList();
 
     ReportPreviewModal.show(

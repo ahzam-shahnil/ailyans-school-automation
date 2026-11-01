@@ -703,10 +703,7 @@ class _DefaulterFilterControlsState extends State<DefaulterFilterControls> {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () {
-        widget.onFiltersChanged?.call(
-          classId: _classId,
-          month: _month,
-        );
+        widget.onFiltersChanged?.call(classId: _classId, month: _month);
       },
       borderRadius: BorderRadius.circular(AppRadius.sm),
       child: Container(

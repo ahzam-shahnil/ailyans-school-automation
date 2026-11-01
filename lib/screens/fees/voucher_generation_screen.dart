@@ -231,7 +231,8 @@ class _VoucherGenerationScreenState
     final filters = ref.read(voucherGenFiltersProvider);
     final db = await DatabaseService.instance.database;
     final yyMm = billingMonthToYyMm(filters.billingMonth);
-    final isSingle = filters.mode == 'single' && filters.selectedStuRegId != null;
+    final isSingle =
+        filters.mode == 'single' && filters.selectedStuRegId != null;
     final stuRegIdParam = isSingle ? filters.selectedStuRegId : null;
     final classIdParam = isSingle ? null : filters.classId;
 
@@ -345,23 +346,35 @@ class _VoucherGenerationScreenState
     int selectedYear = now.year;
     int selectedMonth = now.month;
     if (parts.length >= 2) {
-      selectedYear = int.tryParse(parts[1]) ?? (int.tryParse(parts[0]) ?? now.year);
+      selectedYear =
+          int.tryParse(parts[1]) ?? (int.tryParse(parts[0]) ?? now.year);
       final monthStr = int.tryParse(parts[0]) == null
           ? parts[0].toLowerCase()
           : parts[1].toLowerCase();
       const monthMap = {
-        'jan': 1, 'january': 1,
-        'feb': 2, 'february': 2,
-        'mar': 3, 'march': 3,
-        'apr': 4, 'april': 4,
+        'jan': 1,
+        'january': 1,
+        'feb': 2,
+        'february': 2,
+        'mar': 3,
+        'march': 3,
+        'apr': 4,
+        'april': 4,
         'may': 5,
-        'jun': 6, 'june': 6,
-        'jul': 7, 'july': 7,
-        'aug': 8, 'august': 8,
-        'sep': 9, 'september': 9,
-        'oct': 10, 'october': 10,
-        'nov': 11, 'november': 11,
-        'dec': 12, 'december': 12,
+        'jun': 6,
+        'june': 6,
+        'jul': 7,
+        'july': 7,
+        'aug': 8,
+        'august': 8,
+        'sep': 9,
+        'september': 9,
+        'oct': 10,
+        'october': 10,
+        'nov': 11,
+        'november': 11,
+        'dec': 12,
+        'december': 12,
       };
       selectedMonth = monthMap[monthStr] ?? now.month;
     }
@@ -934,70 +947,79 @@ class _VoucherGenerationScreenState
             const SizedBox(height: 4),
             SizedBox(
               height: 38,
-              child: ref.watch(voucherCohortStudentsProvider).when(
-                data: (students) {
-                  final validVal = students.any((s) => s['Stu_RegID'] == filters.selectedStuRegId)
-                      ? filters.selectedStuRegId
-                      : null;
-                  return DropdownButtonFormField<int?>(
-                    key: ValueKey(validVal),
-                    initialValue: validVal,
-                    isExpanded: true,
-                    isDense: true,
-                    menuMaxHeight: 400,
-                    dropdownColor: AppColors.surfaceRaised,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 13,
-                    ),
-                    decoration: _inputDecoration(),
-                    hint: const Text(
-                      'Select student...',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                    items: students.map((s) {
-                      final regId = s['Stu_RegID'] as int;
-                      final roll = s['ClassRollNo'];
-                      final first = (s['NameFirst'] as String? ?? '').trim();
-                      final mid = (s['NameMiddle'] as String? ?? '').trim();
-                      final last = (s['NameLast'] as String? ?? '').trim();
-                      final name = [first, mid, last]
-                          .where((p) => p.isNotEmpty)
-                          .join(' ');
-                      final label = '#$regId - $name (Roll: ${roll ?? "-"})';
-                      return DropdownMenuItem<int?>(
-                        value: regId,
-                        child: Text(
-                          label,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
+              child: ref
+                  .watch(voucherCohortStudentsProvider)
+                  .when(
+                    data: (students) {
+                      final validVal =
+                          students.any(
+                            (s) => s['Stu_RegID'] == filters.selectedStuRegId,
+                          )
+                          ? filters.selectedStuRegId
+                          : null;
+                      return DropdownButtonFormField<int?>(
+                        key: ValueKey(validVal),
+                        initialValue: validVal,
+                        isExpanded: true,
+                        isDense: true,
+                        menuMaxHeight: 400,
+                        dropdownColor: AppColors.surfaceRaised,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 13,
+                        ),
+                        decoration: _inputDecoration(),
+                        hint: const Text(
+                          'Select student...',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
                             fontSize: 13,
                           ),
                         ),
+                        items: students.map((s) {
+                          final regId = s['Stu_RegID'] as int;
+                          final roll = s['ClassRollNo'];
+                          final first = (s['NameFirst'] as String? ?? '')
+                              .trim();
+                          final mid = (s['NameMiddle'] as String? ?? '').trim();
+                          final last = (s['NameLast'] as String? ?? '').trim();
+                          final name = [
+                            first,
+                            mid,
+                            last,
+                          ].where((p) => p.isNotEmpty).join(' ');
+                          final label =
+                              '#$regId - $name (Roll: ${roll ?? "-"})';
+                          return DropdownMenuItem<int?>(
+                            value: regId,
+                            child: Text(
+                              label,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: isGenerating
+                            ? null
+                            : (val) {
+                                ref
+                                    .read(voucherGenFiltersProvider.notifier)
+                                    .setSelectedStuRegId(val);
+                                ref
+                                    .read(voucherGenExecutionProvider.notifier)
+                                    .clearSummary();
+                              },
                       );
-                    }).toList(),
-                    onChanged: isGenerating
-                        ? null
-                        : (val) {
-                            ref
-                                .read(voucherGenFiltersProvider.notifier)
-                                .setSelectedStuRegId(val);
-                            ref
-                                .read(voucherGenExecutionProvider.notifier)
-                                .clearSummary();
-                          },
-                  );
-                },
-                loading: () => const SizedBox(
-                  height: 38,
-                  child: Center(child: LinearProgressIndicator()),
-                ),
-                error: (_, __) => const Text('Error loading students'),
-              ),
+                    },
+                    loading: () => const SizedBox(
+                      height: 38,
+                      child: Center(child: LinearProgressIndicator()),
+                    ),
+                    error: (_, __) => const Text('Error loading students'),
+                  ),
             ),
             const SizedBox(height: AppSpacing.sm),
           ],
@@ -2136,9 +2158,11 @@ class _VoucherGenerationScreenState
                 final filters = ref.read(voucherGenFiltersProvider);
                 final all = await _loadGeneratedVouchers();
                 final match = all
-                    .where((r) =>
-                        r.stuRegId == row.stuRegId &&
-                        r.forMonth == filters.billingMonth)
+                    .where(
+                      (r) =>
+                          r.stuRegId == row.stuRegId &&
+                          r.forMonth == filters.billingMonth,
+                    )
                     .toList();
                 if (match.isNotEmpty && mounted) {
                   await _openPrintPreview(specific: match);

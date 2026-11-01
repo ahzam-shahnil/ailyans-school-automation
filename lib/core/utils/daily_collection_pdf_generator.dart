@@ -84,8 +84,11 @@ class DailyCollectionPdfGenerator {
                   _headerCell('Student Name', boldFont),
                   _headerCell('Class', boldFont),
                   _headerCell('Voucher', boldFont, align: pw.TextAlign.center),
-                  _headerCell('Amount (Rs.)', boldFont,
-                      align: pw.TextAlign.right),
+                  _headerCell(
+                    'Amount (Rs.)',
+                    boldFont,
+                    align: pw.TextAlign.right,
+                  ),
                   _headerCell('Bank / Mode', boldFont),
                 ],
               ),
@@ -120,16 +123,19 @@ class DailyCollectionPdfGenerator {
                   final idx = entry.key;
                   final c = entry.value;
 
-                  final rowDate = (c['date'] ?? c['paidDate'] ?? date) as String;
-                  final student = (c['student'] ??
-                      c['studentName'] ??
-                      'Student ${idx + 1}') as String;
+                  final rowDate =
+                      (c['date'] ?? c['paidDate'] ?? date) as String;
+                  final student =
+                      (c['student'] ?? c['studentName'] ?? 'Student ${idx + 1}')
+                          as String;
                   final className =
                       (c['class'] ?? c['className'] ?? '-') as String;
-                  final voucher = (c['voucher'] ??
-                      c['voucherNo'] ??
-                      c['voucherMasId'] ??
-                      '-') as String;
+                  final voucher =
+                      (c['voucher'] ??
+                              c['voucherNo'] ??
+                              c['voucherMasId'] ??
+                              '-')
+                          as String;
                   final amt = (c['amount'] ?? c['paidAmt'] ?? 0) as num;
                   final bank =
                       (c['bank'] ?? c['bankName'] ?? 'Counter') as String;
@@ -138,20 +144,33 @@ class DailyCollectionPdfGenerator {
 
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(
-                      color:
-                          isEven ? PdfColors.white : ReportTheme.tableRowAltBg,
+                      color: isEven
+                          ? PdfColors.white
+                          : ReportTheme.tableRowAltBg,
                     ),
                     children: [
-                      _dataCell('${idx + 1}', regularFont,
-                          align: pw.TextAlign.center),
-                      _dataCell(rowDate, regularFont,
-                          align: pw.TextAlign.center),
+                      _dataCell(
+                        '${idx + 1}',
+                        regularFont,
+                        align: pw.TextAlign.center,
+                      ),
+                      _dataCell(
+                        rowDate,
+                        regularFont,
+                        align: pw.TextAlign.center,
+                      ),
                       _dataCell(student, regularFont, bold: true),
                       _dataCell(className, regularFont),
-                      _dataCell(voucher, regularFont,
-                          align: pw.TextAlign.center),
-                      _dataCell(ReportTheme.formatCurrency(amt), regularFont,
-                          align: pw.TextAlign.right),
+                      _dataCell(
+                        voucher,
+                        regularFont,
+                        align: pw.TextAlign.center,
+                      ),
+                      _dataCell(
+                        ReportTheme.formatCurrency(amt),
+                        regularFont,
+                        align: pw.TextAlign.right,
+                      ),
                       _dataCell(bank, regularFont),
                     ],
                   );
@@ -170,8 +189,10 @@ class DailyCollectionPdfGenerator {
                     _dataCell('', regularFont),
                     _dataCell('', regularFont),
                     _dataCell(
-                        ReportTheme.formatCurrency(totalCollected), boldFont,
-                        align: pw.TextAlign.right),
+                      ReportTheme.formatCurrency(totalCollected),
+                      boldFont,
+                      align: pw.TextAlign.right,
+                    ),
                     _dataCell('', regularFont),
                   ],
                 ),
@@ -279,11 +300,7 @@ class DailyCollectionPdfGenerator {
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 8.5,
-          color: PdfColors.white,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 8.5, color: PdfColors.white),
       ),
     );
   }
@@ -299,11 +316,7 @@ class DailyCollectionPdfGenerator {
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 8.5,
-          color: PdfColors.black,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 8.5, color: PdfColors.black),
       ),
     );
   }
@@ -315,16 +328,9 @@ class DailyCollectionPdfGenerator {
   }) {
     return pw.Column(
       children: [
-        pw.Container(
-          width: 130,
-          height: 1,
-          color: ReportTheme.borderRuleColor,
-        ),
+        pw.Container(width: 130, height: 1, color: ReportTheme.borderRuleColor),
         pw.SizedBox(height: 4),
-        pw.Text(
-          label,
-          style: pw.TextStyle(font: boldFont, fontSize: 8.5),
-        ),
+        pw.Text(label, style: pw.TextStyle(font: boldFont, fontSize: 8.5)),
         pw.Text(
           'Date & Stamp',
           style: pw.TextStyle(

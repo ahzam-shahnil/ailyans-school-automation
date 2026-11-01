@@ -39,18 +39,16 @@ class TeacherBiodataPdfGenerator {
 
     final String name =
         (teacherData['name'] ?? teacherData['tName'] ?? '') as String;
-    final String designation = (teacherData['designation'] ??
-        teacherData['tCat'] ??
-        '') as String;
+    final String designation =
+        (teacherData['designation'] ?? teacherData['tCat'] ?? '') as String;
     final String cnic =
         (teacherData['cnic'] ?? teacherData['tCnic'] ?? '') as String;
     final String phone =
         (teacherData['phone'] ?? teacherData['tContactNo1'] ?? '') as String;
     final String address =
         (teacherData['address'] ?? teacherData['tAddress'] ?? '') as String;
-    final String joiningDate = (teacherData['joiningDate'] ??
-        teacherData['doJoing'] ??
-        '') as String;
+    final String joiningDate =
+        (teacherData['joiningDate'] ?? teacherData['doJoing'] ?? '') as String;
     final String? photoPath = (teacherData['photoPath'] as String?)?.trim();
 
     Uint8List? photoBytes;
@@ -241,10 +239,7 @@ class TeacherBiodataPdfGenerator {
               pw.SizedBox(height: 14),
 
               // ── 6. Standard Footer ──
-              ReportTheme.buildStandardFooter(
-                context,
-                branchName: branchName,
-              ),
+              ReportTheme.buildStandardFooter(context, branchName: branchName),
             ],
           );
         },
@@ -268,10 +263,7 @@ class TeacherBiodataPdfGenerator {
         color: ReportTheme.borderRuleColor,
         width: 0.6,
       ),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(2),
-        1: pw.FlexColumnWidth(4),
-      },
+      columnWidths: const {0: pw.FlexColumnWidth(2), 1: pw.FlexColumnWidth(4)},
       children: rows.asMap().entries.map((entry) {
         final idx = entry.key;
         final item = entry.value;
@@ -323,16 +315,9 @@ class TeacherBiodataPdfGenerator {
   }) {
     return pw.Column(
       children: [
-        pw.Container(
-          width: 120,
-          height: 1,
-          color: ReportTheme.borderRuleColor,
-        ),
+        pw.Container(width: 120, height: 1, color: ReportTheme.borderRuleColor),
         pw.SizedBox(height: 4),
-        pw.Text(
-          label,
-          style: pw.TextStyle(font: boldFont, fontSize: 9),
-        ),
+        pw.Text(label, style: pw.TextStyle(font: boldFont, fontSize: 9)),
         pw.Text(
           'Date & Stamp',
           style: pw.TextStyle(

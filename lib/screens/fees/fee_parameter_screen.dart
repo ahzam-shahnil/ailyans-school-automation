@@ -520,8 +520,9 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
                     const SizedBox(width: AppSpacing.sm),
                     OutlinedButton.icon(
                       onPressed: () {
-                        final meta =
-                            ref.read(shellMetadataProvider).valueOrNull;
+                        final meta = ref
+                            .read(shellMetadataProvider)
+                            .valueOrNull;
                         final feeRows = state.currentClassRows
                             .map(
                               (r) => <String, dynamic>{
@@ -534,8 +535,7 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
                           context,
                           request: ReportRequest(
                             type: ReportType.feeSchedule,
-                            id:
-                                '${selectedClass.classId}_${state.selectedFeeYr}',
+                            id: '${selectedClass.classId}_${state.selectedFeeYr}',
                             extraParams: {
                               'feeRows': feeRows,
                               'sessionYear': state.selectedFeeYr,

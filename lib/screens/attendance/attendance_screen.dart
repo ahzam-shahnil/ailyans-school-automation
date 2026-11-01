@@ -677,11 +677,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               }
 
               final meta = ref.read(shellMetadataProvider).value;
-              final safeBranchName = (meta?.branchName != null &&
+              final safeBranchName =
+                  (meta?.branchName != null &&
                       meta!.branchName.trim().isNotEmpty)
                   ? meta.branchName.trim()
                   : "Ailyans's Higher Secondary School Mianwali";
-              final safeBranchAddress = (meta?.branchAddress != null &&
+              final safeBranchAddress =
+                  (meta?.branchAddress != null &&
                       meta!.branchAddress.trim().isNotEmpty)
                   ? meta.branchAddress.trim()
                   : 'Muslim Bazar Mianwali';

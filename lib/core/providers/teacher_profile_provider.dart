@@ -560,11 +560,7 @@ class TeacherProfileNotifier extends StateNotifier<TeacherProfileState> {
   /// Deletes the teacher record from the Teachers table.
   Future<void> deleteTeacher(int teacherId) async {
     final db = await _getDb();
-    await db.delete(
-      'Teachers',
-      where: 'TeacherID = ?',
-      whereArgs: [teacherId],
-    );
+    await db.delete('Teachers', where: 'TeacherID = ?', whereArgs: [teacherId]);
   }
 
   /// Directly updates and persists the active status (TIsPresent) for a teacher.

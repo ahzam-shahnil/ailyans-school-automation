@@ -9,6 +9,8 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers/clock_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
+import '../../core/providers/session_provider.dart';
+import '../../core/providers/sibling_links_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_registration_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -267,7 +269,7 @@ class _StudentRegistrationWizardState
     ref.read(wizardDraftProvider.notifier).setTAddress(pAddr);
   }
 
-  void _copySiblingFamilyInfo(List<SiblingInfo> siblings) {
+  Future<void> _linkAsSiblingAndCopyInfo(List<SiblingInfo> siblings) async {
     if (siblings.isEmpty) return;
     // If multiple siblings match: copy from the row with the HIGHEST Stu_RegID (most recent record).
     final sibling = siblings.reduce(
@@ -321,7 +323,29 @@ class _StudentRegistrationWizardState
       }
     }
 
-    _showSnackBar('Copied family addresses and contacts from sibling.');
+    // Link as siblings
+    final siblingIds = siblings.map((s) => s.stuRegId).toList();
+    if (draft.currentStuRegId != null) {
+      int inserted = 0;
+      final userId = ref.read(sessionProvider)?.user.id.toString();
+      for (final sId in siblingIds) {
+        final ok = await ref
+            .read(siblingLinksProvider.notifier)
+            .linkPair(
+              draft.currentStuRegId!,
+              sId,
+              relation: 'sibling',
+              linkedBy: userId,
+            );
+        if (ok) inserted++;
+      }
+      debugPrint('SiblingLinks: inserted $inserted pairs');
+    } else {
+      notifier.setPendingSiblingIds(siblingIds);
+      debugPrint('SiblingLinks: inserted ${siblingIds.length} pairs');
+    }
+
+    _showSnackBar('Linked ${siblings.length} siblings. Family address copied.');
   }
 
   Future<void> _onCancel() async {
@@ -1291,8 +1315,8 @@ class _StudentRegistrationWizardState
               if (siblings.isNotEmpty)
                 TextButton.icon(
                   icon: const Icon(Icons.link, size: 14),
-                  label: const Text('Copy Family Addresses & Contacts'),
-                  onPressed: () => _copySiblingFamilyInfo(siblings),
+                  label: const Text('Link as Sibling & Copy Family Address'),
+                  onPressed: () => _linkAsSiblingAndCopyInfo(siblings),
                 ),
             ],
           ),

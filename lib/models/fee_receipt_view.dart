@@ -112,8 +112,7 @@ class FeeReceiptView {
   int get netPayable => subtotal - discount;
   int get paidAmt => paidAmount;
   int get remainingBalance => max(0, (subtotal - discount) - paidAmount);
-  int get remainingAfterAdvance =>
-      max(0, remainingBalance - advanceBalance);
+  int get remainingAfterAdvance => max(0, remainingBalance - advanceBalance);
   bool get isFullyPaid => isPaid == 'Y' && remainingBalance == 0;
   bool get isPartiallyPaid => paidAmount > 0 && remainingBalance > 0;
   bool get isOverdue =>

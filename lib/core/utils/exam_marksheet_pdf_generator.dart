@@ -85,7 +85,9 @@ class ExamMarksheetPdfGenerator {
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
         pw.Text(
-          branchName.isNotEmpty ? branchName.toUpperCase() : 'SCHOOL AUTOMATION',
+          branchName.isNotEmpty
+              ? branchName.toUpperCase()
+              : 'SCHOOL AUTOMATION',
           style: pw.TextStyle(
             font: boldFont,
             fontSize: 14,
@@ -112,7 +114,10 @@ class ExamMarksheetPdfGenerator {
             color: ReportTheme.bannerBgColor,
             border: pw.Border(
               top: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
-              bottom: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+              bottom: pw.BorderSide(
+                color: ReportTheme.primaryColor,
+                width: 1.5,
+              ),
             ),
           ),
           child: pw.Row(
@@ -195,7 +200,14 @@ class ExamMarksheetPdfGenerator {
     const colTotal = 4;
     const colGrade = 5;
 
-    final headers = ['Roll #', 'Student Name', 'Subject', 'Obtained', 'Total', 'Grade'];
+    final headers = [
+      'Roll #',
+      'Student Name',
+      'Subject',
+      'Obtained',
+      'Total',
+      'Grade',
+    ];
 
     final rows = <List<String>>[];
     for (int i = 0; i < students.length; i++) {
@@ -205,9 +217,7 @@ class ExamMarksheetPdfGenerator {
       final subject = (s['subject'] ?? s['subjectName'] ?? '').toString();
       final isAbsent = s['isAbsent'] == true;
       final obtVal = s['obtained'] ?? s['obtainedMarks'] ?? s['totalObtained'];
-      final obt = isAbsent
-          ? 'ABS'
-          : (obtVal != null ? obtVal.toString() : '-');
+      final obt = isAbsent ? 'ABS' : (obtVal != null ? obtVal.toString() : '-');
       final totVal = s['total'] ?? s['totalMarks'] ?? s['totalMax'];
       final total = totVal != null ? totVal.toString() : '-';
       final grade = (s['grade'] ?? (isAbsent ? 'ABS' : '')).toString();
@@ -226,10 +236,7 @@ class ExamMarksheetPdfGenerator {
       headerDecoration: const pw.BoxDecoration(
         color: ReportTheme.tableHeaderBg,
       ),
-      cellStyle: pw.TextStyle(
-        font: regularFont,
-        fontSize: 8,
-      ),
+      cellStyle: pw.TextStyle(font: regularFont, fontSize: 8),
       cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3.5),
       rowDecoration: const pw.BoxDecoration(
         border: pw.Border(
@@ -264,7 +271,10 @@ class ExamMarksheetPdfGenerator {
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
         _buildSignBlock(label: 'Subject Teacher', regularFont: regularFont),
-        _buildSignBlock(label: 'Incharge Examination', regularFont: regularFont),
+        _buildSignBlock(
+          label: 'Incharge Examination',
+          regularFont: regularFont,
+        ),
         _buildSignBlock(label: 'Principal', regularFont: regularFont),
       ],
     );

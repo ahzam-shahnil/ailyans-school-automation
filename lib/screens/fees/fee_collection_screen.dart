@@ -10,6 +10,7 @@ import '../../core/providers/clock_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/fee_ledger_provider.dart';
+import '../../core/providers/school_leaving_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
@@ -133,20 +134,39 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       ref.invalidate(dashboardMetricsProvider);
       ref.invalidate(feeLedgerProvider);
       ref.invalidate(shellMetadataProvider);
+      ref.invalidate(schoolLeavingProvider);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Payment Posted Successfully'),
-          backgroundColor: AppColors.statusSuccessBg,
-        ),
-      );
+      if (_originScreen == 'leaving') {
+        final backRoute = _customBackRoute ?? '/students/leaving';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Payment posted. Return to School Leaving to issue SLC.',
+            ),
+            backgroundColor: AppColors.statusSuccessBg,
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: 'Back to School Leaving',
+              textColor: AppColors.textPrimary,
+              onPressed: () => context.go(backRoute),
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Payment Posted Successfully'),
+            backgroundColor: AppColors.statusSuccessBg,
+          ),
+        );
+      }
       _lookupController.clear();
       _amountController.clear();
       _remarksController.clear();
       _lookupFocusNode.requestFocus();
 
-      // Auto-open receipt preview for the just-settled voucher
-      if (settledVoucherId != null) {
+      // Auto-open receipt preview for the just-settled voucher (skip in leaving flow to preserve back action)
+      if (settledVoucherId != null && _originScreen != 'leaving') {
         await _openReceiptPrint(settledVoucherId);
       }
     } else {
@@ -199,12 +219,12 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     final meta = ref.read(shellMetadataProvider).value;
     final branchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
-            ? meta.branchName.trim()
-            : "Ailyans's Higher Secondary School Mianwali";
+        ? meta.branchName.trim()
+        : "Ailyans's Higher Secondary School Mianwali";
     final branchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
-            ? meta.branchAddress.trim()
-            : 'Muslim Bazar Mianwali';
+        ? meta.branchAddress.trim()
+        : 'Muslim Bazar Mianwali';
 
     final paymentMode = ref.read(feeCollectionProvider).paymentMode;
     final printData = await ref
@@ -227,12 +247,58 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       request: ReportRequest(
         type: ReportType.feeReceipt,
         vouchers: [printData],
-        extraParams: {
-          'branchName': branchName,
-          'branchAddress': branchAddress,
-        },
+        extraParams: {'branchName': branchName, 'branchAddress': branchAddress},
       ),
     );
+  }
+
+  String? _lastParsedUri;
+
+  void _parseRouteParams() {
+    try {
+      final uri = GoRouterState.of(context).uri;
+      final uriStr = uri.toString();
+      if (_lastParsedUri == uriStr) return;
+      _lastParsedUri = uriStr;
+
+      final voucherId = uri.queryParameters['voucherId'];
+      final studentId = uri.queryParameters['studentId'];
+      final from = uri.queryParameters['from'];
+
+      if (from != null && from.isNotEmpty) {
+        if (from.startsWith('/students/leaving') || from == 'leaving') {
+          _originScreen = 'leaving';
+          _customBackRoute = from.startsWith('/') ? from : '/students/leaving';
+        } else if (_originConfig.containsKey(from)) {
+          _originScreen = from;
+          _customBackRoute = null;
+        } else if (from.startsWith('/students/') || from.startsWith('/')) {
+          _originScreen = 'students';
+          _customBackRoute = from;
+        } else {
+          _originScreen = from;
+          _customBackRoute = null;
+        }
+      }
+
+      if (voucherId != null && voucherId.isNotEmpty) {
+        if (_lookupController.text != voucherId) {
+          _lookupController.text = voucherId;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _onLookup();
+          });
+        }
+      } else if (studentId != null && studentId.isNotEmpty) {
+        if (_lookupController.text != studentId) {
+          _lookupController.text = studentId;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _onLookup();
+          });
+        }
+      }
+    } catch (_) {
+      // Ignored when FeeCollectionScreen is rendered without GoRouter (e.g. in isolated component tests)
+    }
   }
 
   @override
@@ -245,53 +311,25 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           .amountTendered
           .toString();
     }
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      try {
-        final uri = GoRouterState.of(context).uri;
-        final voucherId = uri.queryParameters['voucherId'];
-        final studentId = uri.queryParameters['studentId'];
-        final from = uri.queryParameters['from'];
-
-        if (from != null) {
-          if (_originConfig.containsKey(from)) {
-            setState(() {
-              _originScreen = from;
-              _customBackRoute = null;
-            });
-          } else if (from.startsWith('/students/') || from.startsWith('/')) {
-            setState(() {
-              _originScreen = 'students';
-              _customBackRoute = from;
-            });
-          }
-        }
-
-        if (voucherId != null && voucherId.isNotEmpty) {
-          _lookupController.text = voucherId;
-          await _onLookup();
-        } else if (studentId != null && studentId.isNotEmpty) {
-          _lookupController.text = studentId;
-          await _onLookup();
-        }
-      } catch (_) {
-        // Ignored when FeeCollectionScreen is rendered without GoRouter (e.g. in isolated component tests)
-      }
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _parseRouteParams();
   }
 
   @override
   Widget build(BuildContext context) {
-    ref.listen<int>(
-      feeCollectionProvider.select((s) => s.amountTendered),
-      (prev, next) {
-        final currentVal = int.tryParse(_amountController.text.trim());
-        if (currentVal != next) {
-          _amountController.text = next.toString();
-        }
-      },
-    );
+    ref.listen<int>(feeCollectionProvider.select((s) => s.amountTendered), (
+      prev,
+      next,
+    ) {
+      final currentVal = int.tryParse(_amountController.text.trim());
+      if (currentVal != next) {
+        _amountController.text = next.toString();
+      }
+    });
     ref.listen<String?>(
       feeCollectionProvider.select((s) => s.currentReceipt?.voucherMasId),
       (prev, next) {
@@ -341,8 +379,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                 Row(
                   children: [
                     OutlinedButton.icon(
-                      onPressed: () =>
-                          context.go(_customBackRoute ?? _originConfig[_originScreen!]!.route),
+                      onPressed: () => context.go(
+                        _customBackRoute ??
+                            _originConfig[_originScreen!]!.route,
+                      ),
                       icon: const Icon(Icons.arrow_back, size: 16),
                       label: Text(_originConfig[_originScreen!]!.label),
                       style: OutlinedButton.styleFrom(
@@ -495,11 +535,13 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               final notifier = ref.read(feeCollectionProvider.notifier);
               final buildData = await notifier.buildDefaulterList();
               final meta = ref.read(shellMetadataProvider).value;
-              final branchName = (meta?.branchName != null &&
+              final branchName =
+                  (meta?.branchName != null &&
                       meta!.branchName.trim().isNotEmpty)
                   ? meta.branchName.trim()
                   : "Ailyans's Higher Secondary School Mianwali";
-              final branchAddress = (meta?.branchAddress != null &&
+              final branchAddress =
+                  (meta?.branchAddress != null &&
                       meta!.branchAddress.trim().isNotEmpty)
                   ? meta.branchAddress.trim()
                   : 'Muslim Bazar Mianwali';
@@ -1503,7 +1545,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Total Concession / Discount', style: AppTypography.bodySmall),
+            const Text(
+              'Total Concession / Discount',
+              style: AppTypography.bodySmall,
+            ),
             Text(
               'Rs. ${_currencyFormat.format(receipt.discount)}',
               style: AppTypography.monospace,
@@ -1579,8 +1624,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
                   child: Text(
                     'PAYMENT INSTALLMENT HISTORY (${receipt.paymentHistory.length})',
                     style: AppTypography.label.copyWith(fontSize: 10),
@@ -1589,19 +1636,22 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                 ...receipt.paymentHistory.map((inst) {
                   final bankPart =
                       (inst.bankName != null && inst.bankName!.isNotEmpty)
-                          ? ' - ${inst.bankName}'
-                          : '';
+                      ? ' - ${inst.bankName}'
+                      : '';
                   return Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
                           child: Text(
                             'Receipt #${inst.feeTransId} (${_formatInstallmentDate(inst.submissionDate)})$bankPart',
-                            style:
-                                AppTypography.bodySmall.copyWith(fontSize: 11),
+                            style: AppTypography.bodySmall.copyWith(
+                              fontSize: 11,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -1668,7 +1718,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text('Payment Settlement', style: AppTypography.h2),
+                        const Text(
+                          'Payment Settlement',
+                          style: AppTypography.h2,
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           receipt.isFullyPaid
@@ -2477,6 +2530,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                                       ref.invalidate(dashboardMetricsProvider);
                                       ref.invalidate(feeLedgerProvider);
                                       ref.invalidate(shellMetadataProvider);
+                                      ref.invalidate(schoolLeavingProvider);
 
                                       if (context.mounted) {
                                         Navigator.of(dialogContext).pop();

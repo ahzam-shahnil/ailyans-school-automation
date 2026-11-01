@@ -35,32 +35,32 @@ class SalarySlipPdfGenerator {
     final regularFont = pw.Font.helvetica();
     final italicFont = pw.Font.helveticaOblique();
 
-    final teacherName = (salaryData['teacherName'] ??
-        salaryData['name'] ??
-        'Employee') as String;
-    final designation = (salaryData['teacherCat'] ??
-        salaryData['designation'] ??
-        'Staff') as String;
-    final cnic = (salaryData['teacherCnic'] ??
-        salaryData['cnic'] ??
-        '-') as String;
-    final month = (salaryData['salMonth'] ??
-        salaryData['month'] ??
-        'N/A') as String;
-    final paidDate = (salaryData['paidDate'] ??
-        salaryData['disbursDate'] ??
-        salaryData['date'] ??
-        '-') as String;
-    final bank = (salaryData['bank'] ??
-        salaryData['bankName'] ??
-        'Cash / Transfer') as String;
+    final teacherName =
+        (salaryData['teacherName'] ?? salaryData['name'] ?? 'Employee')
+            as String;
+    final designation =
+        (salaryData['teacherCat'] ?? salaryData['designation'] ?? 'Staff')
+            as String;
+    final cnic =
+        (salaryData['teacherCnic'] ?? salaryData['cnic'] ?? '-') as String;
+    final month =
+        (salaryData['salMonth'] ?? salaryData['month'] ?? 'N/A') as String;
+    final paidDate =
+        (salaryData['paidDate'] ??
+                salaryData['disbursDate'] ??
+                salaryData['date'] ??
+                '-')
+            as String;
+    final bank =
+        (salaryData['bank'] ?? salaryData['bankName'] ?? 'Cash / Transfer')
+            as String;
 
     final grossVal = (salaryData['paidAmt'] ?? salaryData['gross'] ?? 0) as num;
     final dedVal =
         (salaryData['tDeductions'] ?? salaryData['deductions'] ?? 0) as num;
-    final netVal = (salaryData['netAmount'] ??
-        salaryData['net'] ??
-        (grossVal - dedVal)) as num;
+    final netVal =
+        (salaryData['netAmount'] ?? salaryData['net'] ?? (grossVal - dedVal))
+            as num;
 
     doc.addPage(
       pw.Page(
@@ -157,17 +157,27 @@ class SalarySlipPdfGenerator {
                       color: ReportTheme.tableHeaderBg,
                     ),
                     children: [
-                      _cell('Item Description', boldFont,
-                          color: PdfColors.white),
-                      _cell('Amount (Rs.)', boldFont,
-                          color: PdfColors.white, align: pw.TextAlign.right),
+                      _cell(
+                        'Item Description',
+                        boldFont,
+                        color: PdfColors.white,
+                      ),
+                      _cell(
+                        'Amount (Rs.)',
+                        boldFont,
+                        color: PdfColors.white,
+                        align: pw.TextAlign.right,
+                      ),
                     ],
                   ),
                   pw.TableRow(
                     children: [
                       _cell('Gross Salary', regularFont),
-                      _cell(ReportTheme.formatCurrency(grossVal), regularFont,
-                          align: pw.TextAlign.right),
+                      _cell(
+                        ReportTheme.formatCurrency(grossVal),
+                        regularFont,
+                        align: pw.TextAlign.right,
+                      ),
                     ],
                   ),
                   pw.TableRow(
@@ -177,8 +187,10 @@ class SalarySlipPdfGenerator {
                     children: [
                       _cell('Total Deductions', regularFont),
                       _cell(
-                          ReportTheme.formatCurrency(dedVal), regularFont,
-                          align: pw.TextAlign.right),
+                        ReportTheme.formatCurrency(dedVal),
+                        regularFont,
+                        align: pw.TextAlign.right,
+                      ),
                     ],
                   ),
                   pw.TableRow(
@@ -187,8 +199,11 @@ class SalarySlipPdfGenerator {
                     ),
                     children: [
                       _cell('NET SALARY PAYABLE', boldFont),
-                      _cell(ReportTheme.formatCurrency(netVal), boldFont,
-                          align: pw.TextAlign.right),
+                      _cell(
+                        ReportTheme.formatCurrency(netVal),
+                        boldFont,
+                        align: pw.TextAlign.right,
+                      ),
                     ],
                   ),
                 ],
@@ -320,14 +335,26 @@ class SalarySlipPdfGenerator {
                 children: [
                   _regHeaderCell('#', boldFont, align: pw.TextAlign.center),
                   _regHeaderCell('Teacher / Employee Name', boldFont),
-                  _regHeaderCell('Gross (Rs.)', boldFont,
-                      align: pw.TextAlign.right),
-                  _regHeaderCell('Deduction (Rs.)', boldFont,
-                      align: pw.TextAlign.right),
-                  _regHeaderCell('Net Paid (Rs.)', boldFont,
-                      align: pw.TextAlign.right),
-                  _regHeaderCell('Paid Date', boldFont,
-                      align: pw.TextAlign.center),
+                  _regHeaderCell(
+                    'Gross (Rs.)',
+                    boldFont,
+                    align: pw.TextAlign.right,
+                  ),
+                  _regHeaderCell(
+                    'Deduction (Rs.)',
+                    boldFont,
+                    align: pw.TextAlign.right,
+                  ),
+                  _regHeaderCell(
+                    'Net Paid (Rs.)',
+                    boldFont,
+                    align: pw.TextAlign.right,
+                  ),
+                  _regHeaderCell(
+                    'Paid Date',
+                    boldFont,
+                    align: pw.TextAlign.center,
+                  ),
                   _regHeaderCell('Status / Mode', boldFont),
                 ],
               ),
@@ -362,42 +389,56 @@ class SalarySlipPdfGenerator {
                   final idx = entry.key;
                   final s = entry.value;
 
-                  final name = (s['teacherName'] ??
-                      s['name'] ??
-                      'Employee ${idx + 1}') as String;
+                  final name =
+                      (s['teacherName'] ?? s['name'] ?? 'Employee ${idx + 1}')
+                          as String;
                   final g = (s['paidAmt'] ?? s['gross'] ?? 0) as num;
                   final d = (s['tDeductions'] ?? s['deductions'] ?? 0) as num;
                   final n = (s['netAmount'] ?? s['net'] ?? (g - d)) as num;
-                  final date = (s['paidDate'] ??
-                      s['disbursDate'] ??
-                      s['date'] ??
-                      '-') as String;
-                  final status = (s['bank'] ??
-                      s['bankName'] ??
-                      (s['isPaid'] == 'Y' ? 'Paid' : 'Pending')) as String;
+                  final date =
+                      (s['paidDate'] ?? s['disbursDate'] ?? s['date'] ?? '-')
+                          as String;
+                  final status =
+                      (s['bank'] ??
+                              s['bankName'] ??
+                              (s['isPaid'] == 'Y' ? 'Paid' : 'Pending'))
+                          as String;
 
                   final isEven = idx.isEven;
 
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(
-                      color:
-                          isEven ? PdfColors.white : ReportTheme.tableRowAltBg,
+                      color: isEven
+                          ? PdfColors.white
+                          : ReportTheme.tableRowAltBg,
                     ),
                     children: [
-                      _regDataCell('${idx + 1}', regularFont,
-                          align: pw.TextAlign.center),
+                      _regDataCell(
+                        '${idx + 1}',
+                        regularFont,
+                        align: pw.TextAlign.center,
+                      ),
                       _regDataCell(name, regularFont, bold: true),
                       _regDataCell(
-                          ReportTheme.formatCurrency(g), regularFont,
-                          align: pw.TextAlign.right),
+                        ReportTheme.formatCurrency(g),
+                        regularFont,
+                        align: pw.TextAlign.right,
+                      ),
                       _regDataCell(
-                          ReportTheme.formatCurrency(d), regularFont,
-                          align: pw.TextAlign.right),
+                        ReportTheme.formatCurrency(d),
+                        regularFont,
+                        align: pw.TextAlign.right,
+                      ),
                       _regDataCell(
-                          ReportTheme.formatCurrency(n), boldFont,
-                          align: pw.TextAlign.right),
-                      _regDataCell(date, regularFont,
-                          align: pw.TextAlign.center),
+                        ReportTheme.formatCurrency(n),
+                        boldFont,
+                        align: pw.TextAlign.right,
+                      ),
+                      _regDataCell(
+                        date,
+                        regularFont,
+                        align: pw.TextAlign.center,
+                      ),
                       _regDataCell(status, regularFont),
                     ],
                   );
@@ -411,17 +452,26 @@ class SalarySlipPdfGenerator {
                   ),
                   children: [
                     _regDataCell('', boldFont),
-                    _regDataCell('GRAND TOTAL (${salaries.length})', boldFont,
-                        bold: true),
                     _regDataCell(
-                        ReportTheme.formatCurrency(totalGross), boldFont,
-                        align: pw.TextAlign.right),
+                      'GRAND TOTAL (${salaries.length})',
+                      boldFont,
+                      bold: true,
+                    ),
                     _regDataCell(
-                        ReportTheme.formatCurrency(totalDeductions), boldFont,
-                        align: pw.TextAlign.right),
+                      ReportTheme.formatCurrency(totalGross),
+                      boldFont,
+                      align: pw.TextAlign.right,
+                    ),
                     _regDataCell(
-                        ReportTheme.formatCurrency(totalNet), boldFont,
-                        align: pw.TextAlign.right),
+                      ReportTheme.formatCurrency(totalDeductions),
+                      boldFont,
+                      align: pw.TextAlign.right,
+                    ),
+                    _regDataCell(
+                      ReportTheme.formatCurrency(totalNet),
+                      boldFont,
+                      align: pw.TextAlign.right,
+                    ),
                     _regDataCell('', regularFont),
                     _regDataCell('', regularFont),
                   ],
@@ -466,16 +516,9 @@ class SalarySlipPdfGenerator {
   }) {
     return pw.Column(
       children: [
-        pw.Container(
-          width: 120,
-          height: 1,
-          color: ReportTheme.borderRuleColor,
-        ),
+        pw.Container(width: 120, height: 1, color: ReportTheme.borderRuleColor),
         pw.SizedBox(height: 3),
-        pw.Text(
-          label,
-          style: pw.TextStyle(font: boldFont, fontSize: 8.5),
-        ),
+        pw.Text(label, style: pw.TextStyle(font: boldFont, fontSize: 8.5)),
       ],
     );
   }
@@ -494,10 +537,7 @@ class SalarySlipPdfGenerator {
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text(
-              branchName,
-              style: ReportTheme.titleStyle,
-            ),
+            pw.Text(branchName, style: ReportTheme.titleStyle),
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.end,
               children: [
@@ -539,11 +579,7 @@ class SalarySlipPdfGenerator {
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 8.5,
-          color: PdfColors.white,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 8.5, color: PdfColors.white),
       ),
     );
   }
@@ -559,11 +595,7 @@ class SalarySlipPdfGenerator {
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 8.5,
-          color: PdfColors.black,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 8.5, color: PdfColors.black),
       ),
     );
   }

@@ -6,9 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/db/database.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/providers/sibling_links_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_profile_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -79,6 +81,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     'Exams',
     'Attendance',
     'Documents',
+    'Family',
   ];
 
   @override
@@ -218,12 +221,12 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       return;
     }
 
-    final safeBranchName = (meta?.branchName != null &&
-            meta!.branchName.trim().isNotEmpty)
+    final safeBranchName =
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
         : "Ailyans's Higher Secondary School Mianwali";
-    final safeBranchAddress = (meta?.branchAddress != null &&
-            meta!.branchAddress.trim().isNotEmpty)
+    final safeBranchAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
         : 'Muslim Bazar Mianwali';
 
@@ -389,9 +392,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final activeTab = ref.watch(selectedStudentTabProvider);
     final session = ref.watch(sessionProvider);
     final canEditBiodata =
-        session == null ||
-        session.user.userLevel == 1 ||
-        session.hasAccess(12);
+        session == null || session.user.userLevel == 1 || session.hasAccess(12);
 
     return profileAsync.when(
       loading: () => _buildLoadingSkeleton(),
@@ -418,6 +419,14 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             },
             const SingleActivator(LogicalKeyboardKey.escape): () {
               if (isEditMode) _cancelEdit(bundle.student);
+            },
+            const SingleActivator(LogicalKeyboardKey.keyL, control: true): () {
+              final id = int.tryParse(widget.studentId);
+              if (id != null) _showManageSiblingLinksDialog(context, id);
+            },
+            const SingleActivator(LogicalKeyboardKey.keyL, meta: true): () {
+              final id = int.tryParse(widget.studentId);
+              if (id != null) _showManageSiblingLinksDialog(context, id);
             },
           },
           child: Focus(
@@ -567,7 +576,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     bool canEditBiodata,
   ) {
     final student = bundle.student;
-    final isLeft = student.remarls?.toLowerCase().contains('left') ?? false;
+    final isEnrolled = bundle.isEnrolled;
+    final isLeft = !isEnrolled;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -641,14 +651,14 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: isLeft
-                            ? AppColors.surfaceSubtle
-                            : AppColors.statusSuccessBg,
+                        color: isEnrolled
+                            ? AppColors.statusSuccessBg
+                            : AppColors.surfaceSubtle,
                         borderRadius: BorderRadius.circular(AppRadius.full),
                         border: Border.all(
-                          color: isLeft
-                              ? AppColors.borderDefault
-                              : AppColors.statusSuccessBorder,
+                          color: isEnrolled
+                              ? AppColors.statusSuccessBorder
+                              : AppColors.borderDefault,
                         ),
                       ),
                       child: Row(
@@ -659,18 +669,18 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                             height: 6,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isLeft
-                                  ? AppColors.textDisabled
-                                  : AppColors.statusSuccessText,
+                              color: isEnrolled
+                                  ? AppColors.statusSuccessText
+                                  : AppColors.textDisabled,
                             ),
                           ),
                           const SizedBox(width: 6),
                           Text(
-                            isLeft ? 'Left' : 'Active',
+                            isEnrolled ? 'Active' : 'Alumni',
                             style: AppTypography.label.copyWith(
-                              color: isLeft
-                                  ? AppColors.textSecondary
-                                  : AppColors.statusSuccessText,
+                              color: isEnrolled
+                                  ? AppColors.statusSuccessText
+                                  : AppColors.textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -683,18 +693,31 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
                 // Class + Section + Roll No
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.school_outlined,
                       size: 15,
-                      color: AppColors.textSecondary,
+                      color: isEnrolled
+                          ? AppColors.textSecondary
+                          : AppColors.textDisabled,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'Class ${bundle.currentClassName}-${bundle.currentSectionName}  •  Roll: ${bundle.classRollNo}',
-                      style: AppTypography.body.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
+                    Flexible(
+                      child: Text(
+                        isEnrolled
+                            ? 'Class ${bundle.currentClassName}-${bundle.currentSectionName}  •  Roll: ${bundle.classRollNo}'
+                            : 'Not Enrolled',
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body.copyWith(
+                          color: isEnrolled
+                              ? AppColors.textSecondary
+                              : AppColors.textDisabled,
+                          fontWeight: FontWeight.w500,
+                          fontStyle: isEnrolled
+                              ? FontStyle.normal
+                              : FontStyle.italic,
+                        ),
                       ),
                     ),
                   ],
@@ -702,46 +725,68 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 const SizedBox(height: 4),
 
                 // Father + Mobile
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 4,
                   children: [
-                    const Icon(
-                      Icons.person_outline,
-                      size: 15,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Father: ${bundle.fatherName}',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          const WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: EdgeInsets.only(right: 6),
+                              child: Icon(
+                                Icons.person_outline,
+                                size: 15,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          TextSpan(
+                            text: 'Father: ${bundle.fatherName}',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 12),
-                    Text(
-                      '•',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textMuted,
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          const WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: EdgeInsets.only(right: 4),
+                              child: Icon(
+                                Icons.phone_outlined,
+                                size: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          TextSpan(
+                            text: bundle.mobile1,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Icon(
-                      Icons.phone_outlined,
-                      size: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      bundle.mobile1,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
                 const SizedBox(height: 6),
 
                 // Fee Balance summary
-                Row(
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 4,
+                  runSpacing: 2,
                   children: [
                     Text(
                       'Fee Balance: ',
@@ -785,11 +830,13 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 final stuId = int.tryParse(widget.studentId) ?? -1;
                 final data = await buildBiodataPrintData(stuId, ref);
                 if (!mounted) return;
-                final safeBranchName = (meta?.branchName != null &&
+                final safeBranchName =
+                    (meta?.branchName != null &&
                         meta!.branchName.trim().isNotEmpty)
                     ? meta.branchName.trim()
                     : "Ailyans's Higher Secondary School Mianwali";
-                final safeBranchAddress = (meta?.branchAddress != null &&
+                final safeBranchAddress =
+                    (meta?.branchAddress != null &&
                         meta!.branchAddress.trim().isNotEmpty)
                     ? meta.branchAddress.trim()
                     : 'Muslim Bazar Mianwali';
@@ -815,6 +862,70 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 icon: const Icon(Icons.description_outlined, size: 16),
                 label: const Text('Print SLC'),
                 onPressed: () => context.go('/students/leaving'),
+              ),
+            ],
+            if (!isLeft) ...[
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton.icon(
+                icon: const Icon(
+                  Icons.person_remove_outlined,
+                  size: 16,
+                  color: AppColors.statusErrorText,
+                ),
+                label: const Text(
+                  'Withdraw Student',
+                  style: TextStyle(color: AppColors.statusErrorText),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.statusErrorBorder),
+                ),
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Withdraw Student?'),
+                      content: Text(
+                        'This opens the School Leaving workflow to formally withdraw '
+                        '${student.fullName}. Historical fee records, exam grades, and vouchers '
+                        'are preserved. You will not be able to re-enrol this student '
+                        'without a new admission.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.statusErrorText,
+                            foregroundColor: AppColors.textOnPrimary,
+                          ),
+                          child: const Text('Continue to Withdrawal'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true && mounted) {
+                    final fromOrigin = () {
+                      try {
+                        return GoRouterState.of(context)
+                            .uri
+                            .queryParameters['from'];
+                      } catch (_) {
+                        return null;
+                      }
+                    }();
+                    final currentProfileUrl =
+                        fromOrigin != null && fromOrigin.isNotEmpty
+                        ? '/students/${widget.studentId}?from=${Uri.encodeComponent(fromOrigin)}'
+                        : '/students/${widget.studentId}';
+                    context.go(
+                      '/students/leaving?studentId=${widget.studentId}'
+                      '&from=${Uri.encodeComponent(currentProfileUrl)}',
+                    );
+                  }
+                },
               ),
             ],
           ] else ...[
@@ -997,6 +1108,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         return _buildAttendanceTab(bundle);
       case 6:
         return _buildDocumentsTab(bundle);
+      case 7:
+        return _buildFamilyTab(bundle);
       default:
         return const SizedBox.shrink();
     }
@@ -1312,7 +1425,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             Expanded(
               child: _buildViewField(
                 'Current Enrolled Class',
-                'Class ${bundle.currentClassName}-${bundle.currentSectionName}',
+                bundle.isEnrolled
+                    ? 'Class ${bundle.currentClassName}-${bundle.currentSectionName}'
+                    : 'Not Enrolled',
               ),
             ),
             const SizedBox(width: AppSpacing.lg),
@@ -2015,9 +2130,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   Widget _buildOverviewBottomBar(Student student, bool isEditMode) {
     final session = ref.watch(sessionProvider);
     final canEditBiodata =
-        session == null ||
-        session.user.userLevel == 1 ||
-        session.hasAccess(12);
+        session == null || session.user.userLevel == 1 || session.hasAccess(12);
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -2449,7 +2562,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                             ...vouchers.map((v) {
                               final remainingBalance =
                                   (v.subtotal - v.discount) -
-                                      (v.paidAmount ?? 0);
+                                  (v.paidAmount ?? 0);
                               final isFullyPaid =
                                   v.isPaid == 'Y' && remainingBalance <= 0;
                               final canCollect = !isFullyPaid;
@@ -2544,21 +2657,22 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                                     fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
-                                                style:
-                                                    ElevatedButton.styleFrom(
+                                                style: ElevatedButton.styleFrom(
                                                   padding:
                                                       const EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 2,
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                  minimumSize: const Size(
+                                                    0,
+                                                    26,
                                                   ),
-                                                  minimumSize:
-                                                      const Size(0, 26),
                                                 ),
                                                 onPressed: () {
                                                   final fromPath =
                                                       Uri.encodeComponent(
-                                                    '/students/${widget.studentId}',
-                                                  );
+                                                        '/students/${widget.studentId}',
+                                                      );
                                                   context.go(
                                                     '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
                                                   );
@@ -2577,14 +2691,14 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                                 padding: EdgeInsets.zero,
                                                 constraints:
                                                     const BoxConstraints(
-                                                  minWidth: 26,
-                                                  minHeight: 26,
-                                                ),
+                                                      minWidth: 26,
+                                                      minHeight: 26,
+                                                    ),
                                                 onPressed: () {
                                                   final fromPath =
                                                       Uri.encodeComponent(
-                                                    '/students/${widget.studentId}',
-                                                  );
+                                                        '/students/${widget.studentId}',
+                                                      );
                                                   context.go(
                                                     '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
                                                   );
@@ -2610,20 +2724,21 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                                     fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
-                                                style:
-                                                    OutlinedButton.styleFrom(
+                                                style: OutlinedButton.styleFrom(
                                                   padding:
                                                       const EdgeInsets.symmetric(
-                                                    horizontal: 6,
-                                                    vertical: 2,
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                  minimumSize: const Size(
+                                                    0,
+                                                    26,
                                                   ),
-                                                  minimumSize:
-                                                      const Size(0, 26),
                                                 ),
                                                 onPressed: () =>
                                                     _onPrintReceipt(
-                                                  v.voucherMasId,
-                                                ),
+                                                      v.voucherMasId,
+                                                    ),
                                               ),
                                               IconButton(
                                                 icon: const Icon(
@@ -2638,14 +2753,14 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                                 padding: EdgeInsets.zero,
                                                 constraints:
                                                     const BoxConstraints(
-                                                  minWidth: 26,
-                                                  minHeight: 26,
-                                                ),
+                                                      minWidth: 26,
+                                                      minHeight: 26,
+                                                    ),
                                                 onPressed: () {
                                                   final fromPath =
                                                       Uri.encodeComponent(
-                                                    '/students/${widget.studentId}',
-                                                  );
+                                                        '/students/${widget.studentId}',
+                                                      );
                                                   context.go(
                                                     '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
                                                   );
@@ -3304,6 +3419,480 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 color: AppColors.textPrimary,
               ),
       ),
+    );
+  }
+
+  void _showManageSiblingLinksDialog(BuildContext context, int stuId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _ManageSiblingLinksDialog(currentStudentId: stuId),
+    );
+  }
+
+  Widget _buildFamilyTab(StudentProfileBundle bundle) {
+    final stuId = bundle.student.stuRegId;
+    final siblingsAsync = ref.watch(siblingLinksForStudentProvider(stuId));
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'LINKED SIBLINGS & FAMILY MEMBERS',
+                style: AppTypography.h3.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.link, size: 16),
+                label: const Text('Manage Sibling Links (Ctrl+L)'),
+                onPressed: () => _showManageSiblingLinksDialog(context, stuId),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Expanded(
+            child: siblingsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(
+                child: Text(
+                  'Error loading siblings: $e',
+                  style: const TextStyle(color: AppColors.statusErrorText),
+                ),
+              ),
+              data: (siblings) {
+                if (siblings.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.people_outline,
+                          size: 48,
+                          color: AppColors.textMuted,
+                        ),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(
+                          'No siblings linked for this student.',
+                          style: AppTypography.body.copyWith(
+                            color: AppColors.textMuted,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.link, size: 16),
+                          label: const Text('Manage Sibling Links'),
+                          onPressed: () =>
+                              _showManageSiblingLinksDialog(context, stuId),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.separated(
+                  itemCount: siblings.length,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, index) {
+                    final sib = siblings[index];
+                    final sibId = (sib['Stu_RegID'] as num).toInt();
+                    final first = (sib['NameFirst'] as String? ?? '').trim();
+                    final last = (sib['NameLast'] as String? ?? '').trim();
+                    final fullName = last.isNotEmpty ? '$first $last' : first;
+                    final cName = (sib['CName'] as String?)?.trim();
+                    final secName = (sib['SecName'] as String?)?.trim();
+                    final linkId = (sib['LinkID'] as num?)?.toInt();
+
+                    final classDisplay = (cName != null && cName.isNotEmpty)
+                        ? (secName != null && secName.isNotEmpty
+                              ? '$cName-$secName'
+                              : cName)
+                        : 'Not Enrolled';
+
+                    String initials = 'ST';
+                    if (fullName.isNotEmpty) {
+                      final parts = fullName
+                          .split(' ')
+                          .where((p) => p.isNotEmpty)
+                          .toList();
+                      if (parts.length == 1) {
+                        initials = parts[0]
+                            .substring(0, parts[0].length >= 2 ? 2 : 1)
+                            .toUpperCase();
+                      } else {
+                        initials = '${parts.first[0]}${parts.last[0]}'
+                            .toUpperCase();
+                      }
+                    }
+
+                    return Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                        border: Border.all(color: AppColors.borderDefault),
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: AppColors.brandPrimary,
+                            child: Text(
+                              initials,
+                              style: const TextStyle(
+                                color: AppColors.textOnPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      fullName,
+                                      style: AppTypography.label.copyWith(
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '(Reg #$sibId)',
+                                      style: AppTypography.monospace.copyWith(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceSubtle,
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.sm,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    classDisplay,
+                                    style: AppTypography.bodySmall.copyWith(
+                                      fontSize: 11,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          TextButton.icon(
+                            icon: const Icon(Icons.open_in_new, size: 14),
+                            label: const Text('View Profile'),
+                            onPressed: () => context.go('/students/$sibId'),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.link_off,
+                              size: 18,
+                              color: AppColors.statusErrorText,
+                            ),
+                            tooltip: 'Unlink Sibling',
+                            onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Unlink Sibling?'),
+                                  content: Text(
+                                    'Are you sure you want to remove the sibling link with $fullName (Reg #$sibId)?',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(false),
+                                      child: const Text('Cancel'),
+                                    ),
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            AppColors.statusErrorText,
+                                        foregroundColor:
+                                            AppColors.textOnPrimary,
+                                      ),
+                                      child: const Text('Unlink'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirm == true && mounted) {
+                                if (linkId != null) {
+                                  await ref
+                                      .read(siblingLinksProvider.notifier)
+                                      .unlink(linkId);
+                                } else {
+                                  final links = await ref
+                                      .read(siblingLinksProvider.notifier)
+                                      .loadForStudent(stuId);
+                                  for (final l in links) {
+                                    if (l.stu1RegId == sibId ||
+                                        l.stu2RegId == sibId) {
+                                      await ref
+                                          .read(siblingLinksProvider.notifier)
+                                          .unlink(l.linkId);
+                                      break;
+                                    }
+                                  }
+                                }
+                                ref.invalidate(
+                                  siblingLinksForStudentProvider(stuId),
+                                );
+                                _showSnackBar('Sibling unlinked successfully.');
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ManageSiblingLinksDialog extends ConsumerStatefulWidget {
+  final int currentStudentId;
+
+  const _ManageSiblingLinksDialog({required this.currentStudentId});
+
+  @override
+  ConsumerState<_ManageSiblingLinksDialog> createState() =>
+      _ManageSiblingLinksDialogState();
+}
+
+class _ManageSiblingLinksDialogState
+    extends ConsumerState<_ManageSiblingLinksDialog> {
+  late final TextEditingController _searchController;
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _searching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _performSearch(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) {
+      setState(() => _searchResults = []);
+      return;
+    }
+    setState(() => _searching = true);
+    final db = await DatabaseService.instance.database;
+    final results = await db.rawQuery(
+      '''
+      SELECT sr.Stu_RegID, sr.NameFirst, sr.NameLast, sr.F_Name,
+             c.CName, cs.SecName
+      FROM Stu_Reg sr
+      LEFT JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID AND sc.Present = 1
+      LEFT JOIN Class c ON sc.ClassID = c.ClassID
+      LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+      WHERE sr.Stu_RegID != ?
+        AND (
+          CAST(sr.Stu_RegID AS TEXT) LIKE ?
+          OR LOWER(sr.NameFirst) LIKE ?
+          OR LOWER(COALESCE(sr.NameLast, '')) LIKE ?
+          OR LOWER(COALESCE(sr.F_Name, '')) LIKE ?
+        )
+      LIMIT 20
+    ''',
+      [
+        widget.currentStudentId,
+        '%$q%',
+        '%${q.toLowerCase()}%',
+        '%${q.toLowerCase()}%',
+        '%${q.toLowerCase()}%',
+      ],
+    );
+    if (mounted) {
+      setState(() {
+        _searchResults = results;
+        _searching = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Manage Sibling Links'),
+      content: SizedBox(
+        width: 500,
+        height: 420,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'SEARCH STUDENT BY NAME OR REG ID',
+              style: AppTypography.label.copyWith(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 38,
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Type student name or Reg ID...',
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    borderSide: const BorderSide(
+                      color: AppColors.borderDefault,
+                    ),
+                  ),
+                ),
+                onChanged: _performSearch,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Expanded(
+              child: _searching
+                  ? const Center(child: CircularProgressIndicator())
+                  : _searchResults.isEmpty
+                  ? Center(
+                      child: Text(
+                        _searchController.text.trim().isEmpty
+                            ? 'Search for a student to link as sibling'
+                            : 'No students found',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: _searchResults.length,
+                      separatorBuilder: (ctx, i) => const Divider(height: 1),
+                      itemBuilder: (ctx, i) {
+                        final row = _searchResults[i];
+                        final id = (row['Stu_RegID'] as num).toInt();
+                        final first = (row['NameFirst'] as String? ?? '')
+                            .trim();
+                        final last = (row['NameLast'] as String? ?? '').trim();
+                        final name = last.isNotEmpty ? '$first $last' : first;
+                        final fName = (row['F_Name'] as String?)?.trim();
+                        final cName = (row['CName'] as String?)?.trim();
+
+                        return ListTile(
+                          dense: true,
+                          title: Text('$name (Reg #$id)'),
+                          subtitle: Text(
+                            '${fName != null ? "Father: $fName • " : ""}${cName ?? "Unassigned"}',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                          trailing: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 4,
+                              ),
+                            ),
+                            child: const Text('Link'),
+                            onPressed: () async {
+                              final navigator = Navigator.of(context);
+                              final messenger = ScaffoldMessenger.of(context);
+                              final ok = await ref
+                                  .read(siblingLinksProvider.notifier)
+                                  .linkPair(
+                                    widget.currentStudentId,
+                                    id,
+                                    relation: 'sibling',
+                                    linkedBy: ref
+                                        .read(sessionProvider)
+                                        ?.user
+                                        .id
+                                        .toString(),
+                                  );
+                              if (!mounted) return;
+                              ref.invalidate(
+                                siblingLinksForStudentProvider(
+                                  widget.currentStudentId,
+                                ),
+                              );
+                              if (ok) {
+                                messenger.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Linked with $name successfully',
+                                    ),
+                                    backgroundColor: AppColors.statusSuccessBg,
+                                  ),
+                                );
+                                navigator.pop();
+                              } else {
+                                messenger.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Already linked as sibling'),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }

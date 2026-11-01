@@ -142,15 +142,17 @@ class _ClassSubjectMappingScreenState
     final state = ref.read(classSubjectMappingProvider);
 
     final subjects = state.mappings
-        .map((row) => <String, dynamic>{
-              'subject': row.subjName,
-              'subjName': row.subjName,
-              'subjectName': row.subjName,
-              'teacher': row.teacherName,
-              'teacherName': row.teacherName,
-              'totalMarks': row.totalMarks,
-              'practicalMarks': row.totalPracticalMarks,
-            })
+        .map(
+          (row) => <String, dynamic>{
+            'subject': row.subjName,
+            'subjName': row.subjName,
+            'subjectName': row.subjName,
+            'teacher': row.teacherName,
+            'teacherName': row.teacherName,
+            'totalMarks': row.totalMarks,
+            'practicalMarks': row.totalPracticalMarks,
+          },
+        )
         .toList();
 
     if (subjects.isEmpty) {

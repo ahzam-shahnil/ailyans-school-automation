@@ -36,63 +36,68 @@ class SlcPdfGenerator {
     final regularFont = pw.Font.helvetica();
     final italicFont = pw.Font.helveticaOblique();
 
-    final String studentName = (slcData['studentName'] ??
-            slcData['name'] ??
-            slcData['stuName'] ??
-            slcData['Stu_Name'] ??
-            '')
-        .toString()
-        .trim();
-    final String fatherName = (slcData['fatherName'] ??
-            slcData['father'] ??
-            slcData['fName'] ??
-            slcData['F_Name'] ??
-            '')
-        .toString()
-        .trim();
-    final String className = (slcData['className'] ??
-            slcData['classLeft'] ??
-            slcData['leftClass'] ??
-            slcData['LeftClass'] ??
-            slcData['cName'] ??
-            slcData['CName'] ??
-            '')
-        .toString()
-        .trim();
-    final String admissionDate = (slcData['admissionDate'] ??
-            slcData['admDate'] ??
-            slcData['admission_date'] ??
-            slcData['DOAdmission'] ??
-            '')
-        .toString()
-        .trim();
-    final String leavingDate = (slcData['leavingDate'] ??
-            slcData['leftDate'] ??
-            slcData['LeftDate'] ??
-            slcData['dateLeft'] ??
-            '')
-        .toString()
-        .trim();
-    final String conduct = (slcData['conduct'] ??
-            slcData['charactor'] ??
-            slcData['Charactor'] ??
-            slcData['character'] ??
-            '')
-        .toString()
-        .trim();
-    final String reason = (slcData['reason'] ??
-            slcData['termOfLeaving'] ??
-            slcData['TermOfLeavign'] ??
-            slcData['term'] ??
-            '')
-        .toString()
-        .trim();
-    final String remarks = (slcData['remarks'] ??
-            slcData['slRemarks'] ??
-            slcData['Remarks'] ??
-            '')
-        .toString()
-        .trim();
+    final String studentName =
+        (slcData['studentName'] ??
+                slcData['name'] ??
+                slcData['stuName'] ??
+                slcData['Stu_Name'] ??
+                '')
+            .toString()
+            .trim();
+    final String fatherName =
+        (slcData['fatherName'] ??
+                slcData['father'] ??
+                slcData['fName'] ??
+                slcData['F_Name'] ??
+                '')
+            .toString()
+            .trim();
+    final String className =
+        (slcData['className'] ??
+                slcData['classLeft'] ??
+                slcData['leftClass'] ??
+                slcData['LeftClass'] ??
+                slcData['cName'] ??
+                slcData['CName'] ??
+                '')
+            .toString()
+            .trim();
+    final String admissionDate =
+        (slcData['admissionDate'] ??
+                slcData['admDate'] ??
+                slcData['admission_date'] ??
+                slcData['DOAdmission'] ??
+                '')
+            .toString()
+            .trim();
+    final String leavingDate =
+        (slcData['leavingDate'] ??
+                slcData['leftDate'] ??
+                slcData['LeftDate'] ??
+                slcData['dateLeft'] ??
+                '')
+            .toString()
+            .trim();
+    final String conduct =
+        (slcData['conduct'] ??
+                slcData['charactor'] ??
+                slcData['Charactor'] ??
+                slcData['character'] ??
+                '')
+            .toString()
+            .trim();
+    final String reason =
+        (slcData['reason'] ??
+                slcData['termOfLeaving'] ??
+                slcData['TermOfLeavign'] ??
+                slcData['term'] ??
+                '')
+            .toString()
+            .trim();
+    final String remarks =
+        (slcData['remarks'] ?? slcData['slRemarks'] ?? slcData['Remarks'] ?? '')
+            .toString()
+            .trim();
 
     final sName = studentName.isEmpty ? '__________________' : studentName;
     final fName = fatherName.isEmpty ? '__________________' : fatherName;

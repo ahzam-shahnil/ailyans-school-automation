@@ -27,11 +27,7 @@ class ReportPreviewState {
   final Uint8List? bytes;
   final String? error;
 
-  const ReportPreviewState({
-    this.isLoading = false,
-    this.bytes,
-    this.error,
-  });
+  const ReportPreviewState({this.isLoading = false, this.bytes, this.error});
 
   ReportPreviewState copyWith({
     bool? isLoading,
@@ -60,7 +56,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   int _feeVoucherMode = 0;
 
   ReportPreviewNotifier(this.request)
-      : super(const ReportPreviewState(isLoading: true)) {
+    : super(const ReportPreviewState(isLoading: true)) {
     generate();
   }
 
@@ -80,9 +76,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       }
     } catch (e, st) {
       if (mounted) {
-        state = ReportPreviewState(
-          error: 'Failed to generate PDF: $e\n$st',
-        );
+        state = ReportPreviewState(error: 'Failed to generate PDF: $e\n$st');
       }
     }
   }
@@ -137,9 +131,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       }
     } catch (e, st) {
       if (mounted) {
-        state = ReportPreviewState(
-          error: 'Failed to generate PDF: $e\n$st',
-        );
+        state = ReportPreviewState(error: 'Failed to generate PDF: $e\n$st');
       }
     }
   }
@@ -161,11 +153,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   }
 
   Future<Uint8List> _generateFeeVoucher(int mode) async {
-    const requiredKeys = [
-      'bankName',
-      'bankBranch',
-      'bankAcctNo',
-    ];
+    const requiredKeys = ['bankName', 'bankBranch', 'bankAcctNo'];
 
     for (final key in requiredKeys) {
       if (!request.extraParams.containsKey(key) ||
@@ -253,24 +241,24 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
 
     final safeData =
         (safeName != data.branchName || safeAddress != data.branchAddress)
-            ? AttendancePdfData(
-                branchName: safeName,
-                branchAddress: safeAddress,
-                branchPhone: data.branchPhone,
-                branchPrincipal: data.branchPrincipal,
-                className: data.className,
-                sectionName: data.sectionName,
-                teacherName: data.teacherName,
-                sessionYear: data.sessionYear,
-                attDate: data.attDate,
-                roster: data.roster,
-                presentCount: data.presentCount,
-                absentCount: data.absentCount,
-                leaveCount: data.leaveCount,
-                lateCount: data.lateCount,
-                totalCount: data.totalCount,
-              )
-            : data;
+        ? AttendancePdfData(
+            branchName: safeName,
+            branchAddress: safeAddress,
+            branchPhone: data.branchPhone,
+            branchPrincipal: data.branchPrincipal,
+            className: data.className,
+            sectionName: data.sectionName,
+            teacherName: data.teacherName,
+            sessionYear: data.sessionYear,
+            attDate: data.attDate,
+            roster: data.roster,
+            presentCount: data.presentCount,
+            absentCount: data.absentCount,
+            leaveCount: data.leaveCount,
+            lateCount: data.lateCount,
+            totalCount: data.totalCount,
+          )
+        : data;
 
     return buildAttendancePdf(safeData);
   }
@@ -296,7 +284,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   }
 
   Future<Uint8List> _generateSlc() async {
-    final data = (request.extraParams['slcData'] as Map<String, dynamic>?) ??
+    final data =
+        (request.extraParams['slcData'] as Map<String, dynamic>?) ??
         (request.extraParams.containsKey('studentName') ||
                 request.extraParams.containsKey('name') ||
                 request.extraParams.containsKey('stuRegId') ||
@@ -316,7 +305,9 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   Future<Uint8List> _generateFeeSchedule() async {
     final rows = request.extraParams['feeRows'] as List<dynamic>?;
     if (rows == null) {
-      throw StateError('Missing feeRows in extraParams for feeSchedule report.');
+      throw StateError(
+        'Missing feeRows in extraParams for feeSchedule report.',
+      );
     }
     return FeeSchedulePdfGenerator.generate(
       feeRows: rows.cast<Map<String, dynamic>>(),
@@ -445,5 +436,5 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
 
 final reportPreviewProvider = StateNotifierProvider.autoDispose
     .family<ReportPreviewNotifier, ReportPreviewState, ReportRequest>(
-  (ref, request) => ReportPreviewNotifier(request),
-);
+      (ref, request) => ReportPreviewNotifier(request),
+    );

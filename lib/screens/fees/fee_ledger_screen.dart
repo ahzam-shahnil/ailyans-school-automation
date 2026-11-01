@@ -135,10 +135,12 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     }
 
     final meta = ref.read(shellMetadataProvider).value;
-    final safeBranchName = (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+    final safeBranchName =
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
         : "Ailyans's Higher Secondary School Mianwali";
-    final safeBranchAddress = (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+    final safeBranchAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
         : 'Muslim Bazar Mianwali';
     final request = ReportRequest(
@@ -160,12 +162,16 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
         initialClassId: null,
         initialMonth: null,
         onFiltersChanged: ({int? classId, String? month}) {
-          // Because the filter requires a DB re-query (Q-2 in E-3c-2), we 
+          // Because the filter requires a DB re-query (Q-2 in E-3c-2), we
           // cannot fully regenerate the PDF here without complex state.
           // For now, we preserve the filter UI visually. If the user changes
           // it, we show a snackbar explaining they must close and re-apply.
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Close preview and change filters on the ledger to update the PDF.')),
+            const SnackBar(
+              content: Text(
+                'Close preview and change filters on the ledger to update the PDF.',
+              ),
+            ),
           );
         },
       ),
@@ -280,10 +286,12 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     }
 
     final meta = ref.read(shellMetadataProvider).value;
-    final safeBranchName = (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+    final safeBranchName =
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
         : "Ailyans's Higher Secondary School Mianwali";
-    final safeBranchAddress = (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+    final safeBranchAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
         : 'Muslim Bazar Mianwali';
     await ReportPreviewModal.show(
@@ -1919,19 +1927,31 @@ class _DailyLedgerDialog extends ConsumerWidget {
                       ? null
                       : () {
                           final meta = ref.read(shellMetadataProvider).value;
-                          final collections = paidRows.map((r) => {
-                            'voucherNo': r.voucherMasId,
-                            'date': r.paidDate != null ? _fmt.format(r.paidDate!) : '',
-                            'studentName': r.studentName,
-                            'className': r.className,
-                            'bank': r.bankId != null ? 'Bank #${r.bankId}' : 'Cash',
-                            'amount': r.paidAmt,
-                          }).toList();
+                          final collections = paidRows
+                              .map(
+                                (r) => {
+                                  'voucherNo': r.voucherMasId,
+                                  'date': r.paidDate != null
+                                      ? _fmt.format(r.paidDate!)
+                                      : '',
+                                  'studentName': r.studentName,
+                                  'className': r.className,
+                                  'bank': r.bankId != null
+                                      ? 'Bank #${r.bankId}'
+                                      : 'Cash',
+                                  'amount': r.paidAmt,
+                                },
+                              )
+                              .toList();
 
-                          final safeBranchName = (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+                          final safeBranchName =
+                              (meta?.branchName != null &&
+                                  meta!.branchName.trim().isNotEmpty)
                               ? meta.branchName.trim()
                               : "Ailyans's Higher Secondary School Mianwali";
-                          final safeBranchAddress = (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+                          final safeBranchAddress =
+                              (meta?.branchAddress != null &&
+                                  meta!.branchAddress.trim().isNotEmpty)
                               ? meta.branchAddress.trim()
                               : 'Muslim Bazar Mianwali';
 

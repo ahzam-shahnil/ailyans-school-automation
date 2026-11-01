@@ -12,6 +12,7 @@ class StudentListRow {
   final int? rollNo; // Student_Class.ClassRollNo
   final String status; // "Active" or "Left"
   final String sessionYr; // Student_Class.SessionYr
+  final int siblingCount;
 
   const StudentListRow({
     required this.stuRegId,
@@ -23,6 +24,7 @@ class StudentListRow {
     this.rollNo,
     required this.status,
     required this.sessionYr,
+    this.siblingCount = 0,
   });
 
   /// Formats the class and section badge string (e.g., "Class 10-A").
@@ -46,6 +48,7 @@ class StudentListRow {
       rollNo: map['ClassRollNo'] as int?,
       status: (map['status'] as String? ?? 'Active').trim(),
       sessionYr: (map['SessionYr'] as String? ?? '2017-2018').trim(),
+      siblingCount: (map['siblingCount'] as num?)?.toInt() ?? 0,
     );
   }
 }

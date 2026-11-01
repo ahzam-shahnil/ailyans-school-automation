@@ -78,6 +78,13 @@ class SchemaMigrations {
       currentVersion = 7;
     }
 
+    // Migration 008: Sibling Links table (canonical pair, CHECK constraint)
+    if (currentVersion < 8) {
+      await applyMigration008(db);
+      await db.execute('PRAGMA user_version = 8');
+      currentVersion = 8;
+    }
+
     // Ensure app_config table exists for device-local preferences
     await db.execute('''
       CREATE TABLE IF NOT EXISTS app_config (
@@ -275,6 +282,29 @@ class SchemaMigrations {
         [b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[0]],
       );
     }
+  }
+
+  /// Migration 008: Creates Sibling_Links table for peer/sibling mapping.
+  /// Schema-only (no initial seed data).
+  static Future<void> applyMigration008(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS Sibling_Links (
+        LinkID      INTEGER PRIMARY KEY,
+        Stu1_RegID  INTEGER NOT NULL,
+        Stu2_RegID  INTEGER NOT NULL,
+        Relation    TEXT,
+        LinkedBy    TEXT,
+        LinkedOn    TEXT,
+        UNIQUE(Stu1_RegID, Stu2_RegID),
+        CHECK(Stu1_RegID < Stu2_RegID)
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sibling_stu1 ON Sibling_Links(Stu1_RegID)',
+    );
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sibling_stu2 ON Sibling_Links(Stu2_RegID)',
+    );
   }
 
   /// Executes a multi-statement SQL script using a transactional batch.

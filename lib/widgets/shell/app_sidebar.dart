@@ -255,8 +255,9 @@ class AppSidebar extends ConsumerWidget {
                   height: 24.0,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color:
-                          isActive ? AppColors.brandPrimary : Colors.transparent,
+                      color: isActive
+                          ? AppColors.brandPrimary
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(AppRadius.sm),
                     ),
                   ),
@@ -279,8 +280,9 @@ class AppSidebar extends ConsumerWidget {
                         color: isActive
                             ? AppColors.brandPrimary
                             : AppColors.textPrimary,
-                        fontWeight:
-                            isActive ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight: isActive
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

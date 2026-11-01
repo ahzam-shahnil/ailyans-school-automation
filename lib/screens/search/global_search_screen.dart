@@ -30,7 +30,8 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
 
   Timer? _debounceTimer;
   late String _activeQuery;
-  String _activeFilter = 'all'; // 'all', 'students', 'vouchers', 'staff', 'books'
+  String _activeFilter =
+      'all'; // 'all', 'students', 'vouchers', 'staff', 'books'
 
   @override
   void initState() {
@@ -137,9 +138,8 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
                     borderRadius: BorderRadius.circular(AppRadius.lg),
                     child: searchAsync.when(
                       data: (results) => _buildResultsView(results),
-                      loading: () => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
                       error: (err, _) => Center(
                         child: Text(
                           'Error loading search results: $err',
@@ -212,15 +212,16 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
                       onChanged: _onSearchChanged,
                       onSubmitted: _onSearchSubmitted,
                       decoration: InputDecoration(
-                        hintText:
-                            'Search by Student Name, Reg ID, Voucher ID (e.g. 2610-4808), Staff, or Book...',
+                        hintText: 'Search by Student Name, Reg ID, Voucher ID (e.g. 2610-4808), Staff, or Book...',
                         hintStyle: AppTypography.bodySmall.copyWith(
                           color: AppColors.textMuted,
                         ),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 8.0,
+                        ),
                         isDense: true,
                         filled: false,
                       ),
@@ -250,31 +251,11 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
     bool isLoading = false,
   }) {
     final chips = [
-      (
-        key: 'all',
-        label: 'All Results',
-        count: results.totalCount,
-      ),
-      (
-        key: 'students',
-        label: 'Students',
-        count: results.students.length,
-      ),
-      (
-        key: 'vouchers',
-        label: 'Fee Vouchers',
-        count: results.vouchers.length,
-      ),
-      (
-        key: 'staff',
-        label: 'Staff',
-        count: results.staff.length,
-      ),
-      (
-        key: 'books',
-        label: 'Library Books',
-        count: results.books.length,
-      ),
+      (key: 'all', label: 'All Results', count: results.totalCount),
+      (key: 'students', label: 'Students', count: results.students.length),
+      (key: 'vouchers', label: 'Fee Vouchers', count: results.vouchers.length),
+      (key: 'staff', label: 'Staff', count: results.staff.length),
+      (key: 'books', label: 'Library Books', count: results.books.length),
     ];
 
     return SizedBox(
@@ -460,13 +441,13 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
     final statusColor = v.isPaidStatus
         ? AppColors.statusSuccessText
         : (v.isRolledOver
-            ? AppColors.statusWarningText
-            : AppColors.statusErrorText);
+              ? AppColors.statusWarningText
+              : AppColors.statusErrorText);
     final statusBg = v.isPaidStatus
         ? AppColors.statusSuccessBg
         : (v.isRolledOver
-            ? AppColors.statusWarningBg
-            : AppColors.statusErrorBg);
+              ? AppColors.statusWarningBg
+              : AppColors.statusErrorBg);
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
@@ -615,7 +596,10 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
               // Quick Action Buttons
               OutlinedButton.icon(
                 icon: const Icon(Icons.person_outline, size: 13.0),
-                label: const Text('Student Profile', style: TextStyle(fontSize: 11.0)),
+                label: const Text(
+                  'Student Profile',
+                  style: TextStyle(fontSize: 11.0),
+                ),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   minimumSize: const Size(0, 30),
@@ -627,7 +611,10 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
               const SizedBox(width: AppSpacing.xs),
               ElevatedButton.icon(
                 icon: const Icon(Icons.receipt_long_outlined, size: 13.0),
-                label: const Text('Open in Teller', style: TextStyle(fontSize: 11.0)),
+                label: const Text(
+                  'Open in Teller',
+                  style: TextStyle(fontSize: 11.0),
+                ),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   minimumSize: const Size(0, 30),
@@ -739,7 +726,10 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
               // Action buttons
               OutlinedButton.icon(
                 icon: const Icon(Icons.payments_outlined, size: 13.0),
-                label: const Text('Collect Fee', style: TextStyle(fontSize: 11.0)),
+                label: const Text(
+                  'Collect Fee',
+                  style: TextStyle(fontSize: 11.0),
+                ),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   minimumSize: const Size(0, 30),
@@ -753,7 +743,10 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
               const SizedBox(width: AppSpacing.xs),
               ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_forward, size: 13.0),
-                label: const Text('View Profile', style: TextStyle(fontSize: 11.0)),
+                label: const Text(
+                  'View Profile',
+                  style: TextStyle(fontSize: 11.0),
+                ),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   minimumSize: const Size(0, 30),
@@ -827,7 +820,9 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
                             vertical: 1.0,
                           ),
                           decoration: BoxDecoration(
-                            color: AppColors.brandPrimary.withValues(alpha: 0.10),
+                            color: AppColors.brandPrimary.withValues(
+                              alpha: 0.10,
+                            ),
                             borderRadius: BorderRadius.circular(AppRadius.sm),
                           ),
                           child: Text(
@@ -854,7 +849,10 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
               ),
               ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_forward, size: 13.0),
-                label: const Text('Faculty Profile', style: TextStyle(fontSize: 11.0)),
+                label: const Text(
+                  'Faculty Profile',
+                  style: TextStyle(fontSize: 11.0),
+                ),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   minimumSize: const Size(0, 30),
@@ -956,7 +954,10 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
               ),
               ElevatedButton.icon(
                 icon: const Icon(Icons.arrow_forward, size: 13.0),
-                label: const Text('Book Profile', style: TextStyle(fontSize: 11.0)),
+                label: const Text(
+                  'Book Profile',
+                  style: TextStyle(fontSize: 11.0),
+                ),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
                   minimumSize: const Size(0, 30),

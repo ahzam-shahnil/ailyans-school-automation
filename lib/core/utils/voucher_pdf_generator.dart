@@ -1952,7 +1952,10 @@ class ThreeCopyVouchersPdf {
 
           // 5. Voucher Metadata Strip (Challan No, Month, Issue, Due)
           pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+            padding: const pw.EdgeInsets.symmetric(
+              horizontal: 5,
+              vertical: 2.5,
+            ),
             decoration: pw.BoxDecoration(
               border: pw.Border.all(
                 color: ReportTheme.borderRuleColor,
@@ -2271,7 +2274,9 @@ class ThreeCopyVouchersPdf {
                       horizontal: 4,
                       vertical: 1.5,
                     ),
-                    decoration: const pw.BoxDecoration(color: PdfColors.green50),
+                    decoration: const pw.BoxDecoration(
+                      color: PdfColors.green50,
+                    ),
                     child: pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
@@ -2336,7 +2341,11 @@ class ThreeCopyVouchersPdf {
               children: [
                 pw.Column(
                   children: [
-                    pw.Container(width: 70, height: 0.5, color: PdfColors.black),
+                    pw.Container(
+                      width: 70,
+                      height: 0.5,
+                      color: PdfColors.black,
+                    ),
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'Cashier Signature',
@@ -2349,7 +2358,11 @@ class ThreeCopyVouchersPdf {
                 ),
                 pw.Column(
                   children: [
-                    pw.Container(width: 70, height: 0.5, color: PdfColors.black),
+                    pw.Container(
+                      width: 70,
+                      height: 0.5,
+                      color: PdfColors.black,
+                    ),
                     pw.SizedBox(height: 2),
                     pw.Text(
                       'Bank Stamp / Officer',

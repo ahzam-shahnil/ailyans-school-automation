@@ -79,8 +79,8 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
       : null;
   final branchAddress =
       (rawBranchAddress != null && rawBranchAddress.trim().isNotEmpty)
-          ? rawBranchAddress.trim()
-          : 'Muslim Bazar Mianwali';
+      ? rawBranchAddress.trim()
+      : 'Muslim Bazar Mianwali';
 
   final branchPhone = branchRows.isNotEmpty
       ? (branchRows.first['BrPhone'] as String?)
@@ -89,35 +89,45 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
       ? (branchRows.first['BrPrincipal'] as String?)
       : null;
 
-  // 2. Enrolled Student Count
-  final studentRows = await db.rawQuery(
-    'SELECT COUNT(*) as cnt FROM Student_Class WHERE Present = 1',
-  );
-  final studentCount = (studentRows.first['cnt'] as int?) ?? 0;
-
-  // 3. Class Count
-  final classRows = await db.rawQuery('SELECT COUNT(*) as cnt FROM Class');
-  final classCount = (classRows.first['cnt'] as int?) ?? 0;
-
-  // 4. Active Staff Count
-  final staffRows = await db.rawQuery(
-    "SELECT COUNT(*) as cnt FROM Teachers WHERE TIsPresent = 'Y'",
-  );
-  final staffCount = (staffRows.first['cnt'] as int?) ?? 0;
-
-  // 5. Pending Unpaid Vouchers Count
-  final voucherRows = await db.rawQuery(
-    "SELECT COUNT(*) as cnt FROM VoucharMas WHERE IsPaid = 'N'",
-  );
-  final pendingVouchers = (voucherRows.first['cnt'] as int?) ?? 0;
-
-  // 6. Active Academic Session (app_config key, set via Screen 27 System Settings)
+  // 2. Active Academic Session (app_config key, set via Screen 27 System Settings)
   final sessionRows = await db.rawQuery(
     "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
   );
   final sessionYear = sessionRows.isNotEmpty
       ? (sessionRows.first['config_value'] as String? ?? '2017-2018')
       : '2017-2018';
+
+  // 3. Enrolled Student Count (scoped to active session with 0-fallback)
+  int studentCount = 0;
+  if (sessionYear.isNotEmpty) {
+    final scopedRows = await db.rawQuery(
+      'SELECT COUNT(DISTINCT Stu_RegID) AS cnt FROM Student_Class WHERE Present = 1 AND SessionYr = ?',
+      [sessionYear],
+    );
+    studentCount = (scopedRows.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+  if (studentCount == 0) {
+    final fallbackRows = await db.rawQuery(
+      'SELECT COUNT(DISTINCT Stu_RegID) AS cnt FROM Student_Class WHERE Present = 1',
+    );
+    studentCount = (fallbackRows.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+
+  // 4. Class Count
+  final classRows = await db.rawQuery('SELECT COUNT(*) as cnt FROM Class');
+  final classCount = (classRows.first['cnt'] as int?) ?? 0;
+
+  // 5. Active Staff Count
+  final staffRows = await db.rawQuery(
+    "SELECT COUNT(*) as cnt FROM Teachers WHERE TIsPresent = 'Y'",
+  );
+  final staffCount = (staffRows.first['cnt'] as int?) ?? 0;
+
+  // 6. Pending Unpaid Vouchers Count
+  final voucherRows = await db.rawQuery(
+    "SELECT COUNT(*) as cnt FROM VoucharMas WHERE IsPaid = 'N'",
+  );
+  final pendingVouchers = (voucherRows.first['cnt'] as int?) ?? 0;
 
   return ShellMetadata(
     branchName: branchName,

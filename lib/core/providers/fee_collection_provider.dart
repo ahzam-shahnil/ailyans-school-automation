@@ -170,8 +170,9 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     final receipt = state.currentReceipt;
     final int newAmount;
     if (receipt != null) {
-      newAmount =
-          value ? receipt.remainingAfterAdvance : receipt.remainingBalance;
+      newAmount = value
+          ? receipt.remainingAfterAdvance
+          : receipt.remainingBalance;
     } else {
       newAmount = 0;
     }
@@ -540,12 +541,10 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       final sessionYr =
           (mas['sc_session'] as String?)?.trim() ??
           (mas['SessionYr'] as String?)?.trim();
-      final className =
-          (mas['className'] ?? mas['class_name']) as String?;
+      final className = (mas['className'] ?? mas['class_name']) as String?;
       final sectionName =
           (mas['classSecName'] ?? mas['section_name']) as String?;
-      final rollNo =
-          ((mas['rollNo'] ?? mas['ClassRollNo']) as num?)?.toInt();
+      final rollNo = ((mas['rollNo'] ?? mas['ClassRollNo']) as num?)?.toInt();
 
       // Assemble student name
       final nameFirst = (mas['NameFirst'] as String?)?.trim() ?? '';
@@ -630,13 +629,16 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         feeTransId = 0;
         final paidDateStr = (mas['PaidDate'] as String?)?.trim() ?? '';
         submissionDate = DateTime.tryParse(paidDateStr) ?? _now();
-        latestInstallmentAmount =
-            totalPaidAmount > 0 ? totalPaidAmount : masNetPayable;
+        latestInstallmentAmount = totalPaidAmount > 0
+            ? totalPaidAmount
+            : masNetPayable;
         bankIdForReceipt = (mas['BankID'] as num?)?.toInt() ?? 1;
       }
 
-      final previousPaidAmount =
-          max(0, totalPaidAmount - latestInstallmentAmount);
+      final previousPaidAmount = max(
+        0,
+        totalPaidAmount - latestInstallmentAmount,
+      );
 
       // Separate prior installments from current payment to avoid duplication
       final previousInstallments = allInstallments
@@ -896,8 +898,8 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
         );
         if (confRows.isNotEmpty && confRows.first['config_value'] != null) {
-          effectiveSessionYr =
-              (confRows.first['config_value'] as String).trim();
+          effectiveSessionYr = (confRows.first['config_value'] as String)
+              .trim();
         } else {
           effectiveSessionYr = '2026-27';
         }
@@ -1009,10 +1011,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     final groups = <DefaulterClassGroup>[];
     for (final entry in groupMap.entries) {
       final groupRows = entry.value;
-      final groupSubtotal = groupRows.fold<int>(
-        0,
-        (sum, r) => sum + r.balance,
-      );
+      final groupSubtotal = groupRows.fold<int>(0, (sum, r) => sum + r.balance);
       groups.add(
         DefaulterClassGroup(
           classLabel: entry.key,
@@ -1030,10 +1029,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         : monthFilter;
     final totalDefaulters = allRows.length;
     final uniqueStudents = allRows.map((r) => r.stuRegId).toSet().length;
-    final totalOutstanding = allRows.fold<int>(
-      0,
-      (sum, r) => sum + r.balance,
-    );
+    final totalOutstanding = allRows.fold<int>(0, (sum, r) => sum + r.balance);
 
     final summary = DefaulterListFilterSummary(
       sessionYr: (sessionYr != null && sessionYr.trim().isNotEmpty)

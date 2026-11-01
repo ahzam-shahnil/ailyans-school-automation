@@ -133,22 +133,19 @@ class GlobalSearchResults {
   });
 
   const GlobalSearchResults.empty([String q = ''])
-      : query = q,
-        students = const [],
-        vouchers = const [],
-        staff = const [],
-        books = const [];
+    : query = q,
+      students = const [],
+      vouchers = const [],
+      staff = const [],
+      books = const [];
 
   int get totalCount =>
       students.length + vouchers.length + staff.length + books.length;
 }
 
 /// Auto-disposing future provider executing omni-search across all 4 categories.
-final globalSearchProvider =
-    FutureProvider.autoDispose.family<GlobalSearchResults, String>((
-      ref,
-      rawQuery,
-    ) async {
+final globalSearchProvider = FutureProvider.autoDispose
+    .family<GlobalSearchResults, String>((ref, rawQuery) async {
       final q = rawQuery.trim();
       if (q.isEmpty) {
         return const GlobalSearchResults(

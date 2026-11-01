@@ -129,7 +129,7 @@ void main() {
         );
         expect(state.branch.secPd, 'zaidi110');
         expect(state.config.defaultSessionYr, '2017-2018');
-        expect(state.schemaVersion, 7);
+        expect(state.schemaVersion, 8);
         expect(state.isDirty, isFalse);
       },
     );

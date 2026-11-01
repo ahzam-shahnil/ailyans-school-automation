@@ -24,6 +24,7 @@ class StudentProfileBundle {
   final List<Map<String, dynamic>> advances;
   final List<Map<String, dynamic>> exams;
   final List<Map<String, dynamic>> attendance;
+  final bool isEnrolled;
 
   const StudentProfileBundle({
     required this.student,
@@ -41,6 +42,7 @@ class StudentProfileBundle {
     required this.advances,
     required this.exams,
     required this.attendance,
+    this.isEnrolled = true,
   });
 }
 
@@ -87,16 +89,15 @@ final studentProfileProvider = FutureProvider.family<StudentProfileBundle, int>(
         .toList();
 
     // Current enrollment metadata
-    final currentEnrollment = enrollments.isNotEmpty ? enrollments.first : null;
+    final activeEnrollments =
+        enrollments.where((e) => e.present == 1).toList();
+    final currentEnrollment =
+        activeEnrollments.isNotEmpty ? activeEnrollments.first : null;
+    final isEnrolled = currentEnrollment != null;
     final classRollNo = currentEnrollment?.classRollNo ?? 0;
     final currentClassName =
-        currentEnrollment?.className ??
-        (student.admInClass != null
-            ? 'Class ${student.admInClass}'
-            : (student.admClass != null
-                  ? 'Class ${student.admClass}'
-                  : 'Unassigned'));
-    final currentSectionName = currentEnrollment?.sectionName ?? 'A';
+        isEnrolled ? currentEnrollment.className : 'Not Enrolled';
+    final currentSectionName = isEnrolled ? currentEnrollment.sectionName : '';
 
     // 3. Fetch vouchers with payment transactions
     final voucherRows = await db.rawQuery(
@@ -186,6 +187,7 @@ final studentProfileProvider = FutureProvider.family<StudentProfileBundle, int>(
       advances: advanceRows,
       exams: examRows,
       attendance: attendanceRows,
+      isEnrolled: isEnrolled,
     );
   },
 );

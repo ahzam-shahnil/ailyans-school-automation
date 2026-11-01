@@ -1476,36 +1476,48 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
               if (curState.roster.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Load students first to generate mark sheets.'),
+                    content: Text(
+                      'Load students first to generate mark sheets.',
+                    ),
                   ),
                 );
                 return;
               }
 
-              final examDetail = curState.examInfos.firstWhere(
-                (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                orElse: () => {'Detail': 'Examination'},
-              )['Detail'] ?? 'Examination';
+              final examDetail =
+                  curState.examInfos.firstWhere(
+                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+                    orElse: () => {'Detail': 'Examination'},
+                  )['Detail'] ??
+                  'Examination';
 
-              final className = curState.classes.firstWhere(
-                (c) => c['ClassID'] == curState.selectedClassId,
-                orElse: () => {'CName': 'Class'},
-              )['CName'] ?? 'Class';
+              final className =
+                  curState.classes.firstWhere(
+                    (c) => c['ClassID'] == curState.selectedClassId,
+                    orElse: () => {'CName': 'Class'},
+                  )['CName'] ??
+                  'Class';
 
-              final subjName = curState.subjects.firstWhere(
-                (s) => s['SubjID'] == curState.selectedSubjId,
-                orElse: () => {'SubjName': ''},
-              )['SubjName'] ?? '';
+              final subjName =
+                  curState.subjects.firstWhere(
+                    (s) => s['SubjID'] == curState.selectedSubjId,
+                    orElse: () => {'SubjName': ''},
+                  )['SubjName'] ??
+                  '';
 
-              final students = curState.roster.map((row) => {
-                'rollNo': row.rollNo,
-                'name': row.studentName,
-                'subject': subjName,
-                'obtained': row.totalObtained,
-                'total': row.totalMax,
-                'grade': row.computeGrade(curState.exGradeRows),
-                'isAbsent': row.isAbsent,
-              }).toList();
+              final students = curState.roster
+                  .map(
+                    (row) => {
+                      'rollNo': row.rollNo,
+                      'name': row.studentName,
+                      'subject': subjName,
+                      'obtained': row.totalObtained,
+                      'total': row.totalMax,
+                      'grade': row.computeGrade(curState.exGradeRows),
+                      'isAbsent': row.isAbsent,
+                    },
+                  )
+                  .toList();
 
               ReportPreviewModal.show(
                 context,
@@ -1516,8 +1528,10 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                     'examName': examDetail,
                     'className': className,
                     'students': students,
-                    'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                    'branchName':
+                        meta?.branchName ?? "Ailyans's Higher Secondary School",
+                    'branchAddress':
+                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
                   },
                 ),
               );
@@ -1554,21 +1568,27 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
               if (curState.roster.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Load students first to generate statistics.'),
+                    content: Text(
+                      'Load students first to generate statistics.',
+                    ),
                   ),
                 );
                 return;
               }
 
-              final examDetail = curState.examInfos.firstWhere(
-                (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                orElse: () => {'Detail': 'Examination'},
-              )['Detail'] ?? 'Examination';
+              final examDetail =
+                  curState.examInfos.firstWhere(
+                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+                    orElse: () => {'Detail': 'Examination'},
+                  )['Detail'] ??
+                  'Examination';
 
-              final subjName = curState.subjects.firstWhere(
-                (s) => s['SubjID'] == curState.selectedSubjId,
-                orElse: () => {'SubjName': 'Current Subject'},
-              )['SubjName'] ?? 'Current Subject';
+              final subjName =
+                  curState.subjects.firstWhere(
+                    (s) => s['SubjID'] == curState.selectedSubjId,
+                    orElse: () => {'SubjName': 'Current Subject'},
+                  )['SubjName'] ??
+                  'Current Subject';
 
               int totalStudents = curState.roster.length;
               int passed = 0;
@@ -1585,7 +1605,9 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                   }
                 }
               }
-              final passPct = totalStudents > 0 ? (passed / totalStudents) * 100.0 : 0.0;
+              final passPct = totalStudents > 0
+                  ? (passed / totalStudents) * 100.0
+                  : 0.0;
 
               final subjects = <Map<String, dynamic>>[
                 {
@@ -1605,8 +1627,10 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                   extraParams: {
                     'examName': examDetail,
                     'subjects': subjects,
-                    'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                    'branchName':
+                        meta?.branchName ?? "Ailyans's Higher Secondary School",
+                    'branchAddress':
+                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
                   },
                 ),
               );

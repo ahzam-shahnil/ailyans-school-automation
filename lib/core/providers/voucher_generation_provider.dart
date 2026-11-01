@@ -122,18 +122,29 @@ String normalizeBillingMonthForStorage(String monthStr) {
     }
     if (year != null && year >= 2020) {
       const monthMap = {
-        'jan': 'Jan', 'january': 'Jan',
-        'feb': 'Feb', 'february': 'Feb',
-        'mar': 'Mar', 'march': 'Mar',
-        'apr': 'Apr', 'april': 'Apr',
+        'jan': 'Jan',
+        'january': 'Jan',
+        'feb': 'Feb',
+        'february': 'Feb',
+        'mar': 'Mar',
+        'march': 'Mar',
+        'apr': 'Apr',
+        'april': 'Apr',
         'may': 'May',
-        'jun': 'Jun', 'june': 'Jun',
-        'jul': 'Jul', 'july': 'Jul',
-        'aug': 'Aug', 'august': 'Aug',
-        'sep': 'Sep', 'september': 'Sep',
-        'oct': 'Oct', 'october': 'Oct',
-        'nov': 'Nov', 'november': 'Nov',
-        'dec': 'Dec', 'december': 'Dec',
+        'jun': 'Jun',
+        'june': 'Jun',
+        'jul': 'Jul',
+        'july': 'Jul',
+        'aug': 'Aug',
+        'august': 'Aug',
+        'sep': 'Sep',
+        'september': 'Sep',
+        'oct': 'Oct',
+        'october': 'Oct',
+        'nov': 'Nov',
+        'november': 'Nov',
+        'dec': 'Dec',
+        'december': 'Dec',
       };
       final m = monthMap[monthPart.toLowerCase()];
       if (m != null) {
@@ -175,18 +186,29 @@ String billingMonthToYyMm(String billingMonth) {
     }
     final yy = (year % 100).toString().padLeft(2, '0');
     const monthMap = {
-      'jan': '01', 'january': '01',
-      'feb': '02', 'february': '02',
-      'mar': '03', 'march': '03',
-      'apr': '04', 'april': '04',
+      'jan': '01',
+      'january': '01',
+      'feb': '02',
+      'february': '02',
+      'mar': '03',
+      'march': '03',
+      'apr': '04',
+      'april': '04',
       'may': '05',
-      'jun': '06', 'june': '06',
-      'jul': '07', 'july': '07',
-      'aug': '08', 'august': '08',
-      'sep': '09', 'september': '09',
-      'oct': '10', 'october': '10',
-      'nov': '11', 'november': '11',
-      'dec': '12', 'december': '12',
+      'jun': '06',
+      'june': '06',
+      'jul': '07',
+      'july': '07',
+      'aug': '08',
+      'august': '08',
+      'sep': '09',
+      'september': '09',
+      'oct': '10',
+      'october': '10',
+      'nov': '11',
+      'november': '11',
+      'dec': '12',
+      'december': '12',
     };
     final mm = monthMap[monthName] ?? '10';
     return '$yy$mm';
@@ -200,10 +222,7 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
 
   void setMode(String mode) {
     if (mode != 'batch' && mode != 'single') return;
-    state = state.copyWith(
-      mode: mode,
-      clearSelectedStudent: mode == 'batch',
-    );
+    state = state.copyWith(mode: mode, clearSelectedStudent: mode == 'batch');
   }
 
   void setSelectedStuRegId(int? stuRegId) {
@@ -214,10 +233,7 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
   }
 
   void setSessionYr(String sessionYr) {
-    state = state.copyWith(
-      sessionYr: sessionYr,
-      clearSelectedStudent: true,
-    );
+    state = state.copyWith(sessionYr: sessionYr, clearSelectedStudent: true);
   }
 
   void setClassId(int? classId) {
@@ -264,18 +280,29 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
         monthName = parts[1].toLowerCase();
       }
       const monthMap = {
-        'jan': 1, 'january': 1,
-        'feb': 2, 'february': 2,
-        'mar': 3, 'march': 3,
-        'apr': 4, 'april': 4,
+        'jan': 1,
+        'january': 1,
+        'feb': 2,
+        'february': 2,
+        'mar': 3,
+        'march': 3,
+        'apr': 4,
+        'april': 4,
         'may': 5,
-        'jun': 6, 'june': 6,
-        'jul': 7, 'july': 7,
-        'aug': 8, 'august': 8,
-        'sep': 9, 'september': 9,
-        'oct': 10, 'october': 10,
-        'nov': 11, 'november': 11,
-        'dec': 12, 'december': 12,
+        'jun': 6,
+        'june': 6,
+        'jul': 7,
+        'july': 7,
+        'aug': 8,
+        'august': 8,
+        'sep': 9,
+        'september': 9,
+        'oct': 10,
+        'october': 10,
+        'nov': 11,
+        'november': 11,
+        'dec': 12,
+        'december': 12,
       };
       final m = monthMap[monthName] ?? 10;
       final newIssue = DateTime(year, m, 1);
@@ -362,33 +389,30 @@ final voucherClassTariffsProvider =
 /// Provider that fetches active students enrolled in the currently filtered cohort.
 final voucherCohortStudentsProvider =
     FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final filters = ref.watch(voucherGenFiltersProvider);
-  final db = await DatabaseService.instance.database;
+      final filters = ref.watch(voucherGenFiltersProvider);
+      final db = await DatabaseService.instance.database;
 
-  final whereClauses = <String>[
-    'sc.Present = 1',
-    'sc.SessionYr = ?',
-  ];
-  final whereArgs = <dynamic>[filters.sessionYr];
+      final whereClauses = <String>['sc.Present = 1', 'sc.SessionYr = ?'];
+      final whereArgs = <dynamic>[filters.sessionYr];
 
-  if (filters.classId != null) {
-    whereClauses.add('sc.ClassID = ?');
-    whereArgs.add(filters.classId);
-  }
+      if (filters.classId != null) {
+        whereClauses.add('sc.ClassID = ?');
+        whereArgs.add(filters.classId);
+      }
 
-  if (filters.classSecId != null) {
-    whereClauses.add('sc.ClassSecID = ?');
-    whereArgs.add(filters.classSecId);
-  }
+      if (filters.classSecId != null) {
+        whereClauses.add('sc.ClassSecID = ?');
+        whereArgs.add(filters.classSecId);
+      }
 
-  return db.rawQuery('''
+      return db.rawQuery('''
     SELECT sc.Stu_RegID, sc.ClassRollNo, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name
     FROM Student_Class sc
     JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
     WHERE ${whereClauses.join(' AND ')}
     ORDER BY sc.ClassID ASC, sc.ClassRollNo ASC, sc.Stu_RegID ASC
   ''', whereArgs);
-});
+    });
 
 /// Provider that calculates in-memory preview rows for the cohort.
 final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
@@ -809,8 +833,9 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
               [row.voucherId, row.voucherId],
             );
           } else if (row.discount > 0) {
-            final hasTuition =
-                activeTariffs.any((t) => (t['FeeParamID'] as int) == 2);
+            final hasTuition = activeTariffs.any(
+              (t) => (t['FeeParamID'] as int) == 2,
+            );
             if (hasTuition) {
               await txn.rawUpdate(
                 'UPDATE VoucharDet SET Discount = ? '
@@ -966,7 +991,8 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     final db = await DatabaseService.instance.database;
     final sectionFilter = filters.classSecId;
     final billingMonthPrefix = _yyMmPrefix(filters.billingMonth);
-    final isSingle = filters.mode == 'single' && filters.selectedStuRegId != null;
+    final isSingle =
+        filters.mode == 'single' && filters.selectedStuRegId != null;
     final singleStudentFilter = isSingle ? filters.selectedStuRegId : null;
 
     // 1. Block if any paid voucher exists in cohort

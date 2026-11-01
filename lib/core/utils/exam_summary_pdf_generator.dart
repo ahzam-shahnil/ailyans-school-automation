@@ -80,7 +80,9 @@ class ExamSummaryPdfGenerator {
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
         pw.Text(
-          branchName.isNotEmpty ? branchName.toUpperCase() : 'SCHOOL AUTOMATION',
+          branchName.isNotEmpty
+              ? branchName.toUpperCase()
+              : 'SCHOOL AUTOMATION',
           style: pw.TextStyle(
             font: boldFont,
             fontSize: 14,
@@ -107,7 +109,10 @@ class ExamSummaryPdfGenerator {
             color: ReportTheme.bannerBgColor,
             border: pw.Border(
               top: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
-              bottom: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.5),
+              bottom: pw.BorderSide(
+                color: ReportTheme.primaryColor,
+                width: 1.5,
+              ),
             ),
           ),
           child: pw.Row(
@@ -190,7 +195,14 @@ class ExamSummaryPdfGenerator {
     const colFailed = 4;
     const colPct = 5;
 
-    final headers = ['#', 'Subject', 'Total Students', 'Passed', 'Failed', 'Pass %'];
+    final headers = [
+      '#',
+      'Subject',
+      'Total Students',
+      'Passed',
+      'Failed',
+      'Pass %',
+    ];
 
     int sumTotal = 0;
     int sumPassed = 0;
@@ -209,15 +221,26 @@ class ExamSummaryPdfGenerator {
       sumFailed += failed;
 
       String pctStr;
-      if (s.containsKey('passPercentage') || s.containsKey('passPct') || s.containsKey('percentage')) {
+      if (s.containsKey('passPercentage') ||
+          s.containsKey('passPct') ||
+          s.containsKey('percentage')) {
         final rawPct = s['passPercentage'] ?? s['passPct'] ?? s['percentage'];
-        pctStr = rawPct is num ? '${rawPct.toStringAsFixed(1)}%' : rawPct.toString();
+        pctStr = rawPct is num
+            ? '${rawPct.toStringAsFixed(1)}%'
+            : rawPct.toString();
       } else {
         final pct = total > 0 ? (passed / total) * 100.0 : 0.0;
         pctStr = '${pct.toStringAsFixed(1)}%';
       }
 
-      rows.add([(i + 1).toString(), name, total.toString(), passed.toString(), failed.toString(), pctStr]);
+      rows.add([
+        (i + 1).toString(),
+        name,
+        total.toString(),
+        passed.toString(),
+        failed.toString(),
+        pctStr,
+      ]);
     }
 
     final overallPct = sumTotal > 0 ? (sumPassed / sumTotal) * 100.0 : 0.0;
@@ -236,14 +259,17 @@ class ExamSummaryPdfGenerator {
           headerDecoration: const pw.BoxDecoration(
             color: ReportTheme.tableHeaderBg,
           ),
-          cellStyle: pw.TextStyle(
-            font: regularFont,
-            fontSize: 8,
+          cellStyle: pw.TextStyle(font: regularFont, fontSize: 8),
+          cellPadding: const pw.EdgeInsets.symmetric(
+            horizontal: 6,
+            vertical: 4,
           ),
-          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           rowDecoration: const pw.BoxDecoration(
             border: pw.Border(
-              bottom: pw.BorderSide(color: ReportTheme.borderRuleColor, width: 0.5),
+              bottom: pw.BorderSide(
+                color: ReportTheme.borderRuleColor,
+                width: 0.5,
+              ),
             ),
           ),
           columnWidths: {
@@ -270,7 +296,10 @@ class ExamSummaryPdfGenerator {
             color: ReportTheme.tableRowAltBg,
             border: pw.Border(
               top: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.0),
-              bottom: pw.BorderSide(color: ReportTheme.primaryColor, width: 1.0),
+              bottom: pw.BorderSide(
+                color: ReportTheme.primaryColor,
+                width: 1.0,
+              ),
             ),
           ),
           child: pw.Row(
@@ -339,7 +368,10 @@ class ExamSummaryPdfGenerator {
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
       children: [
         _buildSignBlock(label: 'Prepared By', regularFont: regularFont),
-        _buildSignBlock(label: 'Controller of Examinations', regularFont: regularFont),
+        _buildSignBlock(
+          label: 'Controller of Examinations',
+          regularFont: regularFont,
+        ),
         _buildSignBlock(label: 'Principal', regularFont: regularFont),
       ],
     );

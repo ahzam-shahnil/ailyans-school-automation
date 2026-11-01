@@ -85,10 +85,16 @@ class ClassSyllabusPdfGenerator {
                   _headerCell('#', boldFont, align: pw.TextAlign.center),
                   _headerCell('Subject Name', boldFont),
                   _headerCell('Teacher', boldFont),
-                  _headerCell('Total Marks', boldFont,
-                      align: pw.TextAlign.right),
-                  _headerCell('Practical Marks', boldFont,
-                      align: pw.TextAlign.right),
+                  _headerCell(
+                    'Total Marks',
+                    boldFont,
+                    align: pw.TextAlign.right,
+                  ),
+                  _headerCell(
+                    'Practical Marks',
+                    boldFont,
+                    align: pw.TextAlign.right,
+                  ),
                   _headerCell('Combined', boldFont, align: pw.TextAlign.right),
                 ],
               ),
@@ -122,38 +128,53 @@ class ClassSyllabusPdfGenerator {
                   final idx = entry.key;
                   final s = entry.value;
 
-                  final subjectName = (s['subjectName'] ??
-                      s['subjName'] ??
-                      'Subject ${idx + 1}') as String;
+                  final subjectName =
+                      (s['subjectName'] ??
+                              s['subjName'] ??
+                              'Subject ${idx + 1}')
+                          as String;
                   final teacherName =
-                      (s['teacherName'] ?? s['tName'] ?? 'Unassigned') as String;
-                  final totalMarks =
-                      (s['totalMarks'] as num?)?.toInt() ?? 0;
+                      (s['teacherName'] ?? s['tName'] ?? 'Unassigned')
+                          as String;
+                  final totalMarks = (s['totalMarks'] as num?)?.toInt() ?? 0;
                   final practicalMarks =
                       ((s['practicalMarks'] ?? s['totalPracticalMarks'])
                               as num?)
                           ?.toInt() ??
-                          0;
+                      0;
                   final combined = totalMarks + practicalMarks;
 
                   final isEven = idx.isEven;
 
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(
-                      color:
-                          isEven ? PdfColors.white : ReportTheme.tableRowAltBg,
+                      color: isEven
+                          ? PdfColors.white
+                          : ReportTheme.tableRowAltBg,
                     ),
                     children: [
-                      _dataCell('${idx + 1}', regularFont,
-                          align: pw.TextAlign.center),
+                      _dataCell(
+                        '${idx + 1}',
+                        regularFont,
+                        align: pw.TextAlign.center,
+                      ),
                       _dataCell(subjectName, regularFont, bold: true),
                       _dataCell(teacherName, regularFont),
-                      _dataCell('$totalMarks', regularFont,
-                          align: pw.TextAlign.right),
-                      _dataCell('$practicalMarks', regularFont,
-                          align: pw.TextAlign.right),
-                      _dataCell('$combined', boldFont,
-                          align: pw.TextAlign.right),
+                      _dataCell(
+                        '$totalMarks',
+                        regularFont,
+                        align: pw.TextAlign.right,
+                      ),
+                      _dataCell(
+                        '$practicalMarks',
+                        regularFont,
+                        align: pw.TextAlign.right,
+                      ),
+                      _dataCell(
+                        '$combined',
+                        boldFont,
+                        align: pw.TextAlign.right,
+                      ),
                     ],
                   );
                 }),
@@ -168,13 +189,21 @@ class ClassSyllabusPdfGenerator {
                     _dataCell('', boldFont),
                     _dataCell('TOTAL ALLOCATED MARKS', boldFont, bold: true),
                     _dataCell('${subjects.length} Subjects', regularFont),
-                    _dataCell('$grandTotalTheory', boldFont,
-                        align: pw.TextAlign.right),
-                    _dataCell('$grandTotalPractical', boldFont,
-                        align: pw.TextAlign.right),
-                    _dataCell('${grandTotalTheory + grandTotalPractical}',
-                        boldFont,
-                        align: pw.TextAlign.right),
+                    _dataCell(
+                      '$grandTotalTheory',
+                      boldFont,
+                      align: pw.TextAlign.right,
+                    ),
+                    _dataCell(
+                      '$grandTotalPractical',
+                      boldFont,
+                      align: pw.TextAlign.right,
+                    ),
+                    _dataCell(
+                      '${grandTotalTheory + grandTotalPractical}',
+                      boldFont,
+                      align: pw.TextAlign.right,
+                    ),
                   ],
                 ),
             ],
@@ -280,11 +309,7 @@ class ClassSyllabusPdfGenerator {
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 9,
-          color: PdfColors.white,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.white),
       ),
     );
   }
@@ -300,11 +325,7 @@ class ClassSyllabusPdfGenerator {
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 9,
-          color: PdfColors.black,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 9, color: PdfColors.black),
       ),
     );
   }
@@ -316,16 +337,9 @@ class ClassSyllabusPdfGenerator {
   }) {
     return pw.Column(
       children: [
-        pw.Container(
-          width: 140,
-          height: 1,
-          color: ReportTheme.borderRuleColor,
-        ),
+        pw.Container(width: 140, height: 1, color: ReportTheme.borderRuleColor),
         pw.SizedBox(height: 4),
-        pw.Text(
-          label,
-          style: pw.TextStyle(font: boldFont, fontSize: 8),
-        ),
+        pw.Text(label, style: pw.TextStyle(font: boldFont, fontSize: 8)),
         pw.Text(
           'Signature & Stamp',
           style: pw.TextStyle(

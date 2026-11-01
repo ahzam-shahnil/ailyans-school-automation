@@ -58,7 +58,23 @@ bool _isRouteAllowed(String location, UserSession session) {
   // /search -> allowed if user has Students, Fees, Staff, or Library permissions
   if (location.startsWith('/search')) {
     const searchObjIds = {
-      1, 3, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 26, 29,
+      1,
+      3,
+      8,
+      9,
+      11,
+      12,
+      13,
+      14,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      26,
+      29,
     };
     return allowedSet.intersection(searchObjIds).isNotEmpty;
   }
@@ -159,7 +175,9 @@ String _firstAllowedRoute(UserSession session) {
   if (allowedSet.contains(17)) return '/fees/vouchers';
   if (allowedSet.contains(16)) return '/fees/receipts';
   if (allowedSet.contains(18)) return '/fees/ledger';
-  if (allowedSet.contains(21) || allowedSet.contains(19)) return '/fees/parameters';
+  if (allowedSet.contains(21) || allowedSet.contains(19)) {
+    return '/fees/parameters';
+  }
 
   // 4. Attendance
   if (allowedSet.intersection(const {2, 28}).isNotEmpty) {
@@ -168,7 +186,9 @@ String _firstAllowedRoute(UserSession session) {
 
   // 5. Staff: Check teachers (#14), salary (#22/#29)
   if (allowedSet.contains(14)) return '/staff/teachers';
-  if (allowedSet.contains(22) || allowedSet.contains(29)) return '/staff/salary';
+  if (allowedSet.contains(22) || allowedSet.contains(29)) {
+    return '/staff/salary';
+  }
 
   // 6. Exams: Check marks (#24), terms (#10), subjects (#23)
   if (allowedSet.contains(24)) return '/exams/marks';

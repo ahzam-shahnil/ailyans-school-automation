@@ -488,9 +488,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         color: metrics.collectionPace >= 70
                             ? AppColors.statusSuccessBg
                             : AppColors.statusWarningBg,
-                        borderRadius: BorderRadius.circular(
-                          AppRadius.full,
-                        ),
+                        borderRadius: BorderRadius.circular(AppRadius.full),
                         border: Border.all(
                           color: metrics.collectionPace >= 70
                               ? AppColors.statusSuccessBorder
@@ -512,6 +510,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ),
               footerText: isLoading
                   ? 'Calculating collection...'
+                  : (metrics?.latestBilledMonthLabel != null &&
+                        metrics!.latestBilledMonthLabel.isNotEmpty)
+                  ? '${metrics.latestBilledMonthLabel} • Exp: Rs. ${currencyFormatter.format(metrics.monthlyExpected)}'
                   : 'Exp: Rs. ${currencyFormatter.format(metrics?.monthlyExpected ?? 0)}',
             ),
           ),
@@ -560,8 +561,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               icon: Icons.receipt_long_outlined,
               iconColor: AppColors.chartRose,
               isLoading: isLoading,
-              onTap: () =>
-                  context.go('/fees/ledger?status=Unpaid'),
+              onTap: () => context.go('/fees/ledger?status=Unpaid'),
               mainWidget: Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
                 spacing: AppSpacing.xs,
@@ -590,12 +590,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       ),
                       decoration: BoxDecoration(
                         color: AppColors.statusErrorBg,
-                        borderRadius: BorderRadius.circular(
-                          AppRadius.sm,
-                        ),
-                        border: Border.all(
-                          color: AppColors.statusErrorBorder,
-                        ),
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(color: AppColors.statusErrorBorder),
                       ),
                       child: Text(
                         'Action Req',
@@ -614,47 +610,33 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               footerWidget: isLoading
                   ? null
                   : Wrap(
-                      crossAxisAlignment:
-                          WrapCrossAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 6,
                       children: [
                         Text(
                           'Total Overdue: Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)}',
-                          style: AppTypography.bodySmall
-                              .copyWith(
-                                color: AppColors.textMuted,
-                              ),
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
                         ),
                         InkWell(
                           onTap: () async {
-                            final meta = ref
-                                .read(shellMetadataProvider)
-                                .value;
-                            final sessionYr =
-                                meta?.sessionYear ?? '2026-27';
+                            final meta = ref.read(shellMetadataProvider).value;
+                            final sessionYr = meta?.sessionYear ?? '2026-27';
                             final buildData = await ref
-                                .read(
-                                  feeCollectionProvider
-                                      .notifier,
-                                )
-                                .buildDefaulterList(
-                                  sessionYr: sessionYr,
-                                );
+                                .read(feeCollectionProvider.notifier)
+                                .buildDefaulterList(sessionYr: sessionYr);
                             if (!mounted) return;
                             final safeBranchName =
                                 (meta?.branchName != null &&
-                                        meta!.branchName
-                                            .trim()
-                                            .isNotEmpty)
-                                    ? meta.branchName.trim()
-                                    : "Ailyans's Higher Secondary School Mianwali";
+                                    meta!.branchName.trim().isNotEmpty)
+                                ? meta.branchName.trim()
+                                : "Ailyans's Higher Secondary School Mianwali";
                             final safeBranchAddress =
                                 (meta?.branchAddress != null &&
-                                        meta!.branchAddress
-                                            .trim()
-                                            .isNotEmpty)
-                                    ? meta.branchAddress.trim()
-                                    : 'Muslim Bazar Mianwali';
+                                    meta!.branchAddress.trim().isNotEmpty)
+                                ? meta.branchAddress.trim()
+                                : 'Muslim Bazar Mianwali';
                             await ReportPreviewModal.show(
                               context,
                               request: ReportRequest(
@@ -663,20 +645,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                 extraParams: {
                                   'summary': buildData.summary,
                                   'branchName': safeBranchName,
-                                  'branchAddress':
-                                      safeBranchAddress,
-                                  'branchPhone':
-                                      meta?.branchPhone,
-                                  'branchPrincipal':
-                                      meta?.branchPrincipal,
+                                  'branchAddress': safeBranchAddress,
+                                  'branchPhone': meta?.branchPhone,
+                                  'branchPrincipal': meta?.branchPrincipal,
                                   'sessionYr': sessionYr,
                                 },
                               ),
                             );
                           },
-                          borderRadius: BorderRadius.circular(
-                            4,
-                          ),
+                          borderRadius: BorderRadius.circular(4),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 4,
@@ -693,14 +670,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                 const SizedBox(width: 3),
                                 Text(
                                   'Print Defaulters',
-                                  style: AppTypography.label
-                                      .copyWith(
-                                        fontSize: 11,
-                                        color: AppColors
-                                            .brandPrimary,
-                                        fontWeight:
-                                            FontWeight.w600,
-                                      ),
+                                  style: AppTypography.label.copyWith(
+                                    fontSize: 11,
+                                    color: AppColors.brandPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ],
                             ),
@@ -718,10 +692,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   /// Builds the compact Quick Actions bar.
   Widget _buildQuickActionsBar(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14.0,
-        vertical: 10.0,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -751,10 +722,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () => context.go('/students/new'),
-                  icon: const Icon(
-                    Icons.person_add_alt_outlined,
-                    size: 18,
-                  ),
+                  icon: const Icon(Icons.person_add_alt_outlined, size: 18),
                   label: const Text(
                     '+ New Admission (Ctrl+N)',
                     maxLines: 1,
@@ -767,9 +735,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       horizontal: AppSpacing.xs,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppRadius.md,
-                      ),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     minimumSize: const Size(0, 40),
                     elevation: AppElevation.flat,
@@ -779,12 +745,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () =>
-                      context.go('/fees/receipts?from=dashboard'),
-                  icon: const Icon(
-                    Icons.payments_outlined,
-                    size: 18,
-                  ),
+                  onPressed: () => context.go('/fees/receipts?from=dashboard'),
+                  icon: const Icon(Icons.payments_outlined, size: 18),
                   label: const Text(
                     'Collect Fee',
                     maxLines: 1,
@@ -797,9 +759,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       horizontal: AppSpacing.xs,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppRadius.md,
-                      ),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     minimumSize: const Size(0, 40),
                     elevation: AppElevation.flat,
@@ -810,10 +770,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => context.go('/attendance'),
-                  icon: const Icon(
-                    Icons.check_circle_outlined,
-                    size: 18,
-                  ),
+                  icon: const Icon(Icons.check_circle_outlined, size: 18),
                   label: const Text(
                     'Mark Roll Call',
                     maxLines: 1,
@@ -821,16 +778,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(
-                      color: AppColors.borderDefault,
-                    ),
+                    side: const BorderSide(color: AppColors.borderDefault),
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xs,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppRadius.md,
-                      ),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     minimumSize: const Size(0, 40),
                   ),
@@ -840,10 +793,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => context.go('/fees/vouchers'),
-                  icon: const Icon(
-                    Icons.receipt_long_outlined,
-                    size: 18,
-                  ),
+                  icon: const Icon(Icons.receipt_long_outlined, size: 18),
                   label: const Text(
                     'Batch Voucher',
                     maxLines: 1,
@@ -851,16 +801,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(
-                      color: AppColors.borderDefault,
-                    ),
+                    side: const BorderSide(color: AppColors.borderDefault),
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xs,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        AppRadius.md,
-                      ),
+                      borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
                     minimumSize: const Size(0, 40),
                   ),
@@ -881,8 +827,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     required bool isExpanded,
   }) {
     return Row(
-      crossAxisAlignment:
-          isExpanded ? CrossAxisAlignment.stretch : CrossAxisAlignment.start,
+      crossAxisAlignment: isExpanded
+          ? CrossAxisAlignment.stretch
+          : CrossAxisAlignment.start,
       children: [
         // Left Card (flex 60): Recent Fee Payments Feed
         Expanded(
@@ -933,10 +880,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             : SystemMouseCursors.basic,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 14.0,
-            vertical: 10.0,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
           decoration: BoxDecoration(
             color: AppColors.surfaceRaised,
             borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -1072,10 +1016,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             TableRow(
               decoration: const BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(
-                    color: AppColors.borderSubtle,
-                    width: 1,
-                  ),
+                  bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
                 ),
               ),
               children: [
@@ -1288,10 +1229,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             TableRow(
               decoration: const BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(
-                    color: AppColors.borderSubtle,
-                    width: 1,
-                  ),
+                  bottom: BorderSide(color: AppColors.borderSubtle, width: 1),
                 ),
               ),
               children: [

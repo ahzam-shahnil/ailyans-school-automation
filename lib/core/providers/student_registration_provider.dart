@@ -90,6 +90,8 @@ class WizardDraft {
   int vmDiscount;
   bool fullDiscount;
   String? remarks;
+  int? currentStuRegId;
+  List<int> pendingSiblingIds;
 
   WizardDraft({
     this.nameFirst = '',
@@ -122,6 +124,8 @@ class WizardDraft {
     this.vmDiscount = 0,
     this.fullDiscount = false,
     this.remarks,
+    this.currentStuRegId,
+    this.pendingSiblingIds = const [],
   }) : doAdmission = doAdmission ?? DateTime.now();
 
   /// Validates requirement for specific step (0-indexed).
@@ -206,6 +210,8 @@ class WizardDraft {
     int? vmDiscount,
     bool? fullDiscount,
     String? remarks,
+    int? currentStuRegId,
+    List<int>? pendingSiblingIds,
   }) {
     return WizardDraft(
       nameFirst: nameFirst ?? this.nameFirst,
@@ -238,6 +244,8 @@ class WizardDraft {
       vmDiscount: vmDiscount ?? this.vmDiscount,
       fullDiscount: fullDiscount ?? this.fullDiscount,
       remarks: remarks ?? this.remarks,
+      currentStuRegId: currentStuRegId ?? this.currentStuRegId,
+      pendingSiblingIds: pendingSiblingIds ?? List.from(this.pendingSiblingIds),
     );
   }
 }
@@ -294,6 +302,9 @@ class WizardDraftNotifier extends StateNotifier<WizardDraft> {
     updated.copyFamilyFromSibling(sibling);
     state = updated;
   }
+
+  void setPendingSiblingIds(List<int> ids) =>
+      state = state.copyWith(pendingSiblingIds: ids);
 
   void setAdmInClass(int? val) =>
       state = state.copyWith(admInClass: val, admClass: val);
@@ -692,6 +703,23 @@ Future<int> submitStudentAdmission(
         'PromotionDate': null,
         'VGen': 'Y',
       });
+    }
+
+    // Persist deferred sibling links from the wizard
+    for (final siblingId in draft.pendingSiblingIds) {
+      if (nextStuRegId == siblingId) continue;
+      final lo = nextStuRegId < siblingId ? nextStuRegId : siblingId;
+      final hi = nextStuRegId < siblingId ? siblingId : nextStuRegId;
+      final nextLinkRow = await txn.rawQuery(
+        'SELECT COALESCE(MAX(LinkID), 0) + 1 AS nextId FROM Sibling_Links',
+      );
+      final linkId = (nextLinkRow.first['nextId'] as num?)?.toInt() ?? 1;
+      await txn.rawInsert(
+        'INSERT OR IGNORE INTO Sibling_Links '
+        '(LinkID, Stu1_RegID, Stu2_RegID, Relation, LinkedBy, LinkedOn) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+        [linkId, lo, hi, 'sibling', null, DateTime.now().toIso8601String()],
+      );
     }
 
     return nextStuRegId;

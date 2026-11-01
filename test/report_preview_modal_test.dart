@@ -14,45 +14,42 @@ import 'package:school_automation/widgets/reports/report_preview_modal.dart';
 // A ReportRequest that uses a customBytesBuilder so the provider never calls
 // ThreeCopyVouchersPdf.generate (which needs a real PDF environment).
 ReportRequest _feeVoucherRequest() => ReportRequest(
-      type: ReportType.feeVoucher,
-      titleOverride: 'Test Voucher',
-      extraParams: const {
-        'branchName': 'Test School',
-        'branchAddress': '123 Main St',
-        'bankName': 'Test Bank',
-        'bankBranch': 'Main Branch',
-        'bankAcctNo': '0001',
-      },
-      // Return 1-byte stub so PdfPreview never renders real content.
-      customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
-    );
+  type: ReportType.feeVoucher,
+  titleOverride: 'Test Voucher',
+  extraParams: const {
+    'branchName': 'Test School',
+    'branchAddress': '123 Main St',
+    'bankName': 'Test Bank',
+    'bankBranch': 'Main Branch',
+    'bankAcctNo': '0001',
+  },
+  // Return 1-byte stub so PdfPreview never renders real content.
+  customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+);
 
 ReportRequest _feeReceiptRequest() => ReportRequest(
-      type: ReportType.feeReceipt,
-      titleOverride: 'Test Receipt',
-      customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
-    );
+  type: ReportType.feeReceipt,
+  titleOverride: 'Test Receipt',
+  customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+);
 
 ReportRequest _biodataRequest() => ReportRequest(
-      type: ReportType.biodata,
-      titleOverride: 'Test Biodata',
-      customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
-    );
+  type: ReportType.biodata,
+  titleOverride: 'Test Biodata',
+  customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+);
 
 ReportRequest _attendanceRegisterRequest() => ReportRequest(
-      type: ReportType.attendanceRegister,
-      titleOverride: 'Test Attendance',
-      customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
-    );
+  type: ReportType.attendanceRegister,
+  titleOverride: 'Test Attendance',
+  customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+);
 
 // ---------------------------------------------------------------------------
 // Helper: pump the modal inside a ProviderScope + MaterialApp
 // ---------------------------------------------------------------------------
 
-Future<void> _pumpModal(
-  WidgetTester tester,
-  ReportRequest request,
-) async {
+Future<void> _pumpModal(WidgetTester tester, ReportRequest request) async {
   // Use a wide viewport so the toolbar never overflows in test.
   tester.view.physicalSize = const Size(1440, 900);
   tester.view.devicePixelRatio = 1.0;
@@ -115,20 +112,19 @@ void main() {
       },
     );
 
-    testWidgets(
-      'feeReceipt does NOT render the voucher mode SegmentedButton',
-      (tester) async {
-        await _pumpModal(tester, _feeReceiptRequest());
+    testWidgets('feeReceipt does NOT render the voucher mode SegmentedButton', (
+      tester,
+    ) async {
+      await _pumpModal(tester, _feeReceiptRequest());
 
-        expect(
-          find.byType(SegmentedButton<int>),
-          findsNothing,
-          reason: 'Mode toggle must NOT be visible for feeReceipt',
-        );
+      expect(
+        find.byType(SegmentedButton<int>),
+        findsNothing,
+        reason: 'Mode toggle must NOT be visible for feeReceipt',
+      );
 
-        expect(tester.takeException(), isNull);
-      },
-    );
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets(
       'tapping Cohort Ledger segment triggers regenerateWithMode(1) without crash',
@@ -166,64 +162,72 @@ void main() {
       },
     );
 
-    testWidgets(
-      'biodata report type renders without crash',
-      (tester) async {
-        await _pumpModal(tester, _biodataRequest());
+    testWidgets('biodata report type renders without crash', (tester) async {
+      await _pumpModal(tester, _biodataRequest());
 
-        expect(find.text('Test Biodata'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
-    );
+      expect(find.text('Test Biodata'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
 
-    testWidgets(
-      'attendanceRegister report type renders without crash',
-      (tester) async {
-        await _pumpModal(tester, _attendanceRegisterRequest());
+    testWidgets('attendanceRegister report type renders without crash', (
+      tester,
+    ) async {
+      await _pumpModal(tester, _attendanceRegisterRequest());
 
-        expect(find.text('Test Attendance'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      },
-    );
+      expect(find.text('Test Attendance'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
 
-    testWidgets('defaulterList report type renders without crash', (tester) async {
+    testWidgets('defaulterList report type renders without crash', (
+      tester,
+    ) async {
       final request = ReportRequest(
         type: ReportType.defaulterList,
         titleOverride: 'Test Defaulters',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test Defaulters'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('teacherBiodata report type renders without crash', (tester) async {
+    testWidgets('teacherBiodata report type renders without crash', (
+      tester,
+    ) async {
       final request = ReportRequest(
         type: ReportType.teacherBiodata,
         titleOverride: 'Test Teacher Biodata',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test Teacher Biodata'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('classSyllabus report type renders without crash', (tester) async {
+    testWidgets('classSyllabus report type renders without crash', (
+      tester,
+    ) async {
       final request = ReportRequest(
         type: ReportType.classSyllabus,
         titleOverride: 'Test Class Syllabus',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test Class Syllabus'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('slcRegister report type renders without crash', (tester) async {
+    testWidgets('slcRegister report type renders without crash', (
+      tester,
+    ) async {
       final request = ReportRequest(
         type: ReportType.slcRegister,
         titleOverride: 'Test SLC Register',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test SLC Register'), findsOneWidget);
@@ -234,51 +238,64 @@ void main() {
       final request = ReportRequest(
         type: ReportType.salarySlip,
         titleOverride: 'Test Salary Slip',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test Salary Slip'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('salaryRegister report type renders without crash', (tester) async {
+    testWidgets('salaryRegister report type renders without crash', (
+      tester,
+    ) async {
       final request = ReportRequest(
         type: ReportType.salaryRegister,
         titleOverride: 'Test Salary Register',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test Salary Register'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('dailyCollection report type renders without crash', (tester) async {
+    testWidgets('dailyCollection report type renders without crash', (
+      tester,
+    ) async {
       final request = ReportRequest(
         type: ReportType.dailyCollection,
         titleOverride: 'Test Daily Collection',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test Daily Collection'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('examMarksheet report type renders without crash', (tester) async {
+    testWidgets('examMarksheet report type renders without crash', (
+      tester,
+    ) async {
       final request = ReportRequest(
         type: ReportType.examMarksheet,
         titleOverride: 'Test Exam Marksheet',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test Exam Marksheet'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('examSummary report type renders without crash', (tester) async {
+    testWidgets('examSummary report type renders without crash', (
+      tester,
+    ) async {
       final request = ReportRequest(
         type: ReportType.examSummary,
         titleOverride: 'Test Exam Summary',
-        customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
+        customBytesBuilder: () async =>
+            Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
       );
       await _pumpModal(tester, request);
       expect(find.text('Test Exam Summary'), findsOneWidget);

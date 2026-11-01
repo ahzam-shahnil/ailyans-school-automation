@@ -29,10 +29,8 @@ class ReportPreviewModal extends ConsumerStatefulWidget {
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => ReportPreviewModal(
-        request: request,
-        headerControls: headerControls,
-      ),
+      builder: (_) =>
+          ReportPreviewModal(request: request, headerControls: headerControls),
     );
   }
 
@@ -71,9 +69,8 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Save failed: $e')));
       }
     }
   }
@@ -190,8 +187,11 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
       child: Row(
         children: [
           // --- PDF icon + title -----------------------------------------------
-          const Icon(Icons.picture_as_pdf_outlined,
-              color: AppColors.brandPrimary, size: 20),
+          const Icon(
+            Icons.picture_as_pdf_outlined,
+            color: AppColors.brandPrimary,
+            size: 20,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Column(
@@ -309,9 +309,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
               const SizedBox(height: AppSpacing.md),
               Text(
                 'Generating PDF...',
-                style: AppTypography.body.copyWith(
-                  color: Colors.white70,
-                ),
+                style: AppTypography.body.copyWith(color: Colors.white70),
               ),
             ],
           ),
@@ -327,14 +325,15 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: AppColors.statusErrorText, size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: AppColors.statusErrorText,
+                size: 48,
+              ),
               const SizedBox(height: AppSpacing.md),
               Text(
                 'Failed to generate report',
-                style: AppTypography.h3.copyWith(
-                  color: Colors.white,
-                ),
+                style: AppTypography.h3.copyWith(color: Colors.white),
               ),
               const SizedBox(height: AppSpacing.sm),
               ConstrainedBox(

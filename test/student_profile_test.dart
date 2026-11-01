@@ -152,6 +152,42 @@ void main() {
       expect(find.text('Edit Profile (F2)'), findsWidgets);
     });
 
+    testWidgets(
+      '1b. Renders Alumni status badge and Not Enrolled when isEnrolled is false',
+      (tester) async {
+        final alumniBundle = StudentProfileBundle(
+          student: testStudent,
+          enrollments: testEnrollments,
+          vouchers: testVouchers,
+          totalBilled: 3600,
+          totalPaid: 1800,
+          outstandingArrears: 1800,
+          classRollNo: 0,
+          currentClassName: 'Not Enrolled',
+          currentSectionName: '',
+          fatherName: 'Khan Muhammad',
+          mobile1: '0300-1234567',
+          feeBalanceSummary: 'Rs. 1,800 outstanding',
+          advances: const [],
+          exams: const [],
+          attendance: const [],
+          isEnrolled: false,
+        );
+
+        await tester.binding.setSurfaceSize(const Size(1300, 900));
+        await tester.pumpWidget(buildTestScreen(bundle: alumniBundle));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Muhammad Ali Khan'), findsOneWidget);
+        expect(find.text('#4411'), findsOneWidget);
+        expect(find.text('Alumni'), findsOneWidget);
+        expect(find.text('Active'), findsNothing);
+        expect(find.text('Not Enrolled'), findsWidgets);
+        expect(find.text('Print SLC'), findsOneWidget);
+        expect(find.text('Withdraw Student'), findsNothing);
+      },
+    );
+
     testWidgets('2. Overview tab shows all 4 sections in view mode', (
       tester,
     ) async {

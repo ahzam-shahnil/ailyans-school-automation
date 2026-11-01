@@ -5,8 +5,7 @@ import 'package:school_automation/core/db/database.dart';
 import 'package:school_automation/core/db/migrations.dart';
 import 'package:school_automation/core/db/seed_data.dart';
 import 'package:school_automation/core/providers/fee_collection_provider.dart';
-import 'package:school_automation/core/utils/receipt_pdf_generator.dart'
-    as rcp;
+import 'package:school_automation/core/utils/receipt_pdf_generator.dart' as rcp;
 import 'package:school_automation/models/fee_receipt_view.dart';
 import 'package:school_automation/screens/fees/fee_collection_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -413,110 +412,119 @@ void main() {
       },
     );
 
-    test('9. Partial payment math (1300 / 1495) and empty line-items fallback', () async {
-      // Insert historical voucher with SubTotal=1495, 0 VoucharDet items
-      await db.insert('VoucharMas', {
-        'VoucherMasID': '1803-4454',
-        'VDate': '2018-03-01',
-        'Student_Class_StuRegID': 4411,
-        'ClassID': 13,
-        'SubTotal': 1495,
-        'Discount': 0,
-        'PaidAmt': 0,
-        'IsPaid': 'N',
-        'ForMonth': 'Mar-2018',
-        'DueDate': '2018-03-10',
-        'SessionYr': '2017-2018',
-      });
+    test(
+      '9. Partial payment math (1300 / 1495) and empty line-items fallback',
+      () async {
+        // Insert historical voucher with SubTotal=1495, 0 VoucharDet items
+        await db.insert('VoucharMas', {
+          'VoucherMasID': '1803-4454',
+          'VDate': '2018-03-01',
+          'Student_Class_StuRegID': 4411,
+          'ClassID': 13,
+          'SubTotal': 1495,
+          'Discount': 0,
+          'PaidAmt': 0,
+          'IsPaid': 'N',
+          'ForMonth': 'Mar-2018',
+          'DueDate': '2018-03-10',
+          'SessionYr': '2017-2018',
+        });
 
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
+        final container = ProviderContainer();
+        addTearDown(container.dispose);
 
-      // 1. Lookup voucher with 0 VoucharDet rows -> synthesizes fallback line item
-      await container
-          .read(feeCollectionProvider.notifier)
-          .lookupVoucher('1803-4454');
-      var state = container.read(feeCollectionProvider);
+        // 1. Lookup voucher with 0 VoucharDet rows -> synthesizes fallback line item
+        await container
+            .read(feeCollectionProvider.notifier)
+            .lookupVoucher('1803-4454');
+        var state = container.read(feeCollectionProvider);
 
-      expect(state.lookupError, isNull);
-      expect(state.currentReceipt, isNotNull);
-      final receipt = state.currentReceipt!;
-      expect(receipt.lineItems.length, 1);
-      expect(receipt.lineItems.first.headName, 'Consolidated Voucher Fee (Mar-2018)');
-      expect(receipt.lineItems.first.amount, 1495);
-      expect(receipt.remainingBalance, 1495);
+        expect(state.lookupError, isNull);
+        expect(state.currentReceipt, isNotNull);
+        final receipt = state.currentReceipt!;
+        expect(receipt.lineItems.length, 1);
+        expect(
+          receipt.lineItems.first.headName,
+          'Consolidated Voucher Fee (Mar-2018)',
+        );
+        expect(receipt.lineItems.first.amount, 1495);
+        expect(receipt.remainingBalance, 1495);
 
-      // 2. Partial payment: operator enters 1300
-      container.read(feeCollectionProvider.notifier).setAmountTendered(1300);
-      final firstSuccess =
-          await container.read(feeCollectionProvider.notifier).postPayment();
-      expect(firstSuccess, isTrue);
+        // 2. Partial payment: operator enters 1300
+        container.read(feeCollectionProvider.notifier).setAmountTendered(1300);
+        final firstSuccess = await container
+            .read(feeCollectionProvider.notifier)
+            .postPayment();
+        expect(firstSuccess, isTrue);
 
-      // Verify DB after first payment: IsPaid = 'N', PaidAmt = 1300
-      final v1 = await db.query(
-        'VoucharMas',
-        where: "VoucherMasID = '1803-4454'",
-      );
-      expect(v1.first['IsPaid'], 'N');
-      expect(v1.first['PaidAmt'], 1300);
+        // Verify DB after first payment: IsPaid = 'N', PaidAmt = 1300
+        final v1 = await db.query(
+          'VoucharMas',
+          where: "VoucherMasID = '1803-4454'",
+        );
+        expect(v1.first['IsPaid'], 'N');
+        expect(v1.first['PaidAmt'], 1300);
 
-      final trans1 = await db.query(
-        'FeeTransaction',
-        where: "VoucharNo = '1803-4454'",
-      );
-      expect(trans1.length, 1);
-      expect(trans1.first['PaidAmount'], 1300);
+        final trans1 = await db.query(
+          'FeeTransaction',
+          where: "VoucharNo = '1803-4454'",
+        );
+        expect(trans1.length, 1);
+        expect(trans1.first['PaidAmount'], 1300);
 
-      // 3. Second lookup: pre-fills remaining balance of 195
-      await container
-          .read(feeCollectionProvider.notifier)
-          .lookupVoucher('1803-4454');
-      state = container.read(feeCollectionProvider);
-      final partialReceipt = state.currentReceipt!;
-      expect(partialReceipt.isPartiallyPaid, isTrue);
-      expect(partialReceipt.isFullyPaid, isFalse);
-      expect(partialReceipt.paidAmount, 1300);
-      expect(partialReceipt.remainingBalance, 195);
-      expect(state.amountTendered, 195);
+        // 3. Second lookup: pre-fills remaining balance of 195
+        await container
+            .read(feeCollectionProvider.notifier)
+            .lookupVoucher('1803-4454');
+        state = container.read(feeCollectionProvider);
+        final partialReceipt = state.currentReceipt!;
+        expect(partialReceipt.isPartiallyPaid, isTrue);
+        expect(partialReceipt.isFullyPaid, isFalse);
+        expect(partialReceipt.paidAmount, 1300);
+        expect(partialReceipt.remainingBalance, 195);
+        expect(state.amountTendered, 195);
 
-      // 4. Pay remaining 195 -> settles voucher fully (IsPaid = 'Y', PaidAmt = 1495)
-      final secondSuccess =
-          await container.read(feeCollectionProvider.notifier).postPayment();
-      expect(secondSuccess, isTrue);
+        // 4. Pay remaining 195 -> settles voucher fully (IsPaid = 'Y', PaidAmt = 1495)
+        final secondSuccess = await container
+            .read(feeCollectionProvider.notifier)
+            .postPayment();
+        expect(secondSuccess, isTrue);
 
-      final v2 = await db.query(
-        'VoucharMas',
-        where: "VoucherMasID = '1803-4454'",
-      );
-      expect(v2.first['IsPaid'], 'Y');
-      expect(v2.first['PaidAmt'], 1495);
+        final v2 = await db.query(
+          'VoucharMas',
+          where: "VoucherMasID = '1803-4454'",
+        );
+        expect(v2.first['IsPaid'], 'Y');
+        expect(v2.first['PaidAmt'], 1495);
 
-      final trans2 = await db.query(
-        'FeeTransaction',
-        where: "VoucharNo = '1803-4454'",
-        orderBy: 'FeeTransID ASC',
-      );
-      expect(trans2.length, 2);
-      expect(trans2[1]['PaidAmount'], 195);
+        final trans2 = await db.query(
+          'FeeTransaction',
+          where: "VoucharNo = '1803-4454'",
+          orderBy: 'FeeTransID ASC',
+        );
+        expect(trans2.length, 2);
+        expect(trans2[1]['PaidAmount'], 195);
 
-      // Verify print data and PDF generation for settled installment voucher
-      final printData = await container
-          .read(feeCollectionProvider.notifier)
-          .loadReceiptPrintData('1803-4454');
-      expect(printData, isNotNull);
-      expect(printData!.totalPaidToDate, 1495);
-      expect(printData.remainingBalance, 0);
-      expect(printData.previousPaidAmount, 1300);
-      expect(printData.paidAmount, 195);
-      expect(printData.paymentHistory.length, 1);
+        // Verify print data and PDF generation for settled installment voucher
+        final printData = await container
+            .read(feeCollectionProvider.notifier)
+            .loadReceiptPrintData('1803-4454');
+        expect(printData, isNotNull);
+        expect(printData!.totalPaidToDate, 1495);
+        expect(printData.remainingBalance, 0);
+        expect(printData.previousPaidAmount, 1300);
+        expect(printData.paidAmount, 195);
+        expect(printData.paymentHistory.length, 1);
 
-      final pdfBytes = await rcp.ReceiptPdfGenerator.generateThreeCopyReceipts(
-        receipts: [printData],
-        branchName: "Ailyans's Higher Secondary School",
-        branchAddress: 'Muslim Bazar Mianwali',
-      );
-      expect(pdfBytes.length, greaterThan(1000));
-    });
+        final pdfBytes =
+            await rcp.ReceiptPdfGenerator.generateThreeCopyReceipts(
+              receipts: [printData],
+              branchName: "Ailyans's Higher Secondary School",
+              branchAddress: 'Muslim Bazar Mianwali',
+            );
+        expect(pdfBytes.length, greaterThan(1000));
+      },
+    );
 
     testWidgets(
       '10. Amount Tendered TextField is pre-filled with 195 when loading partially paid voucher',
@@ -590,11 +598,20 @@ void main() {
 
         // 2. Verify partially paid banner and balance preview pill
         expect(find.textContaining('PARTIALLY PAID'), findsWidgets);
-        expect(find.textContaining('Balance After This Payment: Rs. 0'), findsOneWidget);
+        expect(
+          find.textContaining('Balance After This Payment: Rs. 0'),
+          findsOneWidget,
+        );
 
         // 3. Verify payment installment history rendered in left totals
-        expect(find.textContaining('PAYMENT INSTALLMENT HISTORY (1)'), findsOneWidget);
-        expect(find.textContaining('Receipt #101 (31-Oct-2026) - Askari Bank'), findsOneWidget);
+        expect(
+          find.textContaining('PAYMENT INSTALLMENT HISTORY (1)'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('Receipt #101 (31-Oct-2026) - Askari Bank'),
+          findsOneWidget,
+        );
 
         // 4. Verify PDF generation for partial paid receipt
         final partialPrintData = rcp.FeeReceiptPrintData(
@@ -621,11 +638,12 @@ void main() {
             ),
           ],
         );
-        final pdfBytes = await rcp.ReceiptPdfGenerator.generateThreeCopyReceipts(
-          receipts: [partialPrintData],
-          branchName: "Ailyans's Higher Secondary School",
-          branchAddress: 'Muslim Bazar Mianwali',
-        );
+        final pdfBytes =
+            await rcp.ReceiptPdfGenerator.generateThreeCopyReceipts(
+              receipts: [partialPrintData],
+              branchName: "Ailyans's Higher Secondary School",
+              branchAddress: 'Muslim Bazar Mianwali',
+            );
         expect(pdfBytes.length, greaterThan(1000));
       },
     );

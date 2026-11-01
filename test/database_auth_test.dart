@@ -31,12 +31,12 @@ void main() {
   });
 
   test(
-    'Database has 50 active tables, app_config, and IsActive column on Users',
+    'Database has 51 active tables, app_config, and IsActive column on Users',
     () async {
       final tables = await db.rawQuery(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
       );
-      expect(tables.length, 50);
+      expect(tables.length, 51);
 
       final tableNames = tables.map((t) => t['name'] as String).toList();
       expect(tableNames.contains('app_config'), isTrue);

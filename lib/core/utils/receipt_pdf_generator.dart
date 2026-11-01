@@ -85,13 +85,14 @@ class FeeReceiptPrintData {
     this.bankAcctNo,
     this.remarks,
     required this.lineItems,
-  })  : classSecName = classSecName ?? sectionName,
-        totalPaidToDate = totalPaidToDate ?? paidAmount,
-        previousPaidAmount = previousPaidAmount ?? 0,
-        remainingBalance = remainingBalance ??
-            ((totalAmount - (totalPaidToDate ?? paidAmount)) < 0
-                ? 0
-                : (totalAmount - (totalPaidToDate ?? paidAmount)));
+  }) : classSecName = classSecName ?? sectionName,
+       totalPaidToDate = totalPaidToDate ?? paidAmount,
+       previousPaidAmount = previousPaidAmount ?? 0,
+       remainingBalance =
+           remainingBalance ??
+           ((totalAmount - (totalPaidToDate ?? paidAmount)) < 0
+               ? 0
+               : (totalAmount - (totalPaidToDate ?? paidAmount)));
 }
 
 // ============================================================================
@@ -625,13 +626,17 @@ class ReceiptPdfGenerator {
           children: [
             pw.Text(
               'Net Billable Fee:',
-              style:
-                  const pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+              style: const pw.TextStyle(
+                fontSize: 7.5,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
             pw.Text(
               'Rs. ${_fmt(r.totalAmount)}',
-              style:
-                  const pw.TextStyle(fontSize: 7.5, fontWeight: pw.FontWeight.bold),
+              style: const pw.TextStyle(
+                fontSize: 7.5,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
           ],
         ),
@@ -645,33 +650,36 @@ class ReceiptPdfGenerator {
           ...r.paymentHistory
               .where((inst) => inst.feeTransId != r.feeTransId)
               .map((inst) {
-            final formattedDate = _formatInstallmentDate(inst.submissionDate);
-            final bank = (inst.bankName != null && inst.bankName!.isNotEmpty)
-                ? ' (${inst.bankName})'
-                : '';
-            return pw.Padding(
-              padding: const pw.EdgeInsets.only(left: 4, bottom: 0.5),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    '  * Rcpt #${inst.feeTransId} ($formattedDate)$bank:',
-                    style: const pw.TextStyle(
-                      fontSize: 6.5,
-                      color: _Clr.slate,
-                    ),
+                final formattedDate = _formatInstallmentDate(
+                  inst.submissionDate,
+                );
+                final bank =
+                    (inst.bankName != null && inst.bankName!.isNotEmpty)
+                    ? ' (${inst.bankName})'
+                    : '';
+                return pw.Padding(
+                  padding: const pw.EdgeInsets.only(left: 4, bottom: 0.5),
+                  child: pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text(
+                        '  * Rcpt #${inst.feeTransId} ($formattedDate)$bank:',
+                        style: const pw.TextStyle(
+                          fontSize: 6.5,
+                          color: _Clr.slate,
+                        ),
+                      ),
+                      pw.Text(
+                        'Rs. ${_fmt(inst.paidAmount)}',
+                        style: const pw.TextStyle(
+                          fontSize: 6.5,
+                          color: _Clr.slate,
+                        ),
+                      ),
+                    ],
                   ),
-                  pw.Text(
-                    'Rs. ${_fmt(inst.paidAmount)}',
-                    style: const pw.TextStyle(
-                      fontSize: 6.5,
-                      color: _Clr.slate,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                );
+              }),
         _summaryRow(
           'Paid This Receipt ($receiptNoStr):',
           'Rs. ${_fmt(r.paidAmount)}',
@@ -730,12 +738,15 @@ class ReceiptPdfGenerator {
                 ),
               ),
               pw.Container(
-                padding:
-                    const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 2,
+                ),
                 decoration: pw.BoxDecoration(
                   border: pw.Border.all(color: badgeColor, width: 1.2),
-                  borderRadius:
-                      const pw.BorderRadius.all(pw.Radius.circular(2)),
+                  borderRadius: const pw.BorderRadius.all(
+                    pw.Radius.circular(2),
+                  ),
                 ),
                 child: pw.Text(
                   badgeText,

@@ -274,7 +274,8 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     TeacherProfileState state,
     TeacherProfileNotifier notifier,
   ) async {
-    final teacherId = state.currentTeacher?.teacherId ??
+    final teacherId =
+        state.currentTeacher?.teacherId ??
         state.teacherId ??
         _resolvedId ??
         widget.teacherId;
@@ -924,7 +925,8 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                 titleOverride: 'Teacher Biodata - ${teacher.tName}',
                 extraParams: {
                   'teacherData': teacherData,
-                  'branchName': meta?.branchName ??
+                  'branchName':
+                      meta?.branchName ??
                       "Ailyans's Higher Secondary School Mianwali",
                   'branchAddress':
                       meta?.branchAddress ?? 'Muslim Bazar Mianwali',
@@ -1196,10 +1198,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                           : (active) async {
                               final tid = current.teacherId;
                               if (tid != null) {
-                                await notifier.toggleActiveStatus(
-                                  tid,
-                                  active,
-                                );
+                                await notifier.toggleActiveStatus(tid, active);
                                 ref
                                     .read(teacherListProvider.notifier)
                                     .loadInitialData();

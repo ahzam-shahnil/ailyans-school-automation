@@ -54,6 +54,10 @@ class DashboardMetrics {
   final int pendingVouchers;
   final int outstandingAmount;
 
+  final String latestBilledMonthLabel;
+  final int latestBilledGross;
+  final int latestBilledCollected;
+
   final List<RecentPaymentItem> recentPayments;
   final List<ClassStrengthItem> classStrength;
 
@@ -71,6 +75,9 @@ class DashboardMetrics {
     required this.sectionCount,
     required this.pendingVouchers,
     required this.outstandingAmount,
+    this.latestBilledMonthLabel = '',
+    this.latestBilledGross = 0,
+    this.latestBilledCollected = 0,
     required this.recentPayments,
     required this.classStrength,
   });
@@ -118,6 +125,14 @@ final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
     }
   }
 
+  // Read active academic session year
+  final sessionRows = await db.rawQuery(
+    "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
+  );
+  final sessionYear = sessionRows.isNotEmpty
+      ? (sessionRows.first['config_value'] as String? ?? '2017-2018')
+      : '2017-2018';
+
   // 2. Monthly Fee Collection
   final now = ref.watch(clockProvider)();
   final yy = (now.year % 100).toString().padLeft(2, '0');
@@ -145,51 +160,128 @@ final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
   final usPattern = '$mm/%/$yy%';
   final mmmPattern = '%-$monthName3-$yyyy%';
 
-  final feeRows = await db.rawQuery(
+  int monthlyExpected = 0;
+  int monthlyCollected = 0;
+  String latestBilledMonthLabel = '';
+  int latestBilledGross = 0;
+  int latestBilledCollected = 0;
+
+  // Check if current calendar month has vouchers in active session
+  final currentMonthVouchers = await db.rawQuery(
     '''
     SELECT
-      (SELECT COALESCE(SUM(SubTotal), 0) FROM VoucharMas WHERE SUBSTR(VoucherMasID, 1, 4) = ?) as expected,
-      (SELECT COALESCE(SUM(PaidAmt), 0) FROM VoucharMas
-       WHERE (SUBSTR(VoucherMasID, 1, 4) = ? AND PaidAmt > 0)
-          OR PaidDate LIKE ? OR PaidDate LIKE ? OR PaidDate LIKE ?) as collected
+      COALESCE(SUM(SubTotal), 0) as expected,
+      COALESCE(SUM(CASE WHEN PaidAmt > 0 THEN PaidAmt ELSE 0 END), 0) as collected
+    FROM VoucharMas
+    WHERE SessionYr = ? AND SUBSTR(VoucherMasID, 1, 4) = ?
     ''',
-    [currentYyMm, currentYyMm, isoPattern, usPattern, mmmPattern],
+    [sessionYear, currentYyMm],
   );
 
-  int monthlyExpected = feeRows.isNotEmpty
-      ? ((feeRows.first['expected'] as int?) ?? 0)
-      : 0;
-  int monthlyCollected = feeRows.isNotEmpty
-      ? ((feeRows.first['collected'] as int?) ?? 0)
+  final currExpected = currentMonthVouchers.isNotEmpty
+      ? ((currentMonthVouchers.first['expected'] as num?)?.toInt() ?? 0)
       : 0;
 
-  // Fallback to FeeTransaction if VoucharMas.PaidAmt query yielded 0
-  if (monthlyCollected == 0) {
-    final ftRows = await db.rawQuery(
+  if (currExpected > 0) {
+    // Current month has vouchers in active session
+    monthlyExpected = currExpected;
+    monthlyCollected =
+        (currentMonthVouchers.first['collected'] as num?)?.toInt() ?? 0;
+    latestBilledMonthLabel = '$monthName3-$yyyy';
+    latestBilledGross = monthlyExpected;
+    latestBilledCollected = monthlyCollected;
+  } else {
+    // Query latest month with vouchers in current session
+    final latestYyMmRows = await db.rawQuery(
       '''
-      SELECT COALESCE(SUM(PaidAmount), 0) as collected
-      FROM FeeTransaction
-      WHERE SubmissionDate LIKE ? OR SubmissionDate LIKE ? OR SubmissionDate LIKE ?
+      SELECT SUBSTR(VoucherMasID, 1, 4) AS yyMM
+      FROM VoucharMas
+      WHERE SessionYr = ?
+      ORDER BY yyMM DESC LIMIT 1
       ''',
-      [isoPattern, usPattern, mmmPattern],
+      [sessionYear],
     );
-    if (ftRows.isNotEmpty) {
-      monthlyCollected = (ftRows.first['collected'] as int?) ?? 0;
+
+    if (latestYyMmRows.isNotEmpty) {
+      final latestYyMm = latestYyMmRows.first['yyMM'] as String? ?? '';
+      if (latestYyMm.length == 4) {
+        final lYy = int.tryParse(latestYyMm.substring(0, 2)) ?? 0;
+        final lMm = int.tryParse(latestYyMm.substring(2, 4)) ?? 0;
+        final lYear = 2000 + lYy;
+        final lMonthName = (lMm >= 1 && lMm <= 12) ? monthNames[lMm] : 'Month';
+        latestBilledMonthLabel = '$lMonthName-$lYear';
+
+        final latestVoucherRows = await db.rawQuery(
+          '''
+          SELECT
+            COALESCE(SUM(SubTotal), 0) AS gross,
+            COALESCE(SUM(CASE WHEN PaidAmt > 0 THEN PaidAmt ELSE 0 END), 0) AS collected
+          FROM VoucharMas
+          WHERE SessionYr = ? AND SUBSTR(VoucherMasID, 1, 4) = ?
+          ''',
+          [sessionYear, latestYyMm],
+        );
+
+        if (latestVoucherRows.isNotEmpty) {
+          latestBilledGross =
+              (latestVoucherRows.first['gross'] as num?)?.toInt() ?? 0;
+          latestBilledCollected =
+              (latestVoucherRows.first['collected'] as num?)?.toInt() ?? 0;
+          monthlyExpected = latestBilledGross;
+          monthlyCollected = latestBilledCollected;
+        }
+      }
     }
   }
 
-  // Fallback for seed data / legacy test harness where current month has 0 vouchers
+  // Fallback to legacy/seed queries if still 0
   if (monthlyExpected == 0 && monthlyCollected == 0) {
-    final legacyRows = await db.rawQuery('''
+    final feeRows = await db.rawQuery(
+      '''
       SELECT
-        COALESCE(SUM(SubTotal), 0) as expected,
-        COALESCE(SUM(CASE WHEN IsPaid = 'Y' THEN (CASE WHEN PaidAmt > 0 THEN PaidAmt ELSE SubTotal END) ELSE 0 END), 0) as collected
-      FROM VoucharMas
-      WHERE SessionYr = '2017-2018'
-    ''');
-    if (legacyRows.isNotEmpty) {
-      monthlyExpected = (legacyRows.first['expected'] as int?) ?? 0;
-      monthlyCollected = (legacyRows.first['collected'] as int?) ?? 0;
+        (SELECT COALESCE(SUM(SubTotal), 0) FROM VoucharMas WHERE SUBSTR(VoucherMasID, 1, 4) = ?) as expected,
+        (SELECT COALESCE(SUM(PaidAmt), 0) FROM VoucharMas
+         WHERE (SUBSTR(VoucherMasID, 1, 4) = ? AND PaidAmt > 0)
+            OR PaidDate LIKE ? OR PaidDate LIKE ? OR PaidDate LIKE ?) as collected
+      ''',
+      [currentYyMm, currentYyMm, isoPattern, usPattern, mmmPattern],
+    );
+
+    monthlyExpected = feeRows.isNotEmpty
+        ? ((feeRows.first['expected'] as int?) ?? 0)
+        : 0;
+    monthlyCollected = feeRows.isNotEmpty
+        ? ((feeRows.first['collected'] as int?) ?? 0)
+        : 0;
+
+    // Fallback to FeeTransaction if VoucharMas.PaidAmt query yielded 0
+    if (monthlyCollected == 0) {
+      final ftRows = await db.rawQuery(
+        '''
+        SELECT COALESCE(SUM(PaidAmount), 0) as collected
+        FROM FeeTransaction
+        WHERE SubmissionDate LIKE ? OR SubmissionDate LIKE ? OR SubmissionDate LIKE ?
+        ''',
+        [isoPattern, usPattern, mmmPattern],
+      );
+      if (ftRows.isNotEmpty) {
+        monthlyCollected = (ftRows.first['collected'] as int?) ?? 0;
+      }
+    }
+
+    // Fallback for seed data / legacy test harness where current month has 0 vouchers
+    if (monthlyExpected == 0 && monthlyCollected == 0) {
+      final legacyRows = await db.rawQuery('''
+        SELECT
+          COALESCE(SUM(SubTotal), 0) as expected,
+          COALESCE(SUM(CASE WHEN IsPaid = 'Y' THEN (CASE WHEN PaidAmt > 0 THEN PaidAmt ELSE SubTotal END) ELSE 0 END), 0) as collected
+        FROM VoucharMas
+        WHERE SessionYr = '2017-2018'
+      ''');
+      if (legacyRows.isNotEmpty) {
+        monthlyExpected = (legacyRows.first['expected'] as int?) ?? 0;
+        monthlyCollected = (legacyRows.first['collected'] as int?) ?? 0;
+      }
     }
   }
 
@@ -197,13 +289,21 @@ final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
       ? ((monthlyCollected * 100) / monthlyExpected).round()
       : 0;
 
-  // 3. Active Student Enrollment
-  final enrollRows = await db.rawQuery(
-    'SELECT COUNT(*) as cnt FROM Student_Class WHERE Present = 1',
-  );
-  final activeEnrollment = enrollRows.isNotEmpty
-      ? ((enrollRows.first['cnt'] as int?) ?? 0)
-      : 0;
+  // 3. Active Student Enrollment (session-scoped with 0-fallback)
+  int activeEnrollment = 0;
+  if (sessionYear.isNotEmpty) {
+    final scopedEnrollRows = await db.rawQuery(
+      'SELECT COUNT(DISTINCT Stu_RegID) as cnt FROM Student_Class WHERE Present = 1 AND SessionYr = ?',
+      [sessionYear],
+    );
+    activeEnrollment = (scopedEnrollRows.first['cnt'] as num?)?.toInt() ?? 0;
+  }
+  if (activeEnrollment == 0) {
+    final fallbackEnrollRows = await db.rawQuery(
+      'SELECT COUNT(DISTINCT Stu_RegID) as cnt FROM Student_Class WHERE Present = 1',
+    );
+    activeEnrollment = (fallbackEnrollRows.first['cnt'] as num?)?.toInt() ?? 0;
+  }
 
   // 4. Class and Section Counts
   final classRows = await db.rawQuery('SELECT COUNT(*) as cnt FROM Class');
@@ -303,6 +403,9 @@ final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
     sectionCount: sectionCount,
     pendingVouchers: pendingVouchers,
     outstandingAmount: outstandingAmount,
+    latestBilledMonthLabel: latestBilledMonthLabel,
+    latestBilledGross: latestBilledGross,
+    latestBilledCollected: latestBilledCollected,
     recentPayments: recentPayments,
     classStrength: classStrength,
   );

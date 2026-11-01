@@ -79,7 +79,11 @@ class SlcRegisterPdfGenerator {
                   _headerCell('Student Name', boldFont),
                   _headerCell('Father Name', boldFont),
                   _headerCell('Class Left', boldFont),
-                  _headerCell('Date Left', boldFont, align: pw.TextAlign.center),
+                  _headerCell(
+                    'Date Left',
+                    boldFont,
+                    align: pw.TextAlign.center,
+                  ),
                   _headerCell('Reason / Term', boldFont),
                 ],
               ),
@@ -114,62 +118,79 @@ class SlcRegisterPdfGenerator {
                   final idx = entry.key;
                   final l = entry.value;
 
-                  final regId = (l['regId'] ??
-                          l['stuRegId'] ??
-                          l['StuRegID'] ??
-                          l['Stu_RegID'] ??
-                          '-')
-                      .toString();
-                  final studentName = (l['name'] ??
-                          l['studentName'] ??
-                          l['stuName'] ??
-                          l['Stu_Name'] ??
-                          'Student $regId')
-                      .toString();
-                  final fatherName = (l['fatherName'] ??
-                          l['father'] ??
-                          l['fName'] ??
-                          l['F_Name'] ??
-                          '-')
-                      .toString();
-                  final classLeft = (l['classLeft'] ??
-                          l['className'] ??
-                          l['leftClass'] ??
-                          l['LeftClass'] ??
-                          l['cName'] ??
-                          l['CName'] ??
-                          '-')
-                      .toString();
-                  final dateLeft = (l['dateLeft'] ??
-                          l['leavingDate'] ??
-                          l['leftDate'] ??
-                          l['LeftDate'] ??
-                          '-')
-                      .toString();
-                  final reason = (l['reason'] ??
-                          l['termOfLeaving'] ??
-                          l['TermOfLeavign'] ??
-                          l['term'] ??
-                          '-')
-                      .toString();
+                  final regId =
+                      (l['regId'] ??
+                              l['stuRegId'] ??
+                              l['StuRegID'] ??
+                              l['Stu_RegID'] ??
+                              '-')
+                          .toString();
+                  final studentName =
+                      (l['name'] ??
+                              l['studentName'] ??
+                              l['stuName'] ??
+                              l['Stu_Name'] ??
+                              'Student $regId')
+                          .toString();
+                  final fatherName =
+                      (l['fatherName'] ??
+                              l['father'] ??
+                              l['fName'] ??
+                              l['F_Name'] ??
+                              '-')
+                          .toString();
+                  final classLeft =
+                      (l['classLeft'] ??
+                              l['className'] ??
+                              l['leftClass'] ??
+                              l['LeftClass'] ??
+                              l['cName'] ??
+                              l['CName'] ??
+                              '-')
+                          .toString();
+                  final dateLeft =
+                      (l['dateLeft'] ??
+                              l['leavingDate'] ??
+                              l['leftDate'] ??
+                              l['LeftDate'] ??
+                              '-')
+                          .toString();
+                  final reason =
+                      (l['reason'] ??
+                              l['termOfLeaving'] ??
+                              l['TermOfLeavign'] ??
+                              l['term'] ??
+                              '-')
+                          .toString();
 
                   final isEven = idx.isEven;
 
                   return pw.TableRow(
                     decoration: pw.BoxDecoration(
-                      color:
-                          isEven ? PdfColors.white : ReportTheme.tableRowAltBg,
+                      color: isEven
+                          ? PdfColors.white
+                          : ReportTheme.tableRowAltBg,
                     ),
                     children: [
-                      _dataCell('${idx + 1}', regularFont,
-                          align: pw.TextAlign.center),
-                      _dataCell(regId, regularFont,
-                          align: pw.TextAlign.center, bold: true),
+                      _dataCell(
+                        '${idx + 1}',
+                        regularFont,
+                        align: pw.TextAlign.center,
+                      ),
+                      _dataCell(
+                        regId,
+                        regularFont,
+                        align: pw.TextAlign.center,
+                        bold: true,
+                      ),
                       _dataCell(studentName, regularFont, bold: true),
                       _dataCell(fatherName, regularFont),
                       _dataCell(classLeft, regularFont),
-                      _dataCell(dateLeft, regularFont,
-                          align: pw.TextAlign.center),
+                      _dataCell(
+                        dateLeft,
+                        regularFont,
+                        align: pw.TextAlign.center,
+                      ),
                       _dataCell(reason, regularFont),
                     ],
                   );
@@ -244,15 +265,9 @@ class SlcRegisterPdfGenerator {
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(
-                  branchName,
-                  style: ReportTheme.titleStyle,
-                ),
+                pw.Text(branchName, style: ReportTheme.titleStyle),
                 pw.SizedBox(height: 2),
-                pw.Text(
-                  branchAddress,
-                  style: ReportTheme.subtitleStyle,
-                ),
+                pw.Text(branchAddress, style: ReportTheme.subtitleStyle),
               ],
             ),
             pw.Column(
@@ -296,11 +311,7 @@ class SlcRegisterPdfGenerator {
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 8.5,
-          color: PdfColors.white,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 8.5, color: PdfColors.white),
       ),
     );
   }
@@ -316,11 +327,7 @@ class SlcRegisterPdfGenerator {
       child: pw.Text(
         text,
         textAlign: align,
-        style: pw.TextStyle(
-          font: font,
-          fontSize: 8.5,
-          color: PdfColors.black,
-        ),
+        style: pw.TextStyle(font: font, fontSize: 8.5, color: PdfColors.black),
       ),
     );
   }

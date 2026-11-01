@@ -88,6 +88,8 @@ class SchoolLeavingState {
 class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
   final Ref? _ref;
 
+  Future<void>? _loadingFuture;
+
   SchoolLeavingNotifier([Ref? ref])
     : _ref = ref,
       super(
@@ -100,7 +102,14 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
 
   DateTime _now() => _ref?.read(clockProvider)() ?? DateTime.now();
 
-  Future<void> loadInitialData() async {
+  Future<void> loadInitialData() {
+    if (_loadingFuture != null) return _loadingFuture!;
+    final future = _loadInitialDataInternal();
+    _loadingFuture = future;
+    return future;
+  }
+
+  Future<void> _loadInitialDataInternal() async {
     if (!mounted) return;
     state = state.copyWith(loading: true, errorMessage: () => null);
 
@@ -172,10 +181,13 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
         loading: false,
         errorMessage: () => 'Failed to load students: $e',
       );
+    } finally {
+      _loadingFuture = null;
     }
   }
 
   Future<void> selectStudent(int? stuRegId) async {
+    if (!mounted) return;
     if (stuRegId == null) {
       state = state.copyWith(
         selectedStudent: () => null,
@@ -188,6 +200,11 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
         committedSlc: () => null,
       );
       return;
+    }
+
+    if (state.students.isEmpty) {
+      await loadInitialData();
+      if (!mounted) return;
     }
 
     final student = state.students.firstWhere(
@@ -211,6 +228,7 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
       initialRemarks = student.existingSlcRemarks ?? '';
     }
 
+    if (!mounted) return;
     state = state.copyWith(
       selectedStudent: () => student,
       leavingDate: initialDate,
@@ -223,6 +241,15 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
     await computeDues(stuRegId);
   }
 
+  Future<void> refreshSelectedStudent() async {
+    final id = state.selectedStudent?.stuRegId;
+    if (id == null) return;
+    _loadingFuture = null;
+    await loadInitialData();
+    if (!mounted) return;
+    await computeDues(id);
+  }
+
   Future<void> computeDues(int stuRegId) async {
     try {
       final db = await DatabaseService.instance.database;
@@ -232,7 +259,7 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
                COUNT(DISTINCT CASE WHEN (vm.SubTotal - vm.Discount - COALESCE(vm.PaidAmt, 0)) > 0 THEN vm.ForMonth END) AS overdueMonths
         FROM VoucharMas vm
         WHERE vm.Student_Class_StuRegID = ?
-          AND vm.IsPaid IN ('N', 'O')
+          AND vm.IsPaid = 'N'
         ''',
         [stuRegId],
       );

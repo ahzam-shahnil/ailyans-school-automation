@@ -21,6 +21,31 @@ class SchoolLeavingScreen extends ConsumerStatefulWidget {
 class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   final TextEditingController _remarksController = TextEditingController();
 
+  String? _lastSyncedUri;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    try {
+      final uri = GoRouterState.of(context).uri;
+      final uriStr = uri.toString();
+      if (_lastSyncedUri == uriStr) return;
+      _lastSyncedUri = uriStr;
+
+      final sid = uri.queryParameters['studentId'];
+      final parsedId = sid != null ? int.tryParse(sid) : null;
+      if (parsedId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(schoolLeavingProvider.notifier).selectStudent(parsedId);
+          }
+        });
+      }
+    } catch (_) {
+      // Safe fallback if GoRouter is not available in test harness
+    }
+  }
+
   @override
   void dispose() {
     _remarksController.dispose();
@@ -189,19 +214,21 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
 
     final leavers = state.students
         .where((s) => s.hasSLC)
-        .map((s) => <String, dynamic>{
-              'stuRegId': s.stuRegId.toString(),
-              'regId': s.stuRegId.toString(),
-              'name': s.studentName,
-              'studentName': s.studentName,
-              'father': s.fatherName ?? '',
-              'fatherName': s.fatherName ?? '',
-              'className': s.classSecDisplay,
-              'classLeft': s.classSecDisplay,
-              'dateLeft': s.existingSlcDate ?? '',
-              'leavingDate': s.existingSlcDate ?? '',
-              'reason': s.existingSlcTerm ?? '',
-            })
+        .map(
+          (s) => <String, dynamic>{
+            'stuRegId': s.stuRegId.toString(),
+            'regId': s.stuRegId.toString(),
+            'name': s.studentName,
+            'studentName': s.studentName,
+            'father': s.fatherName ?? '',
+            'fatherName': s.fatherName ?? '',
+            'className': s.classSecDisplay,
+            'classLeft': s.classSecDisplay,
+            'dateLeft': s.existingSlcDate ?? '',
+            'leavingDate': s.existingSlcDate ?? '',
+            'reason': s.existingSlcTerm ?? '',
+          },
+        )
         .toList();
 
     if (leavers.isEmpty) {
@@ -261,6 +288,18 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     final printEnabled = state.hasExistingSlc || state.committedSlc != null;
     final commitDisabled = state.hasExistingSlc;
 
+    final fromParam = () {
+      try {
+        return GoRouterState.of(context).uri.queryParameters['from'];
+      } catch (_) {
+        return null;
+      }
+    }();
+    final backTarget = fromParam;
+    final backLabel = backTarget != null && backTarget.startsWith('/students/')
+        ? 'Back to Student Profile'
+        : 'Back to Students';
+
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         const SingleActivator(LogicalKeyboardKey.keyS, control: true):
@@ -284,23 +323,51 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'School Leaving',
-                        style: AppTypography.h2.copyWith(
-                          color: AppColors.textPrimary,
+                  Flexible(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              context.go(backTarget ?? '/students'),
+                          icon: const Icon(Icons.arrow_back, size: 14),
+                          label: Text(backLabel),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.textPrimary,
+                            side: const BorderSide(
+                              color: AppColors.borderDefault,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Student withdrawal clearance and School Leaving Certificate (SLC)',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
+                        const SizedBox(width: AppSpacing.md),
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'School Leaving',
+                                style: AppTypography.h2.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Student withdrawal clearance and School Leaving Certificate (SLC)',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   if (student != null)
                     Container(
@@ -405,7 +472,15 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                                       ),
                                       child: DropdownButtonHideUnderline(
                                         child: DropdownButton<int>(
-                                          value: student?.stuRegId,
+                                          value:
+                                              (student != null &&
+                                                  state.students.any(
+                                                    (s) =>
+                                                        s.stuRegId ==
+                                                        student.stuRegId,
+                                                  ))
+                                              ? student.stuRegId
+                                              : null,
                                           isDense: true,
                                           isExpanded: true,
                                           menuMaxHeight: 400,
@@ -694,7 +769,9 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       OutlinedButton.icon(
-                        onPressed: printEnabled ? _handlePrintCertificate : null,
+                        onPressed: printEnabled
+                            ? _handlePrintCertificate
+                            : null,
                         icon: const Icon(Icons.description_outlined, size: 16),
                         label: Text(
                           state.hasExistingSlc
@@ -840,21 +917,60 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: () {
-                final stuId = state.selectedStudent?.stuRegId;
-                context.go('/fees/receipts?studentId=$stuId&from=leaving');
-              },
-              icon: const Icon(Icons.payment, size: 16),
-              label: const Text('Pay Arrears Now'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.statusErrorText,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 40),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      final stuId = state.selectedStudent?.stuRegId;
+                      final fromParam = () {
+                        try {
+                          return GoRouterState.of(context)
+                              .uri
+                              .queryParameters['from'];
+                        } catch (_) {
+                          return null;
+                        }
+                      }();
+                      final returnToLeavingUrl =
+                          '/students/leaving?studentId=$stuId'
+                          '${fromParam != null && fromParam.isNotEmpty ? '&from=${Uri.encodeComponent(fromParam)}' : ''}';
+                      context.go(
+                        '/fees/receipts?studentId=$stuId'
+                        '&from=${Uri.encodeComponent(returnToLeavingUrl)}',
+                      );
+                    },
+                    icon: const Icon(Icons.payment, size: 16),
+                    label: const Text('Pay Arrears Now'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.statusErrorText,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 40),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.md),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    ref
+                        .read(schoolLeavingProvider.notifier)
+                        .refreshSelectedStudent();
+                  },
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh Status'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.statusErrorText,
+                    side: const BorderSide(color: AppColors.statusErrorBorder),
+                    minimumSize: const Size(0, 40),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
