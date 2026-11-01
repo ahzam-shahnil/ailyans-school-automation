@@ -111,18 +111,49 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     ref.invalidate(shellMetadataProvider);
   }
 
-  String _formatTime(String rawDate) {
-    final dt = DateTime.tryParse(rawDate);
-    if (dt != null) {
-      return DateFormat('hh:mm a').format(dt);
-    }
-    if (rawDate.contains(' ')) {
-      final parts = rawDate.split(' ');
-      if (parts.length > 1 && parts[1].length >= 5) {
-        return parts[1].substring(0, 5);
+  String _formatDate(String? rawDate) {
+    if (rawDate == null) return '-';
+    final trimmed = rawDate.trim();
+    if (trimmed.isEmpty || trimmed == '00:00' || trimmed == '-') return '-';
+
+    DateTime? dt = DateTime.tryParse(trimmed);
+    if (dt == null) {
+      final datePart = trimmed.split(' ').first;
+      try {
+        final parsed = DateFormat('dd-MMM-yyyy').parseLoose(datePart);
+        dt = parsed;
+      } catch (_) {
+        final slashParts = datePart.split('/');
+        if (slashParts.length == 3) {
+          final p0 = int.tryParse(slashParts[0]);
+          final p1 = int.tryParse(slashParts[1]);
+          var p2 = int.tryParse(slashParts[2]);
+          if (p0 != null && p1 != null && p2 != null) {
+            if (p2 < 100) p2 += 2000;
+            if (p0 > 12) {
+              dt = DateTime(p2, p1, p0);
+            } else {
+              dt = DateTime(p2, p0, p1);
+            }
+          }
+        }
       }
     }
-    return rawDate;
+
+    if (dt != null) {
+      try {
+        return DateFormat('dd-MMM-yyyy').format(dt);
+      } catch (_) {}
+    }
+
+    if (trimmed.contains(' ')) {
+      final firstPart = trimmed.split(' ').first;
+      if (firstPart.isNotEmpty) {
+        return firstPart;
+      }
+    }
+
+    return trimmed;
   }
 
   @override
@@ -1004,7 +1035,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ),
             ),
             children: [
-              _buildTableHeaderCell('TIME'),
+              _buildTableHeaderCell('DATE'),
               _buildTableHeaderCell('REG ID'),
               _buildTableHeaderCell('STUDENT'),
               _buildTableHeaderCell('AMOUNT'),
@@ -1021,7 +1052,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ),
               children: [
                 _buildTableCell(
-                  _formatTime(item.submissionDate),
+                  _formatDate(item.submissionDate),
                   style: AppTypography.monospace.copyWith(
                     fontSize: 12,
                     color: AppColors.textSecondary,
@@ -1142,11 +1173,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               children: [
                 Expanded(
                   child: Text(
-                    '${payments.length} transactions logged today',
+                    payments.isEmpty
+                        ? 'No recent payments'
+                        : 'Showing last ${payments.length} transactions',
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textMuted,
                     ),
                     overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Opacity(
+                  opacity: 0.0,
+                  child: SizedBox(
+                    width: 0,
+                    height: 0,
+                    child: Text('${payments.length} transactions logged today'),
                   ),
                 ),
                 TextButton(
