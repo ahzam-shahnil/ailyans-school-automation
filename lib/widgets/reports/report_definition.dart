@@ -24,6 +24,7 @@ enum ReportType {
   feeCollectionRegister,
   classDefaulters,
   examStatus,
+  classCollectionSummary,
 }
 
 extension ReportTypePath on ReportType {
@@ -51,6 +52,7 @@ extension ReportTypePath on ReportType {
     ReportType.feeCollectionRegister => 'fee-collection-register',
     ReportType.classDefaulters => 'class-defaulters',
     ReportType.examStatus => 'exam-status',
+    ReportType.classCollectionSummary => 'class-collection-summary',
   };
 
   String get displayName => switch (this) {
@@ -77,6 +79,7 @@ extension ReportTypePath on ReportType {
     ReportType.feeCollectionRegister => 'Fee Collection Register',
     ReportType.classDefaulters => 'Class Defaulters',
     ReportType.examStatus => 'Exam Status Report',
+    ReportType.classCollectionSummary => 'Class Collection Summary',
   };
 
   String get defaultFileName => '${path}_report.pdf';

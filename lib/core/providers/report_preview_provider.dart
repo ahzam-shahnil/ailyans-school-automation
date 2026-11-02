@@ -135,6 +135,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateClassDefaulters();
       case ReportType.examStatus:
         return _generateExamStatus();
+      case ReportType.classCollectionSummary:
+        return _generateClassCollectionSummary();
     }
   }
 
@@ -855,13 +857,13 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     return doc.save();
   }
 
-  Future<Uint8List> generateClassCollectionSummary() async {
-    final rowsData = (request.extraParams['summaryRows'] as List<dynamic>?) ??
-        (request.extraParams['rows'] as List<dynamic>?) ??
+  Future<Uint8List> _generateClassCollectionSummary() async {
+    final rowsData = (request.extraParams['rows'] as List<dynamic>?) ??
+        (request.extraParams['summaryRows'] as List<dynamic>?) ??
         (request.extraParams['classes'] as List<dynamic>?);
     if (rowsData == null || rowsData.isEmpty) {
       throw StateError(
-        'Missing or empty summaryRows in extraParams for classCollectionSummary.',
+        'Missing or empty rows in extraParams for classCollectionSummary.',
       );
     }
     final month = request.extraParams['month'] as String? ?? '';
