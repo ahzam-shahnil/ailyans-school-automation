@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "9e58b549-f1e5-4d6a-befa-6f9983c93cd5",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/Users/ahzam/flutter_projects/REA/rebuild/app/architecture.json",
+  "output": "/Users/ahzam/flutter_projects/REA/rebuild/app/architecture-diagram.html",
+  "specification": {
+    "sha256": "e3341864a7e605e265fd6708ad864bd51c6eea3daab05b3e8480b38eddb4130d",
+    "bytes": 6695
+  },
+  "artifact": {
+    "sha256": "4dbd16caa8262e5599ad6a15d32e2252c84063e7de377a2d3c5c06c110222f3f",
+    "bytes": 855987
+  }
+}
