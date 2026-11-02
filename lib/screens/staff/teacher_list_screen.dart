@@ -414,71 +414,77 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
 
         const SizedBox(width: AppSpacing.md),
 
-        // Right Actions (Unconstrained Row)
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton.icon(
-              onPressed: () => context.go('/staff/teachers/new'),
-              icon: const Icon(Icons.add, size: 14),
-              label: const Text(
-                'Add New Teacher (Ctrl+N)',
-                style: TextStyle(fontSize: 12),
-              ),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                minimumSize: const Size(0, 36),
-              ),
+        // Right Actions (Horizontally scrollable Flexible to prevent overflow)
+        Flexible(
+          fit: FlexFit.loose,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/staff/teachers/new'),
+                  icon: const Icon(Icons.add, size: 14),
+                  label: const Text(
+                    'Add New Teacher (Ctrl+N)',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    minimumSize: const Size(0, 36),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: () => context.go('/staff/salary'),
+                  icon: const Icon(Icons.payments_outlined, size: 16),
+                  label: const Text(
+                    'Monthly Payroll',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 36),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: _showMonthSelectionDialog,
+                  icon: const Icon(Icons.calendar_month, size: 16),
+                  label: const Text(
+                    'Attendance Register',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 36),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton(
+                  onPressed: () => _showPhaseEStub(context, 'Export CSV'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 36),
+                  ),
+                  child: const Text('Export CSV', style: TextStyle(fontSize: 12)),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: () => _showPhaseEStub(context, 'Print Roster'),
+                  icon: const Icon(Icons.print_outlined, size: 14),
+                  label: const Text(
+                    'Print Faculty Roster',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 36),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.sm),
-            OutlinedButton.icon(
-              onPressed: () => context.go('/staff/salary'),
-              icon: const Icon(Icons.payments_outlined, size: 16),
-              label: const Text(
-                'Monthly Payroll',
-                style: TextStyle(fontSize: 12),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                minimumSize: const Size(0, 36),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            OutlinedButton.icon(
-              onPressed: _showMonthSelectionDialog,
-              icon: const Icon(Icons.calendar_month, size: 16),
-              label: const Text(
-                'Attendance Register',
-                style: TextStyle(fontSize: 12),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                minimumSize: const Size(0, 36),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            OutlinedButton(
-              onPressed: () => _showPhaseEStub(context, 'Export CSV'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                minimumSize: const Size(0, 36),
-              ),
-              child: const Text('Export CSV', style: TextStyle(fontSize: 12)),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            OutlinedButton.icon(
-              onPressed: () => _showPhaseEStub(context, 'Print Roster'),
-              icon: const Icon(Icons.print_outlined, size: 14),
-              label: const Text(
-                'Print Faculty Roster',
-                style: TextStyle(fontSize: 12),
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                minimumSize: const Size(0, 36),
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );
