@@ -10,9 +10,17 @@ import 'core/db/database.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
+
+  // Phase F-1: Cloud sync configuration gate (Supabase.initialize wires here in F-4).
+  const bool isCloudSyncConfigured = bool.fromEnvironment(
+    'CLOUD_SYNC_CONFIGURED',
+    defaultValue: false,
+  );
+  // ignore: unused_local_variable
+  const _ = isCloudSyncConfigured;
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    sqfliteFfiInit();
     await windowManager.ensureInitialized();
 
     const windowOptions = WindowOptions(

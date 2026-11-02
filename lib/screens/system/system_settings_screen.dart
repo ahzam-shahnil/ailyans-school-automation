@@ -960,7 +960,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
           ('Database Engine', 'SQLite 3 (WAL Mode)'),
           (
             'Schema Version',
-            'Level ${state.schemaVersion} (Migrations 001-007 applied)',
+            'Level ${state.schemaVersion} (Migrations 001-009 applied)',
           ),
           ('Configured Operators', '${state.operatorCount} active users'),
           ('Database Path', '~/Documents/Ailyans/school_database.db'),

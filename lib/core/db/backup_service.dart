@@ -233,12 +233,12 @@ class BackupService {
         // h. version
         final versionResult = await candDb.rawQuery('PRAGMA user_version');
         final version = (versionResult.first.values.first as int?) ?? 0;
-        if (version > 7) {
+        if (version > 9) {
           return RestoreValidation(
             ok: false,
             candidatePath: filePath,
             failureReason:
-                'Backup is from a newer app version (schema $version > 7)',
+                'Backup is from a newer app version (schema $version > 9)',
           );
         }
 

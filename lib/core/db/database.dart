@@ -34,7 +34,11 @@ class DatabaseService {
   }
 
   Future<Database> _initDatabase() async {
-    sqfliteFfiInit();
+    // FFI is required for desktop. Android/iOS use the same factory backed by
+    // the native sqlite3 library bundled via sqlite3_flutter_libs.
+    if (Platform.isWindows) {
+      sqfliteFfiInit();
+    }
     databaseFactory = databaseFactoryFfi;
 
     final dbPath = await _getDatabasePath();
@@ -63,9 +67,17 @@ class DatabaseService {
   }
 
   /// Locates the portable Documents/Ailyans/ directory across platforms.
+  /// - Android & iOS: <app documents>/Ailyans/school_database.db
   /// - macOS & Linux: ~/Documents/Ailyans/school_database.db
   /// - Windows: %USERPROFILE%\Documents\Ailyans\school_database.db
   Future<String> _getDatabasePath() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      final docsDir = await getApplicationDocumentsDirectory();
+      final dir = Directory(p.join(docsDir.path, 'Ailyans'));
+      if (!await dir.exists()) await dir.create(recursive: true);
+      return p.join(dir.path, 'school_database.db');
+    }
+
     String documentsPath;
 
     if (Platform.isWindows) {

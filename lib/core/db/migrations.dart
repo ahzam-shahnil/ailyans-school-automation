@@ -1,6 +1,32 @@
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+/// Operational tables whose row changes are captured into `_sync_outbox`.
+///
+/// Single source of truth for Phase F-1 trigger creation and the trigger
+/// inventory test.
+const List<String> kSyncedTables = <String>[
+  'Stu_Reg',
+  'Student_Class',
+  'Sibling_Links',
+  'VoucharMas',
+  'VoucharDet',
+  'FeeTransaction',
+  'StuAdv',
+  'AttMas',
+  'AttDet',
+  'TAtt',
+  'Teachers',
+  'TSalMas',
+  'TSalDet',
+  'ExamInfo',
+  'ExamMas',
+  'ExamDet',
+  'SchLeaving',
+  'Books',
+  'app_config',
+];
+
 /// Database schema migration runner.
 /// Loads base DDL on first launch and executes incremental version upgrades.
 class SchemaMigrations {
@@ -11,6 +37,14 @@ class SchemaMigrations {
     if (versionResult.isNotEmpty && versionResult.first.values.isNotEmpty) {
       currentVersion = (versionResult.first.values.first as int?) ?? 0;
     }
+
+    // Ensure app_config table exists for device-local preferences
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_config (
+        config_key TEXT PRIMARY KEY,
+        config_value TEXT
+      );
+    ''');
 
     // Initial schema load (user_version 0 -> 1)
     if (currentVersion == 0) {
@@ -85,13 +119,12 @@ class SchemaMigrations {
       currentVersion = 8;
     }
 
-    // Ensure app_config table exists for device-local preferences
-    await db.execute('''
-      CREATE TABLE IF NOT EXISTS app_config (
-        config_key TEXT PRIMARY KEY,
-        config_value TEXT
-      );
-    ''');
+    // Migration 009: Cloud sync outbox, state, and re-entrancy guarded triggers
+    if (currentVersion < 9) {
+      await applyMigration009(db);
+      await db.execute('PRAGMA user_version = 9');
+      currentVersion = 9;
+    }
   }
 
   /// Loads and executes the initial schema from assets/reference/schema.sql.
@@ -305,6 +338,135 @@ class SchemaMigrations {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_sibling_stu2 ON Sibling_Links(Stu2_RegID)',
     );
+  }
+
+  /// Exact primary-key column(s) used to build `record_pk` for each synced
+  /// table. Composite keys are serialized with JSON, never hyphen-delimited.
+  static const Map<String, List<String>> _syncPkColumns =
+      <String, List<String>>{
+        'Stu_Reg': <String>['Stu_RegID'],
+        'Student_Class': <String>['Stu_RegID', 'ClassID', 'SessionYr'],
+        'Sibling_Links': <String>['LinkID'],
+        'VoucharMas': <String>['VoucherMasID'],
+        'VoucharDet': <String>['VoucharDetID', 'VoucharMasID', 'feeParameterID'],
+        'FeeTransaction': <String>['FeeTransID'],
+        'StuAdv': <String>['StuAdvID'],
+        'AttMas': <String>['ClassID', 'ClassSecID', 'AttDate'],
+        'AttDet': <String>['AttMasID', 'Stu_RegID'],
+        'TAtt': <String>['TeacherID', 'AttDate'],
+        'Teachers': <String>['TeacherID'],
+        'TSalMas': <String>['TeacherID', 'SalMonth'],
+        'TSalDet': <String>['TSalMasID', 'Detail'],
+        'ExamInfo': <String>['ExTermID', 'SessionYR'],
+        'ExamMas': <String>['ExamInfoID', 'Stu_RegID'],
+        'ExamDet': <String>['ExamMasID', 'SubjID'],
+        'SchLeaving': <String>['StuRegID'],
+        'Books': <String>['BookID'],
+        'app_config': <String>['config_key'],
+      };
+
+  /// Builds the `record_pk` SQL expression for [table] using [rowAlias].
+  static String _syncPkExpression(String table, String rowAlias) {
+    final columns = _syncPkColumns[table];
+    if (columns == null || columns.isEmpty) {
+      throw StateError('No sync primary key registered for table $table');
+    }
+    if (columns.length == 1) {
+      return 'CAST($rowAlias.${columns.single} AS TEXT)';
+    }
+    final args = columns
+        .map((column) => "'$column', $rowAlias.$column")
+        .join(', ');
+    return 'json_object($args)';
+  }
+
+  /// Builds one `trg_sync_<table>_<suffix>` capture trigger statement.
+  static String _syncTriggerSql({
+    required String table,
+    required String suffix,
+    required String event,
+    required String pkExpression,
+    required String operation,
+  }) {
+    return '''
+      CREATE TRIGGER IF NOT EXISTS trg_sync_${table}_$suffix
+      AFTER $event ON $table
+      WHEN COALESCE((SELECT is_applying_remote FROM _sync_state WHERE table_name = '__global__' LIMIT 1), 0) = 0
+      BEGIN
+        INSERT INTO _sync_outbox (table_name, record_pk, operation, payload_json, created_at)
+        VALUES ('$table', $pkExpression, '$operation', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+      END
+    ''';
+  }
+
+  /// Migration 009: Creates the cloud-sync outbox/state tables and installs
+  /// AFTER INSERT/UPDATE/DELETE capture triggers for every [kSyncedTables]
+  /// table. All DDL is idempotent so a partially applied migration can retry.
+  static Future<void> applyMigration009(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS _sync_outbox (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        record_pk TEXT NOT NULL,
+        operation TEXT NOT NULL CHECK (operation IN ('UPSERT', 'DELETE')),
+        payload_json TEXT,
+        created_at TEXT NOT NULL,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_sync_outbox_created ON _sync_outbox(created_at)',
+    );
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS _sync_state (
+        table_name TEXT PRIMARY KEY,
+        last_pulled_at TEXT,
+        last_pushed_at TEXT,
+        is_applying_remote INTEGER NOT NULL DEFAULT 0,
+        node_block_start INTEGER,
+        node_block_end INTEGER
+      )
+    ''');
+    await db.rawInsert(
+      "INSERT OR IGNORE INTO _sync_state (table_name, is_applying_remote) "
+      "VALUES ('__global__', 0)",
+    );
+    await db.rawInsert(
+      "INSERT OR IGNORE INTO _sync_state "
+      '(table_name, is_applying_remote, node_block_start, node_block_end) '
+      "VALUES ('__node__', 0, 10000, 19999)",
+    );
+
+    for (final table in kSyncedTables) {
+      await db.execute(
+        _syncTriggerSql(
+          table: table,
+          suffix: 'ai',
+          event: 'INSERT',
+          pkExpression: _syncPkExpression(table, 'NEW'),
+          operation: 'UPSERT',
+        ),
+      );
+      await db.execute(
+        _syncTriggerSql(
+          table: table,
+          suffix: 'au',
+          event: 'UPDATE',
+          pkExpression: _syncPkExpression(table, 'NEW'),
+          operation: 'UPSERT',
+        ),
+      );
+      await db.execute(
+        _syncTriggerSql(
+          table: table,
+          suffix: 'ad',
+          event: 'DELETE',
+          pkExpression: _syncPkExpression(table, 'OLD'),
+          operation: 'DELETE',
+        ),
+      );
+    }
   }
 
   /// Executes a multi-statement SQL script using a transactional batch.
