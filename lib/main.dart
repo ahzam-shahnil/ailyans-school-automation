@@ -7,17 +7,12 @@ import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'core/db/database.dart';
+import 'core/sync/supabase_client.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Phase F-1: Cloud sync configuration gate (Supabase.initialize wires here in F-4).
-  const bool isCloudSyncConfigured = bool.fromEnvironment(
-    'CLOUD_SYNC_CONFIGURED',
-    defaultValue: false,
-  );
-  // ignore: unused_local_variable
-  const _ = isCloudSyncConfigured;
+  // Phase F-1: Cloud sync configuration gate moved below database initialization in F-4a-1.
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
@@ -40,6 +35,10 @@ void main() async {
 
   // Block on database initialization and schema migration
   await DatabaseService.instance.database;
+
+  if (const bool.fromEnvironment('CLOUD_SYNC_CONFIGURED', defaultValue: true)) {
+    SupabaseClientWrapper.init(); // fire-and-forget, catches internally
+  }
 
   runApp(const ProviderScope(child: AilyansApp()));
 }

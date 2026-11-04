@@ -21,6 +21,7 @@ dependencies:
   pdf: ^3.11.0
   printing: ^5.13.0
   file_picker: ^13.1.0
+  supabase_flutter: ^2.5.0
 
 dev_dependencies:
   flutter_test:
