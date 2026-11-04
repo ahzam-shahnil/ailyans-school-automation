@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:school_automation/core/sync/node_id_allocator.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'migrations.dart';
@@ -55,6 +56,18 @@ class DatabaseService {
 
     // Run initial schema load (if PRAGMA user_version == 0) and any pending migrations
     await SchemaMigrations.migrate(db);
+
+    // Phase F-3a: ensure per-device block allocator state.
+    // node_id comes from app_config; default 'windows'. Idempotent.
+    final cfg = await db.query(
+      'app_config',
+      columns: ['config_value'],
+      where: "config_key = 'node_id'",
+    );
+    final nodeId = cfg.isEmpty
+        ? 'windows'
+        : (cfg.first['config_value'] as String);
+    await NodeIdAllocator(openDb: () async => db).configureNodeBlock(nodeId);
 
     // Seed initial development data if Users table is empty
     await DatabaseSeeder.seedIfEmpty(db);

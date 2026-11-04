@@ -60,8 +60,8 @@ void main() {
       );
       expect(node.length, 1);
       expect(node.single['is_applying_remote'], 0);
-      expect(node.single['node_block_start'], 10000);
-      expect(node.single['node_block_end'], 19999);
+      expect(node.single['node_block_start'], 100000);
+      expect(node.single['node_block_end'], 199999);
     },
   );
 

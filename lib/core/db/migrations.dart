@@ -125,6 +125,10 @@ class SchemaMigrations {
       await db.execute('PRAGMA user_version = 9');
       currentVersion = 9;
     }
+
+    // Phase F-3a: converge _sync_state on every boot, including existing v9
+    // databases that predate next_allocated_id. user_version stays 9.
+    await ensureSyncStateColumns(db);
   }
 
   /// Loads and executes the initial schema from assets/reference/schema.sql.
@@ -428,14 +432,17 @@ class SchemaMigrations {
         node_block_end INTEGER
       )
     ''');
+    // Phase F-3a: add next_allocated_id before the seed INSERT references it.
+    await ensureSyncStateColumns(db);
     await db.rawInsert(
       "INSERT OR IGNORE INTO _sync_state (table_name, is_applying_remote) "
       "VALUES ('__global__', 0)",
     );
     await db.rawInsert(
-      "INSERT OR IGNORE INTO _sync_state "
-      '(table_name, is_applying_remote, node_block_start, node_block_end) '
-      "VALUES ('__node__', 0, 10000, 19999)",
+      'INSERT OR IGNORE INTO _sync_state '
+      '(table_name, is_applying_remote, node_block_start, node_block_end, '
+      'next_allocated_id) '
+      "VALUES ('__node__', 0, 100000, 199999, 100000)",
     );
 
     for (final table in kSyncedTables) {
@@ -467,6 +474,41 @@ class SchemaMigrations {
         ),
       );
     }
+  }
+
+  /// Phase F-3a: idempotently ensures `_sync_state.next_allocated_id` exists
+  /// and converges the legacy `__node__` block (10000..19999) to
+  /// 100000..199999. Called from applyMigration009 before its seed INSERTs and
+  /// from migrate() on every boot, so existing v9 databases converge without a
+  /// version bump.
+  static Future<void> ensureSyncStateColumns(Database db) async {
+    // Step 1: add next_allocated_id column if absent (idempotent).
+    final cols = await db.rawQuery("PRAGMA table_info('_sync_state')");
+    if (!cols.any((c) => c['name'] == 'next_allocated_id')) {
+      await db.execute(
+        'ALTER TABLE _sync_state ADD COLUMN next_allocated_id INTEGER',
+      );
+    }
+
+    // Step 2: converge the __node__ row for existing F-1 DBs whose block is
+    // still 10000..19999. WHERE node_block_start < 100000 makes this a no-op
+    // on any DB already at 100000..199999.
+    await db.rawUpdate(
+      "UPDATE _sync_state SET "
+      "  node_block_start = 100000, "
+      "  node_block_end = 199999, "
+      "  next_allocated_id = COALESCE(next_allocated_id, 100000) "
+      "WHERE table_name = '__node__' "
+      "  AND (node_block_start IS NULL OR node_block_start < 100000)",
+    );
+
+    // Step 3: seed next_allocated_id for a fresh DB where the __node__ row
+    // exists but next_allocated_id is still NULL (happens when
+    // applyMigration009's seed INSERT ran before this helper on first install).
+    await db.rawUpdate(
+      "UPDATE _sync_state SET next_allocated_id = COALESCE(node_block_start, 100000) "
+      "WHERE table_name = '__node__' AND next_allocated_id IS NULL",
+    );
   }
 
   /// Executes a multi-statement SQL script using a transactional batch.
