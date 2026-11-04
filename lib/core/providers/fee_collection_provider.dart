@@ -800,6 +800,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
             'Date': submissionDateStr,
             'DepositedBy': 'System',
             'Detail': 'Fee offset for voucher ${receipt.voucherMasId}',
+            'VoucherMasID': receipt.voucherMasId,
           });
         }
       });

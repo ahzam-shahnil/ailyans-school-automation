@@ -157,7 +157,8 @@ class NodeIdAllocator {
 }
 
 /// Append-only fee ledger reconciliation. Deterministically recomputes
-/// VoucharMas.PaidAmt and IsPaid from SUM(FeeTransaction.PaidAmount), so two
+/// VoucharMas.PaidAmt and IsPaid from cash received (FeeTransaction) plus
+/// advance deductions (negative StuAdv rows linked by VoucherMasID), so two
 /// devices that each collected an offline partial payment never overwrite each
 /// other on sync (LWW is never applied to money).
 class LedgerReconciler {
@@ -165,12 +166,24 @@ class LedgerReconciler {
     DatabaseExecutor db,
     String voucherMasId,
   ) async {
-    final sumRows = await db.rawQuery(
+    // Cash received via FeeTransaction.
+    final cashRows = await db.rawQuery(
       'SELECT COALESCE(SUM(PaidAmount), 0) AS totalPaid '
       'FROM FeeTransaction WHERE VoucharNo = ?',
       [voucherMasId],
     );
-    final totalPaid = (sumRows.first['totalPaid'] as num?)?.toInt() ?? 0;
+    final cashPaid = (cashRows.first['totalPaid'] as num?)?.toInt() ?? 0;
+
+    // Advance deduction: negative AdvAmount rows linked by VoucherMasID.
+    // SUM(-AdvAmount) turns -500 into +500 as contribution to PaidAmt.
+    final advRows = await db.rawQuery(
+      'SELECT COALESCE(SUM(-AdvAmount), 0) AS advancePaid '
+      'FROM StuAdv WHERE VoucherMasID = ? AND AdvAmount < 0',
+      [voucherMasId],
+    );
+    final advancePaid = (advRows.first['advancePaid'] as num?)?.toInt() ?? 0;
+
+    final totalPaid = cashPaid + advancePaid;
 
     final vmRows = await db.rawQuery(
       'SELECT SubTotal, COALESCE(Discount, 0) AS disc, IsPaid '

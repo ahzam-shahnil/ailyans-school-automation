@@ -47,7 +47,7 @@ void main() {
           final version = (await freshDb.rawQuery(
             'PRAGMA user_version',
           )).first.values.first;
-          expect(version, 9);
+          expect(version, 10);
 
           final node = await freshDb.query(
             '_sync_state',
@@ -78,6 +78,12 @@ void main() {
               node_block_end INTEGER
             )
           ''');
+          // Migration 010 alters StuAdv, so the simulated v9 DB must contain it.
+          await legacyDb.execute('''
+            CREATE TABLE StuAdv (
+              StuAdvID INTEGER PRIMARY KEY
+            )
+          ''');
           await legacyDb.rawInsert(
             "INSERT INTO _sync_state (table_name, is_applying_remote, "
             "node_block_start, node_block_end) VALUES "
@@ -95,7 +101,7 @@ void main() {
           final version = (await legacyDb.rawQuery(
             'PRAGMA user_version',
           )).first.values.first;
-          expect(version, 9);
+          expect(version, 10);
 
           final node = await legacyDb.query(
             '_sync_state',
@@ -273,85 +279,93 @@ void main() {
   );
 
   test(
-    'LedgerReconciler: append-only sum from two devices transitions IsPaid',
+    'LedgerReconciler: cash + advance both contribute; NULL VoucherMasID '
+    'deduction is invisible',
     () async {
+      final db = await databaseFactoryFfi.openDatabase(
+        inMemoryDatabasePath,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
+      await SchemaMigrations.migrate(db);
+
+      // Fixture: a voucher with SubTotal 1920, no discount.
       await db.insert('VoucharMas', <String, Object?>{
-        'VoucherMasID': 'TEST-1',
-        'SubTotal': 1000,
+        'VoucherMasID': 'TEST-F3C',
+        'SubTotal': 1920,
         'Discount': 0,
         'IsPaid': 'N',
         'PaidAmt': 0,
       });
+
+      // Part 1 — cash only (1420, no advance yet).
       await db.insert('FeeTransaction', <String, Object?>{
         'FeeTransID': 999001,
-        'VoucharNo': 'TEST-1',
-        'PaidAmount': 500,
+        'VoucharNo': 'TEST-F3C',
+        'PaidAmount': 1420,
+        'TotalAmount': 1920,
       });
+      var result = await LedgerReconciler.reconcileVoucher(db, 'TEST-F3C');
+      expect(result.totalPaid, 1420);
+      expect(result.isPaid, 'N');
 
-      final first = await LedgerReconciler.reconcileVoucher(db, 'TEST-1');
-      expect(first.totalPaid, 500);
-      expect(first.isPaid, 'N');
-
-      var voucher = await db.query(
-        'VoucharMas',
-        where: 'VoucherMasID = ?',
-        whereArgs: ['TEST-1'],
-      );
-      expect(voucher.single['PaidAmt'], 500);
-      expect(voucher.single['IsPaid'], 'N');
-
-      await db.insert('FeeTransaction', <String, Object?>{
-        'FeeTransID': 999002,
-        'VoucharNo': 'TEST-1',
-        'PaidAmount': 500,
+      // Part 2 — advance deduction linked by VoucherMasID (-500 -> +500).
+      await db.insert('StuAdv', <String, Object?>{
+        'StuAdvID': 999002,
+        'StuRegID': 1,
+        'AdvAmount': -500,
+        'MOP': 'Advance Deduction',
+        'VoucherMasID': 'TEST-F3C',
       });
+      result = await LedgerReconciler.reconcileVoucher(db, 'TEST-F3C');
+      expect(result.totalPaid, 1920);
+      expect(result.isPaid, 'Y');
 
-      final second = await LedgerReconciler.reconcileVoucher(db, 'TEST-1');
-      expect(second.totalPaid, 1000);
-      expect(second.isPaid, 'Y');
-
-      voucher = await db.query(
-        'VoucharMas',
-        where: 'VoucherMasID = ?',
-        whereArgs: ['TEST-1'],
+      // Part 3 — a deduction with NULL VoucherMasID must NOT be counted.
+      await db.rawUpdate(
+        'UPDATE StuAdv SET VoucherMasID = NULL WHERE StuAdvID = 999002',
       );
-      expect(voucher.single['PaidAmt'], 1000);
-      expect(voucher.single['IsPaid'], 'Y');
+      result = await LedgerReconciler.reconcileVoucher(db, 'TEST-F3C');
+      expect(result.totalPaid, 1420);
+      expect(result.isPaid, 'N');
 
-      // Over-discount edge: clamped net is 0, so no payments marks paid.
+      await db.close();
+    },
+  );
+
+  test(
+    'LedgerReconciler: over-discount clamps to 0, preserves O for rolled-over',
+    () async {
+      final db = await databaseFactoryFfi.openDatabase(
+        inMemoryDatabasePath,
+        options: OpenDatabaseOptions(singleInstance: false),
+      );
+      await SchemaMigrations.migrate(db);
+
+      // Over-discount: Discount > SubTotal -> clampedNet=0 -> 'Y' on 0 paid.
       await db.insert('VoucharMas', <String, Object?>{
-        'VoucherMasID': 'TEST-2',
+        'VoucherMasID': 'TEST-OVER',
         'SubTotal': 1000,
         'Discount': 1500,
         'IsPaid': 'N',
         'PaidAmt': 0,
       });
-      final overDiscount = await LedgerReconciler.reconcileVoucher(
-        db,
-        'TEST-2',
-      );
-      expect(overDiscount.totalPaid, 0);
-      expect(overDiscount.isPaid, 'Y');
+      var r = await LedgerReconciler.reconcileVoucher(db, 'TEST-OVER');
+      expect(r.totalPaid, 0);
+      expect(r.isPaid, 'Y');
 
-      // 'O' preservation: no payments keeps the opening status.
+      // Rolled-over-unpaid: IsPaid='O', no payments -> stays 'O'.
       await db.insert('VoucharMas', <String, Object?>{
-        'VoucherMasID': 'TEST-3',
+        'VoucherMasID': 'TEST-ROLLED',
         'SubTotal': 1000,
         'Discount': 0,
         'IsPaid': 'O',
         'PaidAmt': 0,
       });
-      final opening = await LedgerReconciler.reconcileVoucher(db, 'TEST-3');
-      expect(opening.totalPaid, 0);
-      expect(opening.isPaid, 'O');
+      r = await LedgerReconciler.reconcileVoucher(db, 'TEST-ROLLED');
+      expect(r.totalPaid, 0);
+      expect(r.isPaid, 'O');
 
-      voucher = await db.query(
-        'VoucharMas',
-        where: 'VoucherMasID = ?',
-        whereArgs: ['TEST-3'],
-      );
-      expect(voucher.single['PaidAmt'], 0);
-      expect(voucher.single['IsPaid'], 'O');
+      await db.close();
     },
   );
 }

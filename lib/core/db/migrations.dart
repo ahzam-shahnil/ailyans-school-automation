@@ -126,8 +126,18 @@ class SchemaMigrations {
       currentVersion = 9;
     }
 
+    // Migration 010 (Phase F-3c-1): StuAdv.VoucherMasID for advance-deduction
+    // reconciliation. Deduction rows (AdvAmount < 0) link to the voucher they
+    // paid. Fixes LedgerReconciler under-reporting PaidAmt by advanceApplied.
+    if (currentVersion < 10) {
+      await applyMigration010(db);
+      await db.execute('PRAGMA user_version = 10');
+      currentVersion = 10;
+    }
+
     // Phase F-3a: converge _sync_state on every boot, including existing v9
-    // databases that predate next_allocated_id. user_version stays 9.
+    // databases that predate next_allocated_id. user_version stays at its
+    // current value; F-3c-1 bumps it to 10 above.
     await ensureSyncStateColumns(db);
   }
 
@@ -508,6 +518,20 @@ class SchemaMigrations {
     await db.rawUpdate(
       "UPDATE _sync_state SET next_allocated_id = COALESCE(node_block_start, 100000) "
       "WHERE table_name = '__node__' AND next_allocated_id IS NULL",
+    );
+  }
+
+  /// Migration 010 (Phase F-3c-1): Adds `StuAdv.VoucherMasID` so negative
+  /// advance-deduction rows can be linked back to the voucher they paid.
+  /// Nullable TEXT; positive advance deposits remain NULL until consumed.
+  static Future<void> applyMigration010(Database db) async {
+    // Idempotent column guard (live DB and fresh install both converge).
+    final cols = await db.rawQuery("PRAGMA table_info('StuAdv')");
+    if (!cols.any((c) => c['name'] == 'VoucherMasID')) {
+      await db.execute('ALTER TABLE StuAdv ADD COLUMN VoucherMasID TEXT');
+    }
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_stuadv_voucher ON StuAdv(VoucherMasID)',
     );
   }
 

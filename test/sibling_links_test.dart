@@ -92,12 +92,12 @@ void main() {
     );
 
     // ─────────────────────────────────────────────────────────────────────────
-    // b) Migration 009 sets user_version = 9
+    // b) Migration 010 sets user_version = 10
     // ─────────────────────────────────────────────────────────────────────────
-    test('b) Migration 009 sets user_version = 9', () async {
+    test('b) Migration 010 sets user_version = 10', () async {
       final res = await db.rawQuery('PRAGMA user_version');
       final version = res.first.values.first as int;
-      expect(version, 9);
+      expect(version, 10);
     });
 
     // ─────────────────────────────────────────────────────────────────────────
