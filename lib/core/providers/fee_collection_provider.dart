@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/fee_receipt_view.dart';
 import '../db/database.dart';
+import 'package:school_automation/core/sync/node_id_allocator.dart';
 import 'clock_provider.dart';
 import 'shell_metadata_provider.dart';
 import '../../core/utils/fee_head_display.dart';
@@ -733,43 +734,27 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           );
         }
 
-        final currentRow = currentRows.first;
-        final subTotal =
-            (currentRow['SubTotal'] as num?)?.toInt() ?? receipt.subtotal;
-        final discount =
-            (currentRow['Discount'] as num?)?.toInt() ?? receipt.discount;
-        final prevPaid = (currentRow['PrevPaid'] as num?)?.toInt() ?? 0;
-
-        final newTotalPaid = prevPaid + paidAmountNow;
-        final netBilled = subTotal - discount;
-        final remainingBalance = netBilled - newTotalPaid;
-
-        final isPaidFlag = remainingBalance <= 0 ? 'Y' : 'N';
-
-        // 1. UPDATE VoucharMas — PaidAmt = newTotalPaid; IsPaid = 'Y' if remaining <= 0, else 'N'
+        // 1. UPDATE VoucharMas — PaidDate and BankID (reconciler sets PaidAmt and IsPaid)
         await txn.rawUpdate(
           '''
           UPDATE VoucharMas
-          SET IsPaid = ?,
-              PaidAmt = ?,
-              PaidDate = ?,
+          SET PaidDate = ?,
               BankID = ?
           WHERE VoucherMasID = ?
           ''',
           [
-            isPaidFlag,
-            newTotalPaid,
             submissionDateStr,
             state.selectedBankId,
             receipt.voucherMasId,
           ],
         );
 
-        // 2. Fetch next FeeTransID (MAX + 1)
-        final maxTrans = await txn.rawQuery(
-          'SELECT COALESCE(MAX(FeeTransID), 0) + 1 AS nextId FROM FeeTransaction',
+        // 2. Fetch next FeeTransID via allocator
+        final nextTransId = await NodeIdAllocator.allocateInTransaction(
+          txn,
+          tableName: 'FeeTransaction',
+          pkColumn: 'FeeTransID',
         );
-        final nextTransId = (maxTrans.first['nextId'] as num).toInt();
 
         // 3. INSERT INTO FeeTransaction (cash trail only — no advance in bank record)
         final detailStr = state.remarks.trim().isNotEmpty
@@ -788,10 +773,11 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
 
         // 4. Deduct advance from StuAdv (negative AdvAmount row = deduction)
         if (advanceApplied > 0) {
-          final maxAdv = await txn.rawQuery(
-            'SELECT COALESCE(MAX(StuAdvID), 0) + 1 AS nextId FROM StuAdv',
+          final nextAdvId = await NodeIdAllocator.allocateInTransaction(
+            txn,
+            tableName: 'StuAdv',
+            pkColumn: 'StuAdvID',
           );
-          final nextAdvId = (maxAdv.first['nextId'] as num).toInt();
           await txn.insert('StuAdv', {
             'StuAdvID': nextAdvId,
             'StuRegID': receipt.stuRegId,
@@ -803,6 +789,9 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
             'VoucherMasID': receipt.voucherMasId,
           });
         }
+
+        // 5. Reconcile voucher ledger to compute PaidAmt and IsPaid from transactions
+        await LedgerReconciler.reconcileVoucher(txn, receipt.voucherMasId);
       });
 
       // Clear receipt state on successful post

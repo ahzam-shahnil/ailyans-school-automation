@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../db/database.dart';
+import 'package:school_automation/core/sync/node_id_allocator.dart';
 
 /// Data model for a canonical student sibling relationship row.
 class SiblingLink {
@@ -73,20 +74,23 @@ class SiblingLinksNotifier extends StateNotifier<List<SiblingLink>> {
     if (a == b) return false;
     final lo = a < b ? a : b;
     final hi = a < b ? b : a;
-    final db = await DatabaseService.instance.database;
-    final nextRow = await db.rawQuery(
-      'SELECT COALESCE(MAX(LinkID), 0) + 1 AS nextId FROM Sibling_Links',
-    );
-    final nextId = (nextRow.first['nextId'] as num?)?.toInt() ?? 1;
     final now = DateTime.now().toIso8601String();
+    final db = await DatabaseService.instance.database;
     try {
-      await db.rawInsert(
-        'INSERT INTO Sibling_Links '
-        '(LinkID, Stu1_RegID, Stu2_RegID, Relation, LinkedBy, LinkedOn) '
-        'VALUES (?, ?, ?, ?, ?, ?)',
-        [nextId, lo, hi, relation, linkedBy, now],
-      );
-      return true;
+      return await db.transaction<bool>((txn) async {
+        final nextId = await NodeIdAllocator.allocateInTransaction(
+          txn,
+          tableName: 'Sibling_Links',
+          pkColumn: 'LinkID',
+        );
+        await txn.rawInsert(
+          'INSERT INTO Sibling_Links '
+          '(LinkID, Stu1_RegID, Stu2_RegID, Relation, LinkedBy, LinkedOn) '
+          'VALUES (?, ?, ?, ?, ?, ?)',
+          [nextId, lo, hi, relation, linkedBy, now],
+        );
+        return true;
+      });
     } on DatabaseException catch (e) {
       if (e.isUniqueConstraintError()) return false;
       rethrow;

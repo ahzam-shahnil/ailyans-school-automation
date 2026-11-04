@@ -466,7 +466,13 @@ void main() {
       },
     );
 
-    test('10. SQLite integration: submitStudentAdmission creates Stu_Reg & Student_Class with MAX(ID)+1', () async {
+    test('10. SQLite integration: submitStudentAdmission creates Stu_Reg & Student_Class with NodeIdAllocator block (400000)', () async {
+      await db.rawUpdate(
+        "UPDATE _sync_state SET node_block_start = 400000, "
+        "node_block_end = 499999, next_allocated_id = 400000 "
+        "WHERE table_name = '__node__'",
+      );
+
       final draft = WizardDraft()
         ..nameFirst = 'Ahmad'
         ..nameLast = 'Rashid'
@@ -479,13 +485,13 @@ void main() {
         ..remarks = 'Admitted under general merit.';
 
       final newId = await submitStudentAdmission(draft);
-      expect(newId, 4421);
+      expect(newId, 400000);
 
       // Verify Stu_Reg row (including verbatim typo Remarls)
       final studentRows = await db.query(
         'Stu_Reg',
         where: 'Stu_RegID = ?',
-        whereArgs: [4421],
+        whereArgs: [400000],
       );
       expect(studentRows.length, 1);
       final student = studentRows.first;
@@ -501,7 +507,7 @@ void main() {
       final classRows = await db.query(
         'Student_Class',
         where: 'Stu_RegID = ?',
-        whereArgs: [4421],
+        whereArgs: [400000],
       );
       expect(classRows.length, 1);
       final enrollment = classRows.first;

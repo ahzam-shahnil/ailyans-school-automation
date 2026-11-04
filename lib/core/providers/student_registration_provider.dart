@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../repositories/photo_repository.dart';
 import '../db/database.dart';
+import 'package:school_automation/core/sync/node_id_allocator.dart';
 import 'clock_provider.dart';
 
 /// Data draft holding all in-progress student admission form state.
@@ -590,11 +591,12 @@ Future<int> submitStudentAdmission(
   final resolvedSession = await _resolveActiveSession(db, override: sessionYr);
 
   return await db.transaction<int>((txn) async {
-    // 1. Compute nextStuRegId = MAX(Stu_RegID) + 1 (NOT AUTOINCREMENT)
-    final maxRegResult = await txn.rawQuery(
-      'SELECT COALESCE(MAX(Stu_RegID), 0) + 1 as nextId FROM Stu_Reg',
+    // 1. Allocate nextStuRegId via NodeIdAllocator
+    final nextStuRegId = await NodeIdAllocator.allocateInTransaction(
+      txn,
+      tableName: 'Stu_Reg',
+      pkColumn: 'Stu_RegID',
     );
-    final nextStuRegId = (maxRegResult.first['nextId'] as int?) ?? 1;
 
     // 2. Compute nextRollNo for Class & Section in resolved session
     int nextRollNo = 1;
@@ -710,10 +712,11 @@ Future<int> submitStudentAdmission(
       if (nextStuRegId == siblingId) continue;
       final lo = nextStuRegId < siblingId ? nextStuRegId : siblingId;
       final hi = nextStuRegId < siblingId ? siblingId : nextStuRegId;
-      final nextLinkRow = await txn.rawQuery(
-        'SELECT COALESCE(MAX(LinkID), 0) + 1 AS nextId FROM Sibling_Links',
+      final linkId = await NodeIdAllocator.allocateInTransaction(
+        txn,
+        tableName: 'Sibling_Links',
+        pkColumn: 'LinkID',
       );
-      final linkId = (nextLinkRow.first['nextId'] as num?)?.toInt() ?? 1;
       await txn.rawInsert(
         'INSERT OR IGNORE INTO Sibling_Links '
         '(LinkID, Stu1_RegID, Stu2_RegID, Relation, LinkedBy, LinkedOn) '
