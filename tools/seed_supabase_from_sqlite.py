@@ -45,6 +45,8 @@ TABLE_SPECS = [
     ("TSalMas", "TeacherID,SalMonth"),
     ("ExamMas", "ExamInfoID,Stu_RegID"),
     ("SchLeaving", "StuRegID"),
+    # F-3c-2: VoucherMasID added to Supabase DDL. The seeder reads the column
+    # via SELECT * and POSTs it. No code change here.
     ("StuAdv", "StuAdvID"),
     ("VoucharDet", "VoucharDetID,VoucharMasID,feeParameterID"),
     ("TSalDet", "TSalMasID,Detail"),

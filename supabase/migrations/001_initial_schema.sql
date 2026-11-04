@@ -117,9 +117,13 @@ CREATE TABLE IF NOT EXISTS "StuAdv" (
     "Date" TEXT,
     "DepositedBy" TEXT,
     "Detail" TEXT,
+    "VoucherMasID" TEXT,
     "updated_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT "StuAdv_pkey" PRIMARY KEY ("StuAdvID")
 );
+
+CREATE INDEX IF NOT EXISTS "idx_stuadv_voucher"
+  ON "StuAdv" ("VoucherMasID");
 
 CREATE TABLE IF NOT EXISTS "AttMas" (
     "AttMasID" BIGINT,
@@ -545,6 +549,7 @@ BEGIN
         "Date" = EXCLUDED."Date",
         "DepositedBy" = EXCLUDED."DepositedBy",
         "Detail" = EXCLUDED."Detail",
+        "VoucherMasID" = EXCLUDED."VoucherMasID",
         "updated_at" = now();
 END;
 $$;
