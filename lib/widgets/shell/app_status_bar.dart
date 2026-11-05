@@ -16,52 +16,133 @@ class AppStatusBar extends ConsumerWidget {
 
     return Container(
       height: 28.0,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       decoration: const BoxDecoration(
         color: AppColors.surfaceSubtle,
         border: Border(
           top: BorderSide(color: AppColors.borderDefault, width: 1.0),
         ),
       ),
-      child: Row(
-        children: [
-          // 1. Left: DB Connection Status
-          Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final compact = width < 480.0;
+          final horizontalPadding = compact ? AppSpacing.xs : AppSpacing.md;
+
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+            child: compact
+                ? _buildCompactRow(metadata, metadataAsync.hasError)
+                : _buildFullRow(
+                    context,
+                    metadata,
+                    metadataAsync.hasError,
+                    showShortcuts: width >= 720.0,
+                    maxLeftWidth: width * 0.45,
+                  ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Below 480px: only the DB status dot and a shortened session chip.
+  Widget _buildCompactRow(ShellMetadata metadata, bool hasError) {
+    final dotColor = hasError
+        ? AppColors.statusErrorText
+        : AppColors.statusSuccessText;
+
+    return Row(
+      children: [
+        Tooltip(
+          message: hasError
+              ? 'DB: SDB_Ailyans.db (Offline)'
+              : 'DB: SDB_Ailyans.db (Online)',
+          child: Icon(Icons.circle, size: 8.0, color: dotColor),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            border: Border.all(color: AppColors.borderDefault),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+          ),
+          child: Text(
+            _shortSessionYear(metadata.sessionYear),
+            maxLines: 1,
+            style: AppTypography.monospace.copyWith(
+              fontSize: 10.0,
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Above 480px: DB label, branch/session, and (above 720px) shortcuts.
+  Widget _buildFullRow(
+    BuildContext context,
+    ShellMetadata metadata,
+    bool hasError, {
+    required bool showShortcuts,
+    required double maxLeftWidth,
+  }) {
+    final dotColor = hasError
+        ? AppColors.statusErrorText
+        : AppColors.statusSuccessText;
+
+    return Row(
+      children: [
+        // 1. Left: DB Connection Status
+        ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxLeftWidth),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 8.0,
                 height: 8.0,
-                decoration: const BoxDecoration(
-                  color: AppColors.statusSuccessText,
+                decoration: BoxDecoration(
+                  color: dotColor,
                   shape: BoxShape.circle,
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              Text(
-                'DB: SDB_Ailyans.db (Online)',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 11.0,
+              Flexible(
+                child: Text(
+                  'DB: SDB_Ailyans.db (Online)',
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 11.0,
+                  ),
                 ),
               ),
             ],
           ),
+        ),
 
-          Expanded(
-            child: Center(
-              child: Text(
-                'Branch: ${metadata.branchName} | Session: ${metadata.sessionYear}',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 11.0,
-                ),
-                overflow: TextOverflow.ellipsis,
+        Expanded(
+          child: Center(
+            child: Text(
+              'Branch: ${metadata.branchName} | Session: ${metadata.sessionYear}',
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 11.0,
               ),
             ),
           ),
+        ),
 
-          // 3. Right: Keyboard Shortcuts Quick Reference Button
+        // 3. Right: Keyboard Shortcuts Quick Reference Button
+        if (showShortcuts)
           InkWell(
             onTap: () => _showShortcutsDialog(context),
             borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -91,9 +172,29 @@ class AppStatusBar extends ConsumerWidget {
               ),
             ),
           ),
-        ],
-      ),
+      ],
     );
+  }
+
+  /// Shortens `2017-2018` -> `17-18` and `2026-27` -> `26-27`.
+  String _shortSessionYear(String sessionYear) {
+    final value = sessionYear.trim();
+    if (value.isEmpty) return '--';
+
+    final parts = value.split('-');
+    if (parts.length >= 2) {
+      final start = parts.first;
+      final end = parts[1];
+      final startShort = start.length >= 2
+          ? start.substring(start.length - 2)
+          : start;
+      final endShort = end.length >= 2 ? end.substring(end.length - 2) : end;
+      if (startShort.isNotEmpty && endShort.isNotEmpty) {
+        return '$startShort-$endShort';
+      }
+    }
+
+    return value.length <= 5 ? value : value.substring(value.length - 5);
   }
 
   void _showShortcutsDialog(BuildContext context) {

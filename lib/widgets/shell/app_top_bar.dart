@@ -107,35 +107,102 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
 
     return Container(
       height: 64.0,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
       decoration: const BoxDecoration(
         color: AppColors.surfaceRaised,
         border: Border(
           bottom: BorderSide(color: AppColors.borderDefault, width: 1.0),
         ),
       ),
-      child: Row(
-        children: [
-          // 1. Left: Sidebar Toggle, Branch Selector Pill, Breadcrumbs
-          _buildLeftSection(context, ref, metadata, breadcrumb),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final compact = width < 720.0;
 
-          const SizedBox(width: AppSpacing.md),
+          // Progressive disclosure: the breadcrumb and profile text are the
+          // first things to go, so the search field and session badge keep
+          // their space instead of being crushed into a 60px sliver.
+          final showBreadcrumb = width >= 1000.0;
+          final showBranchLabel = width >= 720.0;
+          final showUserText = width >= 1100.0;
+          final showBell = width >= 620.0;
+          final showDivider = width >= 900.0;
 
-          // 2. Center: Search Input Pill (up to 360px centered)
-          Expanded(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360.0),
-                child: ClipRect(child: _buildSearchPill(context)),
+          final horizontalPadding = width < 600.0
+              ? AppSpacing.xs
+              : AppSpacing.md;
+          final gap = compact ? AppSpacing.xs : AppSpacing.md;
+
+          final searchPill = _buildSearchPill(
+            context,
+            showShortcutHint: width >= 820.0,
+          );
+
+          final left = _buildLeftSection(
+            context,
+            ref,
+            metadata,
+            breadcrumb,
+            showBranchLabel: showBranchLabel,
+            showBreadcrumb: showBreadcrumb,
+          );
+
+          final right = _buildRightSection(
+            context,
+            ref,
+            metadata,
+            session,
+            showUserText: showUserText,
+            showBell: showBell,
+            showDivider: showDivider,
+          );
+
+          // Safety net for very narrow surfaces (e.g. a shell that still shows
+          // its sidebar): scroll the bar rather than overflow it. The 420
+          // breakpoint keeps the search pill above its icon + padding floor.
+          if (width < 420.0) {
+            return Padding(
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    left,
+                    SizedBox(width: gap),
+                    SizedBox(width: 180.0, child: searchPill),
+                    SizedBox(width: gap),
+                    right,
+                  ],
+                ),
               ),
+            );
+          }
+
+          return Padding(
+            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+            child: Row(
+              children: [
+                // 1. Left: Sidebar Toggle, Branch Selector Pill, Breadcrumbs
+                left,
+                SizedBox(width: gap),
+
+                // 2. Center: Search Input Pill (up to 360px centered)
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 360.0),
+                      child: ClipRect(child: searchPill),
+                    ),
+                  ),
+                ),
+                SizedBox(width: gap),
+
+                // 3. Right: Session Badge, Notification Bell, Divider, User Menu
+                right,
+              ],
             ),
-          ),
-
-          const SizedBox(width: AppSpacing.md),
-
-          // 3. Right: Session Badge, Notification Bell, Divider, User Menu
-          _buildRightSection(context, ref, metadata, session),
-        ],
+          );
+        },
       ),
     );
   }
@@ -144,8 +211,10 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
     BuildContext context,
     WidgetRef ref,
     ShellMetadata metadata,
-    String breadcrumb,
-  ) {
+    String breadcrumb, {
+    required bool showBranchLabel,
+    required bool showBreadcrumb,
+  }) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -153,36 +222,47 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
           icon: const Icon(Icons.menu, size: 20.0),
           color: AppColors.textPrimary,
           tooltip: 'Toggle Sidebar',
+          visualDensity: VisualDensity.compact,
           onPressed: () {
             ref.read(sidebarExpandedProvider.notifier).update((v) => !v);
           },
         ),
-        const SizedBox(width: AppSpacing.xs),
+        const SizedBox(width: AppSpacing.xxs),
 
         // Branch Selector Pill
-        _buildBranchPill(context, ref, metadata),
-
-        const SizedBox(width: AppSpacing.md),
+        _buildBranchPill(context, ref, metadata, showLabel: showBranchLabel),
 
         // Contextual Breadcrumbs
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth:
-                WidgetsBinding.instance.runtimeType.toString().contains('Test')
-                ? 140.0
-                : 240.0,
+        if (showBreadcrumb) ...[
+          const SizedBox(width: AppSpacing.md),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth:
+                  WidgetsBinding.instance.runtimeType.toString().contains(
+                    'Test',
+                  )
+                  ? 140.0
+                  : 240.0,
+            ),
+            child: Text(
+              breadcrumb,
+              maxLines: 1,
+              softWrap: false,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          child: Text(
-            breadcrumb,
-            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
+        ],
       ],
     );
   }
 
-  Widget _buildSearchPill(BuildContext context) {
+  Widget _buildSearchPill(
+    BuildContext context, {
+    required bool showShortcutHint,
+  }) {
     return Container(
       height: 38.0,
       decoration: BoxDecoration(
@@ -191,54 +271,72 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
         borderRadius: BorderRadius.circular(AppRadius.full),
       ),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      child: Row(
-        children: [
-          const Icon(Icons.search, size: 18.0, color: AppColors.textMuted),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: TextField(
-              controller: _searchController,
-              focusNode: _effectiveFocusNode,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (value) {
-                final query = value.trim();
-                if (query.isNotEmpty) {
-                  context.go('/search?q=${Uri.encodeComponent(query)}');
-                }
-              },
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textPrimary,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Search students, staff, vouchers...',
-                hintStyle: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textMuted,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Drop the hint and then the shortcut chip before the field itself
+          // has to give up any room; the icon + field always survive.
+          final showHint = constraints.maxWidth >= 150.0;
+          final showShortcutChip =
+              showShortcutHint && constraints.maxWidth >= 190.0;
+
+          return Row(
+            children: [
+              const Icon(Icons.search, size: 18.0, color: AppColors.textMuted),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: _effectiveFocusNode,
+                  textInputAction: TextInputAction.search,
+                  maxLines: 1,
+                  onSubmitted: (value) {
+                    final query = value.trim();
+                    if (query.isNotEmpty) {
+                      context.go('/search?q=${Uri.encodeComponent(query)}');
+                    }
+                  },
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: showHint
+                        ? 'Search students, staff, vouchers...'
+                        : null,
+                    hintStyle: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
+                    isDense: true,
+                    filled: false,
+                  ),
                 ),
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8.0),
-                isDense: true,
-                filled: false,
               ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 2.0),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSubtle,
-              border: Border.all(color: AppColors.borderDefault),
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Text(
-              'Ctrl+K',
-              style: AppTypography.monospace.copyWith(
-                fontSize: 10.0,
-                color: AppColors.textMuted,
-              ),
-            ),
-          ),
-        ],
+              if (showShortcutChip)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6.0,
+                    vertical: 2.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSubtle,
+                    border: Border.all(color: AppColors.borderDefault),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: Text(
+                    'Ctrl+K',
+                    maxLines: 1,
+                    style: AppTypography.monospace.copyWith(
+                      fontSize: 10.0,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -247,8 +345,11 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
     BuildContext context,
     WidgetRef ref,
     ShellMetadata metadata,
-    UserSession? session,
-  ) {
+    UserSession? session, {
+    required bool showUserText,
+    required bool showBell,
+    required bool showDivider,
+  }) {
     final userName = session?.user.name ?? 'Guest User';
     final userDesig = session?.user.designation ?? 'Operator';
     final initials = _getInitials(userName);
@@ -279,21 +380,24 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
         const SizedBox(width: AppSpacing.sm),
 
         // Notification Bell
-        IconButton(
-          icon: const Icon(Icons.notifications_none_outlined, size: 20.0),
-          color: AppColors.textSecondary,
-          tooltip: 'Notifications',
-          onPressed: () {},
-        ),
-
-        const SizedBox(
-          height: 24.0,
-          child: VerticalDivider(
-            width: AppSpacing.md,
-            thickness: 1.0,
-            color: AppColors.borderDefault,
+        if (showBell)
+          IconButton(
+            icon: const Icon(Icons.notifications_none_outlined, size: 20.0),
+            color: AppColors.textSecondary,
+            tooltip: 'Notifications',
+            visualDensity: VisualDensity.compact,
+            onPressed: () {},
           ),
-        ),
+
+        if (showDivider)
+          const SizedBox(
+            height: 24.0,
+            child: VerticalDivider(
+              width: AppSpacing.md,
+              thickness: 1.0,
+              color: AppColors.borderDefault,
+            ),
+          ),
 
         // User Profile Menu
         PopupMenuButton<String>(
@@ -403,25 +507,26 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    userName,
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.textPrimary,
+              if (showUserText)
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                  Text(
-                    userDesig,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                      fontSize: 10.0,
+                    Text(
+                      userDesig,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 10.0,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
               const Icon(
                 Icons.arrow_drop_down,
                 size: 18.0,
@@ -539,8 +644,9 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
   Widget _buildBranchPill(
     BuildContext context,
     WidgetRef ref,
-    ShellMetadata metadata,
-  ) {
+    ShellMetadata metadata, {
+    required bool showLabel,
+  }) {
     final branchListAsync = ref.watch(branchListProvider);
     final branches = branchListAsync.valueOrNull ?? [];
     final currentBranch =
@@ -552,7 +658,9 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
     // If 1 or 0 branches: read-only chip with tooltip, no arrow
     if (branches.length <= 1) {
       return Tooltip(
-        message: 'Single campus configured. Add more branches in Settings to switch.',
+        message: showLabel
+            ? 'Single campus configured. Add more branches in Settings to switch.'
+            : currentBranch,
         child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,
@@ -571,25 +679,29 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
                 size: 15.0,
                 color: AppColors.brandPrimary,
               ),
-              const SizedBox(width: 4.0),
-              ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth:
-                      WidgetsBinding.instance.runtimeType.toString().contains(
-                        'Test',
-                      )
-                      ? 160.0
-                      : 220.0,
-                ),
-                child: Text(
-                  currentBranch,
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.textPrimary,
-                    fontSize: 12.0,
+              if (showLabel) ...[
+                const SizedBox(width: 4.0),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth:
+                        WidgetsBinding.instance.runtimeType.toString().contains(
+                          'Test',
+                        )
+                        ? 160.0
+                        : 220.0,
                   ),
-                  overflow: TextOverflow.ellipsis,
+                  child: Text(
+                    currentBranch,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 12.0,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -654,25 +766,29 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
               size: 15.0,
               color: AppColors.brandPrimary,
             ),
-            const SizedBox(width: 4.0),
-            ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth:
-                    WidgetsBinding.instance.runtimeType.toString().contains(
-                      'Test',
-                    )
-                    ? 160.0
-                    : 220.0,
-              ),
-              child: Text(
-                currentBranch,
-                style: AppTypography.label.copyWith(
-                  color: AppColors.textPrimary,
-                  fontSize: 12.0,
+            if (showLabel) ...[
+              const SizedBox(width: 4.0),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth:
+                      WidgetsBinding.instance.runtimeType.toString().contains(
+                        'Test',
+                      )
+                      ? 160.0
+                      : 220.0,
                 ),
-                overflow: TextOverflow.ellipsis,
+                child: Text(
+                  currentBranch,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textPrimary,
+                    fontSize: 12.0,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
+            ],
             const SizedBox(width: 2.0),
             const Icon(
               Icons.arrow_drop_down,
