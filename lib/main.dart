@@ -38,7 +38,10 @@ void main() async {
   await DatabaseService.instance.database;
 
   if (const bool.fromEnvironment('CLOUD_SYNC_CONFIGURED', defaultValue: true)) {
-    SupabaseClientWrapper.init().then((_) => SyncService.runStartupPush());
+    SupabaseClientWrapper.init().then((_) async {
+      await SyncService.runStartupPush();
+      await SyncService.runStartupPull();
+    });
   }
 
   runApp(const ProviderScope(child: AilyansApp()));
