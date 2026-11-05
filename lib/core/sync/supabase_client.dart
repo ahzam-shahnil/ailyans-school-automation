@@ -15,30 +15,44 @@ import '../db/database.dart';
 class SupabaseClientWrapper {
   static bool _initialized = false;
   static bool _authReady = false;
+  static String? _currentUrl;
+
+  /// The Supabase project URL currently in use, or null when unconfigured.
+  static String? get supabaseUrl => _currentUrl;
 
   /// Returns true iff Supabase is initialized AND a valid session exists.
   /// Idempotent. Never throws.
   static Future<bool> init() async {
     if (_initialized && _authReady) return true;
 
-    // 1. Resolve URL + anon key from dart-define, then app_config fallback.
+    // 1. Resolve credentials from dart-define, then app_config fallback.
     String url = const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
-    String anonKey = const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+    String anonKey =
+        const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+    String email =
+        const String.fromEnvironment('SUPABASE_SYNC_EMAIL', defaultValue: '');
+    String password = const String.fromEnvironment(
+      'SUPABASE_SYNC_PASSWORD',
+      defaultValue: '',
+    );
 
-    if (url.isEmpty || anonKey.isEmpty) {
+    if (url.isEmpty || anonKey.isEmpty || email.isEmpty || password.isEmpty) {
       try {
         final db = await DatabaseService.instance.database;
         final rows = await db.query(
           'app_config',
           columns: ['config_key', 'config_value'],
-          where: "config_key IN ('supabase_url', 'supabase_anon_key')",
+          where: "config_key IN ('supabase_url', 'supabase_anon_key', "
+              "'supabase_sync_email', 'supabase_sync_password')",
         );
         for (final r in rows) {
-          if (r['config_key'] == 'supabase_url' && url.isEmpty) {
-            url = (r['config_value'] as String?) ?? '';
-          }
-          if (r['config_key'] == 'supabase_anon_key' && anonKey.isEmpty) {
-            anonKey = (r['config_value'] as String?) ?? '';
+          final key = r['config_key'];
+          final value = (r['config_value'] as String?) ?? '';
+          if (key == 'supabase_url' && url.isEmpty) url = value;
+          if (key == 'supabase_anon_key' && anonKey.isEmpty) anonKey = value;
+          if (key == 'supabase_sync_email' && email.isEmpty) email = value;
+          if (key == 'supabase_sync_password' && password.isEmpty) {
+            password = value;
           }
         }
       } catch (e) {
@@ -57,18 +71,19 @@ class SupabaseClientWrapper {
         // ignore: deprecated_member_use
         await Supabase.initialize(url: url, anonKey: anonKey);
         _initialized = true;
+        _currentUrl = url;
       } catch (e) {
         debugPrint('[F-4a-1] Supabase.initialize failed: $e');
         return false;
       }
+    } else {
+      _currentUrl = url;
     }
 
     // 3. Sign in as sync service account if no session exists.
     try {
       final auth = Supabase.instance.client.auth;
       if (auth.currentSession == null) {
-        const email = String.fromEnvironment('SUPABASE_SYNC_EMAIL', defaultValue: '');
-        const password = String.fromEnvironment('SUPABASE_SYNC_PASSWORD', defaultValue: '');
         if (email.isEmpty || password.isEmpty) {
           debugPrint('[F-4a-1] Sync credentials missing; auth skipped.');
           _authReady = false;
@@ -91,10 +106,27 @@ class SupabaseClientWrapper {
     }
   }
 
+  /// Disposes the live Supabase client (if any) and re-initializes from the
+  /// current credentials. Returns true only if init + auth both succeed.
+  static Future<bool> reconfigure() async {
+    if (_initialized) {
+      try {
+        await Supabase.instance.dispose();
+      } catch (_) {
+        // Never initialized, or already disposed.
+      }
+    }
+    _initialized = false;
+    _authReady = false;
+    _currentUrl = null;
+    return await init();
+  }
+
   /// Test-only: reset the singleton state. Do not call from production code.
   @visibleForTesting
   static void resetForTesting() {
     _initialized = false;
     _authReady = false;
+    _currentUrl = null;
   }
 }

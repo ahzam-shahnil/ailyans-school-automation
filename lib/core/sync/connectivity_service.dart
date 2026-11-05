@@ -4,6 +4,9 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../db/database.dart';
+import 'supabase_client.dart';
+
 /// Phase F-5: wraps connectivity_plus as an injectable service for tests.
 class ConnectivityService {
   final Connectivity _connectivity;
@@ -20,16 +23,35 @@ class ConnectivityService {
     return results.firstWhere((r) => r != ConnectivityResult.none);
   }
 
-  /// Supabase URL from dart-define, or null when unconfigured (tests).
-  static String? _supabaseUrl() {
-    const url = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
-    return url.isEmpty ? null : url;
+  /// Supabase URL resolution order: dart-define, live client, app_config.
+  static Future<String?> _supabaseUrl() async {
+    const envUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+    if (envUrl.isNotEmpty) return envUrl;
+
+    final current = SupabaseClientWrapper.supabaseUrl;
+    if (current != null && current.isNotEmpty) return current;
+
+    try {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.query(
+        'app_config',
+        columns: ['config_value'],
+        where: 'config_key = ?',
+        whereArgs: ['supabase_url'],
+        limit: 1,
+      );
+      if (rows.isEmpty) return null;
+      final value = (rows.first['config_value'] as String?) ?? '';
+      return value.isEmpty ? null : value;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Probes actual reachability because macOS can report an interface as up
   /// while there is no internet route.
   Future<bool> _isReachable() async {
-    final url = _supabaseUrl();
+    final url = await _supabaseUrl();
     if (url == null) {
       // No URL configured (unit tests). Treat as reachable.
       return true;

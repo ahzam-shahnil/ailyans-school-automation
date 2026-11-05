@@ -10,6 +10,7 @@ import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/backup_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/system_settings_provider.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
 /// Screen 27: System Settings & Configuration Screen (/system/settings).
@@ -37,9 +38,14 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
   final _remarksCtrl = TextEditingController();
   final _secPdCtrl = TextEditingController();
 
+  // Tab 5 Controllers (Cloud Sync)
+  final _supabaseUrlCtrl = TextEditingController();
+  final _supabaseAnonKeyCtrl = TextEditingController();
+
   final ScrollController _panelScrollController = ScrollController();
   bool _isInitialized = false;
   bool _tab4Refreshed = false;
+  bool _obscureAnonKey = true;
 
   @override
   void initState() {
@@ -104,6 +110,12 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     if (_secPdCtrl.text != state.branch.secPd) {
       _secPdCtrl.text = state.branch.secPd;
     }
+    if (_supabaseUrlCtrl.text != state.config.supabaseUrl) {
+      _supabaseUrlCtrl.text = state.config.supabaseUrl;
+    }
+    if (_supabaseAnonKeyCtrl.text != state.config.supabaseAnonKey) {
+      _supabaseAnonKeyCtrl.text = state.config.supabaseAnonKey;
+    }
   }
 
   @override
@@ -119,6 +131,8 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     _contactPersonCtrl.dispose();
     _remarksCtrl.dispose();
     _secPdCtrl.dispose();
+    _supabaseUrlCtrl.dispose();
+    _supabaseAnonKeyCtrl.dispose();
     _panelScrollController.dispose();
     super.dispose();
   }
@@ -209,6 +223,10 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
           notifier.setActiveTab(4),
       const SingleActivator(LogicalKeyboardKey.digit5, meta: true): () =>
           notifier.setActiveTab(4),
+      const SingleActivator(LogicalKeyboardKey.digit6, control: true): () =>
+          notifier.setActiveTab(5),
+      const SingleActivator(LogicalKeyboardKey.digit6, meta: true): () =>
+          notifier.setActiveTab(5),
     };
 
     return CallbackShortcuts(
@@ -433,6 +451,12 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
         'Data & Backups',
         'Export, restore & auto-backup',
       ),
+      (
+        5,
+        Icons.sync,
+        'Cloud Sync',
+        'Supabase endpoint & force sync',
+      ),
     ];
 
     return Container(
@@ -543,6 +567,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             if (state.activeTab == 1) _buildTab1Calendar(state, notifier),
             if (state.activeTab == 2) _buildTab2Appearance(state, notifier),
             if (state.activeTab == 3) _buildTab3Info(state, notifier),
+            if (state.activeTab == 5) _buildTab5CloudSync(state, notifier),
           ],
         ),
       ),
@@ -1135,6 +1160,218 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
                 ),
         ),
         const SizedBox(height: AppSpacing.sm),
+      ],
+    );
+  }
+
+  // --- Tab 5: Cloud Sync ---
+
+  Widget _buildTab5CloudSync(
+    SystemSettingsState state,
+    SystemSettingsNotifier notifier,
+  ) {
+    const nodeOptions = ['windows', 'android_a', 'android_b'];
+    final nodeValue = nodeOptions.contains(state.config.nodeId)
+        ? state.config.nodeId
+        : 'windows';
+    final busy = state.isForcePushing || state.isForcePulling;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionTitle(
+          'SUPABASE CLOUD ENDPOINT',
+          'Device-local credentials. These values are stored on this device only and never sync to other nodes.',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // Supabase URL
+        Text(
+          'Supabase URL',
+          style: AppTypography.bodySmall.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4.0),
+        SizedBox(
+          height: 38.0,
+          child: TextField(
+            controller: _supabaseUrlCtrl,
+            onChanged: notifier.setSupabaseUrl,
+            decoration: const InputDecoration(
+              hintText: 'https://<project-ref>.supabase.co',
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // Anon key
+        Text(
+          'Supabase Anon Key',
+          style: AppTypography.bodySmall.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4.0),
+        SizedBox(
+          height: 38.0,
+          child: TextField(
+            controller: _supabaseAnonKeyCtrl,
+            obscureText: _obscureAnonKey,
+            onChanged: notifier.setSupabaseAnonKey,
+            decoration: InputDecoration(
+              hintText: 'eyJhbGciOi...',
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureAnonKey
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 18.0,
+                ),
+                onPressed: () =>
+                    setState(() => _obscureAnonKey = !_obscureAnonKey),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // Node block
+        Text(
+          'Device Node Block',
+          style: AppTypography.bodySmall.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 4.0),
+        SizedBox(
+          height: 38.0,
+          child: DropdownButton<String>(
+            value: nodeValue,
+            isExpanded: true,
+            isDense: true,
+            dropdownColor: AppColors.surfaceRaised,
+            items: const [
+              DropdownMenuItem(value: 'windows', child: Text('windows')),
+              DropdownMenuItem(value: 'android_a', child: Text('android_a')),
+              DropdownMenuItem(value: 'android_b', child: Text('android_b')),
+            ],
+            onChanged: (value) {
+              if (value != null) notifier.setNodeId(value);
+            },
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // Sync status
+        _buildSectionTitle(
+          'SYNC STATUS',
+          'Pending outbox rows and the most recent successful watermarks.',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSubtle,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildSyncStatRow(
+                'Pending changes',
+                '${state.pendingOutboxCount}',
+              ),
+              const SizedBox(height: 6.0),
+              _buildSyncStatRow(
+                'Last pulled',
+                state.lastPulledAt ?? 'never',
+              ),
+              const SizedBox(height: 6.0),
+              _buildSyncStatRow(
+                'Last pushed',
+                state.lastPushedAt ?? 'never',
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh Stats'),
+                  onPressed: busy ? null : notifier.refreshSyncStats,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // Actions
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.cloud_download_outlined, size: 16),
+              label: Text(state.isForcePulling ? 'Pulling...' : 'Force Pull'),
+              onPressed: busy ? null : notifier.forcePullAll,
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.cloud_upload_outlined, size: 16),
+              label: Text(state.isForcePushing ? 'Pushing...' : 'Force Push'),
+              onPressed: busy ? null : notifier.forcePushAll,
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.sync, size: 16),
+              label: const Text('Sync Now'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: busy
+                  ? null
+                  : () async {
+                      await ref
+                          .read(syncPushProvider.notifier)
+                          .triggerSync();
+                      if (mounted) {
+                        await notifier.refreshSyncStats();
+                      }
+                    },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSyncStatRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 160.0,
+          child: Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: AppTypography.monospace.copyWith(
+              fontSize: 12.0,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
       ],
     );
   }

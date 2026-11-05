@@ -149,6 +149,16 @@ const List<String> kPullTableOrder = [
   'FeeTransaction', 'AttDet', 'TAtt',
 ];
 
+/// Device-local app_config keys. These must never cross the sync boundary:
+/// each device owns its node block and its own Supabase credentials.
+const Set<String> kDeviceLocalConfigKeys = {
+  'node_id',
+  'supabase_url',
+  'supabase_anon_key',
+  'supabase_sync_email',
+  'supabase_sync_password',
+};
+
 // ============================================================================
 // Result types
 // ============================================================================
@@ -259,6 +269,98 @@ class SyncService {
     }
   }
 
+  /// Force push: reset retry state on every failed outbox row, then drain the
+  /// outbox until it is empty. Does NOT push arbitrary local rows — only the
+  /// pending outbox. Skipped when unconfigured unless a [serviceFactory] is
+  /// injected (unit tests).
+  static Future<SyncPushResult> runForcePushAll({
+    SyncService Function()? serviceFactory,
+  }) async {
+    if (serviceFactory == null) {
+      final ready = await SupabaseClientWrapper.init();
+      if (!ready) {
+        debugPrint('[F-6] Skipping force push (not ready/offline)');
+        return SyncPushResult.skippedResult;
+      }
+    }
+
+    final db = await DatabaseService.instance.database;
+    await db.rawUpdate(
+      'UPDATE _sync_outbox SET retry_count = 0, last_error = NULL '
+      'WHERE retry_count > 0',
+    );
+
+    final svc = (serviceFactory ?? () => SyncService())();
+
+    int totalPushed = 0;
+    int totalFailed = 0;
+    final errors = <String>[];
+    int stalls = 0;
+    int lastCount = -1;
+
+    while (true) {
+      final countRow =
+          await db.rawQuery('SELECT COUNT(*) AS n FROM _sync_outbox');
+      final count = (countRow.first['n'] as num?)?.toInt() ?? 0;
+      if (count == 0) break;
+
+      if (count == lastCount) {
+        stalls++;
+      } else {
+        stalls = 0;
+      }
+      lastCount = count;
+
+      if (stalls >= 3) {
+        errors.add('forcePushAll stalled at $count rows');
+        break;
+      }
+
+      final r = await svc.pushOutbox();
+      totalPushed += r.pushedCount;
+      totalFailed += r.failedCount;
+      errors.addAll(r.errors);
+
+      // Nothing progressed and nothing is left to retry in this pass.
+      if (r.failedCount > 0 && r.pushedCount == 0) break;
+    }
+
+    debugPrint(
+      '[F-6] Force push summary: pushed=$totalPushed, failed=$totalFailed',
+    );
+    return SyncPushResult(
+      pushedCount: totalPushed,
+      failedCount: totalFailed,
+      errors: errors,
+    );
+  }
+
+  /// Force pull: clear every table watermark, then run a full delta pull.
+  /// Reuses pullDelta's per-page transaction and dirty-row guard.
+  static Future<SyncPullResult> runForcePullAll({
+    SyncService Function()? serviceFactory,
+  }) async {
+    if (serviceFactory == null) {
+      final ready = await SupabaseClientWrapper.init();
+      if (!ready) {
+        debugPrint('[F-6] Skipping force pull (not ready/offline)');
+        return SyncPullResult.skippedResult;
+      }
+    }
+
+    final db = await DatabaseService.instance.database;
+    final tables = [...kPullTableOrder, '__global__'];
+    final placeholders = List.filled(tables.length, '?').join(',');
+    await db.rawUpdate(
+      'UPDATE _sync_state SET last_pulled_at = NULL '
+      'WHERE table_name IN ($placeholders)',
+      tables,
+    );
+
+    final svc = (serviceFactory ?? () => SyncService())();
+    return await svc.pullDelta();
+  }
+
   Future<SyncPushResult> pushOutbox() async {
     final db = await _openDb();
 
@@ -294,6 +396,17 @@ class SyncService {
       final recordPk = row['record_pk'] as String;
       final operation = row['operation'] as String;
       final rowId = row['id'] as int;
+
+      // Device-local app_config keys never leave this device. Drop the
+      // coalesced outbox rows without contacting the remote.
+      if (tableName == 'app_config' &&
+          kDeviceLocalConfigKeys.contains(recordPk)) {
+        await db.delete(
+          '_sync_outbox',
+          where: 'id IN (${ids.join(",")})',
+        );
+        continue;
+      }
 
       try {
         if (operation == 'DELETE') {
@@ -427,6 +540,13 @@ class SyncService {
                 if (dirtyKeys.contains('$tableName|$recordPk')) {
                   continue;
                 }
+              }
+
+              // Device-local app_config keys are never overwritten by remote
+              // values; each device keeps its own node block/credentials.
+              if (tableName == 'app_config' &&
+                  kDeviceLocalConfigKeys.contains(row['config_key'])) {
+                continue;
               }
 
               await txn.insert(

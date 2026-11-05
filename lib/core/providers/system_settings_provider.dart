@@ -1,6 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../db/database.dart';
+import '../sync/node_id_allocator.dart';
+import '../sync/supabase_client.dart';
+import '../sync/sync_service.dart';
 import 'available_sessions_provider.dart';
 import 'shell_metadata_provider.dart';
 
@@ -105,7 +109,7 @@ class InstBranchData {
   );
 }
 
-/// Immutable representation of the 6 app_config keys.
+/// Immutable representation of the app_config keys surfaced in System Settings.
 class AppConfigData {
   final String defaultSessionYr;
   final String fiscalStartMonth;
@@ -113,6 +117,11 @@ class AppConfigData {
   final bool darkMode;
   final bool highDensityUi;
   final bool urduFontFallback;
+
+  // Cloud Sync (device-local keys: never cross the sync boundary).
+  final String supabaseUrl;
+  final String supabaseAnonKey;
+  final String nodeId;
 
   const AppConfigData({
     this.defaultSessionYr = '2017-2018',
@@ -128,6 +137,9 @@ class AppConfigData {
     this.darkMode = false,
     this.highDensityUi = false,
     this.urduFontFallback = true,
+    this.supabaseUrl = '',
+    this.supabaseAnonKey = '',
+    this.nodeId = 'windows',
   });
 
   AppConfigData copyWith({
@@ -137,6 +149,9 @@ class AppConfigData {
     bool? darkMode,
     bool? highDensityUi,
     bool? urduFontFallback,
+    String? supabaseUrl,
+    String? supabaseAnonKey,
+    String? nodeId,
   }) {
     return AppConfigData(
       defaultSessionYr: defaultSessionYr ?? this.defaultSessionYr,
@@ -145,6 +160,9 @@ class AppConfigData {
       darkMode: darkMode ?? this.darkMode,
       highDensityUi: highDensityUi ?? this.highDensityUi,
       urduFontFallback: urduFontFallback ?? this.urduFontFallback,
+      supabaseUrl: supabaseUrl ?? this.supabaseUrl,
+      supabaseAnonKey: supabaseAnonKey ?? this.supabaseAnonKey,
+      nodeId: nodeId ?? this.nodeId,
     );
   }
 
@@ -156,7 +174,10 @@ class AppConfigData {
         fiscalStartMonth != other.fiscalStartMonth ||
         darkMode != other.darkMode ||
         highDensityUi != other.highDensityUi ||
-        urduFontFallback != other.urduFontFallback) {
+        urduFontFallback != other.urduFontFallback ||
+        supabaseUrl != other.supabaseUrl ||
+        supabaseAnonKey != other.supabaseAnonKey ||
+        nodeId != other.nodeId) {
       return false;
     }
     if (workingDays.length != other.workingDays.length) return false;
@@ -174,6 +195,9 @@ class AppConfigData {
     darkMode,
     highDensityUi,
     urduFontFallback,
+    supabaseUrl,
+    supabaseAnonKey,
+    nodeId,
   );
 }
 
@@ -191,6 +215,13 @@ class SystemSettingsState {
   final int schemaVersion;
   final int operatorCount;
 
+  // Read-only sync status (not part of the dirty comparison).
+  final int pendingOutboxCount;
+  final String? lastPulledAt;
+  final String? lastPushedAt;
+  final bool isForcePushing;
+  final bool isForcePulling;
+
   const SystemSettingsState({
     this.isLoading = true,
     this.activeTab = 0,
@@ -203,6 +234,11 @@ class SystemSettingsState {
     this.toastMessage,
     this.schemaVersion = 7,
     this.operatorCount = 0,
+    this.pendingOutboxCount = 0,
+    this.lastPulledAt,
+    this.lastPushedAt,
+    this.isForcePushing = false,
+    this.isForcePulling = false,
   });
 
   bool get isDirty => branch != originalBranch || config != originalConfig;
@@ -219,6 +255,11 @@ class SystemSettingsState {
     String? Function()? toastMessage,
     int? schemaVersion,
     int? operatorCount,
+    int? pendingOutboxCount,
+    String? Function()? lastPulledAt,
+    String? Function()? lastPushedAt,
+    bool? isForcePushing,
+    bool? isForcePulling,
   }) {
     return SystemSettingsState(
       isLoading: isLoading ?? this.isLoading,
@@ -232,6 +273,13 @@ class SystemSettingsState {
       toastMessage: toastMessage != null ? toastMessage() : this.toastMessage,
       schemaVersion: schemaVersion ?? this.schemaVersion,
       operatorCount: operatorCount ?? this.operatorCount,
+      pendingOutboxCount: pendingOutboxCount ?? this.pendingOutboxCount,
+      lastPulledAt:
+          lastPulledAt != null ? lastPulledAt() : this.lastPulledAt,
+      lastPushedAt:
+          lastPushedAt != null ? lastPushedAt() : this.lastPushedAt,
+      isForcePushing: isForcePushing ?? this.isForcePushing,
+      isForcePulling: isForcePulling ?? this.isForcePulling,
     );
   }
 }
@@ -250,13 +298,31 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
     return trimmed;
   }
 
-  final Ref? _ref;
+  Ref? _ref;
+  final Future<SyncPushResult> Function() _forcePushRunner;
+  final Future<SyncPullResult> Function() _forcePullRunner;
+  final Future<void> Function(String) _configureNodeBlockRunner;
+  final Future<bool> Function() _reconfigureRunner;
 
-  SystemSettingsNotifier([this._ref]) : super(const SystemSettingsState());
+  SystemSettingsNotifier({
+    Ref? ref,
+    Future<SyncPushResult> Function()? forcePushRunner,
+    Future<SyncPullResult> Function()? forcePullRunner,
+    Future<void> Function(String)? configureNodeBlockRunner,
+    Future<bool> Function()? reconfigureRunner,
+  })  : _forcePushRunner = forcePushRunner ?? SyncService.runForcePushAll,
+        _forcePullRunner = forcePullRunner ?? SyncService.runForcePullAll,
+        _configureNodeBlockRunner = configureNodeBlockRunner ??
+            ((id) => NodeIdAllocator().configureNodeBlock(id)),
+        _reconfigureRunner = reconfigureRunner ??
+            SupabaseClientWrapper.reconfigure,
+        super(const SystemSettingsState()) {
+    _ref = ref;
+  }
 
-  /// Sets the active tab index (0..4).
+  /// Sets the active tab index (0..5).
   void setActiveTab(int tab) {
-    if (tab < 0 || tab > 4) return;
+    if (tab < 0 || tab > 5) return;
     state = state.copyWith(activeTab: tab);
   }
 
@@ -335,6 +401,14 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
       final highDensityUi = configMap['high_density_ui'] == 'true';
       final urduFontFallback = configMap['urdu_font_fallback'] != 'false';
 
+      const envSupabaseUrl =
+          String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+      const envSupabaseAnonKey =
+          String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+      final dbSupabaseUrl = configMap['supabase_url'] ?? '';
+      final dbSupabaseAnonKey = configMap['supabase_anon_key'] ?? '';
+      final dbNodeId = configMap['node_id'] ?? '';
+
       final configData = AppConfigData(
         defaultSessionYr: defaultSessionYr,
         fiscalStartMonth: fiscalStartMonth,
@@ -342,6 +416,12 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
         darkMode: darkMode,
         highDensityUi: highDensityUi,
         urduFontFallback: urduFontFallback,
+        supabaseUrl:
+            dbSupabaseUrl.isNotEmpty ? dbSupabaseUrl : envSupabaseUrl,
+        supabaseAnonKey: dbSupabaseAnonKey.isNotEmpty
+            ? dbSupabaseAnonKey
+            : envSupabaseAnonKey,
+        nodeId: dbNodeId.isNotEmpty ? dbNodeId : 'windows',
       );
 
       // 3. Schema version
@@ -354,6 +434,9 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
       );
       final operatorCount = (userCountRows.first['cnt'] as int?) ?? 0;
 
+      // 5. Sync stats (device-local outbox + watermarks).
+      final stats = await _readSyncStats(db);
+
       state = state.copyWith(
         isLoading: false,
         branch: branchData,
@@ -362,6 +445,9 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
         originalConfig: configData,
         schemaVersion: schemaVersion,
         operatorCount: operatorCount,
+        pendingOutboxCount: stats.pendingOutboxCount,
+        lastPulledAt: () => stats.lastPulledAt,
+        lastPushedAt: () => stats.lastPushedAt,
       );
     } catch (e) {
       state = state.copyWith(
@@ -513,6 +599,29 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
     );
   }
 
+  // --- Mutators for Tab 5: Cloud Sync ---
+
+  void setSupabaseUrl(String value) {
+    state = state.copyWith(
+      config: state.config.copyWith(supabaseUrl: value.trim()),
+      errorMessage: () => null,
+    );
+  }
+
+  void setSupabaseAnonKey(String value) {
+    state = state.copyWith(
+      config: state.config.copyWith(supabaseAnonKey: value.trim()),
+      errorMessage: () => null,
+    );
+  }
+
+  void setNodeId(String value) {
+    state = state.copyWith(
+      config: state.config.copyWith(nodeId: value),
+      errorMessage: () => null,
+    );
+  }
+
   // --- Actions ---
 
   /// Discards all uncommitted changes and reverts to database state.
@@ -626,6 +735,7 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
 
     try {
       final db = await DatabaseService.instance.database;
+      final oldConfig = state.originalConfig;
 
       await db.transaction((txn) async {
         // Update InstBranch
@@ -675,6 +785,9 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
             'urdu_font_fallback',
             state.config.urduFontFallback ? 'true' : 'false',
           ),
+          ('supabase_url', state.config.supabaseUrl.trim()),
+          ('supabase_anon_key', state.config.supabaseAnonKey.trim()),
+          ('node_id', state.config.nodeId),
         ];
 
         for (final (k, v) in configs) {
@@ -683,11 +796,30 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
             [k, v],
           );
         }
+
+        // Device-local keys must never pollute the outbox. The APP_CONFIG
+        // triggers fire on the writes above, so clear those rows here.
+        await txn.delete(
+          '_sync_outbox',
+          where: "table_name = 'app_config' AND record_pk IN "
+              "('supabase_url', 'supabase_anon_key', 'node_id')",
+        );
       });
 
       // Invalidate shellMetadataProvider so top-bar immediately displays the updated institution name
       _ref?.invalidate(shellMetadataProvider);
       _ref?.invalidate(availableSessionsProvider);
+
+      // Follow-ups: node block re-allocation and live client reconfiguration.
+      if (state.config.nodeId != oldConfig.nodeId) {
+        await _configureNodeBlockRunner(state.config.nodeId);
+      }
+      if (state.config.supabaseUrl != oldConfig.supabaseUrl ||
+          state.config.supabaseAnonKey != oldConfig.supabaseAnonKey) {
+        await _reconfigureRunner();
+      }
+
+      await refreshSyncStats();
 
       final toast = state.config.darkMode != state.originalConfig.darkMode
           ? 'Settings saved successfully (Theme change requires app restart)'
@@ -706,10 +838,113 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
       return false;
     }
   }
+
+  // --- Cloud Sync actions ---
+
+  /// Reads outbox count and latest watermarks straight from SQLite.
+  Future<({int pendingOutboxCount, String? lastPulledAt, String? lastPushedAt})>
+      _readSyncStats(Database db) async {
+    final outboxRows =
+        await db.rawQuery('SELECT COUNT(*) AS n FROM _sync_outbox');
+    final pending = (outboxRows.first['n'] as num?)?.toInt() ?? 0;
+
+    final stateRows = await db.rawQuery(
+      'SELECT MAX(last_pulled_at) AS max_pulled, '
+      'MAX(last_pushed_at) AS max_pushed FROM _sync_state',
+    );
+    String? maxPulled;
+    String? maxPushed;
+    if (stateRows.isNotEmpty) {
+      maxPulled = stateRows.first['max_pulled'] as String?;
+      maxPushed = stateRows.first['max_pushed'] as String?;
+    }
+    return (
+      pendingOutboxCount: pending,
+      lastPulledAt: maxPulled,
+      lastPushedAt: maxPushed,
+    );
+  }
+
+  /// Refreshes pending-outbox and watermark stats from the database.
+  Future<void> refreshSyncStats() async {
+    try {
+      final db = await DatabaseService.instance.database;
+      final stats = await _readSyncStats(db);
+      state = state.copyWith(
+        pendingOutboxCount: stats.pendingOutboxCount,
+        lastPulledAt: () => stats.lastPulledAt,
+        lastPushedAt: () => stats.lastPushedAt,
+      );
+    } catch (_) {
+      // Stats are cosmetic; never propagate read failures.
+    }
+  }
+
+  /// Force pushes every pending outbox row (retry counters reset first).
+  Future<void> forcePushAll() async {
+    if (state.isForcePushing) return;
+    state = state.copyWith(
+      isForcePushing: true,
+      errorMessage: () => null,
+    );
+    try {
+      final result = await _forcePushRunner();
+      await refreshSyncStats();
+      if (result.failedCount > 0) {
+        state = state.copyWith(
+          errorMessage: () => 'Force push: ${result.failedCount} rows failed',
+        );
+      } else if (result.skipped) {
+        state = state.copyWith(
+          toastMessage: () => 'Cloud sync is not configured',
+        );
+      } else {
+        state = state.copyWith(
+          toastMessage: () =>
+              'Force push complete (${result.pushedCount} pushed)',
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(errorMessage: () => 'Force push failed: $e');
+    } finally {
+      state = state.copyWith(isForcePushing: false);
+    }
+  }
+
+  /// Force pulls every table from scratch (watermarks cleared first).
+  Future<void> forcePullAll() async {
+    if (state.isForcePulling) return;
+    state = state.copyWith(
+      isForcePulling: true,
+      errorMessage: () => null,
+    );
+    try {
+      final result = await _forcePullRunner();
+      await refreshSyncStats();
+      if (result.failedCount > 0) {
+        state = state.copyWith(
+          errorMessage: () => 'Force pull: ${result.failedCount} rows failed',
+        );
+      } else if (result.skipped) {
+        state = state.copyWith(
+          toastMessage: () => 'Cloud sync is not configured',
+        );
+      } else {
+        state = state.copyWith(
+          toastMessage: () =>
+              'Force pull complete (${result.pulledCount} pulled)',
+        );
+      }
+    } catch (e) {
+      state = state.copyWith(errorMessage: () => 'Force pull failed: $e');
+    } finally {
+      state = state.copyWith(isForcePulling: false);
+    }
+  }
 }
 
 /// Provider for system settings state.
 final systemSettingsProvider =
     StateNotifierProvider<SystemSettingsNotifier, SystemSettingsState>((ref) {
-      return SystemSettingsNotifier(ref);
+      return SystemSettingsNotifier(ref: ref);
     });
