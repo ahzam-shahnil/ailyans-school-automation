@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 import 'app.dart';
 import 'core/db/database.dart';
 import 'core/sync/supabase_client.dart';
+import 'core/sync/sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,7 +38,7 @@ void main() async {
   await DatabaseService.instance.database;
 
   if (const bool.fromEnvironment('CLOUD_SYNC_CONFIGURED', defaultValue: true)) {
-    SupabaseClientWrapper.init(); // fire-and-forget, catches internally
+    SupabaseClientWrapper.init().then((_) => SyncService.runStartupPush());
   }
 
   runApp(const ProviderScope(child: AilyansApp()));
