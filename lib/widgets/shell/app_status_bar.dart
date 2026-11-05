@@ -1,18 +1,27 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
 /// Contextual bottom status bar of the desktop application shell.
 /// Fixed 28px height, pinned at the bottom of the AppShell root Column.
 class AppStatusBar extends ConsumerWidget {
-  const AppStatusBar({super.key});
+  /// When false (login/pre-auth), sync state is neither watched nor rendered.
+  final bool showSyncStatus;
+
+  const AppStatusBar({super.key, this.showSyncStatus = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final metadataAsync = ref.watch(shellMetadataProvider);
     final metadata = metadataAsync.valueOrNull ?? ShellMetadata.empty();
+    final syncState = showSyncStatus ? ref.watch(syncPushProvider) : null;
+    final VoidCallback? onSyncNow = showSyncStatus
+        ? () => ref.read(syncPushProvider.notifier).triggerSync()
+        : null;
 
     return Container(
       height: 28.0,
@@ -31,12 +40,18 @@ class AppStatusBar extends ConsumerWidget {
           return Padding(
             padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
             child: compact
-                ? _buildCompactRow(metadata, metadataAsync.hasError)
+                ? _buildCompactRow(
+                    metadata,
+                    metadataAsync.hasError,
+                    syncState,
+                  )
                 : _buildFullRow(
                     context,
                     metadata,
                     metadataAsync.hasError,
-                    showShortcuts: width >= 720.0,
+                    syncState,
+                    onSyncNow,
+                    showShortcuts: width >= 900.0,
                     maxLeftWidth: width * 0.45,
                   ),
           );
@@ -45,8 +60,12 @@ class AppStatusBar extends ConsumerWidget {
     );
   }
 
-  /// Below 480px: only the DB status dot and a shortened session chip.
-  Widget _buildCompactRow(ShellMetadata metadata, bool hasError) {
+  /// Below 480px: DB status dot, shortened session chip, and a sync label.
+  Widget _buildCompactRow(
+    ShellMetadata metadata,
+    bool hasError,
+    SyncPushState? syncState,
+  ) {
     final dotColor = hasError
         ? AppColors.statusErrorText
         : AppColors.statusSuccessText;
@@ -77,15 +96,31 @@ class AppStatusBar extends ConsumerWidget {
             ),
           ),
         ),
+        if (syncState != null) ...[
+          const SizedBox(width: AppSpacing.xs),
+          Icon(Icons.circle, size: 8.0, color: _syncColor(syncState)),
+          const SizedBox(width: 4.0),
+          Text(
+            _compactSyncLabel(syncState),
+            maxLines: 1,
+            style: AppTypography.bodySmall.copyWith(
+              color: _syncColor(syncState),
+              fontSize: 10.0,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ],
     );
   }
 
-  /// Above 480px: DB label, branch/session, and (above 720px) shortcuts.
+  /// Above 480px: DB label, branch/session, sync status + action, shortcuts.
   Widget _buildFullRow(
     BuildContext context,
     ShellMetadata metadata,
-    bool hasError, {
+    bool hasError,
+    SyncPushState? syncState,
+    VoidCallback? onSyncNow, {
     required bool showShortcuts,
     required double maxLeftWidth,
   }) {
@@ -141,8 +176,44 @@ class AppStatusBar extends ConsumerWidget {
           ),
         ),
 
-        // 3. Right: Keyboard Shortcuts Quick Reference Button
-        if (showShortcuts)
+        // 3. Sync status + manual trigger (F-5).
+        if (syncState != null) ...[
+          const SizedBox(width: AppSpacing.sm),
+          Icon(Icons.circle, size: 8.0, color: _syncColor(syncState)),
+          const SizedBox(width: 4.0),
+          Flexible(
+            child: Text(
+              _syncLabel(syncState),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: _syncColor(syncState),
+                fontSize: 11.0,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4.0),
+          TextButton(
+            onPressed: onSyncNow,
+            style: TextButton.styleFrom(
+              minimumSize: Size.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+              foregroundColor: AppColors.brandPrimary,
+            ),
+            child: Text(
+              'Sync Now',
+              style: AppTypography.label.copyWith(fontSize: 11.0),
+            ),
+          ),
+        ],
+
+        // 4. Right: Keyboard Shortcuts Quick Reference Button
+        if (showShortcuts) ...[
+          const SizedBox(width: AppSpacing.xs),
           InkWell(
             onTap: () => _showShortcutsDialog(context),
             borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -172,8 +243,32 @@ class AppStatusBar extends ConsumerWidget {
               ),
             ),
           ),
+        ],
       ],
     );
+  }
+
+  /// Full-row label. Only `ConnectivityResult.none` is offline; null (not
+  /// checked yet) is treated as online.
+  String _syncLabel(SyncPushState state) {
+    if (state.isPushing || state.isPulling) return 'Syncing...';
+    if (state.connectivity == ConnectivityResult.none) return 'Offline Mode';
+    return 'Online - Synced';
+  }
+
+  /// Compact-row label (<480px), short enough to fit beside the session chip.
+  String _compactSyncLabel(SyncPushState state) {
+    if (state.isPushing || state.isPulling) return 'Syncing';
+    if (state.connectivity == ConnectivityResult.none) return 'Offline';
+    return 'Synced';
+  }
+
+  Color _syncColor(SyncPushState state) {
+    if (state.isPushing || state.isPulling) return AppColors.statusInfoText;
+    if (state.connectivity == ConnectivityResult.none) {
+      return AppColors.statusErrorText;
+    }
+    return AppColors.statusSuccessText;
   }
 
   /// Shortens `2017-2018` -> `17-18` and `2026-27` -> `26-27`.

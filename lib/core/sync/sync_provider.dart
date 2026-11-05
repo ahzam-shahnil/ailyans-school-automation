@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'sync_service.dart';
@@ -13,6 +16,10 @@ class SyncPushState {
   final int lastPullFailedCount;
   final DateTime? lastPulledAt;
 
+  /// F-5: null means "not checked yet". Only [ConnectivityResult.none] is
+  /// treated as offline; null is treated as online by the status bar.
+  final ConnectivityResult? connectivity;
+
   const SyncPushState({
     this.isPushing = false,
     this.lastPushedCount = 0,
@@ -23,6 +30,7 @@ class SyncPushState {
     this.lastPulledCount = 0,
     this.lastPullFailedCount = 0,
     this.lastPulledAt,
+    this.connectivity,
   });
 
   SyncPushState copyWith({
@@ -35,6 +43,7 @@ class SyncPushState {
     int? lastPulledCount,
     int? lastPullFailedCount,
     DateTime? lastPulledAt,
+    ConnectivityResult? connectivity,
   }) =>
       SyncPushState(
         isPushing: isPushing ?? this.isPushing,
@@ -46,18 +55,27 @@ class SyncPushState {
         lastPulledCount: lastPulledCount ?? this.lastPulledCount,
         lastPullFailedCount: lastPullFailedCount ?? this.lastPullFailedCount,
         lastPulledAt: lastPulledAt ?? this.lastPulledAt,
+        connectivity: connectivity ?? this.connectivity,
       );
 }
 
 class SyncPushNotifier extends StateNotifier<SyncPushState> {
-  SyncPushNotifier() : super(const SyncPushState());
+  final Future<SyncPushResult> Function() _pushRunner;
+  final Future<SyncPullResult> Function() _pullRunner;
+
+  SyncPushNotifier({
+    Future<SyncPushResult> Function()? pushRunner,
+    Future<SyncPullResult> Function()? pullRunner,
+  })  : _pushRunner = pushRunner ?? SyncService.runStartupPush,
+        _pullRunner = pullRunner ?? SyncService.runStartupPull,
+        super(const SyncPushState());
 
   /// Push-only. Kept for backward compat with existing callers.
   Future<void> triggerPush() async {
     if (state.isPushing) return;
     state = state.copyWith(isPushing: true);
-    final result = await SyncService.runStartupPush();
-    state = SyncPushState(
+    final result = await _pushRunner();
+    state = state.copyWith(
       isPushing: false,
       lastPushedCount: result.pushedCount,
       lastFailedCount: result.failedCount,
@@ -72,7 +90,7 @@ class SyncPushNotifier extends StateNotifier<SyncPushState> {
 
     // Push phase.
     state = state.copyWith(isPushing: true);
-    final pushResult = await SyncService.runStartupPush();
+    final pushResult = await _pushRunner();
     state = state.copyWith(
       isPushing: false,
       lastPushedCount: pushResult.pushedCount,
@@ -83,18 +101,24 @@ class SyncPushNotifier extends StateNotifier<SyncPushState> {
 
     // Pull phase.
     state = state.copyWith(isPulling: true);
-    final pullResult = await SyncService.runStartupPull();
-    state = SyncPushState(
-      isPushing: false,
+    final pullResult = await _pullRunner();
+    state = state.copyWith(
       isPulling: false,
-      lastPushedCount: pushResult.pushedCount,
-      lastFailedCount: pushResult.failedCount,
-      lastErrors: pushResult.errors,
-      lastAttemptAt: DateTime.now(),
       lastPulledCount: pullResult.pulledCount,
       lastPullFailedCount: pullResult.failedCount,
       lastPulledAt: DateTime.now(),
     );
+  }
+
+  /// Updates connectivity and auto-syncs on a true offline -> online edge.
+  /// A null initial state -> online does NOT trigger (avoids boot duplicate).
+  void updateConnectivity(ConnectivityResult result) {
+    if (state.connectivity == result) return;
+    final wasOffline = state.connectivity == ConnectivityResult.none;
+    state = state.copyWith(connectivity: result);
+    if (wasOffline && result != ConnectivityResult.none) {
+      unawaited(triggerSync());
+    }
   }
 }
 

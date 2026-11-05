@@ -1,9 +1,15 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers/session_provider.dart';
+import '../../core/sync/connectivity_service.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../screens/login/change_password_dialog.dart';
 import 'app_sidebar.dart';
@@ -23,8 +29,69 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell> {
   final FocusNode _searchFocusNode = FocusNode();
 
+  StreamSubscription<ConnectivityResult>? _connectivitySub;
+  Timer? _periodicSyncTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // F-5: bootstrap after the first frame so provider state is never mutated
+    // during widget-tree build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _bootstrapSync();
+    });
+  }
+
+  /// Attaches the connectivity listener and 30s periodic sync timer.
+  /// All platform calls are guarded so widget tests never fail on
+  /// MissingPluginException or pending timers.
+  void _bootstrapSync() {
+    // connectivity_plus uses platform channels/EventChannels that are not
+    // registered in widget tests; skip the real plugin there so existing
+    // tests never see MissingPluginException.
+    final isTest =
+        Platform.environment.containsKey('FLUTTER_TEST') ||
+        WidgetsBinding.instance.runtimeType.toString().contains('Test');
+    if (isTest) return;
+
+    final svc = ref.read(connectivityServiceProvider);
+
+    try {
+      svc
+          .checkCurrent()
+          .then((result) {
+            if (!mounted) return;
+            ref.read(syncPushProvider.notifier).updateConnectivity(result);
+          })
+          .catchError((Object e) {
+            debugPrint('[F-5] Initial connectivity check failed: $e');
+          });
+
+      _connectivitySub = svc.onConnectivityChanged.listen(
+        (result) {
+          if (!mounted) return;
+          ref.read(syncPushProvider.notifier).updateConnectivity(result);
+        },
+        onError: (Object e) {
+          debugPrint('[F-5] Connectivity stream error: $e');
+        },
+      );
+    } catch (e) {
+      debugPrint('[F-5] Connectivity bootstrap failed: $e');
+    }
+
+    if (!Platform.environment.containsKey('FLUTTER_TEST')) {
+      _periodicSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!mounted) return;
+        ref.read(syncPushProvider.notifier).triggerSync();
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _connectivitySub?.cancel();
+    _periodicSyncTimer?.cancel();
     _searchFocusNode.dispose();
     super.dispose();
   }
@@ -73,7 +140,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   ],
                 ),
               ),
-              const AppStatusBar(),
+              const AppStatusBar(showSyncStatus: true),
             ],
           ),
         ),
