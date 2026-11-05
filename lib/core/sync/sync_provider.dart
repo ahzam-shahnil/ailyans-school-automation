@@ -20,6 +20,13 @@ class SyncPushState {
   /// treated as offline; null is treated as online by the status bar.
   final ConnectivityResult? connectivity;
 
+  /// F-5 fix: true once the first connectivity result has been observed.
+  final bool hasHadFirstCheck;
+
+  /// F-5 fix: true once a non-none result has been observed. Suppresses the
+  /// plugin's boot sequence (none -> wifi) from firing a duplicate sync.
+  final bool hasSeenOnline;
+
   const SyncPushState({
     this.isPushing = false,
     this.lastPushedCount = 0,
@@ -31,6 +38,8 @@ class SyncPushState {
     this.lastPullFailedCount = 0,
     this.lastPulledAt,
     this.connectivity,
+    this.hasHadFirstCheck = false,
+    this.hasSeenOnline = false,
   });
 
   SyncPushState copyWith({
@@ -44,6 +53,8 @@ class SyncPushState {
     int? lastPullFailedCount,
     DateTime? lastPulledAt,
     ConnectivityResult? connectivity,
+    bool? hasHadFirstCheck,
+    bool? hasSeenOnline,
   }) =>
       SyncPushState(
         isPushing: isPushing ?? this.isPushing,
@@ -56,6 +67,8 @@ class SyncPushState {
         lastPullFailedCount: lastPullFailedCount ?? this.lastPullFailedCount,
         lastPulledAt: lastPulledAt ?? this.lastPulledAt,
         connectivity: connectivity ?? this.connectivity,
+        hasHadFirstCheck: hasHadFirstCheck ?? this.hasHadFirstCheck,
+        hasSeenOnline: hasSeenOnline ?? this.hasSeenOnline,
       );
 }
 
@@ -110,13 +123,28 @@ class SyncPushNotifier extends StateNotifier<SyncPushState> {
     );
   }
 
-  /// Updates connectivity and auto-syncs on a true offline -> online edge.
-  /// A null initial state -> online does NOT trigger (avoids boot duplicate).
+  /// Updates connectivity and auto-syncs on a real offline -> online edge.
+  /// The plugin's boot handshake (none -> wifi) is suppressed entirely.
   void updateConnectivity(ConnectivityResult result) {
-    if (state.connectivity == result) return;
+    if (state.connectivity == result) {
+      if (!state.hasHadFirstCheck) {
+        state = state.copyWith(hasHadFirstCheck: true);
+      }
+      return;
+    }
+    final firstCheck = !state.hasHadFirstCheck;
+    final firstOnline =
+        !state.hasSeenOnline && result != ConnectivityResult.none;
     final wasOffline = state.connectivity == ConnectivityResult.none;
-    state = state.copyWith(connectivity: result);
-    if (wasOffline && result != ConnectivityResult.none) {
+    state = state.copyWith(
+      connectivity: result,
+      hasHadFirstCheck: true,
+      hasSeenOnline: state.hasSeenOnline || result != ConnectivityResult.none,
+    );
+    if (!firstCheck &&
+        !firstOnline &&
+        wasOffline &&
+        result != ConnectivityResult.none) {
       unawaited(triggerSync());
     }
   }

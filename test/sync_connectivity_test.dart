@@ -96,6 +96,72 @@ void main() {
         expect(pullCalls, 1);
       },
     );
+
+    test(
+      'updateConnectivity: plugin initial none -> wifi does not fire '
+      'duplicate triggerSync',
+      () async {
+        var pushCalls = 0;
+        var pullCalls = 0;
+
+        final notifier = SyncPushNotifier(
+          pushRunner: () async {
+            pushCalls++;
+            return const SyncPushResult(
+              pushedCount: 0,
+              failedCount: 0,
+              errors: [],
+            );
+          },
+          pullRunner: () async {
+            pullCalls++;
+            return const SyncPullResult(
+              pulledCount: 0,
+              failedCount: 0,
+              errors: [],
+            );
+          },
+        );
+        addTearDown(notifier.dispose);
+
+        // Plugin boot sequence: initial none, then wifi -> zero syncs.
+        notifier.updateConnectivity(ConnectivityResult.none);
+        notifier.updateConnectivity(ConnectivityResult.wifi);
+        await pumpEventQueue();
+        expect(pushCalls, 0);
+        expect(pullCalls, 0);
+        expect(notifier.state.connectivity, ConnectivityResult.wifi);
+        expect(notifier.state.hasSeenOnline, isTrue);
+
+        // Real offline -> online after the handshake -> exactly one sync.
+        notifier.updateConnectivity(ConnectivityResult.none);
+        notifier.updateConnectivity(ConnectivityResult.wifi);
+        await pumpEventQueue();
+        expect(pushCalls, 1);
+        expect(pullCalls, 1);
+      },
+    );
+
+    test('updateConnectivity: hasHadFirstCheck transitions false -> true', () {
+      final notifier = SyncPushNotifier(
+        pushRunner: () async => const SyncPushResult(
+          pushedCount: 0,
+          failedCount: 0,
+          errors: [],
+        ),
+        pullRunner: () async => const SyncPullResult(
+          pulledCount: 0,
+          failedCount: 0,
+          errors: [],
+        ),
+      );
+      addTearDown(notifier.dispose);
+
+      expect(notifier.state.hasHadFirstCheck, isFalse);
+      notifier.updateConnectivity(ConnectivityResult.none);
+      expect(notifier.state.hasHadFirstCheck, isTrue);
+      expect(notifier.state.connectivity, ConnectivityResult.none);
+    });
   });
 
   group('triggerSync connectivity preservation', () {
