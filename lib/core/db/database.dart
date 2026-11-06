@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:school_automation/core/sync/node_id_allocator.dart';
+import 'package:sqflite/sqflite.dart' as mobile; // native Android/iOS
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'migrations.dart';
@@ -35,12 +36,14 @@ class DatabaseService {
   }
 
   Future<Database> _initDatabase() async {
-    // FFI is required for desktop. Android/iOS use the same factory backed by
-    // the native sqlite3 library bundled via sqlite3_flutter_libs.
-    if (Platform.isWindows) {
+    if (Platform.isAndroid || Platform.isIOS) {
+      // Native sqflite (Java/Kotlin plugin). No sqfliteFfiInit needed.
+      databaseFactory = mobile.databaseFactorySqflitePlugin;
+    } else {
+      // Desktop: FFI factory backed by sqlite3_flutter_libs.
       sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
     }
-    databaseFactory = databaseFactoryFfi;
 
     final dbPath = await _getDatabasePath();
 
@@ -49,7 +52,11 @@ class DatabaseService {
       options: OpenDatabaseOptions(
         onConfigure: (db) async {
           // Enable foreign keys
-          await db.execute('PRAGMA foreign_keys = ON');
+          await db.rawQuery('PRAGMA foreign_keys = ON');
+          // Use WAL journaling where the engine supports it.
+          try {
+            await db.rawQuery('PRAGMA journal_mode = WAL');
+          } catch (_) {}
         },
       ),
     );

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -172,10 +173,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _exitApplication() async {
-    try {
-      await windowManager.close();
-    } catch (_) {
-      // In tests or headless environments windowManager might throw
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      try {
+        await windowManager.close();
+      } catch (_) {
+        // In tests or headless environments windowManager might throw
+      }
     }
   }
 

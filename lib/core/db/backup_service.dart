@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:sqflite/sqflite.dart' as mobile; // native Android/iOS
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'database.dart';
@@ -173,8 +174,14 @@ class BackupService {
       }
 
       // Open candidate read-only with singleInstance: false
-      sqfliteFfiInit();
-      final candDb = await databaseFactoryFfi.openDatabase(
+      final DatabaseFactory factory;
+      if (Platform.isAndroid || Platform.isIOS) {
+        factory = mobile.databaseFactorySqflitePlugin;
+      } else {
+        sqfliteFfiInit();
+        factory = databaseFactoryFfi;
+      }
+      final candDb = await factory.openDatabase(
         filePath,
         options: OpenDatabaseOptions(readOnly: true, singleInstance: false),
       );
