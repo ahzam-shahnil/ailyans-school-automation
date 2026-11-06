@@ -11,10 +11,12 @@ import '../../core/providers/session_provider.dart';
 import '../../core/sync/connectivity_service.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../screens/login/change_password_dialog.dart';
 import 'app_sidebar.dart';
 import 'app_status_bar.dart';
 import 'app_top_bar.dart';
+import 'mobile_bottom_nav.dart';
 
 /// Persistent desktop application shell wrapping all authenticated routes.
 class AppShell extends ConsumerStatefulWidget {
@@ -120,31 +122,67 @@ class _AppShellState extends ConsumerState<AppShell> {
       },
       child: Focus(
         autofocus: true,
-        child: Scaffold(
-          body: Column(
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    const AppSidebar(),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          AppTopBar(searchFocusNode: _searchFocusNode),
-                          if (session?.hasWeakPasswordWarning == true)
-                            _buildWeakPasswordBanner(context, ref, session!),
-                          Expanded(child: widget.child),
-                        ],
-                      ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < ResponsiveBreakpoints.mobileMax) {
+              return _buildMobileScaffold(context);
+            }
+
+            return Scaffold(
+              body: Column(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const AppSidebar(),
+                        Expanded(
+                          child: Column(
+                            children: [
+                              AppTopBar(searchFocusNode: _searchFocusNode),
+                              if (session?.hasWeakPasswordWarning == true)
+                                _buildWeakPasswordBanner(
+                                  context,
+                                  ref,
+                                  session!,
+                                ),
+                              Expanded(child: widget.child),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const AppStatusBar(showSyncStatus: true),
+                ],
               ),
-              const AppStatusBar(showSyncStatus: true),
-            ],
-          ),
+            );
+          },
         ),
       ),
+    );
+  }
+
+  String _safeCurrentLocation(BuildContext context) {
+    try {
+      return GoRouterState.of(context).uri.toString();
+    } catch (_) {
+      return '/dashboard';
+    }
+  }
+
+  Widget _buildMobileScaffold(BuildContext context) {
+    final currentLocation = _safeCurrentLocation(context);
+    return Scaffold(
+      backgroundColor: AppColors.surfaceSubtle,
+      appBar: AppTopBar(searchFocusNode: _searchFocusNode, mobile: true),
+      drawer: const MobileDrawer(),
+      body: Column(
+        children: [
+          Expanded(child: widget.child),
+          const AppStatusBar(showSyncStatus: true),
+        ],
+      ),
+      bottomNavigationBar: MobileBottomNav(currentLocation: currentLocation),
     );
   }
 

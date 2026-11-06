@@ -27,7 +27,11 @@ class _NavItemData {
 
 /// Persistent left navigation sidebar / rail.
 class AppSidebar extends ConsumerWidget {
-  const AppSidebar({super.key});
+  /// When true the sidebar is rendered inside a mobile [Drawer]: it is always
+  /// expanded, uses the wider drawer width, and hides the collapse toggle.
+  final bool asDrawer;
+
+  const AppSidebar({super.key, this.asDrawer = false});
 
   static const List<_NavItemData> _navItems = [
     _NavItemData(
@@ -91,16 +95,21 @@ class AppSidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isExpanded = ref.watch(sidebarExpandedProvider);
+    final isExpanded = asDrawer || ref.watch(sidebarExpandedProvider);
     final session = ref.watch(sessionProvider);
     final metadataAsync = ref.watch(shellMetadataProvider);
     final metadata = metadataAsync.valueOrNull ?? ShellMetadata.empty();
 
-    final currentPath = GoRouterState.of(context).matchedLocation;
+    String currentPath;
+    try {
+      currentPath = GoRouterState.of(context).matchedLocation;
+    } catch (_) {
+      currentPath = '/dashboard';
+    }
 
     return AnimatedContainer(
       duration: AppDuration.fast,
-      width: isExpanded ? 240.0 : 68.0,
+      width: asDrawer ? 280.0 : (isExpanded ? 240.0 : 68.0),
       decoration: const BoxDecoration(
         color: AppColors.surfaceRaised,
         border: Border(
@@ -149,7 +158,7 @@ class AppSidebar extends ConsumerWidget {
               badgeCount: 0,
             ),
 
-          _buildCollapseToggle(ref, isExpanded),
+          if (!asDrawer) _buildCollapseToggle(ref, isExpanded),
         ],
       ),
     );
@@ -226,7 +235,12 @@ class AppSidebar extends ConsumerWidget {
     required int badgeCount,
   }) {
     final itemWidget = InkWell(
-      onTap: () => context.go(item.route),
+      onTap: () {
+        if (asDrawer) {
+          Navigator.of(context).maybePop();
+        }
+        context.go(item.route);
+      },
       child: Container(
         height: 44.0,
         margin: const EdgeInsets.symmetric(
@@ -390,5 +404,18 @@ class AppSidebar extends ConsumerWidget {
     if (session.user.userLevel == 1) return true;
     if (requiredObjIds.isEmpty) return false;
     return requiredObjIds.any((id) => session.allowedObjIds.contains(id));
+  }
+}
+
+/// Mobile slide-out navigation drawer wrapping [AppSidebar] in drawer mode.
+class MobileDrawer extends StatelessWidget {
+  const MobileDrawer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Drawer(
+      width: 280,
+      child: SafeArea(child: AppSidebar(asDrawer: true)),
+    );
   }
 }

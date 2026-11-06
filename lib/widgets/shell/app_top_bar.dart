@@ -27,10 +27,16 @@ final branchListProvider = FutureProvider<List<Map<String, dynamic>>>((
 final currentBranchProvider = StateProvider<String?>((ref) => null);
 
 /// Persistent top bar of the desktop application shell.
-class AppTopBar extends ConsumerStatefulWidget {
+class AppTopBar extends ConsumerStatefulWidget implements PreferredSizeWidget {
   final FocusNode? searchFocusNode;
 
-  const AppTopBar({super.key, this.searchFocusNode});
+  /// When true renders the compact Phase G-2 mobile variant.
+  final bool mobile;
+
+  const AppTopBar({super.key, this.searchFocusNode, this.mobile = false});
+
+  @override
+  Size get preferredSize => const Size.fromHeight(64);
 
   @override
   ConsumerState<AppTopBar> createState() => _AppTopBarState();
@@ -102,8 +108,17 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
     final metadataAsync = ref.watch(shellMetadataProvider);
     final metadata = metadataAsync.valueOrNull ?? ShellMetadata.empty();
 
-    final currentPath = GoRouterState.of(context).matchedLocation;
+    String currentPath;
+    try {
+      currentPath = GoRouterState.of(context).matchedLocation;
+    } catch (_) {
+      currentPath = '/dashboard';
+    }
     final breadcrumb = _getBreadcrumb(currentPath);
+
+    if (widget.mobile) {
+      return _buildMobileBar(context, ref, metadata, session, breadcrumb);
+    }
 
     return Container(
       height: 64.0,
@@ -203,6 +218,93 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  /// Compact Phase G-2 top bar used below the 600px breakpoint.
+  Widget _buildMobileBar(
+    BuildContext context,
+    WidgetRef ref,
+    ShellMetadata metadata,
+    UserSession? session,
+    String breadcrumb,
+  ) {
+    return Container(
+      height: 64.0,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(
+          bottom: BorderSide(color: AppColors.borderDefault, width: 1.0),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.menu),
+            color: AppColors.textPrimary,
+            tooltip: 'Open navigation menu',
+            visualDensity: VisualDensity.compact,
+            onPressed: () => Scaffold.maybeOf(context)?.openDrawer(),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+
+          // Compact title (breadcrumb trail, single line).
+          Expanded(
+            child: Text(
+              breadcrumb,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+
+          IconButton(
+            icon: const Icon(Icons.search),
+            color: AppColors.textSecondary,
+            tooltip: 'Search',
+            visualDensity: VisualDensity.compact,
+            onPressed: () {
+              try {
+                context.push('/search');
+              } catch (_) {}
+            },
+          ),
+          const SizedBox(width: AppSpacing.xxs),
+
+          // Compact session chip; shrinks with an ellipsis before overflowing.
+          Flexible(
+            flex: 2,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6.0,
+                vertical: 4.0,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.statusInfoBg,
+                border: Border.all(color: AppColors.statusInfoBorder),
+                borderRadius: BorderRadius.circular(AppRadius.full),
+              ),
+              child: Text(
+                metadata.sessionYear,
+                maxLines: 1,
+                softWrap: false,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.statusInfoText,
+                  fontSize: 11.0,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xxs),
+
+          _buildUserMenu(context, ref, session, showUserText: false),
+        ],
       ),
     );
   }
@@ -350,10 +452,6 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
     required bool showBell,
     required bool showDivider,
   }) {
-    final userName = session?.user.name ?? 'Guest User';
-    final userDesig = session?.user.designation ?? 'Operator';
-    final initials = _getInitials(userName);
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -400,142 +498,155 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
           ),
 
         // User Profile Menu
-        PopupMenuButton<String>(
-          offset: const Offset(0, 48),
-          color: AppColors.surfaceRaised,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            side: const BorderSide(color: AppColors.borderDefault),
-          ),
-          onSelected: (value) {
-            if (value == 'logout') {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  ref.read(sessionProvider.notifier).clear();
-                  context.go('/login');
-                }
-              });
-            } else if (value == 'change_password') {
-              ChangePasswordDialog.show(context, username: session?.user.name);
-            } else if (value == 'profile') {
-              _showProfileDialog(context, session);
+        _buildUserMenu(context, ref, session, showUserText: showUserText),
+      ],
+    );
+  }
+
+  Widget _buildUserMenu(
+    BuildContext context,
+    WidgetRef ref,
+    UserSession? session, {
+    required bool showUserText,
+  }) {
+    final userName = session?.user.name ?? 'Guest User';
+    final userDesig = session?.user.designation ?? 'Operator';
+    final initials = _getInitials(userName);
+
+    return PopupMenuButton<String>(
+      offset: const Offset(0, 48),
+      color: AppColors.surfaceRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        side: const BorderSide(color: AppColors.borderDefault),
+      ),
+      onSelected: (value) {
+        if (value == 'logout') {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ref.read(sessionProvider.notifier).clear();
+              context.go('/login');
             }
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              enabled: false,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    userName,
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  Text(
-                    userDesig,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
+          });
+        } else if (value == 'change_password') {
+          ChangePasswordDialog.show(context, username: session?.user.name);
+        } else if (value == 'profile') {
+          _showProfileDialog(context, session);
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                userName,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textPrimary,
+                ),
               ),
-            ),
-            const PopupMenuDivider(),
-            const PopupMenuItem(
-              value: 'profile',
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.person_outline,
-                    size: 18.0,
-                    color: AppColors.textSecondary,
-                  ),
-                  SizedBox(width: AppSpacing.xs),
-                  Text('Profile Information', style: AppTypography.bodySmall),
-                ],
+              Text(
+                userDesig,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
               ),
-            ),
-            const PopupMenuItem(
-              value: 'change_password',
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.lock_outline,
-                    size: 18.0,
-                    color: AppColors.textSecondary,
-                  ),
-                  SizedBox(width: AppSpacing.xs),
-                  Text('Change Password', style: AppTypography.bodySmall),
-                ],
-              ),
-            ),
-            const PopupMenuDivider(),
-            PopupMenuItem(
-              value: 'logout',
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.logout,
-                    size: 18.0,
-                    color: AppColors.statusErrorText,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    'Sign Out',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.statusErrorText,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: 'profile',
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 16.0,
-                backgroundColor: AppColors.brandPrimary,
-                child: Text(
-                  initials,
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.surfaceRaised,
-                    fontSize: 12.0,
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              if (showUserText)
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      userName,
-                      style: AppTypography.label.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      userDesig,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textMuted,
-                        fontSize: 10.0,
-                      ),
-                    ),
-                  ],
-                ),
-              const Icon(
-                Icons.arrow_drop_down,
+              Icon(
+                Icons.person_outline,
                 size: 18.0,
                 color: AppColors.textSecondary,
+              ),
+              SizedBox(width: AppSpacing.xs),
+              Text('Profile Information', style: AppTypography.bodySmall),
+            ],
+          ),
+        ),
+        const PopupMenuItem(
+          value: 'change_password',
+          child: Row(
+            children: [
+              Icon(
+                Icons.lock_outline,
+                size: 18.0,
+                color: AppColors.textSecondary,
+              ),
+              SizedBox(width: AppSpacing.xs),
+              Text('Change Password', style: AppTypography.bodySmall),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: 'logout',
+          child: Row(
+            children: [
+              const Icon(
+                Icons.logout,
+                size: 18.0,
+                color: AppColors.statusErrorText,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                'Sign Out',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.statusErrorText,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
         ),
       ],
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 16.0,
+            backgroundColor: AppColors.brandPrimary,
+            child: Text(
+              initials,
+              style: AppTypography.label.copyWith(
+                color: AppColors.surfaceRaised,
+                fontSize: 12.0,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          if (showUserText)
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userName,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  userDesig,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                    fontSize: 10.0,
+                  ),
+                ),
+              ],
+            ),
+          const Icon(
+            Icons.arrow_drop_down,
+            size: 18.0,
+            color: AppColors.textSecondary,
+          ),
+        ],
+      ),
     );
   }
 
