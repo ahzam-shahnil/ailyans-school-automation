@@ -45,6 +45,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
   final ScrollController _panelScrollController = ScrollController();
   bool _isInitialized = false;
   bool _tab4Refreshed = false;
+  bool _cloudSyncStatsRefreshed = false;
   bool _obscureAnonKey = true;
 
   @override
@@ -186,6 +187,18 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
       // Sync if reset/discarded or refreshed
       if (next.branch != prev?.branch && !next.isLoading) {
         _syncControllers(next);
+      }
+
+      // F-6 fix: reset stats latch when tab 5 becomes active OR after save.
+      if (next.activeTab == 5 && prev?.activeTab != 5) {
+        _cloudSyncStatsRefreshed = false;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ref.read(systemSettingsProvider.notifier).refreshSyncStats();
+        });
+      }
+      if (next.config != prev?.config || next.branch != prev?.branch) {
+        _cloudSyncStatsRefreshed = false;
       }
     });
 
@@ -1175,6 +1188,14 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
         ? state.config.nodeId
         : 'windows';
     final busy = state.isForcePushing || state.isForcePulling;
+
+    if (!_cloudSyncStatsRefreshed) {
+      _cloudSyncStatsRefreshed = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(systemSettingsProvider.notifier).refreshSyncStats();
+      });
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

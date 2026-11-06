@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../db/database.dart';
+import '../sync/connectivity_service.dart';
 import '../sync/node_id_allocator.dart';
 import '../sync/supabase_client.dart';
+import '../sync/sync_provider.dart';
 import '../sync/sync_service.dart';
 import 'available_sessions_provider.dart';
 import 'shell_metadata_provider.dart';
@@ -817,6 +820,18 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
       if (state.config.supabaseUrl != oldConfig.supabaseUrl ||
           state.config.supabaseAnonKey != oldConfig.supabaseAnonKey) {
         await _reconfigureRunner();
+      }
+
+      // F-6 fix: force connectivity re-check so status bar flips immediately
+      // after URL/key change (Argon fix 4).
+      if (_ref != null) {
+        try {
+          final connSvc = _ref!.read(connectivityServiceProvider);
+          final result = await connSvc.checkCurrent();
+          _ref!.read(syncPushProvider.notifier).updateConnectivity(result);
+        } catch (e) {
+          debugPrint('[F-6] Post-save connectivity check failed: $e');
+        }
       }
 
       await refreshSyncStats();
