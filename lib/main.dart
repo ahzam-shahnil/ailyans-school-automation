@@ -38,7 +38,10 @@ void main() async {
   await DatabaseService.instance.database;
 
   if (const bool.fromEnvironment('CLOUD_SYNC_CONFIGURED', defaultValue: true)) {
-    SupabaseClientWrapper.init().then((_) async {
+    bool syncBootstrapped = false;
+    SupabaseClientWrapper.init().then((ready) async {
+      if (!ready || syncBootstrapped) return;
+      syncBootstrapped = true;
       await SyncService.runStartupPush();
       await SyncService.runStartupPull();
     });
