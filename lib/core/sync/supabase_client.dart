@@ -25,7 +25,6 @@ class SupabaseClientWrapper {
   static Future<bool> init() async {
     if (_initialized && _authReady) return true;
 
-    // 1. Resolve credentials from dart-define, then app_config fallback.
     String url = const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
     String anonKey =
         const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
@@ -36,71 +35,58 @@ class SupabaseClientWrapper {
       defaultValue: '',
     );
 
-    if (url.isEmpty || anonKey.isEmpty || email.isEmpty || password.isEmpty) {
-      try {
-        final db = await DatabaseService.instance.database;
-        final rows = await db.query(
-          'app_config',
-          columns: ['config_key', 'config_value'],
-          where: "config_key IN ('supabase_url', 'supabase_anon_key', "
-              "'supabase_sync_email', 'supabase_sync_password')",
-        );
-        for (final r in rows) {
-          final key = r['config_key'];
-          final value = (r['config_value'] as String?) ?? '';
-          if (key == 'supabase_url' && url.isEmpty) url = value;
-          if (key == 'supabase_anon_key' && anonKey.isEmpty) anonKey = value;
-          if (key == 'supabase_sync_email' && email.isEmpty) email = value;
-          if (key == 'supabase_sync_password' && password.isEmpty) {
-            password = value;
-          }
-        }
-      } catch (e) {
-        debugPrint('[F-4a-1] app_config read failed: $e');
+    // Runtime app_config ALWAYS overrides compile-time dart-define when non-empty.
+    try {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.query(
+        'app_config',
+        columns: ['config_key', 'config_value'],
+        where: "config_key IN ('supabase_url', 'supabase_anon_key', "
+            "'supabase_sync_email', 'supabase_sync_password')",
+      );
+      final cfg = <String, String>{
+        for (final r in rows)
+          if (r['config_key'] is String && r['config_value'] is String)
+            r['config_key'] as String: (r['config_value'] as String).trim(),
+      };
+      if ((cfg['supabase_url'] ?? '').isNotEmpty) {
+        url = cfg['supabase_url']!;
       }
+      if ((cfg['supabase_anon_key'] ?? '').isNotEmpty) {
+        anonKey = cfg['supabase_anon_key']!;
+      }
+      if ((cfg['supabase_sync_email'] ?? '').isNotEmpty) {
+        email = cfg['supabase_sync_email']!;
+      }
+      if ((cfg['supabase_sync_password'] ?? '').isNotEmpty) {
+        password = cfg['supabase_sync_password']!;
+      }
+    } catch (_) {
+      // Fallback to dart-define if DB is unavailable in isolated unit tests.
     }
 
-    if (url.isEmpty || anonKey.isEmpty) {
-      debugPrint('[F-4a-1] Supabase credentials not configured; sync disabled.');
+    if (url.isEmpty || anonKey.isEmpty || email.isEmpty || password.isEmpty) {
       return false;
     }
 
-    // 2. Initialize Supabase (global singleton).
-    if (!_initialized) {
-      try {
+    // Set _currentUrl BEFORE network/auth calls so ConnectivityService probes
+    // the exact configured URL even if signInWithPassword fails on a bad URL.
+    _currentUrl = url;
+
+    try {
+      if (!_initialized) {
         // ignore: deprecated_member_use
         await Supabase.initialize(url: url, anonKey: anonKey);
         _initialized = true;
-        _currentUrl = url;
-      } catch (e) {
-        debugPrint('[F-4a-1] Supabase.initialize failed: $e');
-        return false;
       }
-    } else {
-      _currentUrl = url;
-    }
-
-    // 3. Sign in as sync service account if no session exists.
-    try {
-      final auth = Supabase.instance.client.auth;
-      if (auth.currentSession == null) {
-        if (email.isEmpty || password.isEmpty) {
-          debugPrint('[F-4a-1] Sync credentials missing; auth skipped.');
-          _authReady = false;
-          return false;
-        }
-        final resp = await auth.signInWithPassword(email: email, password: password);
-        if (resp.session == null) {
-          debugPrint('[F-4a-1] signInWithPassword returned null session.');
-          _authReady = false;
-          return false;
-        }
+      final client = Supabase.instance.client;
+      if (client.auth.currentSession == null) {
+        await client.auth.signInWithPassword(email: email, password: password);
       }
-      _authReady = true;
-      debugPrint('[F-4a-1] Supabase ready, session active.');
-      return true;
+      _authReady = client.auth.currentSession != null;
+      return _authReady;
     } catch (e) {
-      debugPrint('[F-4a-1] Sign-in failed: $e');
+      debugPrint('[SupabaseClientWrapper] init failed for $url: $e');
       _authReady = false;
       return false;
     }

@@ -23,29 +23,32 @@ class ConnectivityService {
     return results.firstWhere((r) => r != ConnectivityResult.none);
   }
 
-  /// Supabase URL resolution order: dart-define, live client, app_config.
+  /// Supabase URL resolution order: live client, app_config, dart-define.
   static Future<String?> _supabaseUrl() async {
-    const envUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
-    if (envUrl.isNotEmpty) return envUrl;
-
-    final current = SupabaseClientWrapper.supabaseUrl;
+    // 1. Active runtime URL from SupabaseClientWrapper (set before auth attempt)
+    final current = SupabaseClientWrapper.supabaseUrl?.trim();
     if (current != null && current.isNotEmpty) return current;
 
+    // 2. Persisted runtime override in SQLite app_config
     try {
       final db = await DatabaseService.instance.database;
       final rows = await db.query(
         'app_config',
         columns: ['config_value'],
-        where: 'config_key = ?',
-        whereArgs: ['supabase_url'],
+        where: "config_key = 'supabase_url'",
         limit: 1,
       );
-      if (rows.isEmpty) return null;
-      final value = (rows.first['config_value'] as String?) ?? '';
-      return value.isEmpty ? null : value;
-    } catch (_) {
-      return null;
-    }
+      if (rows.isNotEmpty) {
+        final val = (rows.first['config_value'] as String?)?.trim();
+        if (val != null && val.isNotEmpty) return val;
+      }
+    } catch (_) {}
+
+    // 3. Compile-time dart-define fallback
+    const envUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+    if (envUrl.isNotEmpty) return envUrl;
+
+    return null;
   }
 
   /// Probes actual reachability because macOS can report an interface as up
