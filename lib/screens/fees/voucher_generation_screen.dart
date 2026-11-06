@@ -1355,14 +1355,17 @@ class _VoucherGenerationScreenState
               children: [
                 const Icon(Icons.tune, size: 12, color: AppColors.textMuted),
                 const SizedBox(width: AppSpacing.xs),
-                Text(
-                  'FEE HEADS',
-                  style: AppTypography.bodySmall.copyWith(
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                Expanded(
+                  child: Text(
+                    'FEE HEADS',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
                   ),
                 ),
-                const Spacer(),
                 TextButton.icon(
                   onPressed: () => context.go('/fees/parameters'),
                   icon: const Icon(Icons.edit_outlined, size: 12),
@@ -1372,7 +1375,7 @@ class _VoucherGenerationScreenState
                   ),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
+                      horizontal: 4,
                       vertical: 2,
                     ),
                     minimumSize: Size.zero,

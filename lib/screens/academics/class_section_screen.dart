@@ -842,10 +842,12 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                 ),
                                 child: Row(
                                   children: [
-                                    SizedBox(
-                                      width: 60,
+                                    Expanded(
+                                      flex: 2,
                                       child: Text(
                                         '#$secId',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                           fontFamily: 'monospace',
                                           fontSize: 12,
@@ -853,10 +855,12 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                         ),
                                       ),
                                     ),
-                                    SizedBox(
-                                      width: 70,
+                                    Expanded(
+                                      flex: 2,
                                       child: Text(
                                         secName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: AppTypography.body.copyWith(
                                           fontWeight: FontWeight.w600,
                                           color: AppColors.textPrimary,
@@ -864,7 +868,7 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                       ),
                                     ),
                                     Expanded(
-                                      flex: 2,
+                                      flex: 5,
                                       child: Text(
                                         teacher,
                                         style: AppTypography.bodySmall.copyWith(
@@ -876,7 +880,7 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                       ),
                                     ),
                                     Expanded(
-                                      flex: 2,
+                                      flex: 5,
                                       child: Text(
                                         proctor,
                                         style: AppTypography.bodySmall.copyWith(
@@ -887,8 +891,8 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    SizedBox(
-                                      width: 100,
+                                    Expanded(
+                                      flex: 3,
                                       child: Text(
                                         room,
                                         style: AppTypography.bodySmall.copyWith(
@@ -897,8 +901,8 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    SizedBox(
-                                      width: 100,
+                                    Expanded(
+                                      flex: 3,
                                       child: Center(
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(
@@ -915,6 +919,8 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                           ),
                                           child: Text(
                                             '$enrolled students',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
@@ -927,7 +933,7 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                       ),
                                     ),
                                     SizedBox(
-                                      width: 90,
+                                      width: 72,
                                       child: Row(
                                         mainAxisAlignment:
                                             MainAxisAlignment.end,
@@ -947,11 +953,10 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                             tooltip: 'Edit section',
                                             splashRadius: 16,
                                             padding: EdgeInsets.zero,
-                                            constraints:
-                                                const BoxConstraints.tightFor(
-                                                  width: 32,
-                                                  height: 32,
-                                                ),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 32,
+                                              minHeight: 32,
+                                            ),
                                             onPressed: () =>
                                                 _handleEditSection(secId),
                                           ),
@@ -972,11 +977,10 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
                                             tooltip: 'Delete section',
                                             splashRadius: 16,
                                             padding: EdgeInsets.zero,
-                                            constraints:
-                                                const BoxConstraints.tightFor(
-                                                  width: 32,
-                                                  height: 32,
-                                                ),
+                                            constraints: const BoxConstraints(
+                                              minWidth: 32,
+                                              minHeight: 32,
+                                            ),
                                             onPressed: () =>
                                                 _handleDeleteSection(secId),
                                           ),
@@ -1005,10 +1009,12 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          const SizedBox(
-            width: 60,
+          const Expanded(
+            flex: 2,
             child: Text(
               '#ID',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -1016,10 +1022,12 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
               ),
             ),
           ),
-          const SizedBox(
-            width: 70,
+          const Expanded(
+            flex: 2,
             child: Text(
               'Sec',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -1028,9 +1036,11 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 5,
             child: Text(
               'Incharge Teacher',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTypography.bodySmall.copyWith(
                 fontWeight: FontWeight.w700,
                 color: AppColors.textSecondary,
@@ -1038,19 +1048,23 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
+            flex: 5,
             child: Text(
               'Proctor',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTypography.bodySmall.copyWith(
                 fontWeight: FontWeight.w700,
                 color: AppColors.textSecondary,
               ),
             ),
           ),
-          const SizedBox(
-            width: 100,
+          const Expanded(
+            flex: 3,
             child: Text(
               'Room',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -1058,11 +1072,13 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
               ),
             ),
           ),
-          const SizedBox(
-            width: 100,
+          const Expanded(
+            flex: 3,
             child: Center(
               child: Text(
                 'Enrolled',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
@@ -1072,7 +1088,7 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
             ),
           ),
           const SizedBox(
-            width: 90,
+            width: 72,
             child: Align(
               alignment: Alignment.centerRight,
               child: Text(

@@ -1254,12 +1254,17 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     final isSorted = filters.sortColumn == column;
     final isAsc = filters.sortDirection == SortDirection.ascending;
 
-    final headerText = Text(
-      label,
-      style: AppTypography.label.copyWith(
-        fontSize: 11.0,
-        color: isSorted ? AppColors.brandPrimary : AppColors.textSecondary,
-        fontWeight: FontWeight.w600,
+    final headerText = Flexible(
+      fit: FlexFit.loose,
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.label.copyWith(
+          fontSize: 11.0,
+          color: isSorted ? AppColors.brandPrimary : AppColors.textSecondary,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
 

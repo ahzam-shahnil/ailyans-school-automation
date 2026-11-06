@@ -815,77 +815,93 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
                         }
 
                         return SingleChildScrollView(
-                          child: DataTable(
-                            headingRowHeight: 40,
-                            dataRowMinHeight: 40,
-                            dataRowMaxHeight: 44,
-                            columns: const [
-                              DataColumn(label: Text('Reg ID')),
-                              DataColumn(label: Text('Roll No')),
-                              DataColumn(label: Text('Student Name')),
-                              DataColumn(label: Text('Father Name')),
-                              DataColumn(label: Text('Present')),
-                              DataColumn(label: Text('Actions')),
-                            ],
-                            rows: state.roster.map((row) {
-                              return DataRow(
-                                cells: [
-                                  DataCell(
-                                    Text(
-                                      '#${row.stuRegId}',
-                                      style: AppTypography.monospace,
-                                    ),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              return SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minWidth: constraints.maxWidth,
                                   ),
-                                  DataCell(
-                                    Text(
-                                      row.classRollNo.toString().padLeft(
-                                        2,
-                                        '0',
-                                      ),
-                                      style: AppTypography.monospace,
-                                    ),
+                                  child: DataTable(
+                                    headingRowHeight: 40,
+                                    dataRowMinHeight: 40,
+                                    dataRowMaxHeight: 44,
+                                    columns: const [
+                                      DataColumn(label: Text('Reg ID')),
+                                      DataColumn(label: Text('Roll No')),
+                                      DataColumn(label: Text('Student Name')),
+                                      DataColumn(label: Text('Father Name')),
+                                      DataColumn(label: Text('Present')),
+                                      DataColumn(label: Text('Actions')),
+                                    ],
+                                    rows: state.roster.map((row) {
+                                      return DataRow(
+                                        cells: [
+                                          DataCell(
+                                            Text(
+                                              '#${row.stuRegId}',
+                                              style: AppTypography.monospace,
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              row.classRollNo
+                                                  .toString()
+                                                  .padLeft(2, '0'),
+                                              style: AppTypography.monospace,
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              row.fullName,
+                                              style: AppTypography.label,
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Text(
+                                              row.fatherName ?? '-',
+                                              style: AppTypography.bodySmall,
+                                            ),
+                                          ),
+                                          DataCell(
+                                            Checkbox(
+                                              value: row.present,
+                                              onChanged: (val) {
+                                                if (val != null) {
+                                                  ref
+                                                      .read(
+                                                        bulkEnrollmentProvider
+                                                            .notifier,
+                                                      )
+                                                      .togglePresent(
+                                                        row.stuRegId,
+                                                        val,
+                                                      );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                          DataCell(
+                                            IconButton(
+                                              icon: const Icon(
+                                                Icons.delete_outline,
+                                                size: 18,
+                                                color:
+                                                    AppColors.statusErrorText,
+                                              ),
+                                              tooltip: 'Remove Student',
+                                              onPressed: () =>
+                                                  _confirmRemoveStudent(row),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }).toList(),
                                   ),
-                                  DataCell(
-                                    Text(
-                                      row.fullName,
-                                      style: AppTypography.label,
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Text(
-                                      row.fatherName ?? '-',
-                                      style: AppTypography.bodySmall,
-                                    ),
-                                  ),
-                                  DataCell(
-                                    Checkbox(
-                                      value: row.present,
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          ref
-                                              .read(
-                                                bulkEnrollmentProvider.notifier,
-                                              )
-                                              .togglePresent(row.stuRegId, val);
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  DataCell(
-                                    IconButton(
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        size: 18,
-                                        color: AppColors.statusErrorText,
-                                      ),
-                                      tooltip: 'Remove Student',
-                                      onPressed: () =>
-                                          _confirmRemoveStudent(row),
-                                    ),
-                                  ),
-                                ],
+                                ),
                               );
-                            }).toList(),
+                            },
                           ),
                         );
                       },
