@@ -272,11 +272,15 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
           ),
           child: Row(
             children: [
-              Text(
-                'OPERATOR DIRECTORY',
-                style: AppTypography.h3.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14.0,
+              Expanded(
+                child: Text(
+                  'OPERATOR DIRECTORY',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.h3.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14.0,
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
@@ -299,7 +303,6 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   ),
                 ),
               ),
-              const Spacer(),
               OutlinedButton.icon(
                 icon: const Icon(Icons.settings_outlined, size: 16),
                 label: const Text('Settings'),
@@ -1028,15 +1031,22 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
           ),
         ),
 
-        // Pinned Bottom Action Bar (52px height)
+        // Pinned Bottom Action Bar (min 52px height; wraps when narrow)
         Container(
-          height: 52.0,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          constraints: const BoxConstraints(minHeight: 52.0),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 6.0,
+          ),
           decoration: const BoxDecoration(
             color: AppColors.surfaceRaised,
             border: Border(top: BorderSide(color: AppColors.borderDefault)),
           ),
-          child: Row(
+          child: Wrap(
+            spacing: 8.0,
+            runSpacing: 8.0,
+            alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               // Deactivate User Button
               if (!isNew && user != null && user.isActive)
@@ -1054,8 +1064,6 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                   onPressed: () => _confirmDeactivate(user),
                 ),
 
-              const Spacer(),
-
               // Cancel Button
               OutlinedButton(
                 onPressed: () {
@@ -1065,7 +1073,6 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
                 },
                 child: const Text('Cancel'),
               ),
-              const SizedBox(width: AppSpacing.sm),
 
               // Save User CTA
               ElevatedButton.icon(

@@ -673,6 +673,7 @@ class _VoucherGenerationScreenState
           children: [
             Expanded(
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   if (from != null && from.isNotEmpty) ...[
                     OutlinedButton.icon(
@@ -697,6 +698,7 @@ class _VoucherGenerationScreenState
                     const SizedBox(width: AppSpacing.sm),
                   ],
                   Flexible(
+                    flex: 3,
                     child: Text(
                       'Monthly Voucher Generation Engine',
                       style: AppTypography.h1.copyWith(
@@ -707,21 +709,26 @@ class _VoucherGenerationScreenState
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSubtle,
-                      borderRadius: BorderRadius.circular(AppRadius.full),
-                      border: Border.all(color: AppColors.borderDefault),
-                    ),
-                    child: Text(
-                      '$eligibleCount Eligible Students',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceSubtle,
+                        borderRadius: BorderRadius.circular(AppRadius.full),
+                        border: Border.all(color: AppColors.borderDefault),
+                      ),
+                      child: Text(
+                        '$eligibleCount Eligible Students',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -835,6 +842,12 @@ class _VoucherGenerationScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
           Text(
             'Batch Generation Parameters',
             style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
@@ -1179,12 +1192,14 @@ class _VoucherGenerationScreenState
           ),
           const SizedBox(height: AppSpacing.sm),
 
-          // Fee heads fill the remaining space; never overflow (clips + scrolls
-          // internally only if a class has an unusually large number of heads).
-          Expanded(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: _buildFeeHeadsCompact(tariffsAsync, filters),
+                  // Fee heads are height-bounded so their internal scroll view
+                  // never receives unbounded vertical constraints.
+                  SizedBox(
+                    height: 220,
+                    child: _buildFeeHeadsCompact(tariffsAsync, filters),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.md),

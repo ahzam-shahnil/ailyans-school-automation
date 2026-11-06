@@ -347,7 +347,7 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
             children: [
               // Session Year
               Expanded(
-                flex: 2,
+                flex: 3,
                 child: _buildDropdownField<String>(
                   label: 'Session',
                   value: effectiveSessions.contains(state.selectedSessionYr)

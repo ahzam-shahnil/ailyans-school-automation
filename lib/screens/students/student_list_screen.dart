@@ -754,6 +754,8 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 flex: 2,
                                 child: Text(
                                   'FATHER NAME',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: AppTypography.label.copyWith(
                                     fontSize: 11.0,
                                     color: AppColors.textSecondary,
