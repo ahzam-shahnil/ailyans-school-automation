@@ -82,6 +82,17 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     );
   }
 
+  Future<void> _handleShare(Uint8List bytes, String filename) async {
+    await Printing.sharePdf(bytes: bytes, filename: filename);
+  }
+
+  void _setVoucherMode(int mode) {
+    setState(() => _selectedFeeMode = mode);
+    ref
+        .read(reportPreviewProvider(widget.request).notifier)
+        .regenerateWithMode(mode);
+  }
+
   void _handleClose() => Navigator.of(context).pop();
 
   // ---------------------------------------------------------------------------
@@ -134,8 +145,9 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     };
 
     final size = MediaQuery.sizeOf(context);
-    final dialogWidth = size.width * 0.92;
-    final dialogHeight = size.height * 0.92;
+    final isMobile = size.width < 600;
+    final dialogWidth = isMobile ? size.width : size.width * 0.92;
+    final dialogHeight = isMobile ? size.height : size.height * 0.92;
 
     return CallbackShortcuts(
       bindings: shortcuts,
@@ -145,21 +157,34 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
         child: Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: EdgeInsets.zero,
-          child: SizedBox(
-            width: dialogWidth,
-            height: dialogHeight,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surfaceRaised,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildToolbar(state),
-                  Expanded(child: _buildBody(state)),
-                ],
+          shape: isMobile
+              ? const RoundedRectangleBorder()
+              : RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+          child: SafeArea(
+            top: isMobile,
+            bottom: false,
+            left: false,
+            right: false,
+            child: SizedBox(
+              width: dialogWidth,
+              height: dialogHeight,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceRaised,
+                  borderRadius: isMobile
+                      ? BorderRadius.zero
+                      : BorderRadius.circular(AppRadius.lg),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildToolbar(state, isMobile),
+                    Expanded(child: _buildBody(state)),
+                  ],
+                ),
               ),
             ),
           ),
@@ -172,7 +197,11 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   // Toolbar
   // ---------------------------------------------------------------------------
 
-  Widget _buildToolbar(ReportPreviewState state) {
+  Widget _buildToolbar(ReportPreviewState state, bool isMobile) {
+    if (isMobile) {
+      return _buildMobileToolbar(state);
+    }
+
     final hasBytes = state.bytes != null;
 
     return Container(
@@ -284,6 +313,114 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             tooltip: 'Close (Esc)',
             iconSize: 20,
             onPressed: _handleClose,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Mobile toolbar
+  // ---------------------------------------------------------------------------
+
+  Widget _buildMobileToolbar(ReportPreviewState state) {
+    final hasBytes = state.bytes != null;
+    final isVoucher = widget.request.type == ReportType.feeVoucher;
+
+    return Container(
+      height: 56.0,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(
+          bottom: BorderSide(color: AppColors.borderDefault, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.close, size: 20),
+            tooltip: 'Close',
+            onPressed: () => _handleClose(),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              widget.request.effectiveTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.h3,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.share_outlined, size: 20),
+            tooltip: 'Share PDF',
+            onPressed: hasBytes
+                ? () => _handleShare(
+                      state.bytes!,
+                      widget.request.effectiveFileName,
+                    )
+                : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.print_outlined, size: 20),
+            tooltip: 'Print',
+            onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 20),
+            tooltip: 'More actions',
+            onSelected: (value) {
+              switch (value) {
+                case 'export':
+                  if (hasBytes) _handleSavePdf(state.bytes!);
+                  break;
+                case 'regenerate':
+                  ref
+                      .read(reportPreviewProvider(widget.request).notifier)
+                      .generate();
+                  break;
+                case 'voucher_slips':
+                  _setVoucherMode(0);
+                  break;
+                case 'voucher_ledger':
+                  _setVoucherMode(1);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'export',
+                child: Row(
+                  children: [
+                    Icon(Icons.download_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Text('Export PDF'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'regenerate',
+                child: Row(
+                  children: [
+                    Icon(Icons.refresh_rounded, size: 18),
+                    SizedBox(width: 8),
+                    Text('Regenerate'),
+                  ],
+                ),
+              ),
+              if (isVoucher) ...[
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                  value: 'voucher_slips',
+                  child: Text('Mode: 3-Copy Slips'),
+                ),
+                const PopupMenuItem(
+                  value: 'voucher_ledger',
+                  child: Text('Mode: Cohort Ledger'),
+                ),
+              ],
+            ],
           ),
         ],
       ),

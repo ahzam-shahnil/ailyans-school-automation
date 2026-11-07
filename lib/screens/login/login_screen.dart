@@ -200,8 +200,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                child: Container(
-                  width: 440.0,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final cardWidth = constraints.maxWidth < 472
+                        ? constraints.maxWidth - 32
+                        : 440.0;
+                    return Container(
+                      width: cardWidth,
                   decoration: BoxDecoration(
                     color: AppColors.surfaceRaised,
                     borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -314,6 +319,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ? _selectedUsername
                                     : null,
                                 isDense: true,
+                                isExpanded: true,
                                 icon: const Icon(
                                   Icons.arrow_drop_down,
                                   color: AppColors.textSecondary,
@@ -542,10 +548,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: AppSpacing.xs),
-                                  Text(
-                                    'Remember me on this device',
-                                    style: AppTypography.bodySmall.copyWith(
-                                      color: AppColors.textSecondary,
+                                  Flexible(
+                                    child: Text(
+                                      'Remember me on this device',
+                                      style: AppTypography.bodySmall.copyWith(
+                                        color: AppColors.textSecondary,
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -723,6 +731,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       ),
                     ],
                   ),
+                );
+                  },
                 ),
               ),
             ),
