@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 
 /// Riverpod provider managing sidebar expanded vs collapsed rail state.
 final sidebarExpandedProvider = StateProvider<bool>((ref) => true);
@@ -95,7 +96,9 @@ class AppSidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isExpanded = asDrawer || ref.watch(sidebarExpandedProvider);
+    final isTablet = !asDrawer && ResponsiveBreakpoints.isTablet(context);
+    final isExpanded =
+        asDrawer || (!isTablet && ref.watch(sidebarExpandedProvider));
     final session = ref.watch(sessionProvider);
     final metadataAsync = ref.watch(shellMetadataProvider);
     final metadata = metadataAsync.valueOrNull ?? ShellMetadata.empty();
@@ -158,7 +161,8 @@ class AppSidebar extends ConsumerWidget {
               badgeCount: 0,
             ),
 
-          if (!asDrawer) _buildCollapseToggle(ref, isExpanded),
+          if (!asDrawer && !isTablet)
+            _buildCollapseToggle(ref, isExpanded),
         ],
       ),
     );
@@ -167,7 +171,7 @@ class AppSidebar extends ConsumerWidget {
   Widget _buildBrandHeader(bool isExpanded) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isCollapsed = constraints.maxWidth < 60 || !isExpanded;
+        final isCollapsed = constraints.maxWidth < 72 || !isExpanded;
         return Container(
           height: 64.0,
           padding: EdgeInsets.symmetric(
@@ -255,7 +259,7 @@ class AppSidebar extends ConsumerWidget {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final isCollapsed = !isExpanded || constraints.maxWidth <= 60;
+            final isCollapsed = !isExpanded || constraints.maxWidth <= 84;
             return Row(
               mainAxisAlignment: isCollapsed
                   ? MainAxisAlignment.center
