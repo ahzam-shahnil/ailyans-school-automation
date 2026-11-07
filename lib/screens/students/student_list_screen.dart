@@ -11,6 +11,7 @@ import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/student_list_row.dart';
 
 /// Production Student Directory and Search Portal (`frmStuSearch` / `ObjID: 13`).
@@ -186,10 +187,13 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // ── 1. PAGE HEADER ──
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
+                _mobileBoundedScroll(
+                  context,
+                  width: 760,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -340,7 +344,8 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                         ],
                       ),
                     ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
 
@@ -359,9 +364,12 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                       ),
                     ],
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
+                  child: _mobileBoundedScroll(
+                    context,
+                    width: 820,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
                       // Search Input (Flex 2)
                       Expanded(
                         flex: 2,
@@ -657,8 +665,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             vertical: AppSpacing.xs,
                           ),
                         ),
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -680,6 +689,12 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     ),
                     child: LayoutBuilder(
                       builder: (context, constraints) {
+                        if (ResponsiveBreakpoints.isMobile(context)) {
+                          return _buildMobileStudentCardList(
+                            paginatedStudents,
+                          );
+                        }
+
                         // 666px fixed columns + 32px cell insets + two
                         // ~150px name columns. 900px left each name only
                         // ~101px, which still ellipsized real names (e.g.
@@ -1178,10 +1193,13 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 // ── 4. PAGINATION ROW ──
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
+                  child: _mobileBoundedScroll(
+                    context,
+                    width: 820,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
                       // Total range label
                       Text(
                         totalCount == 0
@@ -1267,9 +1285,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                               }
                             },
                           ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -1277,6 +1296,74 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _mobileBoundedScroll(
+    BuildContext context, {
+    required double width,
+    required Widget child,
+  }) {
+    if (!ResponsiveBreakpoints.isMobile(context)) return child;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SizedBox(width: width, child: child),
+    );
+  }
+
+  Widget _buildMobileStudentCardList(List<StudentListRow> students) {
+    if (students.isEmpty) {
+      return Center(
+        child: Text(
+          'No students found',
+          style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+        ),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      itemCount: students.length,
+      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+      itemBuilder: (context, i) {
+        final s = students[i];
+        return Card(
+          child: InkWell(
+            onTap: () => context.go('/students/${s.stuRegId}'),
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                children: [
+                  _buildAvatar(s),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          s.fullName,
+                          style: AppTypography.body.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${s.classSecDisplay} · Roll ${s.rollNo ?? "-"}',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildStatusBadge(s.status),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

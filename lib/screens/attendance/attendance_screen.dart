@@ -7,6 +7,7 @@ import '../../core/providers/attendance_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/attendance_pdf_generator.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/attendance_roster_row.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
@@ -371,12 +372,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     final late = state.summaryCounts['Late'] ?? 0;
     final total = state.roster.length;
 
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      color: AppColors.surfaceRaised,
-      child: Row(
-        children: [
+    final summaryRow = Row(
+      children: [
           // Edit mode badge if attendance already entered
           if (state.isEditMode) ...[
             Container(
@@ -448,8 +445,19 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             bgColor: const Color(0xFFEFF6FF),
             textColor: const Color(0xFF2563EB),
           ),
-        ],
-      ),
+      ],
+    );
+
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      color: AppColors.surfaceRaised,
+      child: ResponsiveBreakpoints.isMobile(context)
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: summaryRow,
+            )
+          : summaryRow,
     );
   }
 
@@ -495,6 +503,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     AttendanceState state,
     AttendanceNotifier notifier,
   ) {
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileRoster(state, notifier);
+    }
+
     if (state.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -633,6 +645,35 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     );
   }
 
+  Widget _buildMobileRoster(
+    AttendanceState state,
+    AttendanceNotifier notifier,
+  ) {
+    if (state.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (state.roster.isEmpty) {
+      return Center(
+        child: Text(
+          'No students in this class',
+          style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      itemCount: state.roster.length,
+      itemBuilder: (context, i) {
+        final row = state.roster[i];
+        return _MobileAttendanceCard(
+          row: row,
+          onStatusChanged: (status) =>
+              notifier.updateStudentStatus(row.stuRegId, status),
+        );
+      },
+    );
+  }
+
   // ==========================================================================
   // 4. PINNED BOTTOM ACTION BAR
   // ==========================================================================
@@ -641,13 +682,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     AttendanceState state,
     AttendanceNotifier notifier,
   ) {
-    return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      color: AppColors.surface,
-      child: Row(
-        children: [
-          // Cancel / Reset
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+    final actionsRow = Row(
+      mainAxisSize: isMobile ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        // Cancel / Reset
           OutlinedButton(
             onPressed:
                 (state.selectedClassId != null || state.roster.isNotEmpty)
@@ -778,7 +817,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             ),
           ),
 
-          const Spacer(),
+          if (!isMobile) const Spacer(),
 
           // Submit Attendance OR Update Attendance
           if (state.isEditMode)
@@ -811,8 +850,19 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 minimumSize: const Size(160, 44),
               ),
             ),
-        ],
-      ),
+      ],
+    );
+
+    return Container(
+      height: 72,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      color: AppColors.surface,
+      child: isMobile
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: actionsRow,
+            )
+          : actionsRow,
     );
   }
 
@@ -1264,5 +1314,161 @@ String? _getFromOrigin(BuildContext context) {
     return GoRouterState.of(context).uri.queryParameters['from'];
   } catch (_) {
     return null;
+  }
+}
+
+
+class _MobileAttendanceCard extends StatefulWidget {
+  final AttendanceRosterRow row;
+  final void Function(String) onStatusChanged;
+
+  const _MobileAttendanceCard({
+    required this.row,
+    required this.onStatusChanged,
+  });
+
+  @override
+  State<_MobileAttendanceCard> createState() => _MobileAttendanceCardState();
+}
+
+class _MobileAttendanceCardState extends State<_MobileAttendanceCard> {
+  late String _status;
+
+  @override
+  void initState() {
+    super.initState();
+    _status = widget.row.currentStatus;
+  }
+
+  @override
+  void didUpdateWidget(covariant _MobileAttendanceCard old) {
+    super.didUpdateWidget(old);
+    if (widget.row.currentStatus != _status) {
+      setState(() => _status = widget.row.currentStatus);
+    }
+  }
+
+  void _set(String s) {
+    if (_status == s) return;
+    setState(() => _status = s);
+    widget.onStatusChanged(s);
+  }
+
+  String get _initial {
+    final n = widget.row.getNameDisplay().trim();
+    return n.isNotEmpty ? n[0].toUpperCase() : '?';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: AppColors.brandPrimary.withValues(
+                    alpha: 0.15,
+                  ),
+                  child: Text(
+                    _initial,
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.brandPrimary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.row.getNameDisplay(),
+                        style: AppTypography.body.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Roll: ${widget.row.rollNo} | Reg: ${widget.row.stuRegId}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                Expanded(
+                  child: _btn(
+                    'Present',
+                    AppColors.statusSuccessText,
+                    AppColors.statusSuccessBg,
+                    AppColors.statusSuccessBorder,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: _btn(
+                    'Absent',
+                    AppColors.statusErrorText,
+                    AppColors.statusErrorBg,
+                    AppColors.statusErrorBorder,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: _btn(
+                    'Leave',
+                    AppColors.statusWarningText,
+                    AppColors.statusWarningBg,
+                    AppColors.statusWarningBorder,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _btn(String status, Color fg, Color bg, Color border) {
+    final selected = _status == status;
+    return SizedBox(
+      height: 48,
+      child: OutlinedButton(
+        onPressed: () => _set(status),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: selected ? bg : Colors.transparent,
+          foregroundColor: selected ? fg : AppColors.textSecondary,
+          side: BorderSide(
+            color: selected ? border : AppColors.borderDefault,
+            width: selected ? 2 : 1,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+        ),
+        child: Text(
+          status,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
   }
 }

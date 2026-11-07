@@ -14,6 +14,7 @@ import '../../core/providers/sibling_links_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_profile_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/photo_picker.dart';
 import '../../models/student.dart';
 import '../../repositories/photo_repository.dart';
@@ -472,6 +473,46 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final tabName = _tabLabels[activeTab];
     final modeLabel = isEditMode ? 'Editing Profile' : tabName;
 
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return Row(
+        children: [
+          IconButton(
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+              size: 18,
+              color: AppColors.textSecondary,
+            ),
+            onPressed: () => context.go('/students'),
+            tooltip: 'Back to Student Directory',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              'Student #${student.stuRegId}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          if (isEditMode) ...[
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              'Editing',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusWarningText,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ],
+      );
+    }
+
     return Row(
       children: [
         IconButton(
@@ -578,6 +619,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final student = bundle.student;
     final isEnrolled = bundle.isEnrolled;
     final isLeft = !isEnrolled;
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileHeroCard(bundle, isEditMode, canEditBiodata);
+    }
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -825,36 +870,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             OutlinedButton.icon(
               icon: const Icon(Icons.print_outlined, size: 16),
               label: const Text('Print Biodata'),
-              onPressed: () async {
-                final meta = ref.read(shellMetadataProvider).value;
-                final stuId = int.tryParse(widget.studentId) ?? -1;
-                final data = await buildBiodataPrintData(stuId, ref);
-                if (!mounted) return;
-                final safeBranchName =
-                    (meta?.branchName != null &&
-                        meta!.branchName.trim().isNotEmpty)
-                    ? meta.branchName.trim()
-                    : "Ailyans's Higher Secondary School Mianwali";
-                final safeBranchAddress =
-                    (meta?.branchAddress != null &&
-                        meta!.branchAddress.trim().isNotEmpty)
-                    ? meta.branchAddress.trim()
-                    : 'Muslim Bazar Mianwali';
-                await ReportPreviewModal.show(
-                  context,
-                  request: ReportRequest(
-                    type: ReportType.biodata,
-                    id: stuId.toString(),
-                    vouchers: [data],
-                    extraParams: {
-                      'branchName': safeBranchName,
-                      'branchAddress': safeBranchAddress,
-                      'branchPhone': meta?.branchPhone ?? '',
-                      'branchPrincipal': meta?.branchPrincipal ?? '',
-                    },
-                  ),
-                );
-              },
+              onPressed: () => _printBiodata(student),
             ),
             if (isLeft) ...[
               const SizedBox(width: AppSpacing.sm),
@@ -879,53 +895,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: AppColors.statusErrorBorder),
                 ),
-                onPressed: () async {
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Withdraw Student?'),
-                      content: Text(
-                        'This opens the School Leaving workflow to formally withdraw '
-                        '${student.fullName}. Historical fee records, exam grades, and vouchers '
-                        'are preserved. You will not be able to re-enrol this student '
-                        'without a new admission.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(false),
-                          child: const Text('Cancel'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => Navigator.of(ctx).pop(true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.statusErrorText,
-                            foregroundColor: AppColors.textOnPrimary,
-                          ),
-                          child: const Text('Continue to Withdrawal'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirmed == true && mounted) {
-                    final fromOrigin = () {
-                      try {
-                        return GoRouterState.of(context)
-                            .uri
-                            .queryParameters['from'];
-                      } catch (_) {
-                        return null;
-                      }
-                    }();
-                    final currentProfileUrl =
-                        fromOrigin != null && fromOrigin.isNotEmpty
-                        ? '/students/${widget.studentId}?from=${Uri.encodeComponent(fromOrigin)}'
-                        : '/students/${widget.studentId}';
-                    context.go(
-                      '/students/leaving?studentId=${widget.studentId}'
-                      '&from=${Uri.encodeComponent(currentProfileUrl)}',
-                    );
-                  }
-                },
+                onPressed: () => _withdrawStudent(student),
               ),
             ],
           ] else ...[
@@ -958,6 +928,307 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _printBiodata(Student student) async {
+    final meta = ref.read(shellMetadataProvider).value;
+    final stuId = int.tryParse(widget.studentId) ?? -1;
+    final data = await buildBiodataPrintData(stuId, ref);
+    if (!mounted) return;
+    final safeBranchName =
+        (meta?.branchName != null &&
+            meta!.branchName.trim().isNotEmpty)
+        ? meta.branchName.trim()
+        : "Ailyans's Higher Secondary School Mianwali";
+    final safeBranchAddress =
+        (meta?.branchAddress != null &&
+            meta!.branchAddress.trim().isNotEmpty)
+        ? meta.branchAddress.trim()
+        : 'Muslim Bazar Mianwali';
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.biodata,
+        id: stuId.toString(),
+        vouchers: [data],
+        extraParams: {
+          'branchName': safeBranchName,
+          'branchAddress': safeBranchAddress,
+          'branchPhone': meta?.branchPhone ?? '',
+          'branchPrincipal': meta?.branchPrincipal ?? '',
+        },
+      ),
+    );
+
+  }
+
+  Future<void> _withdrawStudent(Student student) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Withdraw Student?'),
+        content: Text(
+          'This opens the School Leaving workflow to formally withdraw '
+          '${student.fullName}. Historical fee records, exam grades, and vouchers '
+          'are preserved. You will not be able to re-enrol this student '
+          'without a new admission.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.statusErrorText,
+              foregroundColor: AppColors.textOnPrimary,
+            ),
+            child: const Text('Continue to Withdrawal'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      final fromOrigin = () {
+        try {
+          return GoRouterState.of(context)
+              .uri
+              .queryParameters['from'];
+        } catch (_) {
+          return null;
+        }
+      }();
+      final currentProfileUrl =
+          fromOrigin != null && fromOrigin.isNotEmpty
+          ? '/students/${widget.studentId}?from=${Uri.encodeComponent(fromOrigin)}'
+          : '/students/${widget.studentId}';
+      context.go(
+        '/students/leaving?studentId=${widget.studentId}'
+        '&from=${Uri.encodeComponent(currentProfileUrl)}',
+      );
+    }
+
+  }
+
+  Widget _buildMobileHeroCard(
+    StudentProfileBundle bundle,
+    bool isEditMode,
+    bool canEditBiodata,
+  ) {
+    final student = bundle.student;
+    final isEnrolled = bundle.isEnrolled;
+    final isLeft = !isEnrolled;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 8.0,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => _handlePhotoTap(student),
+                child: _buildAvatar(student),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      student.fullName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.h3.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            border: Border.all(color: AppColors.borderDefault),
+                          ),
+                          child: Text(
+                            '#${student.stuRegId}',
+                            style: AppTypography.monospace
+                                .copyWith(fontSize: 11)
+                                .copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isEnrolled
+                                ? AppColors.statusSuccessBg
+                                : AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(AppRadius.full),
+                            border: Border.all(
+                              color: isEnrolled
+                                  ? AppColors.statusSuccessBorder
+                                  : AppColors.borderDefault,
+                            ),
+                          ),
+                          child: Text(
+                            isEnrolled ? 'Active' : 'Alumni',
+                            style: AppTypography.label.copyWith(
+                              color: isEnrolled
+                                  ? AppColors.statusSuccessText
+                                  : AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      isEnrolled
+                          ? 'Class ${bundle.currentClassName}-${bundle.currentSectionName}  •  Roll: ${bundle.classRollNo}'
+                          : 'Not Enrolled',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: isEnrolled
+                            ? AppColors.textSecondary
+                            : AppColors.textDisabled,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Father: ${bundle.fatherName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 2,
+                      children: [
+                        Text(
+                          'Fee Balance: ',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        Text(
+                          bundle.feeBalanceSummary,
+                          style: AppTypography.bodySmall.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: bundle.outstandingArrears <= 0
+                                ? AppColors.statusSuccessText
+                                : AppColors.statusErrorText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (!isEditMode)
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: [
+                if (canEditBiodata)
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit Profile'),
+                    onPressed: () {
+                      _populateForm(student);
+                      ref.read(studentEditModeProvider.notifier).state = true;
+                    },
+                  ),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.print_outlined, size: 16),
+                  label: const Text('Print Biodata'),
+                  onPressed: () => _printBiodata(student),
+                ),
+                if (isLeft)
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.description_outlined, size: 16),
+                    label: const Text('Print SLC'),
+                    onPressed: () => context.go('/students/leaving'),
+                  )
+                else
+                  OutlinedButton.icon(
+                    icon: const Icon(
+                      Icons.person_remove_outlined,
+                      size: 16,
+                      color: AppColors.statusErrorText,
+                    ),
+                    label: const Text(
+                      'Withdraw',
+                      style: TextStyle(color: AppColors.statusErrorText),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(
+                        color: AppColors.statusErrorBorder,
+                      ),
+                    ),
+                    onPressed: () => _withdrawStudent(student),
+                  ),
+              ],
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.statusWarningBg,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.statusWarningBorder),
+              ),
+              child: Text(
+                '[Editing Active - Unsaved Changes]',
+                style: AppTypography.monospace
+                    .copyWith(fontSize: 11)
+                    .copyWith(
+                      color: AppColors.statusWarningText,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ),
         ],
       ),
     );
@@ -1041,6 +1312,41 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   // TAB BAR (7 TABS)
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildTabBar(int activeTab) {
+    final tabsRow = Row(
+      children: List.generate(_tabLabels.length, (index) {
+        final isSelected = activeTab == index;
+        return InkWell(
+          onTap: () {
+            ref.read(selectedStudentTabProvider.notifier).state = index;
+          },
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isSelected
+                      ? AppColors.brandPrimary
+                      : Colors.transparent,
+                  width: 2.5,
+                ),
+              ),
+            ),
+            child: Text(
+              _tabLabels[index],
+              style: AppTypography.label.copyWith(
+                color: isSelected
+                    ? AppColors.brandPrimary
+                    : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+
     return Container(
       height: 42,
       decoration: const BoxDecoration(
@@ -1048,40 +1354,12 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           bottom: BorderSide(color: AppColors.borderDefault, width: 1.0),
         ),
       ),
-      child: Row(
-        children: List.generate(_tabLabels.length, (index) {
-          final isSelected = activeTab == index;
-          return InkWell(
-            onTap: () {
-              ref.read(selectedStudentTabProvider.notifier).state = index;
-            },
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: isSelected
-                        ? AppColors.brandPrimary
-                        : Colors.transparent,
-                    width: 2.5,
-                  ),
-                ),
-              ),
-              child: Text(
-                _tabLabels[index],
-                style: AppTypography.label.copyWith(
-                  color: isSelected
-                      ? AppColors.brandPrimary
-                      : AppColors.textSecondary,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
+      child: ResponsiveBreakpoints.isMobile(context)
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: tabsRow,
+            )
+          : tabsRow,
     );
   }
 
@@ -1513,11 +1791,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       children: [
         Icon(icon, size: 18, color: AppColors.brandPrimary),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: AppTypography.h3.copyWith(
-            color: AppColors.textPrimary,
-            fontWeight: FontWeight.bold,
+        Flexible(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.h3.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -2131,6 +2413,89 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final session = ref.watch(sessionProvider);
     final canEditBiodata =
         session == null || session.user.userLevel == 1 || session.hasAccess(12);
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceRaised,
+          border: Border(top: BorderSide(color: AppColors.borderDefault)),
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(12)),
+        ),
+        child: isEditMode
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'You have unsaved changes in student profile.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      TextButton.icon(
+                        icon: const Icon(Icons.close_rounded, size: 16),
+                        label: const Text('Cancel'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                        ),
+                        onPressed: () => _cancelEdit(student),
+                      ),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.save_outlined, size: 16),
+                        label: const Text('Save Profile'),
+                        onPressed: () => _handleSave(student),
+                      ),
+                    ],
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    canEditBiodata
+                        ? 'View Mode — Press F2 or click Edit Profile to unlock and modify student registration fields.'
+                        : 'Read-Only View - Modification requires #12 access.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      OutlinedButton(
+                        child: const Text('Print Biodossier'),
+                        onPressed: () =>
+                            _showSnackBar('Print coming in Phase 2'),
+                      ),
+                      if (canEditBiodata)
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.edit_outlined, size: 16),
+                          label: const Text('Edit Profile'),
+                          onPressed: () {
+                            _populateForm(student);
+                            ref
+                                    .read(studentEditModeProvider.notifier)
+                                    .state =
+                                true;
+                          },
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+      );
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(
