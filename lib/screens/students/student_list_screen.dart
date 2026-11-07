@@ -32,6 +32,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   // Selected row IDs for table row checkboxes
   final Set<int> _selectedStuRegIds = <int>{};
 
+  // Horizontal scroll for the data table (narrow viewports)
+  final ScrollController _tableHorizontalScroll = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -58,6 +61,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     _debounceTimer?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    _tableHorizontalScroll.dispose();
     super.dispose();
   }
 
@@ -674,8 +678,32 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                         ),
                       ],
                     ),
-                    child: Column(
-                      children: [
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        // 666px fixed columns + 32px cell insets + two
+                        // ~150px name columns. 900px left each name only
+                        // ~101px, which still ellipsized real names (e.g.
+                        // "Muhammad Ali Khan" needs ~140px).
+                        const minTableWidth = 1000.0;
+                        final tableWidth = constraints.maxWidth > minTableWidth
+                            ? constraints.maxWidth
+                            : minTableWidth;
+                        return Scrollbar(
+                          controller: _tableHorizontalScroll,
+                          thumbVisibility: true,
+                          trackVisibility: true,
+                          scrollbarOrientation: ScrollbarOrientation.bottom,
+                          child: SingleChildScrollView(
+                            controller: _tableHorizontalScroll,
+                            scrollDirection: Axis.horizontal,
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                minWidth: constraints.maxWidth,
+                              ),
+                              child: SizedBox(
+                                width: tableWidth,
+                                child: Column(
+                                  children: [
                         // Table Header Row
                         Container(
                           height: 40.0,
@@ -1136,6 +1164,12 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                           ),
                         ),
                       ],
+                    ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ),
