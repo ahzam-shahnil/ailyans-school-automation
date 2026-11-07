@@ -14,6 +14,7 @@ import '../../core/providers/school_leaving_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
@@ -344,6 +345,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     final bankListAsync = ref.watch(bankListProvider);
     final receipt = state.currentReceipt;
 
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(state, bankListAsync, receipt);
+    }
+
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
@@ -633,6 +638,1398 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // MOBILE SCAFFOLD & COMPONENTS
+  // ---------------------------------------------------------------------------
+
+  Widget _buildMobileLeftPane(
+    FeeReceiptView? receipt,
+    FeeCollectionState state,
+  ) {
+    final notifier = ref.read(feeCollectionProvider.notifier);
+    if (receipt == null && state.directoryRows.isNotEmpty) {
+      return _buildMobileDirectoryList(state, notifier);
+    }
+    if (receipt != null) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: _buildReceiptDossierMobile(receipt, state),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 48,
+            color: AppColors.textMuted.withValues(alpha: 0.5),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Scan a voucher to load details',
+            textAlign: TextAlign.center,
+            style: AppTypography.body.copyWith(color: AppColors.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileScaffold(
+    FeeCollectionState state,
+    AsyncValue<List<BankRow>> bankListAsync,
+    FeeReceiptView? receipt,
+  ) {
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
+          if (receipt != null && !receipt.isFullyPaid) _onPostPayment();
+        },
+        const SingleActivator(
+          LogicalKeyboardKey.keyR,
+          control: true,
+          shift: true,
+        ): () {
+          if (receipt != null &&
+              (receipt.isFullyPaid || receipt.paidAmount > 0)) {
+            _openRevokeModal(context, receipt);
+          }
+        },
+        const SingleActivator(LogicalKeyboardKey.escape): _onClear,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Container(
+          color: AppColors.surface,
+          child: SafeArea(
+            bottom: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_originScreen != null &&
+                    _originConfig.containsKey(_originScreen!))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      AppSpacing.md,
+                      AppSpacing.md,
+                      0,
+                    ),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        onPressed: () => context.go(
+                          _customBackRoute ??
+                              _originConfig[_originScreen!]!.route,
+                        ),
+                        icon: const Icon(Icons.arrow_back, size: 16),
+                        label: Text(_originConfig[_originScreen!]!.label),
+                      ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: _buildMobileSearchBar(state),
+                ),
+                if (state.lookupError != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                    ),
+                    child: Text(
+                      state.lookupError!,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.statusErrorText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.sm),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      0,
+                      AppSpacing.md,
+                      AppSpacing.md,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildMobileLeftPane(receipt, state),
+                        const SizedBox(height: AppSpacing.md),
+                        _buildMobileRightPane(receipt, state, bankListAsync),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openDefaulterReport() async {
+    final notifier = ref.read(feeCollectionProvider.notifier);
+    final buildData = await notifier.buildDefaulterList();
+    final meta = ref.read(shellMetadataProvider).value;
+    final branchName =
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+        ? meta.branchName.trim()
+        : "Ailyans's Higher Secondary School Mianwali";
+    final branchAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+        ? meta.branchAddress.trim()
+        : 'Muslim Bazar Mianwali';
+    final branchPhone = meta?.branchPhone ?? '03334449993';
+    final branchPrincipal = meta?.branchPrincipal ?? 'Nasir ali';
+
+    if (!mounted) return;
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.defaulterList,
+        vouchers: buildData.groups,
+        extraParams: {
+          'summary': buildData.summary,
+          'branchName': branchName,
+          'branchAddress': branchAddress,
+          'branchPhone': branchPhone,
+          'branchPrincipal': branchPrincipal,
+        },
+      ),
+      headerControls: DefaulterFilterControls(
+        initialClassId: null,
+        initialMonth: null,
+        onFiltersChanged: ({int? classId, String? month}) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Close preview and change filters on the screen to update the PDF.',
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildMobileSearchBar(FeeCollectionState state) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.qr_code_scanner_outlined,
+                color: AppColors.textMuted,
+                size: 22,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: TextField(
+                  controller: _lookupController,
+                  focusNode: _lookupFocusNode,
+                  style: AppTypography.monospace.copyWith(fontSize: 14),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Scan barcode or enter Voucher ID / Reg ID',
+                    hintStyle: AppTypography.monospace.copyWith(
+                      color: AppColors.textMuted,
+                      fontSize: 13,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onSubmitted: (_) => _onLookup(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: [
+              OutlinedButton(
+                onPressed: () => _onFilter('unpaid'),
+                child: const Text(
+                  'Load All Unpaid',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+              OutlinedButton(
+                onPressed: () => _onFilter('paid'),
+                child: const Text(
+                  'Load All Paid',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _openDefaulterReport,
+                icon: const Icon(
+                  Icons.assignment_late_outlined,
+                  size: 16,
+                  color: AppColors.statusErrorText,
+                ),
+                label: const Text(
+                  'Defaulter Report',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.statusErrorText,
+                  ),
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/fees/ledger'),
+                icon: const Icon(Icons.assessment_outlined, size: 16),
+                label: const Text(
+                  'View Ledger',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: state.isLoadingLookup ? null : _onLookup,
+              icon: state.isLoadingLookup
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.search, size: 16),
+              label: const Text('Load Voucher'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileDirectoryList(
+    FeeCollectionState state,
+    FeeCollectionNotifier notifier,
+  ) {
+    final q = state.directorySearch.toLowerCase();
+    final filtered = state.directoryRows.where((r) {
+      if (q.isEmpty) return true;
+      return r.studentName.toLowerCase().contains(q) ||
+          r.stuRegId.toString().contains(q) ||
+          r.voucherMasId.toLowerCase().contains(q);
+    }).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${filtered.length} ${state.activeDirectoryFilter == 'paid' ? 'Paid' : 'Unpaid'} Vouchers',
+                style: AppTypography.h2,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 40,
+          child: TextField(
+            decoration: const InputDecoration(
+              isDense: true,
+              prefixIcon: Icon(Icons.search, size: 16),
+              hintText: 'Filter name / Reg ID...',
+            ),
+            onChanged: notifier.setDirectorySearch,
+            style: AppTypography.body.copyWith(fontSize: 13),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        ...filtered.map((r) => _buildMobileDirectoryCard(r, notifier)),
+        if (filtered.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Text(
+              state.activeDirectoryFilter == 'paid'
+                  ? 'No Paid Vouchar' // VERBATIM [Sic]
+                  : 'No unpaid vouchers found',
+              textAlign: TextAlign.center,
+              style: AppTypography.body.copyWith(color: AppColors.textMuted),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMobileDirectoryCard(
+    FeeReceiptSummaryRow r,
+    FeeCollectionNotifier notifier,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: InkWell(
+        onTap: () => notifier.selectFromDirectory(r.voucherMasId),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      r.voucherMasId,
+                      style: AppTypography.monospace.copyWith(
+                        fontSize: 12,
+                        color: AppColors.brandPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  _buildSmallStatusBadge(r.statusLabel),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                r.studentName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.body.copyWith(fontSize: 13),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Reg ${r.stuRegId} · ${r.classSecDisplay} · ${r.forMonth}',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(
+                    'Net Due:',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    'Rs. ${_currencyFormat.format(r.netPayable)}',
+                    style: AppTypography.monospace.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReceiptDossierMobile(
+    FeeReceiptView receipt,
+    FeeCollectionState state,
+  ) {
+    final notifier = ref.read(feeCollectionProvider.notifier);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (state.directoryRows.isNotEmpty) ...[
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: notifier.clearCurrentReceiptOnly,
+              icon: const Icon(Icons.arrow_back, size: 14),
+              label: Text(
+                'All ${state.activeDirectoryFilter == 'paid' ? 'Paid' : 'Unpaid'} '
+                'Vouchers (${state.directoryRows.length})',
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+        ],
+        SizedBox(
+          width: double.infinity,
+          height: 40,
+          child: OutlinedButton.icon(
+            onPressed: _openReceiptPrint,
+            icon: const Icon(Icons.print_outlined, size: 14),
+            label: const Text('Print'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        // Header strip
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildAvatar(receipt),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          receipt.studentName,
+                          style: AppTypography.h2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceSubtle,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          border: Border.all(color: AppColors.borderSubtle),
+                        ),
+                        child: Text(
+                          'Reg #${receipt.stuRegId}',
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${receipt.className ?? "Class"} - Sec ${receipt.sectionName ?? "A"}  •  Roll #${receipt.rollNo ?? "N/A"}  •  Father: ${receipt.fatherName}',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Billing Month: ${receipt.forMonth}',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            _buildStatusBadge(receipt),
+          ],
+        ),
+
+        // Paid settlement strip if settled
+        if (receipt.isFullyPaid) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.statusSuccessBg,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.statusSuccessBorder),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.check_circle_outline,
+                  size: 16,
+                  color: AppColors.statusSuccessText,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Settled on ${receipt.paidDate != null ? _dateFormat.format(receipt.paidDate!) : "Recorded Date"}  •  Receipt #${receipt.voucherMasId}  •  Official Receipt Issued',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.statusSuccessText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        // Partially Paid settlement strip
+        if (receipt.isPartiallyPaid) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.statusWarningBg,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.statusWarningBorder),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.timelapse,
+                  size: 16,
+                  color: AppColors.statusWarningText,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'PARTIALLY PAID (Paid: Rs. ${_currencyFormat.format(receipt.paidAmount)} | Due: Rs. ${_currencyFormat.format(receipt.remainingBalance)})',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.statusWarningText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+
+        const SizedBox(height: AppSpacing.sm),
+
+        // Voucher metadata bar
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: 8,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSubtle,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    text: 'Voucher ID: ',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    children: [
+                      TextSpan(
+                        text: receipt.voucherMasId,
+                        style: AppTypography.monospace.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Issue Date: ${receipt.issueDate != null ? _dateFormat.format(receipt.issueDate!) : "N/A"}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    text: 'Due Date: ',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                    children: [
+                      TextSpan(
+                        text: receipt.dueDate != null
+                            ? _dateFormat.format(receipt.dueDate!)
+                            : "N/A",
+                        style: TextStyle(
+                          color: receipt.isOverdue
+                              ? AppColors.statusErrorText
+                              : AppColors.textPrimary,
+                          fontWeight: receipt.isOverdue
+                              ? FontWeight.w700
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      if (receipt.isOverdue)
+                        const TextSpan(
+                          text: ' (Overdue)',
+                          style: TextStyle(
+                            color: AppColors.statusErrorText,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                    ],
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.md),
+
+        // Line items list (mobile unrolled, no vertical Expanded)
+        _buildMobileLineItemsList(receipt.lineItems),
+
+        const SizedBox(height: AppSpacing.sm),
+        const Divider(height: 1, color: AppColors.borderDefault),
+        const SizedBox(height: AppSpacing.sm),
+
+        // Totals pinned at bottom
+        _buildMobileTotals(receipt),
+
+        // Advance credit callout if available
+        if (receipt.advanceBalance > 0) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: 8,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.statusSuccessBg,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.statusSuccessBorder),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.savings_outlined,
+                  size: 20,
+                  color: AppColors.statusSuccessText,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Available Advance: Rs. ${_currencyFormat.format(receipt.advanceBalance)}',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.statusSuccessText,
+                        ),
+                      ),
+                      Text(
+                        'Surplus advance payments recorded in previous billing cycles.',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Checkbox(
+                  value: state.useAdvanceCredit,
+                  onChanged: (val) {
+                    ref
+                        .read(feeCollectionProvider.notifier)
+                        .toggleUseAdvance(val ?? false);
+                    _amountController.text =
+                        ((val == true)
+                                ? receipt.remainingAfterAdvance
+                                : receipt.netPayable)
+                            .toString();
+                  },
+                ),
+                const Text(
+                  'Apply',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMobileLineItemsList(List<FeeReceiptLineItem> lineItems) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+          child: Text(
+            'Line Items (${lineItems.length})',
+            style: AppTypography.h3,
+          ),
+        ),
+        ...lineItems.map(_buildMobileLineItemRow),
+      ],
+    );
+  }
+
+  Widget _buildMobileLineItemRow(FeeReceiptLineItem item) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text(
+                '#${item.feeParamId}',
+                style: AppTypography.monospace.copyWith(
+                  fontSize: 11,
+                  color: AppColors.brandPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  item.headName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall,
+                ),
+              ),
+              Text(
+                'Rs. ${_currencyFormat.format(item.net)}',
+                style: AppTypography.monospace.copyWith(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                'Gross: ${_currencyFormat.format(item.amount)}',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Text(
+                'Disc: ${_currencyFormat.format(item.discount)}',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTotals(FeeReceiptView receipt) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Text('SubTotal', style: AppTypography.bodySmall),
+            ),
+            Text(
+              'Rs. ${_currencyFormat.format(receipt.subtotal)}',
+              style: AppTypography.monospace,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Text(
+                'Total Concession / Discount',
+                style: AppTypography.bodySmall,
+              ),
+            ),
+            Text(
+              'Rs. ${_currencyFormat.format(receipt.discount)}',
+              style: AppTypography.monospace,
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Divider(height: 1, color: AppColors.borderSubtle),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Text('Net Payable', style: AppTypography.h3),
+            ),
+            Text(
+              'Rs. ${_currencyFormat.format(receipt.netPayable)}',
+              style: AppTypography.monospace.copyWith(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        if (receipt.paidAmount > 0) ...[
+          const SizedBox(height: 6),
+          const Divider(height: 1, color: AppColors.borderSubtle),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: Text('Amount Paid So Far', style: AppTypography.bodySmall),
+              ),
+              Text(
+                'Rs. ${_currencyFormat.format(receipt.paidAmount)}',
+                style: AppTypography.monospace.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.statusSuccessText,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'Remaining Balance Due',
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Text(
+                'Rs. ${_currencyFormat.format(receipt.remainingBalance)}',
+                style: AppTypography.monospace.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: receipt.remainingBalance > 0
+                      ? AppColors.statusWarningText
+                      : AppColors.statusSuccessText,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMobileRightPane(
+    FeeReceiptView? receipt,
+    FeeCollectionState state,
+    AsyncValue<List<BankRow>> bankListAsync,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: receipt == null
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.point_of_sale_outlined,
+                    size: 48,
+                    color: AppColors.textMuted.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Waiting for voucher selection',
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Payment Settlement', style: AppTypography.h2),
+                const SizedBox(height: 2),
+                Text(
+                  receipt.isFullyPaid
+                      ? 'Voucher settled. Payment inputs are locked.'
+                      : 'Record teller collection and deposit account',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+
+                // Form for Unpaid / Overdue voucher
+                if (!receipt.isFullyPaid) ...[
+                  _buildMobilePaymentForm(receipt, state, bankListAsync),
+                ],
+
+                // Summary & Revoke for Paid voucher
+                if (receipt.isFullyPaid) ...[_buildPaidSummary(receipt)],
+              ],
+            ),
+    );
+  }
+
+  Widget _buildMobilePaymentForm(
+    FeeReceiptView receipt,
+    FeeCollectionState state,
+    AsyncValue<List<BankRow>> bankListAsync,
+  ) {
+    final effectivePayable = state.useAdvanceCredit
+        ? receipt.remainingAfterAdvance
+        : receipt.remainingBalance;
+    final remainingBalance = (effectivePayable - state.amountTendered).clamp(
+      0,
+      effectivePayable,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Partially Paid banner inside form
+        if (receipt.isPartiallyPaid) ...[
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.statusWarningBg,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.statusWarningBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.timelapse,
+                      size: 16,
+                      color: AppColors.statusWarningText,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'PARTIALLY PAID (Paid: Rs. ${_currencyFormat.format(receipt.paidAmount)} | Due: Rs. ${_currencyFormat.format(receipt.remainingBalance)})',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.statusWarningText,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Remaining Balance Due: Rs. ${_currencyFormat.format(receipt.remainingBalance)}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.statusWarningText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _openRevokeModal(context, receipt),
+                  icon: const Icon(
+                    Icons.undo,
+                    color: AppColors.statusErrorText,
+                    size: 14,
+                  ),
+                  label: const Text(
+                    'Revoke Paid Status',
+                    style: TextStyle(
+                      color: AppColors.statusErrorText,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.statusErrorBorder),
+                    minimumSize: const Size.fromHeight(34),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+
+        // 1. Payment Date selector
+        Text(
+          'Payment Date *',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: () async {
+            final now = ref.read(clockProvider)();
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: state.paymentDate ?? now,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) {
+              ref.read(feeCollectionProvider.notifier).setPaymentDate(picked);
+            }
+          },
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.borderDefault),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.calendar_today,
+                  size: 16,
+                  color: AppColors.textMuted,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _dateFormat.format(
+                      state.paymentDate ?? ref.read(clockProvider)(),
+                    ),
+                    style: AppTypography.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // 2. Receiving Bank Dropdown
+        Text(
+          'Receiving Bank *',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        bankListAsync.when(
+          data: (banks) {
+            final currentBankId =
+                banks.any((b) => b.bankInfoId == state.selectedBankId)
+                    ? state.selectedBankId
+                    : (banks.isNotEmpty ? banks.first.bankInfoId : null);
+            return DropdownButtonFormField<int>(
+              key: ValueKey(currentBankId),
+              initialValue: currentBankId,
+              isExpanded: true,
+              decoration: InputDecoration(
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+                prefixIcon: const Icon(Icons.account_balance, size: 18),
+              ),
+              items: banks.map((b) {
+                return DropdownMenuItem<int>(
+                  value: b.bankInfoId,
+                  child: Text(
+                    b.displayName,
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  ref.read(feeCollectionProvider.notifier).setBankId(val);
+                }
+              },
+            );
+          },
+          loading: () => const SizedBox(
+            height: 40,
+            child: LinearProgressIndicator(value: 0.5),
+          ),
+          error: (_, __) => const Text('Error loading banks'),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // 3. Payment Mode Segmented Buttons
+        Text(
+          'Payment Mode *',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: ['Cash', 'Bank Slip', 'Cheque'].map((mode) {
+            final isSelected = state.paymentMode == mode;
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: InkWell(
+                  onTap: () {
+                    ref
+                        .read(feeCollectionProvider.notifier)
+                        .setPaymentMode(mode);
+                  },
+                  child: Container(
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.brandPrimary.withValues(alpha: 0.1)
+                          : AppColors.surfaceRaised,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(
+                        color: isSelected
+                            ? AppColors.brandPrimary
+                            : AppColors.borderDefault,
+                        width: isSelected ? 1.5 : 1.0,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      mode,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: isSelected
+                            ? AppColors.brandPrimary
+                            : AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // 4. Amount Tendered TextField
+        Text(
+          'Amount Tendered (Rs.) *',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _amountController,
+          keyboardType: TextInputType.number,
+          style: AppTypography.monospace.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            suffixText: 'PKR',
+          ),
+          onChanged: (val) {
+            final parsed = int.tryParse(val) ?? 0;
+            ref.read(feeCollectionProvider.notifier).setAmountTendered(parsed);
+          },
+        ),
+        const SizedBox(height: 4),
+        Text(
+          receipt.isPartiallyPaid
+              ? 'Pre-filled with remaining balance due: Rs. ${_currencyFormat.format(receipt.remainingBalance)}'
+              : 'Pre-filled with net payable${state.useAdvanceCredit ? " minus advance credit" : ""}',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textMuted,
+            fontSize: 11,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+
+        // Settlement State callout
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: remainingBalance == 0
+                ? AppColors.statusSuccessBg
+                : AppColors.surfaceSubtle,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(
+              color: remainingBalance == 0
+                  ? AppColors.statusSuccessBorder
+                  : AppColors.borderSubtle,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                remainingBalance == 0
+                    ? Icons.check_circle_outline
+                    : Icons.info_outline,
+                size: 14,
+                color: remainingBalance == 0
+                    ? AppColors.statusSuccessText
+                    : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Balance After This Payment: Rs. ${_currencyFormat.format(remainingBalance)}',
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: remainingBalance == 0
+                        ? AppColors.statusSuccessText
+                        : AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // 5. Remarks Field
+        Text(
+          'Remarks',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _remarksController,
+          maxLines: 2,
+          style: AppTypography.bodySmall,
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'Teller settlement remarks or transaction note...',
+            contentPadding: const EdgeInsets.all(10),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+          onChanged: (val) {
+            ref.read(feeCollectionProvider.notifier).setRemarks(val);
+          },
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // 6. SMS Checkbox
+        Row(
+          children: [
+            Checkbox(
+              value: state.sendSms,
+              onChanged: (v) {
+                ref.read(feeCollectionProvider.notifier).toggleSms(v ?? true);
+              },
+            ),
+            const SizedBox(width: 4),
+            const Expanded(
+              child: Text(
+                'Send SMS payment confirmation',
+                style: AppTypography.bodySmall,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+
+        // 7. Post Payment Button (Ctrl+Enter)
+        ElevatedButton.icon(
+          onPressed: state.isPosting ? null : _onPostPayment,
+          icon: state.isPosting
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.receipt_long, size: 18),
+          label: Text(
+            state.isPosting ? 'Posting...' : 'Post Payment (Ctrl+Enter)',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.brandPrimary,
+            foregroundColor: Colors.white,
+            minimumSize: const Size.fromHeight(48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1387,6 +2784,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   }
 
   Widget _buildLineItemsTable(List<FeeReceiptLineItem> lineItems) {
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileLineItemsList(lineItems);
+    }
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
