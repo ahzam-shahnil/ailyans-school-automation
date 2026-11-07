@@ -14,6 +14,7 @@ import '../../core/providers/sibling_links_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_registration_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/input_formatters.dart';
 import '../../core/utils/photo_picker.dart';
 import '../../models/school_class.dart';
@@ -484,8 +485,14 @@ class _StudentRegistrationWizardState
   Widget build(BuildContext context) {
     final currentStep = ref.watch(wizardStepProvider);
     final draft = ref.watch(wizardDraftProvider);
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
 
-    return CallbackShortcuts(
+    return SafeArea(
+      bottom: isMobile,
+      top: false,
+      left: false,
+      right: false,
+      child: CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): _onCancel,
         const SingleActivator(LogicalKeyboardKey.enter): _advanceOrSubmit,
@@ -498,7 +505,7 @@ class _StudentRegistrationWizardState
           color: AppColors.surface,
           child: Container(
             color: AppColors.surface,
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
             child: Center(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 900),
@@ -526,7 +533,9 @@ class _StudentRegistrationWizardState
                           ),
                         ),
                         child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          padding: EdgeInsets.all(
+                            isMobile ? AppSpacing.md : AppSpacing.xl,
+                          ),
                           child: _buildStepCard(currentStep, draft),
                         ),
                       ),
@@ -535,10 +544,12 @@ class _StudentRegistrationWizardState
 
                     // 4. Bottom Action Bar
                     _buildBottomActionBar(currentStep, draft),
-                    const SizedBox(height: AppSpacing.md),
+                    if (!isMobile) ...[
+                      const SizedBox(height: AppSpacing.md),
 
-                    // 5. Keyboard hints bar
-                    _buildKeyboardHintsBar(),
+                      // 5. Keyboard hints bar
+                      _buildKeyboardHintsBar(),
+                    ],
                   ],
                 ),
               ),
@@ -546,130 +557,153 @@ class _StudentRegistrationWizardState
           ),
         ),
       ),
+      ),
     );
   }
 
   Widget _buildBreadcrumbRow() {
     final from = _getFromOrigin(context);
     final isFromDashboard = from != null && from.contains('dashboard');
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    final leftContent = Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Flexible(
+        if (from != null && from.isNotEmpty) ...[
+          OutlinedButton.icon(
+            onPressed: () => context.go(from),
+            icon: const Icon(Icons.arrow_back, size: 14),
+            label: Text(
+              isFromDashboard ? 'Back to Dashboard' : 'Back to Students',
+              style: const TextStyle(fontSize: 12),
+            ),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              minimumSize: const Size(0, 32),
+              foregroundColor: AppColors.textPrimary,
+              side: const BorderSide(color: AppColors.borderDefault),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
+        InkWell(
+          onTap: () => context.go('/dashboard'),
+          child: Text(
+            'Home',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        Text(
+          ' > ',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+        InkWell(
+          onTap: () => context.go('/students'),
+          child: Text(
+            'Students',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ),
+        Text(
+          ' > ',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+        if (isMobile)
+          Text(
+            'New Student',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          )
+        else
+          Flexible(
+            child: Text(
+              'New Student',
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ],
+    );
+
+    final rightContent = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSubtle,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (from != null && from.isNotEmpty) ...[
-                OutlinedButton.icon(
-                  onPressed: () => context.go(from),
-                  icon: const Icon(Icons.arrow_back, size: 14),
-                  label: Text(
-                    isFromDashboard ? 'Back to Dashboard' : 'Back to Students',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    minimumSize: const Size(0, 32),
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.borderDefault),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-              ],
-              InkWell(
-                onTap: () => context.go('/dashboard'),
-                child: Text(
-                  'Home',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
+              Container(
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AppColors.brandPrimary,
+                  shape: BoxShape.circle,
                 ),
               ),
+              const SizedBox(width: 6),
               Text(
-                ' > ',
+                'Session: 2017-2018',
                 style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textMuted,
-                ),
-              ),
-              InkWell(
-                onTap: () => context.go('/students'),
-                child: Text(
-                  'Students',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ),
-              Text(
-                ' > ',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textMuted,
-                ),
-              ),
-              Flexible(
-                child: Text(
-                  'New Student',
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(width: 8),
-        Row(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.statusInfoBg,
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            border: Border.all(color: AppColors.statusInfoBorder),
+          ),
+          child: Text(
+            'SYS - ADM - REG',
+            style: AppTypography.monospace.copyWith(
+              color: AppColors.statusInfoText,
+              fontSize: 11,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (isMobile) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceSubtle,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(color: AppColors.borderDefault),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: const BoxDecoration(
-                      color: AppColors.brandPrimary,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Session: 2017-2018',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            leftContent,
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.statusInfoBg,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(color: AppColors.statusInfoBorder),
-              ),
-              child: Text(
-                'SYS - ADM - REG',
-                style: AppTypography.monospace.copyWith(
-                  color: AppColors.statusInfoText,
-                  fontSize: 11,
-                ),
-              ),
-            ),
+            rightContent,
           ],
         ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Flexible(child: leftContent),
+        const SizedBox(width: 8),
+        rightContent,
       ],
     );
   }
@@ -682,6 +716,32 @@ class _StudentRegistrationWizardState
       'Academic Placement',
     ];
 
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
+    final indicatorRow = Row(
+      mainAxisSize: isMobile ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        for (int i = 0; i < 4; i++) ...[
+          if (isMobile)
+            SizedBox(
+              width: 128,
+              child: _buildStepCircle(i, currentStep, stepTitles[i]),
+            )
+          else
+            Expanded(child: _buildStepCircle(i, currentStep, stepTitles[i])),
+          if (i < 3)
+            Container(
+              width: 24,
+              height: 2,
+              margin: const EdgeInsets.only(bottom: 18),
+              color: i < currentStep
+                  ? AppColors.brandSecondary
+                  : AppColors.borderDefault,
+            ),
+        ],
+      ],
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -689,22 +749,12 @@ class _StudentRegistrationWizardState
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColors.borderDefault),
       ),
-      child: Row(
-        children: [
-          for (int i = 0; i < 4; i++) ...[
-            Expanded(child: _buildStepCircle(i, currentStep, stepTitles[i])),
-            if (i < 3)
-              Container(
-                width: 24,
-                height: 2,
-                margin: const EdgeInsets.only(bottom: 18),
-                color: i < currentStep
-                    ? AppColors.brandSecondary
-                    : AppColors.borderDefault,
-              ),
-          ],
-        ],
-      ),
+      child: isMobile
+          ? SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: indicatorRow,
+            )
+          : indicatorRow,
     );
   }
 
@@ -793,18 +843,168 @@ class _StudentRegistrationWizardState
   // ─────────────────────────────────────────────────────────────
   Widget _buildStep1Personal(WizardDraft draft) {
     final notifier = ref.read(wizardDraftProvider.notifier);
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
+    final identityFieldsColumn = Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(
+                label: 'First Name *',
+                controller: _nameFirstController,
+                focusNode: _nameFirstFocusNode,
+                hint: 'Enter student first given name',
+                onChanged: notifier.setNameFirst,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _buildTextField(
+                label: 'Middle Name',
+                optionalLabel: '(Optional)',
+                controller: _nameMiddleController,
+                hint: 'Optional middle name',
+                onChanged: notifier.setNameMiddle,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(
+                label: 'Last Name *',
+                controller: _nameLastController,
+                hint: 'Enter surname or family name',
+                onChanged: notifier.setNameLast,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _buildDatePickerField(
+                label: 'Date of Birth *',
+                controller: _dobController,
+                hint: 'Select date of birth',
+                onTap: _pickDob,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: _buildDropdownField<String>(
+                label: 'Gender *',
+                value: draft.gender ?? 'Male',
+                items: const ['Male', 'Female'],
+                onChanged: notifier.setGender,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _buildDropdownField<String>(
+                label: 'Blood Group',
+                optionalLabel: '(Optional)',
+                value: draft.bloodGroup,
+                hint: 'Select Blood Group',
+                items: const [
+                  'A+',
+                  'A-',
+                  'B+',
+                  'B-',
+                  'AB+',
+                  'AB-',
+                  'O+',
+                  'O-',
+                ],
+                onChanged: notifier.setBloodGroup,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTextField(
+                label: 'Child Form-B / CRC No',
+                optionalLabel: '(Optional)',
+                controller: _bFormController,
+                hint: '38302-1234567-1',
+                monospace: true,
+                inputFormatters: const [CnicInputFormatter()],
+                onChanged: notifier.setBFormNo,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: _buildTextField(
+                label: 'Nationality',
+                controller: _nationalityController,
+                hint: 'Pakistani',
+                onChanged: notifier.setNationality,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _buildTextField(
+          label: 'Religion / Community',
+          controller: _religionController,
+          hint: 'Islam',
+          onChanged: notifier.setReligion,
+        ),
+      ],
+    );
+
+    final photoColumn = Column(
+      children: [
+        _buildPhotoDropzone(draft.photoPath),
+        const SizedBox(height: AppSpacing.md),
+        // Specifications / Info Card
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSubtle,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.shield_outlined,
+                size: 16,
+                color: AppColors.brandPrimary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'All fields marked * are mandatory for board registration',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // Card Title & Subtitle
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+            Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       'Step 1 of 4: Personal Information',
@@ -834,13 +1034,11 @@ class _StudentRegistrationWizardState
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'Basic identity details for the new student',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ],
+            Text(
+              'Basic identity details for the new student',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
             ),
           ],
         ),
@@ -848,170 +1046,25 @@ class _StudentRegistrationWizardState
         const Divider(color: AppColors.borderDefault),
         const SizedBox(height: AppSpacing.lg),
 
-        // Two-column layout (Left flex 1, Right fixed width 240)
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left Column: Identity Form Fields
-            Expanded(
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildTextField(
-                          label: 'First Name *',
-                          controller: _nameFirstController,
-                          focusNode: _nameFirstFocusNode,
-                          hint: 'Enter student first given name',
-                          onChanged: notifier.setNameFirst,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: _buildTextField(
-                          label: 'Middle Name',
-                          optionalLabel: '(Optional)',
-                          controller: _nameMiddleController,
-                          hint: 'Optional middle name',
-                          onChanged: notifier.setNameMiddle,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildTextField(
-                          label: 'Last Name *',
-                          controller: _nameLastController,
-                          hint: 'Enter surname or family name',
-                          onChanged: notifier.setNameLast,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: _buildDatePickerField(
-                          label: 'Date of Birth *',
-                          controller: _dobController,
-                          hint: 'Select date of birth',
-                          onTap: _pickDob,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildDropdownField<String>(
-                          label: 'Gender *',
-                          value: draft.gender ?? 'Male',
-                          items: const ['Male', 'Female'],
-                          onChanged: notifier.setGender,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: _buildDropdownField<String>(
-                          label: 'Blood Group',
-                          optionalLabel: '(Optional)',
-                          value: draft.bloodGroup,
-                          hint: 'Select Blood Group',
-                          items: const [
-                            'A+',
-                            'A-',
-                            'B+',
-                            'B-',
-                            'AB+',
-                            'AB-',
-                            'O+',
-                            'O-',
-                          ],
-                          onChanged: notifier.setBloodGroup,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildTextField(
-                          label: 'Child Form-B / CRC No',
-                          optionalLabel: '(Optional)',
-                          controller: _bFormController,
-                          hint: '38302-1234567-1',
-                          monospace: true,
-                          inputFormatters: const [CnicInputFormatter()],
-                          onChanged: notifier.setBFormNo,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: _buildTextField(
-                          label: 'Nationality',
-                          controller: _nationalityController,
-                          hint: 'Pakistani',
-                          onChanged: notifier.setNationality,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _buildTextField(
-                    label: 'Religion / Community',
-                    controller: _religionController,
-                    hint: 'Islam',
-                    onChanged: notifier.setReligion,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.xl),
-
-            // Right Column: Photo Upload Dropzone
-            SizedBox(
-              width: 240,
-              child: Column(
-                children: [
-                  _buildPhotoDropzone(draft.photoPath),
-                  const SizedBox(height: AppSpacing.md),
-                  // Specifications / Info Card
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSubtle,
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      border: Border.all(color: AppColors.borderDefault),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.shield_outlined,
-                          size: 16,
-                          color: AppColors.brandPrimary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'All fields marked * are mandatory for board registration',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        // Two-column layout on desktop; stacked on mobile.
+        if (isMobile)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              identityFieldsColumn,
+              const SizedBox(height: AppSpacing.md),
+              photoColumn,
+            ],
+          )
+        else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: identityFieldsColumn),
+              const SizedBox(width: AppSpacing.xl),
+              SizedBox(width: 240, child: photoColumn),
+            ],
+          ),
       ],
     );
   }
@@ -1221,6 +1274,8 @@ class _StudentRegistrationWizardState
   }
 
   Widget _buildSiblingPanel(List<SiblingInfo> siblings) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
     return Container(
       margin: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -1240,12 +1295,16 @@ class _StudentRegistrationWizardState
                 color: AppColors.statusWarningText,
               ),
               const SizedBox(width: 8),
-              Text(
-                '${siblings.length} Existing Siblings Found Under This Father CNIC',
-                style: AppTypography.h3.copyWith(
-                  color: AppColors.statusWarningText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+              Expanded(
+                child: Text(
+                  '${siblings.length} Existing Siblings Found Under This Father CNIC',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.h3.copyWith(
+                    color: AppColors.statusWarningText,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ],
@@ -1278,34 +1337,46 @@ class _StudentRegistrationWizardState
                   Expanded(
                     child: Row(
                       children: [
-                        Text(
-                          sibling.fullName,
-                          style: AppTypography.label.copyWith(
-                            color: AppColors.textPrimary,
+                        Flexible(
+                          child: Text(
+                            sibling.fullName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.label.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          '(Reg #${sibling.stuRegId})',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textMuted,
+                        Flexible(
+                          child: Text(
+                            '(Reg #${sibling.stuRegId})',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceSubtle,
-                            borderRadius: BorderRadius.circular(AppRadius.sm),
-                          ),
-                          child: Text(
-                            '${sibling.className ?? 'Unassigned'}${sibling.sectionName != null ? '-${sibling.sectionName}' : ''}',
-                            style: AppTypography.bodySmall.copyWith(
-                              fontSize: 11,
-                              color: AppColors.textSecondary,
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceSubtle,
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                            ),
+                            child: Text(
+                              '${sibling.className ?? 'Unassigned'}${sibling.sectionName != null ? '-${sibling.sectionName}' : ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.bodySmall.copyWith(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ),
                         ),
@@ -1325,26 +1396,46 @@ class _StudentRegistrationWizardState
               ),
             ),
           ],
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   'Sibling links are for family reference only. Fee concessions are configured separately per student.',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textMuted,
                     fontSize: 11,
                   ),
                 ),
-              ),
-              if (siblings.isNotEmpty)
-                TextButton.icon(
-                  icon: const Icon(Icons.link, size: 14),
-                  label: const Text('Link as Sibling & Copy Family Address'),
-                  onPressed: () => _linkAsSiblingAndCopyInfo(siblings),
+                if (siblings.isNotEmpty)
+                  TextButton.icon(
+                    icon: const Icon(Icons.link, size: 14),
+                    label: const Text('Link as Sibling & Copy Family Address'),
+                    onPressed: () => _linkAsSiblingAndCopyInfo(siblings),
+                  ),
+              ],
+            )
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'Sibling links are for family reference only. Fee concessions are configured separately per student.',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
-            ],
-          ),
+                if (siblings.isNotEmpty)
+                  TextButton.icon(
+                    icon: const Icon(Icons.link, size: 14),
+                    label: const Text('Link as Sibling & Copy Family Address'),
+                    onPressed: () => _linkAsSiblingAndCopyInfo(siblings),
+                  ),
+              ],
+            ),
         ],
       ),
     );
@@ -1355,6 +1446,7 @@ class _StudentRegistrationWizardState
   // ─────────────────────────────────────────────────────────────
   Widget _buildStep3Contact(WizardDraft draft) {
     final notifier = ref.read(wizardDraftProvider.notifier);
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1437,20 +1529,40 @@ class _StudentRegistrationWizardState
           onChanged: notifier.setPAddress,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Present Address (Optional)',
-              style: AppTypography.label.copyWith(color: AppColors.textPrimary),
-            ),
-            TextButton.icon(
-              icon: const Icon(Icons.copy, size: 14),
-              label: const Text('Copy from Permanent'),
-              onPressed: _copyFromPermanent,
-            ),
-          ],
-        ),
+        if (isMobile)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Present Address (Optional)',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.copy, size: 14),
+                label: const Text('Copy from Permanent'),
+                onPressed: _copyFromPermanent,
+              ),
+            ],
+          )
+        else
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Present Address (Optional)',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              TextButton.icon(
+                icon: const Icon(Icons.copy, size: 14),
+                label: const Text('Copy from Permanent'),
+                onPressed: _copyFromPermanent,
+              ),
+            ],
+          ),
         const SizedBox(height: 4),
         TextField(
           controller: _tAddressController,
@@ -1471,52 +1583,61 @@ class _StudentRegistrationWizardState
     final notifier = ref.read(wizardDraftProvider.notifier);
     final classesAsync = ref.watch(classesProvider);
     final sectionsAsync = ref.watch(sectionsProvider);
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
+    final titleColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Step 4 of 4: Academic Placement',
+          style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Class assignment and fee structure',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+      ],
+    );
+
+    final sessionBadge = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Text(
+        'ACTIVE SESSION 2017-2018 (Annual)',
+        style: AppTypography.monospace.copyWith(
+          color: AppColors.textSecondary,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Step 4 of 4: Academic Placement',
-                    style: AppTypography.h2.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Class assignment and fee structure',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceSubtle,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(color: AppColors.borderDefault),
-              ),
-              child: Text(
-                'ACTIVE SESSION 2017-2018 (Annual)',
-                style: AppTypography.monospace.copyWith(
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
+        if (isMobile)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              titleColumn,
+              const SizedBox(height: 8),
+              sessionBadge,
+            ],
+          )
+        else
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(child: titleColumn),
+              const SizedBox(width: 8),
+              sessionBadge,
+            ],
+          ),
         const SizedBox(height: AppSpacing.md),
         const Divider(color: AppColors.borderDefault),
         const SizedBox(height: AppSpacing.lg),
@@ -1738,6 +1859,7 @@ class _StudentRegistrationWizardState
 
   Widget _buildFeePreviewCard(int classId) {
     final feeParamsAsync = ref.watch(feePreviewProvider(classId));
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -1761,31 +1883,65 @@ class _StudentRegistrationWizardState
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.calculate_outlined,
-                    size: 18,
-                    color: AppColors.chartBlue,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'FEE PREVIEW CALCULATION',
-                    style: AppTypography.label.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+              if (isMobile)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.calculate_outlined,
+                          size: 18,
+                          color: AppColors.chartBlue,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'FEE PREVIEW CALCULATION',
+                            style: AppTypography.label.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Estimated Monthly Fee: Rs. ${sum.toStringAsFixed(0)}',
-                    style: AppTypography.monospace.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                    const SizedBox(height: 4),
+                    Text(
+                      'Estimated Monthly Fee: Rs. ${sum.toStringAsFixed(0)}',
+                      style: AppTypography.monospace.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.calculate_outlined,
+                      size: 18,
+                      color: AppColors.chartBlue,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'FEE PREVIEW CALCULATION',
+                      style: AppTypography.label.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Estimated Monthly Fee: Rs. ${sum.toStringAsFixed(0)}',
+                      style: AppTypography.monospace.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
               const SizedBox(height: 8),
               if (sum == 0.0)
                 Text(
@@ -1842,59 +1998,84 @@ class _StudentRegistrationWizardState
   // BOTTOM ACTION BAR & KEYBOARD HINTS
   // ─────────────────────────────────────────────────────────────
   Widget _buildBottomActionBar(int currentStep, WizardDraft draft) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
+    final Widget primaryButton = currentStep < 3
+        ? ElevatedButton.icon(
+            icon: const Icon(Icons.arrow_forward, size: 16),
+            label: const Text('Save & Continue'),
+            onPressed: _isSubmitting ? null : _advanceOrSubmit,
+          )
+        : ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: AppColors.textOnPrimary,
+            ),
+            icon: _isSubmitting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.check, size: 16),
+            label: Text(_isSubmitting ? 'Saving...' : 'Complete Admission'),
+            onPressed: _isSubmitting ? null : _advanceOrSubmit,
+          );
+
     return Container(
       padding: const EdgeInsets.only(top: AppSpacing.sm),
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AppColors.borderSubtle)),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              TextButton(onPressed: _onCancel, child: const Text('Cancel')),
-              const SizedBox(width: 8),
-              if (currentStep > 0)
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.arrow_back, size: 16),
-                  label: const Text('Back'),
-                  onPressed: _goBack,
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(height: 48, child: primaryButton),
+                const SizedBox(height: AppSpacing.sm),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: _onCancel,
+                      child: const Text('Cancel'),
+                    ),
+                    if (currentStep > 0)
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.arrow_back, size: 16),
+                        label: const Text('Back'),
+                        onPressed: _goBack,
+                      )
+                    else
+                      const SizedBox.shrink(),
+                  ],
                 ),
-            ],
-          ),
-          Row(
-            children: [
-              if (currentStep < 3)
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.arrow_forward, size: 16),
-                  label: const Text('Save & Continue'),
-                  onPressed: _isSubmitting ? null : _advanceOrSubmit,
-                )
-              else
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.brandPrimary,
-                    foregroundColor: AppColors.textOnPrimary,
-                  ),
-                  icon: _isSubmitting
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.check, size: 16),
-                  label: Text(
-                    _isSubmitting ? 'Saving...' : 'Complete Admission',
-                  ),
-                  onPressed: _isSubmitting ? null : _advanceOrSubmit,
+              ],
+            )
+          : Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: _onCancel,
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: 8),
+                    if (currentStep > 0)
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.arrow_back, size: 16),
+                        label: const Text('Back'),
+                        onPressed: _goBack,
+                      ),
+                  ],
                 ),
-            ],
-          ),
-        ],
-      ),
+                Row(children: [primaryButton]),
+              ],
+            ),
     );
   }
 
