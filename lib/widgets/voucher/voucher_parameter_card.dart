@@ -677,20 +677,23 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
   }
 
   Widget _buildArrearsField() {
-    return SwitchListTile.adaptive(
-      value: widget.includeArrears,
-      onChanged: widget.onIncludeArrearsChanged,
-      title: Text(
-        'Include arrears in vouchers',
-        style: AppTypography.body.copyWith(
-          color: AppColors.textPrimary,
-          fontSize: 13.5,
-          fontWeight: FontWeight.w500,
+    return Material(
+      type: MaterialType.transparency,
+      child: SwitchListTile.adaptive(
+        value: widget.includeArrears,
+        onChanged: widget.onIncludeArrearsChanged,
+        title: Text(
+          'Include arrears in vouchers',
+          style: AppTypography.body.copyWith(
+            color: AppColors.textPrimary,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w500,
+          ),
         ),
+        activeThumbColor: AppColors.brandPrimary,
+        contentPadding: EdgeInsets.zero,
+        dense: true,
       ),
-      activeThumbColor: AppColors.brandPrimary,
-      contentPadding: EdgeInsets.zero,
-      dense: true,
     );
   }
 

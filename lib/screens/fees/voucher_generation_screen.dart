@@ -1238,6 +1238,12 @@ class _VoucherGenerationScreenState
               banks: banksData,
               bankError: null,
               lateFineAmount: filters.lateFineAmount,
+              includeArrears: filters.includeArrears,
+              onIncludeArrearsChanged: (val) {
+                ref
+                    .read(voucherGenFiltersProvider.notifier)
+                    .setIncludeArrears(val);
+              },
               columnCount: columnCount,
               onSessionYearChanged: (val) {
                 ref.read(voucherGenFiltersProvider.notifier).setSessionYr(val);
