@@ -52,7 +52,7 @@ class _VoucherGenerationScreenState
   static const double _kStatusColWidth = 112;
   static const double _kPrintColWidth = 36;
   static const double _kColGap = 6;
-  static const double _kRowHeight = 40;
+  static const double _kRowHeight = 44;
 
   @override
   void initState() {
@@ -1646,7 +1646,16 @@ class _VoucherGenerationScreenState
             child: previewAsync.when(
               data: (rows) {
                 if (rows.isEmpty) return _buildEmptyState();
-                return _buildTable(rows, readyCount, generatedCount);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildCohortSummaryChips(rows),
+                    const SizedBox(height: AppSpacing.sm),
+                    Expanded(
+                      child: _buildTable(rows, readyCount, generatedCount),
+                    ),
+                  ],
+                );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (err, __) => Center(
@@ -1859,105 +1868,202 @@ class _VoucherGenerationScreenState
     return Expanded(flex: flex ?? 1, child: cell);
   }
 
-  Widget _buildPreviewRow(VoucherPreviewRow row, int index) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: index.isEven ? AppColors.surfaceRaised : AppColors.surface,
-        border: const Border(
-          bottom: BorderSide(color: AppColors.surfaceSubtle),
+  Widget _buildCohortSummaryChips(List<VoucherPreviewRow> rows) {
+    final ready =
+        rows.where((r) => r.status == VoucherPreviewStatus.ready).length;
+    final generated = rows
+        .where((r) => r.status == VoucherPreviewStatus.alreadyGenerated)
+        .length;
+    final arrears = rows
+        .where((r) => r.status == VoucherPreviewStatus.arrearsRollover)
+        .length;
+    final waiver =
+        rows.where((r) => r.status == VoucherPreviewStatus.fullWaiver).length;
+
+    Widget chip(String text, Color bg, Color fg, Color border) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          border: Border.all(color: border),
         ),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: _kIdColWidth,
-            child: Text(
-              row.voucherId,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.monospace.copyWith(
-                color: AppColors.brandPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
+        child: Text(
+          text,
+          style: AppTypography.bodySmall.copyWith(
+            color: fg,
+            fontWeight: FontWeight.w600,
+            fontSize: 11.5,
+          ),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        chip('$ready Ready', AppStatusPill.readyBg, AppStatusPill.readyText,
+            AppStatusPill.readyBorder),
+        chip('$generated Generated', AppStatusPill.generatedBg,
+            AppStatusPill.generatedText, AppStatusPill.generatedBorder),
+        chip('$arrears Arrears', AppStatusPill.rolloverBg,
+            AppStatusPill.rolloverText, AppStatusPill.rolloverBorder),
+        chip('$waiver Waiver', AppStatusPill.waiverBg, AppStatusPill.waiverText,
+            AppStatusPill.waiverBorder),
+      ],
+    );
+  }
+
+  Widget _buildPreviewRow(VoucherPreviewRow row, int index) {
+    final rowBg =
+        index.isEven ? AppColors.surfaceRaised : AppColors.surfaceSubtle;
+
+    return Material(
+      color: rowBg,
+      child: InkWell(
+        hoverColor: AppColors.surfaceOverlay,
+        onTap: () {},
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: AppColors.surfaceSubtle),
               ),
             ),
-          ),
-          const SizedBox(width: _kColGap),
-          Expanded(
-            flex: 30,
-            child: Text(
-              row.studentName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.body.copyWith(
-                color: AppColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: _kIdColWidth,
+                  child: Text(
+                    row.voucherId,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.monospace.copyWith(
+                      color: AppColors.brandPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: _kColGap),
+                Expanded(
+                  flex: 30,
+                  child: Text(
+                    row.studentName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: _kColGap),
+                _numCell(
+                  currencyFormat.format(row.subtotal),
+                  flex: 16,
+                  color: AppColors.textPrimary,
+                ),
+                const SizedBox(width: _kColGap),
+                _numCell(
+                  currencyFormat.format(row.arrears),
+                  flex: 13,
+                  color: row.arrears > 0
+                      ? AppColors.statusWarningText
+                      : AppColors.textMuted,
+                  weight: row.arrears > 0 ? FontWeight.w600 : FontWeight.w400,
+                ),
+                const SizedBox(width: _kColGap),
+                _numCell(
+                  currencyFormat.format(row.discount),
+                  flex: 13,
+                  color: row.discount > 0
+                      ? AppColors.statusInfoText
+                      : AppColors.textMuted,
+                  weight: row.discount > 0 ? FontWeight.w600 : FontWeight.w400,
+                ),
+                const SizedBox(width: _kColGap),
+                Expanded(
+                  flex: 18,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        currencyFormat.format(row.netPayable),
+                        textAlign: TextAlign.right,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.monospace.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (row.arrears > 0)
+                        Text(
+                          '+Rs. ${currencyFormat.format(row.arrears)} Arrears',
+                          textAlign: TextAlign.right,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodySmall.copyWith(
+                            fontSize: 9.5,
+                            color: AppColors.statusWarningText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )
+                      else if (row.discount > 0)
+                        Text(
+                          '-Rs. ${currencyFormat.format(row.discount)} Disc',
+                          textAlign: TextAlign.right,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodySmall.copyWith(
+                            fontSize: 9.5,
+                            color: AppColors.statusSuccessText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: _kColGap),
+                SizedBox(
+                  width: _kStatusColWidth,
+                  child: Center(child: _buildStatusBadge(row.status)),
+                ),
+                const SizedBox(width: _kColGap),
+                SizedBox(
+                  width: _kPrintColWidth,
+                  child: IconButton(
+                    icon: const Icon(Icons.print_outlined, size: 16),
+                    color: AppColors.textMuted,
+                    tooltip: 'Print this voucher',
+                    padding: EdgeInsets.zero,
+                    onPressed: () async {
+                      final filters = ref.read(voucherGenFiltersProvider);
+                      final all = await _loadGeneratedVouchers();
+                      final match = all
+                          .where(
+                            (r) =>
+                                r.stuRegId == row.stuRegId &&
+                                r.forMonth == filters.billingMonth,
+                          )
+                          .toList();
+                      if (match.isNotEmpty && mounted) {
+                        await _openPrintPreview(specific: match);
+                      }
+                    },
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: _kColGap),
-          _numCell(
-            currencyFormat.format(row.subtotal),
-            flex: 16,
-            color: AppColors.textPrimary,
-          ),
-          const SizedBox(width: _kColGap),
-          _numCell(
-            currencyFormat.format(row.arrears),
-            flex: 13,
-            color: row.arrears > 0
-                ? AppColors.statusWarningText
-                : AppColors.textMuted,
-            weight: row.arrears > 0 ? FontWeight.w600 : FontWeight.w400,
-          ),
-          const SizedBox(width: _kColGap),
-          _numCell(
-            currencyFormat.format(row.discount),
-            flex: 13,
-            color: row.discount > 0
-                ? AppColors.statusInfoText
-                : AppColors.textMuted,
-            weight: row.discount > 0 ? FontWeight.w600 : FontWeight.w400,
-          ),
-          const SizedBox(width: _kColGap),
-          _numCell(
-            currencyFormat.format(row.netPayable),
-            flex: 18,
-            color: AppColors.textPrimary,
-            weight: FontWeight.w700,
-          ),
-          const SizedBox(width: _kColGap),
-          SizedBox(
-            width: _kStatusColWidth,
-            child: Center(child: _buildStatusBadge(row.status)),
-          ),
-          const SizedBox(width: _kColGap),
-          SizedBox(
-            width: _kPrintColWidth,
-            child: IconButton(
-              icon: const Icon(Icons.print_outlined, size: 16),
-              color: AppColors.textMuted,
-              tooltip: 'Print this voucher',
-              padding: EdgeInsets.zero,
-              onPressed: () async {
-                final filters = ref.read(voucherGenFiltersProvider);
-                final all = await _loadGeneratedVouchers();
-                final match = all
-                    .where(
-                      (r) =>
-                          r.stuRegId == row.stuRegId &&
-                          r.forMonth == filters.billingMonth,
-                    )
-                    .toList();
-                if (match.isNotEmpty && mounted) {
-                  await _openPrintPreview(specific: match);
-                }
-              },
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1984,37 +2090,37 @@ class _VoucherGenerationScreenState
     );
   }
 
-  /// Modern pill: dot + label.
+  /// Modern pill using AppStatusPill tokens
   Widget _buildStatusBadge(VoucherPreviewStatus status) {
     final String label;
     final Color bg;
     final Color fg;
-    final Color dot;
+    final Color border;
 
     switch (status) {
       case VoucherPreviewStatus.ready:
         label = 'Ready';
-        bg = AppColors.surfaceSubtle;
-        fg = AppColors.textSecondary;
-        dot = AppColors.textMuted;
+        bg = AppStatusPill.readyBg;
+        fg = AppStatusPill.readyText;
+        border = AppStatusPill.readyBorder;
         break;
       case VoucherPreviewStatus.alreadyGenerated:
         label = 'Generated';
-        bg = AppColors.statusSuccessBg;
-        fg = AppColors.statusSuccessText;
-        dot = AppColors.statusSuccessText;
+        bg = AppStatusPill.generatedBg;
+        fg = AppStatusPill.generatedText;
+        border = AppStatusPill.generatedBorder;
         break;
       case VoucherPreviewStatus.arrearsRollover:
         label = 'Arrears';
-        bg = AppColors.statusWarningBg;
-        fg = AppColors.statusWarningText;
-        dot = AppColors.statusWarningText;
+        bg = AppStatusPill.rolloverBg;
+        fg = AppStatusPill.rolloverText;
+        border = AppStatusPill.rolloverBorder;
         break;
       case VoucherPreviewStatus.fullWaiver:
-        label = '100% Waiver';
-        bg = AppColors.statusInfoBg;
-        fg = AppColors.statusInfoText;
-        dot = AppColors.statusInfoText;
+        label = 'Waiver';
+        bg = AppStatusPill.waiverBg;
+        fg = AppStatusPill.waiverText;
+        border = AppStatusPill.waiverBorder;
         break;
     }
 
@@ -2023,30 +2129,18 @@ class _VoucherGenerationScreenState
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(AppRadius.full),
+        border: Border.all(color: border),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySmall.copyWith(
-                fontSize: 11,
-                color: fg,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.bodySmall.copyWith(
+          fontSize: 11,
+          color: fg,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -2586,6 +2680,8 @@ class _VoucherGenerationScreenState
             ),
           ),
         ] else ...[
+          _buildCohortSummaryChips(previewList),
+          const SizedBox(height: AppSpacing.sm),
           for (int i = 0; i < previewList.length; i++) ...[
             _buildCompactStudentRow(previewList[i]),
             if (i < previewList.length - 1)
@@ -2648,102 +2744,98 @@ class _VoucherGenerationScreenState
   }
 
   Widget _buildCompactStudentRow(VoucherPreviewRow row) {
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: 8,
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.borderDefault),
-      ),
-      child: Row(
-        children: [
-          _buildStatusDot(row.status),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  row.studentName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.body.copyWith(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                  ),
-                ),
-                Text(
-                  row.voucherId,
-                  style: AppTypography.monospace.copyWith(
-                    fontSize: 11,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Tooltip(
+        message: 'Voucher ${row.voucherId}',
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: 10,
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.center,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: Row(
             children: [
-              Text(
-                'Rs. ${currencyFormat.format(row.netPayable)}',
-                style: AppTypography.monospace.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
-                  color: AppColors.textPrimary,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      row.studentName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      row.voucherId,
+                      style: AppTypography.monospace.copyWith(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              if (row.discount > 0)
-                Text(
-                  '-${currencyFormat.format(row.discount)} off',
-                  style: AppTypography.bodySmall.copyWith(
-                    fontSize: 10,
-                    color: AppColors.statusSuccessText,
+              const SizedBox(width: AppSpacing.sm),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Rs. ${currencyFormat.format(row.netPayable)}',
+                        style: AppTypography.monospace.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _buildStatusBadge(row.status),
+                    ],
                   ),
-                )
-              else if (row.arrears > 0)
-                Text(
-                  '+${currencyFormat.format(row.arrears)} arr',
-                  style: AppTypography.bodySmall.copyWith(
-                    fontSize: 10,
-                    color: AppColors.statusWarningText,
-                  ),
-                ),
+                  if (row.arrears > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '+Rs. ${currencyFormat.format(row.arrears)} Arrears',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 10,
+                        color: AppColors.statusWarningText,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ] else if (row.discount > 0) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '-Rs. ${currencyFormat.format(row.discount)} Disc',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 10,
+                        color: AppColors.statusSuccessText,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatusDot(VoucherPreviewStatus status) {
-    final Color color;
-    switch (status) {
-      case VoucherPreviewStatus.ready:
-        color = AppColors.statusSuccessText;
-      case VoucherPreviewStatus.alreadyGenerated:
-        color = AppColors.textMuted;
-      case VoucherPreviewStatus.fullWaiver:
-        color = AppColors.brandPrimary;
-      case VoucherPreviewStatus.arrearsRollover:
-        color = AppColors.statusWarningText;
-    }
-    return Container(
-      width: 8,
-      height: 8,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-    );
-  }
+
 
   List<FeeHeadItem> _buildFeeHeadItems(
     List<FeeHeadSummary> tariffs,
