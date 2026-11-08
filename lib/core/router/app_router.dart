@@ -215,11 +215,19 @@ class RouterNotifier extends ChangeNotifier {
   }
 }
 
+final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(
+  debugLabel: 'root',
+);
+final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>(
+  debugLabel: 'shell',
+);
+
 /// Global Riverpod provider configuring the application GoRouter instance.
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = RouterNotifier(ref);
 
   return GoRouter(
+    navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
     refreshListenable: notifier,
     redirect: (BuildContext context, GoRouterState state) {
@@ -291,12 +299,46 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       // 1. Top-Level Unauthenticated Routes (No Shell)
-      GoRoute(path: '/', builder: (context, state) => const SplashScreen()),
-      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/',
+        builder: (context, state) => const SplashScreen(),
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/login',
+        builder: (context, state) => const LoginScreen(),
+      ),
 
       // 2. Authenticated Routes Wrapped in Persistent Desktop AppShell
       ShellRoute(
-        builder: (context, state, child) => AppShell(child: child),
+        navigatorKey: _shellNavigatorKey,
+        builder: (context, state, child) {
+          final isDashboard = state.matchedLocation == '/dashboard';
+          return PopScope(
+            canPop: isDashboard,
+            onPopInvokedWithResult: (didPop, result) {
+              if (didPop) return;
+              final shellNav = _shellNavigatorKey.currentState;
+              if (shellNav != null && shellNav.canPop()) {
+                shellNav.pop();
+                return;
+              }
+              final rootNav = _rootNavigatorKey.currentState;
+              if (rootNav != null && rootNav.canPop()) {
+                rootNav.pop();
+                return;
+              }
+              final from = state.uri.queryParameters['from'];
+              if (from != null && from.isNotEmpty) {
+                context.go(from);
+              } else {
+                context.go('/dashboard');
+              }
+            },
+            child: AppShell(child: child),
+          );
+        },
         routes: [
           GoRoute(
             path: '/search',
