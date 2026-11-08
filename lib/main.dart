@@ -10,6 +10,9 @@ import 'core/db/database.dart';
 import 'core/sync/supabase_client.dart';
 import 'core/sync/sync_service.dart';
 
+// Phase G-8 Shot 5: Production polish — re-export root app widget with debugShowCheckedModeBanner: false
+export 'app.dart' show AilyansApp;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

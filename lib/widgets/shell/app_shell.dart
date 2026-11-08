@@ -170,19 +170,113 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
   }
 
+  bool _isRootLocation(String location) {
+    final path = Uri.tryParse(location)?.path ?? location;
+    return path == '/' ||
+        path == '/dashboard' ||
+        path == '/students' ||
+        path == '/fees' ||
+        path == '/fees/ledger' ||
+        path == '/attendance';
+  }
+
   Widget _buildMobileScaffold(BuildContext context) {
     final currentLocation = _safeCurrentLocation(context);
-    return Scaffold(
-      backgroundColor: AppColors.surfaceSubtle,
-      appBar: AppTopBar(searchFocusNode: _searchFocusNode, mobile: true),
-      drawer: const MobileDrawer(),
-      body: Column(
-        children: [
-          Expanded(child: widget.child),
-          const AppStatusBar(showSyncStatus: true),
-        ],
+    final topPadding = MediaQuery.paddingOf(context).top;
+    final isRoot = _isRootLocation(currentLocation);
+
+    return PopScope(
+      canPop: isRoot && currentLocation == '/dashboard',
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (Scaffold.maybeOf(context)?.isDrawerOpen == true) {
+          Navigator.of(context).pop();
+          return;
+        }
+        if (context.canPop()) {
+          context.pop();
+          return;
+        }
+        final from = GoRouterState.of(context).uri.queryParameters['from'];
+        if (from != null && from.isNotEmpty) {
+          context.go(from);
+          return;
+        }
+        final path = Uri.tryParse(currentLocation)?.path ?? currentLocation;
+        if (path.startsWith('/students/')) {
+          context.go('/students');
+          return;
+        } else if (path.startsWith('/fees/')) {
+          context.go('/fees/ledger');
+          return;
+        } else if (path != '/dashboard') {
+          context.go('/dashboard');
+          return;
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.surfaceSubtle,
+        appBar: PreferredSize(
+          preferredSize: Size.fromHeight(64.0 + topPadding),
+          child: Container(
+            color: AppColors.surfaceRaised,
+            padding: EdgeInsets.only(top: topPadding),
+            child: Stack(
+              children: [
+                AppTopBar(searchFocusNode: _searchFocusNode, mobile: true),
+                if (!isRoot)
+                  Positioned(
+                    left: 8.0,
+                    top: 0.0,
+                    bottom: 0.0,
+                    width: 48.0,
+                    child: Container(
+                      color: AppColors.surfaceRaised,
+                      alignment: Alignment.center,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        color: AppColors.textPrimary,
+                        tooltip: 'Back',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            final from = GoRouterState.of(context)
+                                .uri
+                                .queryParameters['from'];
+                            if (from != null && from.isNotEmpty) {
+                              context.go(from);
+                            } else {
+                              final path =
+                                  Uri.tryParse(currentLocation)?.path ??
+                                  currentLocation;
+                              if (path.startsWith('/students/')) {
+                                context.go('/students');
+                              } else if (path.startsWith('/fees/')) {
+                                context.go('/fees/ledger');
+                              } else {
+                                context.go('/dashboard');
+                              }
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        drawer: const MobileDrawer(),
+        body: Column(
+          children: [
+            Expanded(child: widget.child),
+            const AppStatusBar(showSyncStatus: true),
+          ],
+        ),
+        bottomNavigationBar: MobileBottomNav(currentLocation: currentLocation),
       ),
-      bottomNavigationBar: MobileBottomNav(currentLocation: currentLocation),
     );
   }
 
