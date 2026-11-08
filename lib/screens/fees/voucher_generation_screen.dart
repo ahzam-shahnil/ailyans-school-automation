@@ -253,6 +253,16 @@ class _VoucherGenerationScreenState
     }
   }
 
+  void _onGenerateAnother() {
+    ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+    ref.read(voucherGenFiltersProvider.notifier).clearFilters();
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      setState(() => _isParamExpanded = true);
+      final updatedFilters = ref.read(voucherGenFiltersProvider);
+      _openParamSheet(context, updatedFilters, 0, 0, false);
+    }
+  }
+
   Future<void> _openPrintPreview({List<FeeReceiptView>? specific}) async {
     List<FeeReceiptView> receipts;
     try {
@@ -477,6 +487,21 @@ class _VoucherGenerationScreenState
           _hasAutoCollapsed = true;
           _isParamExpanded = false;
         });
+      }
+    });
+
+    // Filter change listener: dismiss completion summary when cohort/filter changes
+    ref.listen<VoucherGenFilters>(voucherGenFiltersProvider, (prev, next) {
+      if (prev == null) return;
+      if (prev.classId != next.classId ||
+          prev.classSecId != next.classSecId ||
+          prev.billingMonth != next.billingMonth ||
+          prev.sessionYr != next.sessionYr ||
+          prev.mode != next.mode ||
+          prev.selectedStuRegId != next.selectedStuRegId) {
+        if (ref.read(voucherGenExecutionProvider).completionSummary != null) {
+          ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+        }
       }
     });
 
@@ -1341,7 +1366,7 @@ class _VoucherGenerationScreenState
           _openPrintPreview();
         },
         onShare: ResponsiveBreakpoints.isMobile(context) ? _sharePdf : null,
-        onGenerateAnother: _onEscape,
+        onGenerateAnother: _onGenerateAnother,
         onResumeRemaining:
             (s.generatedCount > 0 && s.generatedCount < effectiveTotal)
                 ? _onGenerate

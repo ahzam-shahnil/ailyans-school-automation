@@ -250,6 +250,15 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
     );
   }
 
+  void clearFilters() {
+    state = state.copyWith(
+      clearClassId: true,
+      clearClassSecId: true,
+      clearSelectedStudent: true,
+      excludedFeeParamIds: const {},
+    );
+  }
+
   void toggleFeeHead(int feeParamId) {
     final next = Set<int>.from(state.excludedFeeParamIds);
     if (next.contains(feeParamId)) {

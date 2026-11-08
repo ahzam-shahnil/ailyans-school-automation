@@ -16,6 +16,7 @@ import 'package:school_automation/core/providers/voucher_generation_provider.dar
 import 'package:school_automation/models/school_class.dart';
 import 'package:school_automation/models/voucher_preview_row.dart';
 import 'package:school_automation/screens/fees/voucher_generation_screen.dart';
+import 'package:school_automation/widgets/voucher/voucher.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -1829,6 +1830,218 @@ void main() {
         tester.view.physicalSize = const Size(1400, 900);
         await tester.pumpAndSettle();
         expect(find.text('Share'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'changing class clears completion summary and shows preview',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1400, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        const summary = BatchGenerationSummary(
+          generatedCount: 10,
+          skippedCount: 0,
+          totalBilled: 19200,
+          arrearsRolledOver: 0,
+          concessionsApplied: 0,
+          skippedReasons: [],
+        );
+        const mockState = VoucherGenState(
+          isGenerating: false,
+          generatedCount: 10,
+          totalToGenerate: 10,
+          completionSummary: summary,
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                  const SchoolClass(classId: 14, cName: 'Class 9'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(14).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [],
+              ),
+              voucherGenExecutionProvider.overrideWith(
+                (ref) => _MockVoucherGenNotifier(ref, mockState),
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // 1. Initial state: VoucherResultPanel is shown
+        expect(find.byType(VoucherResultPanel), findsOneWidget);
+
+        // 2. Change class filter
+        final element = tester.element(find.byType(VoucherGenerationScreen))
+            as ConsumerStatefulElement;
+        element.read(voucherGenFiltersProvider.notifier).setClassId(14);
+        await tester.pumpAndSettle();
+
+        // 3. Result panel dismissed, preview pane is visible
+        expect(find.byType(VoucherResultPanel), findsNothing);
+        expect(
+          find.text('Cohort Billing Audit & Ledger Preview'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'tapping Generate another resets class selection',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1400, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        const summary = BatchGenerationSummary(
+          generatedCount: 10,
+          skippedCount: 0,
+          totalBilled: 19200,
+          arrearsRolledOver: 0,
+          concessionsApplied: 0,
+          skippedReasons: [],
+        );
+        const mockState = VoucherGenState(
+          isGenerating: false,
+          generatedCount: 10,
+          totalToGenerate: 10,
+          completionSummary: summary,
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [],
+              ),
+              voucherGenExecutionProvider.overrideWith(
+                (ref) => _MockVoucherGenNotifier(ref, mockState),
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // 1. Initial state: VoucherResultPanel is shown
+        expect(find.byType(VoucherResultPanel), findsOneWidget);
+
+        // 2. Tap Generate another
+        expect(find.text('Generate another'), findsOneWidget);
+        await tester.tap(find.text('Generate another'));
+        await tester.pumpAndSettle();
+
+        // 3. Result panel gone, class field is cleared to hint
+        expect(find.byType(VoucherResultPanel), findsNothing);
+        expect(find.textContaining('Select a class'), findsWidgets);
+
+        final element = tester.element(find.byType(VoucherGenerationScreen))
+            as ConsumerStatefulElement;
+        expect(element.read(voucherGenFiltersProvider).classId, isNull);
       },
     );
   });
