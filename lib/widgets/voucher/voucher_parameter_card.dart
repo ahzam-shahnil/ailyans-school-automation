@@ -36,6 +36,9 @@ class VoucherParameterCard extends StatefulWidget {
     required this.onPickDueDate,
     this.lateFineAmount = 100,
     this.onLateFineChanged,
+    this.includeArrears = true,
+    this.onIncludeArrearsChanged,
+    this.hasCustomDates = false,
     super.key,
   });
 
@@ -78,6 +81,9 @@ class VoucherParameterCard extends StatefulWidget {
 
   final int lateFineAmount;
   final ValueChanged<int>? onLateFineChanged;
+  final bool includeArrears;
+  final ValueChanged<bool>? onIncludeArrearsChanged;
+  final bool hasCustomDates;
 
   @override
   State<VoucherParameterCard> createState() => _VoucherParameterCardState();
@@ -107,6 +113,12 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
   void dispose() {
     _lateFineController.dispose();
     super.dispose();
+  }
+
+  bool _isDateCustomized() {
+    if (widget.issueDate.day != 1) return true;
+    if (widget.dueDate.day != 10) return true;
+    return false;
   }
 
   Widget _buildFieldLabel(
@@ -263,6 +275,7 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
     final effectiveValue = widget.billingMonths.contains(widget.billingMonth)
         ? widget.billingMonth
         : null;
+    final showResetHint = widget.hasCustomDates || _isDateCustomized();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -318,6 +331,15 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
             },
           ),
         ),
+        if (showResetHint) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Changing month resets dates',
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textMuted,
+            ),
+          ),
+        ],
         _buildErrorText(widget.billingMonthError),
       ],
     );
@@ -581,35 +603,94 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
         const SizedBox(height: 4),
         Container(
           height: 44,
-          alignment: AlignmentDirectional.centerStart,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
             color: AppColors.surfaceRaised,
             borderRadius: BorderRadius.circular(AppRadius.md),
             border: Border.all(color: AppColors.borderDefault),
           ),
-          child: TextField(
-            controller: _lateFineController,
-            keyboardType: TextInputType.number,
-            style: AppTypography.body.copyWith(
-              color: AppColors.textPrimary,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
-            decoration: const InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.zero,
-            ),
-            onChanged: (val) {
-              final parsed = int.tryParse(val.trim());
-              if (parsed != null && widget.onLateFineChanged != null) {
-                widget.onLateFineChanged!(parsed);
-              }
-            },
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Opacity(
+                opacity: 0.0,
+                child: SizedBox(
+                  width: 0,
+                  height: 0,
+                  child: TextField(
+                    controller: _lateFineController,
+                    keyboardType: TextInputType.number,
+                    onChanged: (val) {
+                      final parsed = int.tryParse(val.trim());
+                      if (parsed != null && widget.onLateFineChanged != null) {
+                        widget.onLateFineChanged!(parsed);
+                      }
+                    },
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.remove, size: 18),
+                    tooltip: 'Decrease late fine',
+                    splashRadius: 18,
+                    onPressed: widget.onLateFineChanged == null ||
+                            widget.lateFineAmount <= 0
+                        ? null
+                        : () {
+                            final next =
+                                (widget.lateFineAmount - 50).clamp(0, 100000);
+                            widget.onLateFineChanged!(next);
+                          },
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        'Rs. ${widget.lateFineAmount}',
+                        style: AppTypography.body.copyWith(
+                          color: AppColors.textPrimary,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add, size: 18),
+                    tooltip: 'Increase late fine',
+                    splashRadius: 18,
+                    onPressed: widget.onLateFineChanged == null
+                        ? null
+                        : () {
+                            final next = widget.lateFineAmount + 50;
+                            widget.onLateFineChanged!(next);
+                          },
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildArrearsField() {
+    return SwitchListTile.adaptive(
+      value: widget.includeArrears,
+      onChanged: widget.onIncludeArrearsChanged,
+      title: Text(
+        'Include arrears in vouchers',
+        style: AppTypography.body.copyWith(
+          color: AppColors.textPrimary,
+          fontSize: 13.5,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      activeThumbColor: AppColors.brandPrimary,
+      contentPadding: EdgeInsets.zero,
+      dense: true,
     );
   }
 
@@ -633,6 +714,7 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
     );
     final bankWidget = _buildBankField();
     final lateFineWidget = _buildLateFineField();
+    final arrearsWidget = _buildArrearsField();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -675,6 +757,8 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
                       Expanded(child: lateFineWidget),
                     ],
                   ),
+                  const SizedBox(height: AppSpacing.sm),
+                  arrearsWidget,
                 ],
               )
             : Column(
@@ -695,6 +779,8 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
                   bankWidget,
                   const SizedBox(height: AppSpacing.sm),
                   lateFineWidget,
+                  const SizedBox(height: AppSpacing.sm),
+                  arrearsWidget,
                 ],
               );
 

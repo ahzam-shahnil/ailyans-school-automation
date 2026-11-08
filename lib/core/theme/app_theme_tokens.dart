@@ -184,6 +184,26 @@ abstract class AppDarkColors {
   static const Color accentLibrarySoftBg = Color(0xFF312E81);
 }
 
+abstract class AppStatusPill {
+  // Light variants
+  static const readyBg = Color(0xFFDCFCE7);
+  static const readyText = Color(0xFF14532D);
+  static const readyBorder = Color(0xFF86EFAC);
+
+  static const generatedBg = Color(0xFFDBEAFE);
+  static const generatedText = Color(0xFF1E3A8A);
+  static const generatedBorder = Color(0xFF93C5FD);
+
+  static const rolloverBg = Color(0xFFFEF3C7);
+  static const rolloverText = Color(0xFF78350F);
+  static const rolloverBorder = Color(0xFFFCD34D);
+
+  static const waiverBg = Color(0xFFF1F5F9);
+  static const waiverText = Color(0xFF334155);
+  static const waiverBorder = Color(0xFFCBD5E1);
+  // Note: add dark variants later or use existing tokens.
+}
+
 abstract class AppSpacing {
   static const double xxs = 4.0;
   static const double xs = 8.0;
