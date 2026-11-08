@@ -551,6 +551,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       isLoading: isLoading,
       isMobile: isMobile,
       onTap: () => context.go('/students'),
+      tooltip: 'View student directory',
     );
 
     final todayIso =
@@ -573,6 +574,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       isLoading: isLoading,
       isMobile: isMobile,
       onTap: () => context.go('/fees/receipts?from=dashboard'),
+      tooltip: "View today's fee receipts",
     );
 
     // Card 3: Monthly Revenue / Fee Collection
@@ -591,6 +593,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       isLoading: isLoading,
       isMobile: isMobile,
       onTap: () => context.go('/fees/ledger?from=/dashboard'),
+      tooltip: 'View monthly fee ledger & billing',
     );
 
     // Card 4: Pending Dues / Pending Vouchers
@@ -605,69 +608,77 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       suffix: 'Defaulters',
       subtitle:
           'Total Overdue: Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)}',
-      footerAction: InkWell(
-        onTap: () async {
-          final meta = ref.read(shellMetadataProvider).value;
-          final sy = meta?.sessionYear ?? '2026-27';
-          final buildData = await ref
-              .read(feeCollectionProvider.notifier)
-              .buildDefaulterList(sessionYr: sy);
-          if (!mounted) return;
-          final safeBranchName = (meta?.branchName != null &&
-                  meta!.branchName.trim().isNotEmpty)
-              ? meta.branchName.trim()
-              : "Ailyans's Higher Secondary School Mianwali";
-          final safeBranchAddress = (meta?.branchAddress != null &&
-                  meta!.branchAddress.trim().isNotEmpty)
-              ? meta.branchAddress.trim()
-              : 'Muslim Bazar Mianwali';
-          await ReportPreviewModal.show(
-            context,
-            request: ReportRequest(
-              type: ReportType.defaulterList,
-              vouchers: buildData.groups,
-              extraParams: {
-                'summary': buildData.summary,
-                'branchName': safeBranchName,
-                'branchAddress': safeBranchAddress,
-                'branchPhone': meta?.branchPhone,
-                'branchPrincipal': meta?.branchPrincipal,
-                'sessionYr': sy,
-              },
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.print_outlined,
-                size: 14,
-                color: AppColors.brandPrimary,
-              ),
-              const SizedBox(width: 3),
-              Flexible(
-                child: Text(
-                  'Print Defaulters',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.label.copyWith(
-                    fontSize: 11,
-                    color: AppColors.brandPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
+      footerAction: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Tooltip(
+          message: 'Print fee defaulter list',
+          waitDuration: const Duration(milliseconds: 500),
+          child: InkWell(
+            onTap: () async {
+              final meta = ref.read(shellMetadataProvider).value;
+              final sy = meta?.sessionYear ?? '2026-27';
+              final buildData = await ref
+                  .read(feeCollectionProvider.notifier)
+                  .buildDefaulterList(sessionYr: sy);
+              if (!mounted) return;
+              final safeBranchName = (meta?.branchName != null &&
+                      meta!.branchName.trim().isNotEmpty)
+                  ? meta.branchName.trim()
+                  : "Ailyans's Higher Secondary School Mianwali";
+              final safeBranchAddress = (meta?.branchAddress != null &&
+                      meta!.branchAddress.trim().isNotEmpty)
+                  ? meta.branchAddress.trim()
+                  : 'Muslim Bazar Mianwali';
+              await ReportPreviewModal.show(
+                context,
+                request: ReportRequest(
+                  type: ReportType.defaulterList,
+                  vouchers: buildData.groups,
+                  extraParams: {
+                    'summary': buildData.summary,
+                    'branchName': safeBranchName,
+                    'branchAddress': safeBranchAddress,
+                    'branchPhone': meta?.branchPhone,
+                    'branchPrincipal': meta?.branchPrincipal,
+                    'sessionYr': sy,
+                  },
                 ),
+              );
+            },
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.print_outlined,
+                    size: 14,
+                    color: AppColors.brandPrimary,
+                  ),
+                  const SizedBox(width: 3),
+                  Flexible(
+                    child: Text(
+                      'Print Defaulters',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.label.copyWith(
+                        fontSize: 11,
+                        color: AppColors.brandPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
       isLoading: isLoading,
       isMobile: isMobile,
       onTap: () => context.go('/fees/ledger?status=Unpaid&from=/dashboard'),
+      tooltip: 'View pending fee defaulters',
     );
 
     // Card 5: Today's Attendance
@@ -680,6 +691,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       totalCount: metrics?.totalStudents ?? 0,
       isLoading: isLoading,
       onTap: () => context.go('/attendance'),
+      tooltip: 'View student attendance registers',
     );
 
     // Card 6: Academic Faculty
@@ -687,6 +699,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         ? _StitchCard(
             accentColor: AppColors.accentStaff,
             onTap: () => context.go('/staff/teachers'),
+            tooltip: 'View faculty & staff directory',
             child: Row(
               children: [
                 Container(
@@ -757,6 +770,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             subtitle: 'Teaching & Admin Staff',
             isLoading: isLoading,
             onTap: () => context.go('/staff/teachers'),
+            tooltip: 'View faculty & staff directory',
           );
 
     const gap = 12.0;
@@ -867,11 +881,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     bool monospace = false,
     Widget? footerAction,
     VoidCallback? onTap,
+    String? tooltip,
   }) {
     if (isMobile) {
       return _StitchCard(
         accentColor: accentColor,
         onTap: onTap,
+        tooltip: tooltip,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -976,6 +992,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return _StitchCard(
       accentColor: accentColor,
       onTap: onTap,
+      tooltip: tooltip,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1083,10 +1100,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     required int totalCount,
     required bool isLoading,
     VoidCallback? onTap,
+    String? tooltip,
   }) {
     return _StitchCard(
       accentColor: AppColors.accentAttendance,
       onTap: onTap,
+      tooltip: tooltip,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1410,6 +1429,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   Widget _buildQuickOpCard(_QuickOpItem item, {required bool isCompact}) {
     return _SurfaceCard(
       onTap: item.onTap,
+      tooltip: '${item.title} (${item.badge})',
       padding: const EdgeInsets.all(12),
       child: isCompact
           ? Row(
@@ -1505,6 +1525,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   Widget _buildMobileQuickOpTile(_QuickOpItem item) {
     return _SurfaceCard(
       onTap: item.onTap,
+      tooltip: '${item.title} (${item.badge})',
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 44),
@@ -1729,6 +1750,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       color: AppColors.brandPrimary,
                       fontWeight: FontWeight.w600,
                     ),
+                    onTap: () => context.go('/students?from=/dashboard'),
+                    tooltip: 'View student #${item.stuRegId} directory',
                   ),
                   _buildTableCell(
                     item.studentName,
@@ -1737,6 +1760,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       fontWeight: FontWeight.w500,
                       color: AppColors.textPrimary,
                     ),
+                    onTap: () => context.go('/students?from=/dashboard'),
+                    tooltip: 'View ${item.studentName} directory',
                   ),
                   _buildTableCell(
                     'Rs. ${currencyFormatter.format(item.paidAmount)}',
@@ -1752,6 +1777,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       fontSize: 12,
                       color: AppColors.textMuted,
                     ),
+                    onTap: () => context.go('/fees/ledger?from=/dashboard'),
+                    tooltip: 'View voucher ${item.voucherNo} in ledger',
                   ),
                 ],
               ),
@@ -1851,6 +1878,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary,
                     ),
+                    onTap: () => context.go('/students?from=/dashboard'),
+                    tooltip: 'View ${item.className} roster',
                   ),
                   _buildTableCell(
                     '${item.enrolled}',
@@ -1868,6 +1897,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                           : AppColors.textSecondary,
                       fontWeight: FontWeight.w600,
                     ),
+                    onTap: item.unpaid > 0
+                        ? () => context.go(
+                            '/fees/ledger?status=Unpaid&from=/dashboard')
+                        : null,
+                    tooltip: item.unpaid > 0
+                        ? 'View ${item.unpaid} unpaid vouchers'
+                        : null,
                   ),
                   _buildTableCell(
                     'Rs. ${currencyFormatter.format(item.outstanding)}',
@@ -1876,6 +1912,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
+                    onTap: item.outstanding > 0
+                        ? () => context.go(
+                            '/fees/ledger?status=Unpaid&from=/dashboard')
+                        : null,
+                    tooltip: item.outstanding > 0
+                        ? 'View overdue balance'
+                        : null,
                   ),
                 ],
               ),
@@ -1949,21 +1992,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xxs),
-                TextButton(
-                  onPressed: onAction,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xs,
-                    ),
-                    minimumSize: const Size(0, 32),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    actionLabel,
-                    maxLines: 1,
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.brandPrimary,
-                      fontWeight: FontWeight.w600,
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Tooltip(
+                    message: actionLabel,
+                    waitDuration: const Duration(milliseconds: 500),
+                    child: TextButton(
+                      onPressed: onAction,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xs,
+                        ),
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        actionLabel,
+                        maxLines: 1,
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.brandPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -2071,15 +2121,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  Widget _buildTableCell(String text, {required TextStyle style}) {
+  Widget _buildTableCell(
+    String text, {
+    required TextStyle style,
+    VoidCallback? onTap,
+    String? tooltip,
+  }) {
+    Widget content = Text(
+      text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+
+    if (onTap != null) {
+      content = MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: content,
+        ),
+      );
+      if (tooltip != null && tooltip.isNotEmpty) {
+        content = Tooltip(
+          message: tooltip,
+          waitDuration: const Duration(milliseconds: 500),
+          child: content,
+        );
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-      child: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: style,
-      ),
+      child: content,
     );
   }
 
@@ -2149,25 +2224,52 @@ class _QuickOpItem {
   });
 }
 
-/// Stitch KPI Card with a 3.5px colored accent strip on the left border
-class _StitchCard extends StatelessWidget {
+/// Stitch KPI Card with a 3.5px colored accent strip on the left border,
+/// hover lift, cursor feedback, and tooltip.
+class _StitchCard extends StatefulWidget {
   const _StitchCard({
     required this.accentColor,
     required this.child,
     this.onTap,
+    this.tooltip,
   });
 
   final Color accentColor;
   final Widget child;
   final VoidCallback? onTap;
+  final String? tooltip;
+
+  @override
+  State<_StitchCard> createState() => _StitchCardState();
+}
+
+class _StitchCardState extends State<_StitchCard> {
+  bool _hovered = false;
+
+  bool get _interactive => widget.onTap != null;
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final lifted = _hovered && _interactive && !reduceMotion;
+
+    Widget card = AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : AppDuration.fast,
+      curve: Curves.easeOutCubic,
+      transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
+        border: Border.all(
+          color: lifted ? AppColors.borderHover : AppColors.borderDefault,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: lifted ? const Color(0x140F172A) : const Color(0x06000000),
+            blurRadius: lifted ? 16 : 4,
+            offset: lifted ? const Offset(0, 6) : const Offset(0, 1),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.lg - 1),
@@ -2177,12 +2279,12 @@ class _StitchCard extends StatelessWidget {
             children: [
               Container(
                 width: 3.5,
-                color: accentColor,
+                color: widget.accentColor,
               ),
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
-                  child: child,
+                  child: widget.child,
                 ),
               ),
             ],
@@ -2191,14 +2293,34 @@ class _StitchCard extends StatelessWidget {
       ),
     );
 
-    if (onTap == null) return card;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: card,
-      ),
+    if (_interactive) {
+      card = Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          hoverColor: Colors.transparent,
+          splashColor: widget.accentColor.withValues(alpha: 0.08),
+          highlightColor: widget.accentColor.withValues(alpha: 0.04),
+          child: card,
+        ),
+      );
+
+      final tooltipMsg = widget.tooltip ?? 'Click to view details';
+      if (tooltipMsg.isNotEmpty) {
+        card = Tooltip(
+          message: tooltipMsg,
+          waitDuration: const Duration(milliseconds: 500),
+          child: card,
+        );
+      }
+    }
+
+    return MouseRegion(
+      cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: _interactive ? (_) => setState(() => _hovered = true) : null,
+      onExit: _interactive ? (_) => setState(() => _hovered = false) : null,
+      child: card,
     );
   }
 }
@@ -2208,11 +2330,13 @@ class _SurfaceCard extends StatefulWidget {
     required this.child,
     this.onTap,
     this.padding = EdgeInsets.zero,
+    this.tooltip,
   });
 
   final Widget child;
   final VoidCallback? onTap;
   final EdgeInsetsGeometry padding;
+  final String? tooltip;
 
   @override
   State<_SurfaceCard> createState() => _SurfaceCardState();
@@ -2228,32 +2352,52 @@ class _SurfaceCardState extends State<_SurfaceCard> {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     final lifted = _hovered && _interactive && !reduceMotion;
 
+    Widget card = AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : AppDuration.fast,
+      curve: Curves.easeOutCubic,
+      transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: lifted
+              ? AppColors.borderHover
+              : AppColors.borderDefault,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: lifted ? const Color(0x140F172A) : const Color(0x06000000),
+            blurRadius: lifted ? 16 : 4,
+            offset: lifted ? const Offset(0, 6) : const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          hoverColor: Colors.transparent,
+          splashColor: AppColors.brandPrimary.withValues(alpha: 0.05),
+          highlightColor: AppColors.brandPrimary.withValues(alpha: 0.03),
+          child: Padding(padding: widget.padding, child: widget.child),
+        ),
+      ),
+    );
+
+    if (_interactive && widget.tooltip != null && widget.tooltip!.isNotEmpty) {
+      card = Tooltip(
+        message: widget.tooltip!,
+        waitDuration: const Duration(milliseconds: 500),
+        child: card,
+      );
+    }
+
     return MouseRegion(
       cursor: _interactive ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: _interactive ? (_) => setState(() => _hovered = true) : null,
       onExit: _interactive ? (_) => setState(() => _hovered = false) : null,
-      child: AnimatedContainer(
-        duration: reduceMotion ? Duration.zero : AppDuration.fast,
-        curve: Curves.easeOutCubic,
-        transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
-        decoration: BoxDecoration(
-          color: AppColors.surfaceRaised,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(
-            color: _hovered && _interactive
-                ? AppColors.borderHover
-                : AppColors.borderDefault,
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            child: Padding(padding: widget.padding, child: widget.child),
-          ),
-        ),
-      ),
+      child: card,
     );
   }
 }
