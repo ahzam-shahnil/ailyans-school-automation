@@ -124,25 +124,40 @@ void main() {
     }
   });
 
-  testWidgets('KPI grid collapses 4 → 2 → 1 columns', (tester) async {
-    const first = "TODAY'S ATTENDANCE";
-    const second = 'MONTHLY FEE COLLECTION';
-    const third = 'ACTIVE ENROLLMENT';
-    const fourth = 'PENDING VOUCHERS';
+  testWidgets(
+    'KPI grid adheres to Stitch 3-tier breakpoint grid (Desktop 3x2, Tablet 2x3, Mobile 2x2+2)',
+    (tester) async {
+      const card1 = 'ACTIVE ENROLLMENT';
+      const card2 = "TODAY'S COLLECTION";
+      const card3 = 'MONTHLY FEE COLLECTION';
+      const card4 = 'PENDING VOUCHERS';
+      const card5 = "TODAY'S ATTENDANCE";
+      const card6 = 'ACADEMIC FACULTY';
 
-    await pumpDashboard(tester, const Size(1440, 900));
-    expect(labelTop(tester, first), labelTop(tester, fourth));
+      // 1. Desktop (>= 1024px): 3 columns x 2 rows
+      await pumpDashboard(tester, const Size(1440, 900));
+      expect(labelTop(tester, card1), closeTo(labelTop(tester, card3), 10.0));
+      expect(labelTop(tester, card4), closeTo(labelTop(tester, card5), 10.0));
+      expect(labelTop(tester, card4), closeTo(labelTop(tester, card6), 10.0));
+      expect(labelTop(tester, card4), greaterThan(labelTop(tester, card1) + 40));
 
-    await pumpDashboard(tester, const Size(900, 900));
-    expect(labelTop(tester, first), labelTop(tester, second));
-    expect(labelTop(tester, third), greaterThan(labelTop(tester, first)));
-    expect(labelTop(tester, third), labelTop(tester, fourth));
+      // 2. Tablet (600..1023px): 2 columns x 3 rows
+      await pumpDashboard(tester, const Size(900, 900));
+      expect(labelTop(tester, card1), closeTo(labelTop(tester, card2), 10.0));
+      expect(labelTop(tester, card3), greaterThan(labelTop(tester, card1) + 40));
+      expect(labelTop(tester, card3), closeTo(labelTop(tester, card4), 10.0));
+      expect(labelTop(tester, card5), greaterThan(labelTop(tester, card3) + 40));
+      expect(labelTop(tester, card5), closeTo(labelTop(tester, card6), 10.0));
 
-    await pumpDashboard(tester, const Size(600, 900));
-    expect(labelTop(tester, second), greaterThan(labelTop(tester, first)));
-    expect(labelTop(tester, third), greaterThan(labelTop(tester, second)));
-    expect(labelTop(tester, fourth), greaterThan(labelTop(tester, third)));
-  });
+      // 3. Mobile (< 600px): 2x2 grid (cards 1-4) + full-width card5 + full-width card6
+      await pumpDashboard(tester, const Size(390, 844));
+      expect(labelTop(tester, card1), closeTo(labelTop(tester, card2), 10.0));
+      expect(labelTop(tester, card3), greaterThan(labelTop(tester, card1) + 40));
+      expect(labelTop(tester, card3), closeTo(labelTop(tester, card4), 10.0));
+      expect(labelTop(tester, card5), greaterThan(labelTop(tester, card3) + 40));
+      expect(labelTop(tester, card6), greaterThan(labelTop(tester, card5) + 40));
+    },
+  );
 
   testWidgets('lower workspace split drags and resets', (tester) async {
     await pumpDashboard(tester, const Size(1440, 1000));

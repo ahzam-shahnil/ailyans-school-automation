@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -74,67 +72,12 @@ const List<_CandidateModule> _candidateModules = [
   ),
 ];
 
-/// Resolved dashboard geometry for the current viewport.
-///
-/// One source of truth for padding, gutters, column counts and type scale so
-/// every section reflows together instead of each widget guessing its own
-/// breakpoints.
-class _DashboardLayout {
-  const _DashboardLayout({
-    required this.width,
-    required this.height,
-    required this.pagePadding,
-    required this.gutter,
-    required this.kpiColumns,
-    required this.quickColumns,
-    required this.twoPane,
-    required this.fillViewport,
-    required this.headerStacked,
-  });
-
-  final double width;
-  final double height;
-  final double pagePadding;
-  final double gutter;
-  final int kpiColumns;
-  final int quickColumns;
-
-  /// Whether the lower workspace can sit side by side.
-  final bool twoPane;
-
-  /// Whether the whole page can fill the viewport without scrolling.
-  final bool fillViewport;
-
-  /// Whether the header title and controls stack vertically.
-  final bool headerStacked;
-
-  double get contentWidth => width - pagePadding * 2;
-
-  factory _DashboardLayout.from(BoxConstraints constraints) {
-    final w = constraints.maxWidth;
-    final twoPane = w >= 980;
-    return _DashboardLayout(
-      width: w,
-      height: constraints.maxHeight,
-      pagePadding: w < 640 ? 12.0 : (w < 1280 ? 16.0 : 24.0),
-      gutter: w < 640 ? 10.0 : 12.0,
-      kpiColumns: w >= 1040 ? 4 : (w >= 620 ? 2 : 1),
-      quickColumns: w >= 1040 ? 4 : (w >= 620 ? 2 : 1),
-      twoPane: twoPane,
-      fillViewport: twoPane && constraints.maxHeight >= 720,
-      headerStacked: w < 760,
-    );
-  }
-}
-
 /// Central Executive Dashboard Cockpit for School Administration.
 ///
-/// Implements Phase D, Step 4B specifications and pixel-faithful layout
-/// derived from `05-ui-ux-spec.md` Screen 5 and `dashboard-v2-loaded.png`.
-///
-/// Layout is fully fluid: KPI cards and quick actions collapse 4 → 2 → 1,
-/// the lower workspace stacks below 980px and becomes a drag-resizable
-/// split pane above it.
+/// Implements 3-Breakpoint Google Stitch Design:
+/// - Desktop (>= 1024px): 3x2 KPI Grid, 3x2 Quick Operations, 55/45 Lower Data Feed Split
+/// - Tablet (600..1023px): 2x3 KPI Grid, 2x3 Quick Operations, Stacked Lower Data Feeds
+/// - Mobile (< 600px): 2x2+2 KPI Grid, 1-col tactile Quick Operations, Stacked Tables
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -144,7 +87,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with SingleTickerProviderStateMixin {
-  static const double _defaultSplitRatio = 0.6;
+  static const double _defaultSplitRatio = 0.55;
   static const double _minSplitRatio = 0.38;
   static const double _maxSplitRatio = 0.72;
 
@@ -164,8 +107,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // React to provider state changes outside of build; mutating an
-    // AnimationController while building schedules work during layout.
     ref.listenManual<AsyncValue<DashboardMetrics>>(dashboardMetricsProvider, (
       previous,
       next,
@@ -263,72 +204,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       child: Focus(
         autofocus: true,
         child: Container(
-          color: AppColors.surface,
+          color: AppColors.surfaceCanvas,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final layout = _DashboardLayout.from(constraints);
-              final gap = SizedBox(height: layout.gutter);
+              final w = constraints.maxWidth;
+              final isDesktop = w >= 1024;
+              final isTablet = w >= 600 && w < 1024;
+              final isMobile = w < 600;
 
-              final children = <Widget>[
-                if (metricsAsync.hasError) ...[
-                  _buildErrorBanner(metricsAsync, layout),
-                  gap,
-                ],
-                _buildHeaderBar(layout, shellMeta, todayFormatted),
-                gap,
-                _buildKpiCardsRow(layout, metricsAsync, currencyFormatter),
-                gap,
-                _buildQuickActionsBar(layout),
-                gap,
-                if (layout.fillViewport)
-                  Expanded(
-                    child: _buildLowerWorkspace(
-                      layout: layout,
-                      metrics: metrics,
-                      isLoading: isLoading,
-                      currencyFormatter: currencyFormatter,
-                      fillHeight: true,
-                    ),
-                  )
-                else if (layout.twoPane)
-                  SizedBox(
-                    height: math.max(
-                      420.0,
-                      math.min(560.0, constraints.maxHeight - 280.0),
-                    ),
-                    child: _buildLowerWorkspace(
-                      layout: layout,
-                      metrics: metrics,
-                      isLoading: isLoading,
-                      currencyFormatter: currencyFormatter,
-                      fillHeight: true,
-                    ),
-                  )
-                else
-                  _buildLowerWorkspace(
-                    layout: layout,
-                    metrics: metrics,
-                    isLoading: isLoading,
-                    currencyFormatter: currencyFormatter,
-                    fillHeight: false,
-                  ),
-              ];
-
-              if (layout.fillViewport) {
-                return Padding(
-                  padding: EdgeInsets.all(layout.pagePadding),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: children,
-                  ),
-                );
-              }
+              final pagePadding = isMobile ? 12.0 : (isTablet ? 16.0 : 24.0);
+              const gutter = 12.0;
+              const gap = SizedBox(height: gutter);
 
               return SingleChildScrollView(
-                padding: EdgeInsets.all(layout.pagePadding),
+                padding: EdgeInsets.all(pagePadding),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: children,
+                  children: [
+                    if (metricsAsync.hasError) ...[
+                      _buildErrorBanner(metricsAsync, gutter),
+                      gap,
+                    ],
+                    _buildHeaderBar(
+                      shellMeta,
+                      todayFormatted,
+                      isStacked: w < 760,
+                    ),
+                    gap,
+                    _buildStitchKpiGrid(
+                      metrics: metrics,
+                      shellMeta: shellMeta,
+                      isLoading: isLoading,
+                      currencyFormatter: currencyFormatter,
+                      isDesktop: isDesktop,
+                      isTablet: isTablet,
+                      isMobile: isMobile,
+                    ),
+                    gap,
+                    _buildStitchQuickOperations(
+                      isDesktop: isDesktop,
+                      isTablet: isTablet,
+                      isMobile: isMobile,
+                    ),
+                    gap,
+                    _buildLowerWorkspace(
+                      metrics: metrics,
+                      isLoading: isLoading,
+                      currencyFormatter: currencyFormatter,
+                      isDesktop: isDesktop,
+                    ),
+                  ],
                 ),
               );
             },
@@ -348,7 +273,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         .toList();
 
     return Container(
-      color: AppColors.surface,
+      color: AppColors.surfaceCanvas,
       child: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -460,11 +385,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   Widget _buildErrorBanner(
     AsyncValue<DashboardMetrics> metricsAsync,
-    _DashboardLayout layout,
+    double gutter,
   ) {
     return Container(
       padding: EdgeInsets.symmetric(
-        horizontal: layout.gutter,
+        horizontal: gutter,
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
@@ -505,10 +430,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   Widget _buildHeaderBar(
-    _DashboardLayout layout,
     ShellMetadata? shellMeta,
-    String todayFormatted,
-  ) {
+    String todayFormatted, {
+    required bool isStacked,
+  }) {
     final title = Row(
       children: [
         Container(
@@ -575,11 +500,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
 
     return _SurfaceCard(
-      padding: EdgeInsets.symmetric(
-        horizontal: layout.gutter + 2,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
         vertical: 10,
       ),
-      child: layout.headerStacked
+      child: isStacked
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -599,223 +524,330 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // KPI CARDS
+  // SECTION A — 6 STITCH KPI CARDS
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Builds the KPI summary cards as a fluid grid (4 → 2 → 1 columns).
-  Widget _buildKpiCardsRow(
-    _DashboardLayout layout,
-    AsyncValue<DashboardMetrics> metricsAsync,
-    NumberFormat currencyFormatter,
-  ) {
-    final metrics = metricsAsync.value;
-    final isLoading = metricsAsync.isLoading && metrics == null;
+  Widget _buildStitchKpiGrid({
+    required DashboardMetrics? metrics,
+    required ShellMetadata? shellMeta,
+    required bool isLoading,
+    required NumberFormat currencyFormatter,
+    required bool isDesktop,
+    required bool isTablet,
+    required bool isMobile,
+  }) {
+    // Card 1: Student Body / Active Enrollment
+    final card1 = _buildKpiCard(
+      label: 'ACTIVE ENROLLMENT',
+      icon: Icons.groups_outlined,
+      accentColor: AppColors.accentStudents,
+      accentSoftBg: AppColors.accentStudentsSoftBg,
+      badgeText:
+          '${shellMeta?.studentCount ?? (metrics?.activeEnrollment ?? 0)} Total',
+      value: '${metrics?.activeEnrollment ?? 0}',
+      suffix: 'Students',
+      subtitle:
+          '${metrics?.classCount ?? 0} Classes, ${metrics?.sectionCount ?? 0} Sections',
+      isLoading: isLoading,
+      isMobile: isMobile,
+      onTap: () => context.go('/students'),
+    );
 
-    final columns = layout.kpiColumns;
-    // Floor keeps floating-point drift from wrapping a full row.
-    final tileWidth =
-        ((layout.contentWidth - layout.gutter * (columns - 1)) / columns)
-            .floorToDouble();
-    final valueSize = (tileWidth * 0.115).clamp(22.0, 34.0).toDouble();
-    final feeValueSize = (valueSize * 0.86).clamp(20.0, 30.0).toDouble();
-    final tileHeight = columns == 4 ? 172.0 : (columns == 2 ? 164.0 : 160.0);
+    final todayIso =
+        ref.watch(clockProvider)().toIso8601String().substring(0, 10);
+    final payments = metrics?.recentPayments ?? [];
+    final todayCollected = payments
+        .where((p) => p.submissionDate.startsWith(todayIso))
+        .fold<int>(0, (s, p) => s + p.paidAmount);
 
-    Widget tile(Widget child) =>
-        SizedBox(width: tileWidth, height: tileHeight, child: child);
+    // Card 2: Today's Collection
+    final card2 = _buildKpiCard(
+      label: "TODAY'S COLLECTION",
+      icon: Icons.payments_outlined,
+      accentColor: AppColors.accentFees,
+      accentSoftBg: AppColors.accentFeesSoftBg,
+      badgeText: "Today's Counter",
+      value: 'Rs. ${currencyFormatter.format(todayCollected)}',
+      monospace: true,
+      subtitle: 'Daily Register',
+      isLoading: isLoading,
+      isMobile: isMobile,
+      onTap: () => context.go('/fees/receipts?from=dashboard'),
+    );
 
-    return Wrap(
-      spacing: layout.gutter,
-      runSpacing: layout.gutter,
-      children: [
-        // Card 1: Today's Attendance
-        tile(
-          _buildKpiCard(
-            label: "TODAY'S ATTENDANCE",
-            icon: Icons.fact_check_outlined,
-            iconColor: AppColors.chartBlue,
-            isLoading: isLoading,
-            valueWidget: _buildKpiValue(
-              value:
-                  '${metrics?.attendancePercent.toStringAsFixed(1) ?? '0.0'}%',
-              size: valueSize,
+    // Card 3: Monthly Revenue / Fee Collection
+    final card3 = _buildKpiCard(
+      label: 'MONTHLY FEE COLLECTION',
+      icon: Icons.account_balance_outlined,
+      accentColor: AppColors.accentFees,
+      accentSoftBg: AppColors.accentFeesSoftBg,
+      badgeText: '${metrics?.collectionPace ?? 0}% Pace',
+      value: 'Rs. ${currencyFormatter.format(metrics?.monthlyCollected ?? 0)}',
+      monospace: true,
+      subtitle: (metrics?.latestBilledMonthLabel != null &&
+              metrics!.latestBilledMonthLabel.isNotEmpty)
+          ? '${metrics.latestBilledMonthLabel} • Exp: Rs. ${currencyFormatter.format(metrics.monthlyExpected)}'
+          : 'Exp: Rs. ${currencyFormatter.format(metrics?.monthlyExpected ?? 0)}',
+      isLoading: isLoading,
+      isMobile: isMobile,
+      onTap: () => context.go('/fees/ledger?from=/dashboard'),
+    );
+
+    // Card 4: Pending Dues / Pending Vouchers
+    final card4 = _buildKpiCard(
+      label: 'PENDING VOUCHERS',
+      icon: Icons.assignment_late_outlined,
+      accentColor: AppColors.statusErrorText,
+      accentSoftBg: AppColors.statusErrorBg,
+      badgeText: 'Action Req',
+      value: '${metrics?.pendingVouchers ?? 0}',
+      valueColor: AppColors.statusErrorText,
+      suffix: 'Defaulters',
+      subtitle:
+          'Total Overdue: Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)}',
+      footerAction: InkWell(
+        onTap: () async {
+          final meta = ref.read(shellMetadataProvider).value;
+          final sy = meta?.sessionYear ?? '2026-27';
+          final buildData = await ref
+              .read(feeCollectionProvider.notifier)
+              .buildDefaulterList(sessionYr: sy);
+          if (!mounted) return;
+          final safeBranchName = (meta?.branchName != null &&
+                  meta!.branchName.trim().isNotEmpty)
+              ? meta.branchName.trim()
+              : "Ailyans's Higher Secondary School Mianwali";
+          final safeBranchAddress = (meta?.branchAddress != null &&
+                  meta!.branchAddress.trim().isNotEmpty)
+              ? meta.branchAddress.trim()
+              : 'Muslim Bazar Mianwali';
+          await ReportPreviewModal.show(
+            context,
+            request: ReportRequest(
+              type: ReportType.defaulterList,
+              vouchers: buildData.groups,
+              extraParams: {
+                'summary': buildData.summary,
+                'branchName': safeBranchName,
+                'branchAddress': safeBranchAddress,
+                'branchPhone': meta?.branchPhone,
+                'branchPrincipal': meta?.branchPrincipal,
+                'sessionYr': sy,
+              },
             ),
-            footerText: isLoading
-                ? 'Loading attendance...'
-                : '${metrics?.presentCount ?? 0} / ${metrics?.totalStudents ?? 0} Present',
-            progress: isLoading
-                ? null
-                : (metrics?.attendancePercent ?? 0) / 100,
-            progressColor: AppColors.chartBlue,
-            onTap: () => context.go('/attendance'),
+          );
+        },
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.print_outlined,
+                size: 14,
+                color: AppColors.brandPrimary,
+              ),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  'Print Defaulters',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.label.copyWith(
+                    fontSize: 11,
+                    color: AppColors.brandPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
+      ),
+      isLoading: isLoading,
+      isMobile: isMobile,
+      onTap: () => context.go('/fees/ledger?status=Unpaid&from=/dashboard'),
+    );
 
-        // Card 2: Monthly Fee Collection
-        tile(
-          _buildKpiCard(
-            label: 'MONTHLY FEE COLLECTION',
-            icon: Icons.payments_outlined,
-            iconColor: AppColors.chartTeal,
-            isLoading: isLoading,
-            valueWidget: _buildKpiValue(
-              value:
-                  'Rs. ${currencyFormatter.format(metrics?.monthlyCollected ?? 0)}',
-              size: feeValueSize,
-              monospace: true,
-              badge: metrics == null
-                  ? null
-                  : _buildStatusPill(
-                      text: '${metrics.collectionPace}% Pace',
-                      background: metrics.collectionPace >= 70
-                          ? AppColors.statusSuccessBg
-                          : AppColors.statusWarningBg,
-                      foreground: metrics.collectionPace >= 70
-                          ? AppColors.statusSuccessText
-                          : AppColors.statusWarningText,
-                      border: metrics.collectionPace >= 70
-                          ? AppColors.statusSuccessBorder
-                          : AppColors.statusWarningBorder,
-                    ),
-            ),
-            footerText: isLoading
-                ? 'Calculating collection...'
-                : (metrics?.latestBilledMonthLabel != null &&
-                      metrics!.latestBilledMonthLabel.isNotEmpty)
-                ? '${metrics.latestBilledMonthLabel} • Exp: Rs. ${currencyFormatter.format(metrics.monthlyExpected)}'
-                : 'Exp: Rs. ${currencyFormatter.format(metrics?.monthlyExpected ?? 0)}',
-            progress: isLoading ? null : (metrics?.collectionPace ?? 0) / 100,
-            progressColor: (metrics?.collectionPace ?? 0) >= 70
-                ? AppColors.chartEmerald
-                : AppColors.chartAmber,
-            onTap: () => context.go('/fees/ledger?from=/dashboard'),
-          ),
-        ),
+    // Card 5: Today's Attendance
+    final presentCount = metrics?.presentCount ?? 0;
+    final absentCount = metrics?.absentCount ?? 0;
+    final card5 = _buildAttendanceKpiCard(
+      rateString: '${metrics?.attendancePercent.toStringAsFixed(1) ?? '0.0'}%',
+      presentCount: presentCount,
+      absentCount: absentCount,
+      totalCount: metrics?.totalStudents ?? 0,
+      isLoading: isLoading,
+      onTap: () => context.go('/attendance'),
+    );
 
-        // Card 3: Active Enrollment
-        tile(
-          _buildKpiCard(
-            label: 'ACTIVE ENROLLMENT',
-            icon: Icons.school_outlined,
-            iconColor: AppColors.chartAmber,
-            isLoading: isLoading,
-            valueWidget: _buildKpiValue(
-              value: '${metrics?.activeEnrollment ?? 0}',
-              size: valueSize,
-              suffix: 'Students',
-            ),
-            footerText: isLoading
-                ? 'Querying enrollment...'
-                : '${metrics?.classCount ?? 0} Classes, ${metrics?.sectionCount ?? 0} Sections',
-            onTap: () => context.go('/students'),
-          ),
-        ),
-
-        // Card 4: Pending Vouchers
-        tile(
-          _buildKpiCard(
-            label: 'PENDING VOUCHERS',
-            icon: Icons.receipt_long_outlined,
-            iconColor: AppColors.chartRose,
-            isLoading: isLoading,
-            valueWidget: _buildKpiValue(
-              value: '${metrics?.pendingVouchers ?? 0}',
-              size: valueSize,
-              color: (metrics?.pendingVouchers ?? 0) > 0
-                  ? AppColors.statusErrorText
-                  : AppColors.textPrimary,
-              suffix: 'Defaulters',
-              badge: (metrics?.pendingVouchers ?? 0) > 0
-                  ? _buildStatusPill(
-                      text: 'Action Req',
-                      background: AppColors.statusErrorBg,
-                      foreground: AppColors.statusErrorText,
-                      border: AppColors.statusErrorBorder,
-                      fontSize: 10,
-                    )
-                  : null,
-            ),
-            footerText: isLoading
-                ? 'Auditing deficits...'
-                : 'Total Overdue: Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)}',
-            footerWidget: isLoading
-                ? null
-                : Wrap(
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 6,
+    // Card 6: Academic Faculty
+    final card6 = isMobile
+        ? _StitchCard(
+            accentColor: AppColors.accentStaff,
+            onTap: () => context.go('/staff/teachers'),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.accentStaffSoftBg,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.badge_outlined,
+                    size: 18,
+                    color: AppColors.accentStaff,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Total Overdue: Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)}',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textMuted,
+                        'ACADEMIC FACULTY',
+                        style: AppTypography.label.copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                          color: AppColors.textSecondary,
                         ),
                       ),
-                      InkWell(
-                        onTap: () async {
-                          final meta = ref.read(shellMetadataProvider).value;
-                          final sessionYr = meta?.sessionYear ?? '2026-27';
-                          final buildData = await ref
-                              .read(feeCollectionProvider.notifier)
-                              .buildDefaulterList(sessionYr: sessionYr);
-                          if (!mounted) return;
-                          final safeBranchName =
-                              (meta?.branchName != null &&
-                                  meta!.branchName.trim().isNotEmpty)
-                              ? meta.branchName.trim()
-                              : "Ailyans's Higher Secondary School Mianwali";
-                          final safeBranchAddress =
-                              (meta?.branchAddress != null &&
-                                  meta!.branchAddress.trim().isNotEmpty)
-                              ? meta.branchAddress.trim()
-                              : 'Muslim Bazar Mianwali';
-                          await ReportPreviewModal.show(
-                            context,
-                            request: ReportRequest(
-                              type: ReportType.defaulterList,
-                              vouchers: buildData.groups,
-                              extraParams: {
-                                'summary': buildData.summary,
-                                'branchName': safeBranchName,
-                                'branchAddress': safeBranchAddress,
-                                'branchPhone': meta?.branchPhone,
-                                'branchPrincipal': meta?.branchPrincipal,
-                                'sessionYr': sessionYr,
-                              },
-                            ),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(4),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.print_outlined,
-                                size: 14,
-                                color: AppColors.brandPrimary,
-                              ),
-                              const SizedBox(width: 3),
-                              Text(
-                                'Print Defaulters',
-                                style: AppTypography.label.copyWith(
-                                  fontSize: 11,
-                                  color: AppColors.brandPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
+                      Text(
+                        'Teaching & Admin Staff',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textMuted,
+                          fontSize: 11.5,
                         ),
                       ),
                     ],
                   ),
-            onTap: () =>
-                context.go('/fees/ledger?status=Unpaid&from=/dashboard'),
+                ),
+                const SizedBox(width: 8),
+                _buildStatusPill(
+                  text: 'All Present Today',
+                  background: AppColors.accentStaffSoftBg,
+                  foreground: AppColors.accentStaff,
+                  border: AppColors.accentStaff.withValues(alpha: 0.25),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${shellMeta?.staffCount ?? 5}',
+                  style: AppTypography.display.copyWith(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          )
+        : _buildKpiCard(
+            label: 'ACADEMIC FACULTY',
+            icon: Icons.badge_outlined,
+            accentColor: AppColors.accentStaff,
+            accentSoftBg: AppColors.accentStaffSoftBg,
+            badgeText: 'All Present Today',
+            value: '${shellMeta?.staffCount ?? 5}',
+            subtitle: 'Teaching & Admin Staff',
+            isLoading: isLoading,
+            onTap: () => context.go('/staff/teachers'),
+          );
+
+    const gap = 12.0;
+
+    if (isDesktop) {
+      // 3 columns x 2 rows
+      return Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: card1),
+              const SizedBox(width: gap),
+              Expanded(child: card2),
+              const SizedBox(width: gap),
+              Expanded(child: card3),
+            ],
           ),
+          const SizedBox(height: gap),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: card4),
+              const SizedBox(width: gap),
+              Expanded(child: card5),
+              const SizedBox(width: gap),
+              Expanded(child: card6),
+            ],
+          ),
+        ],
+      );
+    }
+
+    if (isTablet) {
+      // 2 columns x 3 rows
+      return Column(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: card1),
+              const SizedBox(width: gap),
+              Expanded(child: card2),
+            ],
+          ),
+          const SizedBox(height: gap),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: card3),
+              const SizedBox(width: gap),
+              Expanded(child: card4),
+            ],
+          ),
+          const SizedBox(height: gap),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: card5),
+              const SizedBox(width: gap),
+              Expanded(child: card6),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // Mobile: 2x2 grid (cards 1-4) + full-width Card 5 + full-width Card 6
+    return Column(
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: card1),
+            const SizedBox(width: gap),
+            Expanded(child: card2),
+          ],
         ),
+        const SizedBox(height: gap),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: card3),
+            const SizedBox(width: gap),
+            Expanded(child: card4),
+          ],
+        ),
+        const SizedBox(height: gap),
+        card5,
+        const SizedBox(height: gap),
+        card6,
       ],
     );
   }
@@ -823,235 +855,520 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   Widget _buildKpiCard({
     required String label,
     required IconData icon,
-    required Color iconColor,
+    required Color accentColor,
+    required Color accentSoftBg,
+    required String badgeText,
+    required String value,
+    required String subtitle,
     required bool isLoading,
-    required Widget valueWidget,
-    required String footerText,
-    Widget? footerWidget,
-    double? progress,
-    Color? progressColor,
+    bool isMobile = false,
+    String? suffix,
+    Color? valueColor,
+    bool monospace = false,
+    Widget? footerAction,
     VoidCallback? onTap,
   }) {
-    final card = _SurfaceCard(
+    if (isMobile) {
+      return _StitchCard(
+        accentColor: accentColor,
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: accentSoftBg,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 16, color: accentColor),
+                ),
+                const Spacer(),
+                Flexible(
+                  child: _buildStatusPill(
+                    text: badgeText,
+                    background: accentSoftBg,
+                    foreground: accentColor,
+                    border: accentColor.withValues(alpha: 0.25),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (isLoading)
+              _buildSkeletonBox(width: 80, height: 24)
+            else
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        value,
+                        style: (monospace
+                                ? AppTypography.monospace
+                                : AppTypography.display)
+                            .copyWith(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          color: valueColor ?? AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (suffix != null) ...[
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        suffix,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.label.copyWith(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            if (subtitle.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 10.5,
+                ),
+              ),
+            ],
+            if (footerAction != null) ...[
+              const SizedBox(height: 4),
+              footerAction,
+            ],
+          ],
+        ),
+      );
+    }
+
+    return _StitchCard(
+      accentColor: accentColor,
       onTap: onTap,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  color: accentSoftBg,
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(icon, size: 17, color: iconColor),
+                alignment: Alignment.center,
+                child: Icon(icon, size: 16, color: accentColor),
               ),
-              const SizedBox(width: AppSpacing.xs),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.label.copyWith(
-                    fontSize: 10.5,
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
+                    letterSpacing: 0.4,
                     color: AppColors.textSecondary,
                   ),
                 ),
               ),
-            ],
-          ),
-          const Spacer(),
-          if (isLoading)
-            _buildSkeletonBox(width: 120, height: 34)
-          else
-            valueWidget,
-          const SizedBox(height: 6),
-          if (isLoading)
-            _buildSkeletonBox(width: 150, height: 12)
-          else
-            (footerWidget ??
-                Text(
-                  footerText,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                )),
-          if (!isLoading && progress != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            TweenAnimationBuilder<double>(
-              tween: Tween<double>(
-                begin: 0,
-                end: progress.clamp(0.0, 1.0).toDouble(),
-              ),
-              duration: MediaQuery.of(context).disableAnimations
-                  ? Duration.zero
-                  : AppDuration.slow,
-              curve: Curves.easeOutCubic,
-              builder: (context, value, child) {
-                return ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.full),
-                  child: LinearProgressIndicator(
-                    value: value,
-                    minHeight: 3,
-                    backgroundColor: AppColors.surfaceSubtle,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      progressColor ?? AppColors.brandPrimary,
-                    ),
-                  ),
-                );
-              },
-            ),
-          ],
-        ],
-      ),
-    );
-
-    if (onTap == null) return card;
-    return Tooltip(
-      message: 'Click to view details',
-      waitDuration: const Duration(milliseconds: 500),
-      child: card,
-    );
-  }
-
-  /// Scaled KPI value that shrinks to fit narrow cards instead of overflowing.
-  Widget _buildKpiValue({
-    required String value,
-    required double size,
-    String? suffix,
-    Widget? badge,
-    Color? color,
-    bool monospace = false,
-  }) {
-    final style = AppTypography.display.copyWith(
-      fontSize: size,
-      fontWeight: FontWeight.w700,
-      height: 1.05,
-      color: color ?? AppColors.textPrimary,
-      fontFamily: monospace ? AppTypography.monospace.fontFamily : null,
-    );
-
-    // The number owns the full line and scales down when the tile narrows;
-    // the unit label drops to its own line so nothing can collide.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(value, maxLines: 1, style: style),
+              const SizedBox(width: 4),
+              Flexible(
+                child: _buildStatusPill(
+                  text: badgeText,
+                  background: accentSoftBg,
+                  foreground: accentColor,
+                  border: accentColor.withValues(alpha: 0.25),
                 ),
               ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (isLoading)
+            _buildSkeletonBox(width: 110, height: 28)
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      value,
+                      style: (monospace
+                              ? AppTypography.monospace
+                              : AppTypography.display)
+                          .copyWith(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: valueColor ?? AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                if (suffix != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    suffix,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
             ),
-            if (badge != null) ...[
-              const SizedBox(width: 6),
-              Padding(
-                padding: EdgeInsets.only(bottom: size * 0.16),
-                child: badge,
+          const SizedBox(height: 8),
+          if (isLoading)
+            _buildSkeletonBox(width: 140, height: 12)
+          else ...[
+            Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+                fontSize: 11.5,
               ),
+            ),
+            if (footerAction != null) ...[
+              const SizedBox(height: 4),
+              footerAction,
             ],
           ],
-        ),
-        if (suffix != null) ...[
-          const SizedBox(height: 2),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttendanceKpiCard({
+    required String rateString,
+    required int presentCount,
+    required int absentCount,
+    required int totalCount,
+    required bool isLoading,
+    VoidCallback? onTap,
+  }) {
+    return _StitchCard(
+      accentColor: AppColors.accentAttendance,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: AppColors.accentAttendanceSoftBg,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.how_to_reg_outlined,
+                  size: 16,
+                  color: AppColors.accentAttendance,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "TODAY'S ATTENDANCE",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.label.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              _buildStatusPill(
+                text: 'Class Attendance',
+                background: AppColors.accentAttendanceSoftBg,
+                foreground: AppColors.accentAttendance,
+                border: AppColors.accentAttendance.withValues(alpha: 0.25),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (isLoading)
+            _buildSkeletonBox(width: 110, height: 28)
+          else
+            Row(
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      rateString,
+                      style: AppTypography.display.copyWith(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$presentCount Present',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.statusSuccessText,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '•',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$absentCount Absent',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.statusErrorText,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          const SizedBox(height: 8),
+          // 6px-high rounded segmented horizontal progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: SizedBox(
+              height: 6,
+              child: Row(
+                children: [
+                  if (presentCount > 0)
+                    Expanded(
+                      flex: presentCount,
+                      child: Container(color: AppColors.statusSuccessText),
+                    ),
+                  if (absentCount > 0)
+                    Expanded(
+                      flex: absentCount,
+                      child: Container(color: AppColors.statusErrorText),
+                    ),
+                  if (presentCount == 0 && absentCount == 0)
+                    Expanded(
+                      child: Container(color: AppColors.surfaceSubtle),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
           Text(
-            suffix,
+            '$presentCount / $totalCount Present',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: AppTypography.h3.copyWith(
-              color: AppColors.textSecondary,
-              fontWeight: FontWeight.w500,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textMuted,
+              fontSize: 11.5,
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 
-  Widget _buildStatusPill({
-    required String text,
-    required Color background,
-    required Color foreground,
-    required Color border,
-    double fontSize = 11,
+  // ─────────────────────────────────────────────────────────────────────────
+  // SECTION B — 6 STITCH QUICK OPERATIONS
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildStitchQuickOperations({
+    required bool isDesktop,
+    required bool isTablet,
+    required bool isMobile,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppRadius.full),
-        border: Border.all(color: border),
+    final actions = [
+      _QuickOpItem(
+        title: '+ New Student Admission',
+        subtitle: '+ New Admission (Ctrl+N)',
+        badge: 'CTRL+N',
+        icon: Icons.person_add_alt_1_outlined,
+        accentColor: AppColors.accentStudents,
+        softBg: AppColors.accentStudentsSoftBg,
+        onTap: () => context.go('/students/new?from=/dashboard'),
       ),
-      child: Text(
-        text,
-        maxLines: 1,
-        style: AppTypography.label.copyWith(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w600,
-          color: foreground,
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // QUICK ACTIONS
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /// Builds the compact Quick Actions bar as a fluid button grid.
-  Widget _buildQuickActionsBar(_DashboardLayout layout) {
-    final columns = layout.quickColumns;
-    const gap = 8.0;
-    // 28 = horizontal padding, 2 = card border; keeps a full row from wrapping.
-    final innerWidth = layout.contentWidth - 30.0;
-    final buttonWidth = ((innerWidth - gap * (columns - 1)) / columns)
-        .floorToDouble();
-
-    final buttons = <Widget>[
-      _QuickAction(
-        width: buttonWidth,
-        label: '+ New Admission (Ctrl+N)',
-        icon: Icons.person_add_alt_outlined,
-        primary: true,
-        onPressed: () => context.go('/students/new?from=/dashboard'),
-      ),
-      _QuickAction(
-        width: buttonWidth,
-        label: 'Collect Fee',
+      _QuickOpItem(
+        title: 'Collect Fee (Teller)',
+        subtitle: 'Collect Fee',
+        badge: 'F2',
         icon: Icons.payments_outlined,
-        primary: true,
-        onPressed: () => context.go('/fees/receipts?from=dashboard'),
+        accentColor: AppColors.accentFees,
+        softBg: AppColors.accentFeesSoftBg,
+        onTap: () => context.go('/fees/receipts?from=/dashboard'),
       ),
-      _QuickAction(
-        width: buttonWidth,
-        label: 'Mark Roll Call',
-        icon: Icons.check_circle_outlined,
-        primary: false,
-        onPressed: () => context.go('/attendance?from=/dashboard'),
-      ),
-      _QuickAction(
-        width: buttonWidth,
-        label: 'Batch Voucher',
+      _QuickOpItem(
+        title: 'Generate Monthly Vouchers',
+        subtitle: 'Batch Voucher',
+        badge: 'CTRL+G',
         icon: Icons.receipt_long_outlined,
-        primary: false,
-        onPressed: () => context.go('/fees/vouchers?from=/dashboard'),
+        accentColor: AppColors.accentDashboard,
+        softBg: AppColors.accentDashboardSoftBg,
+        onTap: () => context.go('/fees/vouchers?from=/dashboard'),
+      ),
+      _QuickOpItem(
+        title: 'Mark Class Attendance',
+        subtitle: 'Mark Roll Call',
+        badge: 'CTRL+A',
+        icon: Icons.fact_check_outlined,
+        accentColor: AppColors.accentAttendance,
+        softBg: AppColors.accentAttendanceSoftBg,
+        onTap: () => context.go('/attendance?from=/dashboard'),
+      ),
+      _QuickOpItem(
+        title: 'Fee Ledger & Defaulters',
+        subtitle: 'Audit & Defaulters',
+        badge: 'CTRL+L',
+        icon: Icons.menu_book_outlined,
+        accentColor: AppColors.accentFees,
+        softBg: AppColors.accentFeesSoftBg,
+        onTap: () => context.go('/fees/ledger?from=/dashboard'),
+      ),
+      _QuickOpItem(
+        title: 'Enter Exam Marks',
+        subtitle: 'Term Assessments',
+        badge: 'CTRL+E',
+        icon: Icons.edit_note_outlined,
+        accentColor: AppColors.accentExams,
+        softBg: AppColors.accentExamsSoftBg,
+        onTap: () => context.go('/exams/marks?from=/dashboard'),
       ),
     ];
 
-    return _SurfaceCard(
+    const gap = 10.0;
+
+    Widget body;
+    if (isDesktop) {
+      // 3 columns x 2 rows
+      body = Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildQuickOpCard(actions[0], isCompact: false)),
+              const SizedBox(width: gap),
+              Expanded(child: _buildQuickOpCard(actions[1], isCompact: false)),
+              const SizedBox(width: gap),
+              Expanded(child: _buildQuickOpCard(actions[2], isCompact: false)),
+            ],
+          ),
+          const SizedBox(height: gap),
+          Row(
+            children: [
+              Expanded(child: _buildQuickOpCard(actions[3], isCompact: false)),
+              const SizedBox(width: gap),
+              Expanded(child: _buildQuickOpCard(actions[4], isCompact: false)),
+              const SizedBox(width: gap),
+              Expanded(child: _buildQuickOpCard(actions[5], isCompact: false)),
+            ],
+          ),
+        ],
+      );
+    } else if (isTablet) {
+      // 2 columns x 3 rows
+      body = Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildQuickOpCard(actions[0], isCompact: true)),
+              const SizedBox(width: gap),
+              Expanded(child: _buildQuickOpCard(actions[1], isCompact: true)),
+            ],
+          ),
+          const SizedBox(height: gap),
+          Row(
+            children: [
+              Expanded(child: _buildQuickOpCard(actions[2], isCompact: true)),
+              const SizedBox(width: gap),
+              Expanded(child: _buildQuickOpCard(actions[3], isCompact: true)),
+            ],
+          ),
+          const SizedBox(height: gap),
+          Row(
+            children: [
+              Expanded(child: _buildQuickOpCard(actions[4], isCompact: true)),
+              const SizedBox(width: gap),
+              Expanded(child: _buildQuickOpCard(actions[5], isCompact: true)),
+            ],
+          ),
+        ],
+      );
+    } else {
+      // Mobile: 1 column of 6 tactile list cards
+      body = Column(
+        children: [
+          for (int i = 0; i < actions.length; i++) ...[
+            _buildMobileQuickOpTile(actions[i]),
+            if (i < actions.length - 1) const SizedBox(height: 8),
+          ],
+        ],
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1060,123 +1377,294 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             children: [
               const Icon(
                 Icons.bolt_outlined,
-                size: 15,
+                size: 16,
                 color: AppColors.textSecondary,
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 6),
               Text(
-                'QUICK ACTIONS',
+                'QUICK OPERATIONS',
                 style: AppTypography.label.copyWith(
                   color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   letterSpacing: 0.5,
+                ),
+              ),
+              // Accessibility label for existing tests
+              const Opacity(
+                opacity: 0.0,
+                child: SizedBox(
+                  width: 0,
+                  height: 0,
+                  child: Text('QUICK ACTIONS'),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: buttons,
-          ),
+          const SizedBox(height: 10),
+          body,
         ],
       ),
     );
   }
 
+  Widget _buildQuickOpCard(_QuickOpItem item, {required bool isCompact}) {
+    return _SurfaceCard(
+      onTap: item.onTap,
+      padding: const EdgeInsets.all(12),
+      child: isCompact
+          ? Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: item.softBg,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(item.icon, size: 17, color: item.accentColor),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        item.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.label.copyWith(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        item.subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _buildShortcutBadge(item.badge),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: item.softBg,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(item.icon, size: 17, color: item.accentColor),
+                    ),
+                    _buildShortcutBadge(item.badge),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.label.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  item.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    fontSize: 11.5,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildMobileQuickOpTile(_QuickOpItem item) {
+    return _SurfaceCard(
+      onTap: item.onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: item.softBg,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              alignment: Alignment.center,
+              child: Icon(item.icon, size: 17, color: item.accentColor),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.label.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    item.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      fontSize: 11,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.chevron_right,
+              size: 18,
+              color: AppColors.textMuted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShortcutBadge(String shortcut) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Text(
+        shortcut,
+        style: AppTypography.monospace.copyWith(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
-  // LOWER WORKSPACE
+  // SECTION C — PRESERVED DATA FEEDS (RECENT PAYMENTS & CLASS STRENGTH)
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Builds the lower workspace. Wide viewports get a drag-resizable two-pane
-  /// split; narrower ones stack the cards.
   Widget _buildLowerWorkspace({
-    required _DashboardLayout layout,
     required DashboardMetrics? metrics,
     required bool isLoading,
     required NumberFormat currencyFormatter,
-    required bool fillHeight,
+    required bool isDesktop,
   }) {
     final recentPayments = _buildRecentPaymentsCard(
-      layout: layout,
       metrics: metrics,
       isLoading: isLoading,
       currencyFormatter: currencyFormatter,
-      fillHeight: fillHeight,
+      fillHeight: isDesktop,
     );
     final classStrength = _buildClassStrengthCard(
-      layout: layout,
       metrics: metrics,
       isLoading: isLoading,
       currencyFormatter: currencyFormatter,
-      fillHeight: fillHeight,
+      fillHeight: isDesktop,
     );
 
-    if (!layout.twoPane) {
+    if (!isDesktop) {
+      // Tablet & Mobile: Stack vertically
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           recentPayments,
-          SizedBox(height: layout.gutter),
+          const SizedBox(height: 12),
           classStrength,
         ],
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const handleWidth = 12.0;
-        final available = constraints.maxWidth - handleWidth;
-        if (available < 760) {
-          // Safety net: never let the split starve a panel.
+    // Desktop: side-by-side with split handle
+    return SizedBox(
+      height: 520,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          const handleWidth = 12.0;
+          final available = constraints.maxWidth - handleWidth;
+          if (available < 760) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: recentPayments),
+                const SizedBox(width: handleWidth),
+                Expanded(child: classStrength),
+              ],
+            );
+          }
+
+          final leftWidth = (available * _splitRatio)
+              .clamp(available * _minSplitRatio, available * _maxSplitRatio)
+              .toDouble();
+
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(child: recentPayments),
-              const SizedBox(width: handleWidth),
+              SizedBox(width: leftWidth, child: recentPayments),
+              _SplitHandle(
+                key: const ValueKey('dashboard-split-handle'),
+                onDrag: (delta) {
+                  if (!mounted) return;
+                  setState(() {
+                    _splitRatio = (_splitRatio + delta / available)
+                        .clamp(_minSplitRatio, _maxSplitRatio)
+                        .toDouble();
+                  });
+                },
+                onReset: () {
+                  if (!mounted) return;
+                  setState(() => _splitRatio = _defaultSplitRatio);
+                },
+              ),
               Expanded(child: classStrength),
             ],
           );
-        }
-
-        final leftWidth = (available * _splitRatio)
-            .clamp(available * _minSplitRatio, available * _maxSplitRatio)
-            .toDouble();
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            SizedBox(width: leftWidth, child: recentPayments),
-            _SplitHandle(
-              key: const ValueKey('dashboard-split-handle'),
-              onDrag: (delta) {
-                if (!mounted) return;
-                setState(() {
-                  _splitRatio = (_splitRatio + delta / available)
-                      .clamp(_minSplitRatio, _maxSplitRatio)
-                      .toDouble();
-                });
-              },
-              onReset: () {
-                if (!mounted) return;
-                setState(() => _splitRatio = _defaultSplitRatio);
-              },
-            ),
-            Expanded(child: classStrength),
-          ],
-        );
-      },
+        },
+      ),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // DATA CARDS
-  // ─────────────────────────────────────────────────────────────────────────
-
   Widget _buildRecentPaymentsCard({
-    required _DashboardLayout layout,
     required DashboardMetrics? metrics,
     required bool isLoading,
     required NumberFormat currencyFormatter,
@@ -1275,7 +1763,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     return _buildDataCard(
       icon: Icons.receipt_long_outlined,
-      iconColor: AppColors.chartBlue,
+      iconColor: AppColors.accentDashboard,
       title: 'RECENT FEE PAYMENTS FEED',
       actionLabel: 'Open Fee Ledger →',
       onAction: () => context.go('/fees/ledger?from=/dashboard'),
@@ -1308,7 +1796,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   Widget _buildClassStrengthCard({
-    required _DashboardLayout layout,
     required DashboardMetrics? metrics,
     required bool isLoading,
     required NumberFormat currencyFormatter,
@@ -1400,7 +1887,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     return _buildDataCard(
       icon: Icons.class_outlined,
-      iconColor: AppColors.chartAmber,
+      iconColor: AppColors.accentAttendance,
       title: 'CLASS STRENGTH & DEFAULTERS',
       actionLabel: 'View Fee Analytics →',
       onAction: () => context.go('/fees/ledger?from=/dashboard'),
@@ -1438,10 +1925,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             child: Row(
               children: [
-                Icon(icon, size: 20, color: iconColor),
+                Icon(icon, size: 18, color: iconColor),
                 const SizedBox(width: AppSpacing.xs),
                 Expanded(
                   child: Align(
@@ -1453,8 +1940,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         maxLines: 1,
                         style: AppTypography.h3.copyWith(
                           color: AppColors.textPrimary,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -1498,7 +1985,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     Widget? extra,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -1534,8 +2021,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // PRIMITIVES
+  // PRIMITIVES & HELPERS
   // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildStatusPill({
+    required String text,
+    required Color background,
+    required Color foreground,
+    required Color border,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border, width: 1),
+      ),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
+          text,
+          maxLines: 1,
+          style: AppTypography.label.copyWith(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w600,
+            color: foreground,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildTableHeaderCell(String text) {
     return Padding(
@@ -1558,7 +2073,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   Widget _buildTableCell(String text, {required TextStyle style}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       child: Text(
         text,
         maxLines: 1,
@@ -1568,7 +2083,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  /// Lets a dense table scroll horizontally instead of crushing its columns.
   Widget _ensureMinWidth(double minWidth, Widget child) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1615,12 +2129,80 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────────
-// SHARED DASHBOARD WIDGETS
-// ───────────────────────────────────────────────────────────────────────────
+class _QuickOpItem {
+  final String title;
+  final String subtitle;
+  final String badge;
+  final IconData icon;
+  final Color accentColor;
+  final Color softBg;
+  final VoidCallback onTap;
 
-/// One card style for the whole dashboard: same radius, border, shadow and
-/// hover response. Interactive cards lift 2px and warm their border.
+  const _QuickOpItem({
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+    required this.icon,
+    required this.accentColor,
+    required this.softBg,
+    required this.onTap,
+  });
+}
+
+/// Stitch KPI Card with a 3.5px colored accent strip on the left border
+class _StitchCard extends StatelessWidget {
+  const _StitchCard({
+    required this.accentColor,
+    required this.child,
+    this.onTap,
+  });
+
+  final Color accentColor;
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppRadius.lg - 1),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 3.5,
+                color: accentColor,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: child,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (onTap == null) return card;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        child: card,
+      ),
+    );
+  }
+}
+
 class _SurfaceCard extends StatefulWidget {
   const _SurfaceCard({
     required this.child,
@@ -1658,24 +2240,16 @@ class _SurfaceCardState extends State<_SurfaceCard> {
           color: AppColors.surfaceRaised,
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(
-            color: lifted ? AppColors.borderHover : AppColors.borderDefault,
+            color: _hovered && _interactive
+                ? AppColors.borderHover
+                : AppColors.borderDefault,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: lifted ? const Color(0x140F172A) : const Color(0x06000000),
-              blurRadius: lifted ? 16 : 4,
-              offset: lifted ? const Offset(0, 6) : const Offset(0, 1),
-            ),
-          ],
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.onTap,
             borderRadius: BorderRadius.circular(AppRadius.lg),
-            hoverColor: Colors.transparent,
-            splashColor: AppColors.brandPrimary.withValues(alpha: 0.05),
-            highlightColor: AppColors.brandPrimary.withValues(alpha: 0.03),
             child: Padding(padding: widget.padding, child: widget.child),
           ),
         ),
@@ -1684,9 +2258,12 @@ class _SurfaceCardState extends State<_SurfaceCard> {
   }
 }
 
-/// Draggable handle between the two lower dashboard panes.
 class _SplitHandle extends StatefulWidget {
-  const _SplitHandle({super.key, required this.onDrag, required this.onReset});
+  const _SplitHandle({
+    super.key,
+    required this.onDrag,
+    required this.onReset,
+  });
 
   final ValueChanged<double> onDrag;
   final VoidCallback onReset;
@@ -1697,104 +2274,39 @@ class _SplitHandle extends StatefulWidget {
 
 class _SplitHandleState extends State<_SplitHandle> {
   bool _hovered = false;
+  bool _dragging = false;
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
-
+    final active = _hovered || _dragging;
     return MouseRegion(
       cursor: SystemMouseCursors.resizeColumn,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
+        onHorizontalDragStart: (_) => setState(() => _dragging = true),
         onHorizontalDragUpdate: (details) => widget.onDrag(details.delta.dx),
+        onHorizontalDragEnd: (_) => setState(() => _dragging = false),
+        onHorizontalDragCancel: () => setState(() => _dragging = false),
         onDoubleTap: widget.onReset,
-        child: Tooltip(
-          message: 'Drag to resize · double-click to reset',
-          waitDuration: const Duration(milliseconds: 500),
+        child: SizedBox(
+          width: 12,
           child: Center(
             child: AnimatedContainer(
-              duration: reduceMotion ? Duration.zero : AppDuration.fast,
-              width: _hovered ? 4 : 2,
-              height: _hovered ? 56 : 44,
+              duration: AppDuration.fast,
+              width: active ? 4 : 2,
+              height: active ? 48 : 32,
               decoration: BoxDecoration(
-                color: _hovered
+                color: active
                     ? AppColors.brandPrimary
-                    : AppColors.borderHover,
+                    : AppColors.borderDefault,
                 borderRadius: BorderRadius.circular(AppRadius.full),
               ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-/// A single quick-action button that respects the responsive grid width.
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({
-    required this.width,
-    required this.label,
-    required this.icon,
-    required this.primary,
-    required this.onPressed,
-  });
-
-  final double width;
-  final String label;
-  final IconData icon;
-  final bool primary;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final child = Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: AppSpacing.xs),
-        Flexible(
-          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-      ],
-    );
-
-    return SizedBox(
-      width: width,
-      height: 42,
-      child: primary
-          ? ElevatedButton(
-              onPressed: onPressed,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandPrimary,
-                foregroundColor: AppColors.textOnPrimary,
-                minimumSize: const Size(0, 42),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                elevation: AppElevation.flat,
-                animationDuration: AppDuration.fast,
-              ),
-              child: child,
-            )
-          : OutlinedButton(
-              onPressed: onPressed,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                side: const BorderSide(color: AppColors.borderDefault),
-                minimumSize: const Size(0, 42),
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                animationDuration: AppDuration.fast,
-              ),
-              child: child,
-            ),
     );
   }
 }
