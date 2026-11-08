@@ -732,6 +732,326 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
               .toList()
         : <Map<String, dynamic>>[];
 
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
+    if (isMobile) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Row 1: Session & Month
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Session:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: DropdownButton<String>(
+                          value: state.selectedSessionYr.isNotEmpty
+                              ? state.selectedSessionYr
+                              : null,
+                          isDense: true,
+                          isExpanded: true,
+                          underline: const SizedBox.shrink(),
+                          items: {
+                            if (state.selectedSessionYr.isNotEmpty)
+                              state.selectedSessionYr,
+                            ...state.sessionYears,
+                          }
+                              .map(
+                                (y) => DropdownMenuItem(
+                                  value: y,
+                                  child: Text(
+                                    y,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null) notifier.setSession(val);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Month:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: DropdownButton<String?>(
+                          value: state.selectedMonth,
+                          isDense: true,
+                          isExpanded: true,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text(
+                                'All Months',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            ...{
+                              if (state.selectedMonth != null)
+                                state.selectedMonth!,
+                              ...state.months,
+                            }.map(
+                              (m) => DropdownMenuItem<String?>(
+                                value: m,
+                                child: Text(
+                                  m,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) => notifier.setMonth(val),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            // Row 2: Class & Section
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Class:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: DropdownButton<int?>(
+                          value: state.selectedClassId,
+                          isDense: true,
+                          isExpanded: true,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text(
+                                'All Classes',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            ...state.classes.map(
+                              (c) => DropdownMenuItem<int?>(
+                                value: c['ClassID'] as int,
+                                child: Text(
+                                  (c['CName'] as String?) ?? '',
+                                  style: const TextStyle(fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) => notifier.setClass(val),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Section:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: DropdownButton<int?>(
+                          value: state.selectedClassSecId,
+                          isDense: true,
+                          isExpanded: true,
+                          underline: const SizedBox.shrink(),
+                          items: [
+                            const DropdownMenuItem<int?>(
+                              value: null,
+                              child: Text(
+                                'All Sections',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            ...filteredSections.map(
+                              (s) => DropdownMenuItem<int?>(
+                                value: s['ClassSecID'] as int,
+                                child: Text(
+                                  (s['SecName'] as String?) ?? '',
+                                  style: const TextStyle(fontSize: 12),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
+                          onChanged: state.selectedClassId == null
+                              ? null
+                              : (val) => notifier.setSection(val),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            // Row 3: Status & Presets
+            Wrap(
+              spacing: AppSpacing.xs,
+              runSpacing: AppSpacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Status:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    DropdownButton<String>(
+                      value: state.selectedStatus,
+                      isDense: true,
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'All',
+                          child: Text('All', style: TextStyle(fontSize: 12)),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Paid',
+                          child: Text('Paid', style: TextStyle(fontSize: 12)),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Unpaid',
+                          child: Text('Unpaid', style: TextStyle(fontSize: 12)),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Overdue',
+                          child: Text('Overdue', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) notifier.setStatus(val);
+                      },
+                    ),
+                  ],
+                ),
+                ActionChip(
+                  label: const Text('This Month', style: TextStyle(fontSize: 11)),
+                  padding: EdgeInsets.zero,
+                  backgroundColor: state.activePreset == 'thisMonth'
+                      ? AppColors.brandPrimary
+                      : null,
+                  labelStyle: TextStyle(
+                    fontSize: 11,
+                    color: state.activePreset == 'thisMonth'
+                        ? AppColors.surfaceRaised
+                        : AppColors.textPrimary,
+                  ),
+                  side: state.activePreset == 'thisMonth'
+                      ? const BorderSide(color: AppColors.brandPrimary, width: 1)
+                      : null,
+                  onPressed: notifier.applyThisMonth,
+                ),
+                ActionChip(
+                  label: const Text('Today', style: TextStyle(fontSize: 11)),
+                  padding: EdgeInsets.zero,
+                  backgroundColor: state.activePreset == 'today'
+                      ? AppColors.brandPrimary
+                      : null,
+                  labelStyle: TextStyle(
+                    fontSize: 11,
+                    color: state.activePreset == 'today'
+                        ? AppColors.surfaceRaised
+                        : AppColors.textPrimary,
+                  ),
+                  side: state.activePreset == 'today'
+                      ? const BorderSide(color: AppColors.brandPrimary, width: 1)
+                      : null,
+                  onPressed: notifier.applyToday,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            // Row 4: Search Field
+            SizedBox(
+              height: 36,
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                style: const TextStyle(fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: 'Search voucher or name...',
+                  prefixIcon: const Icon(Icons.search, size: 16),
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 14),
+                          onPressed: () {
+                            _searchController.clear();
+                            notifier.setSearch('');
+                          },
+                        )
+                      : null,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 0,
+                    horizontal: 8,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    borderSide: const BorderSide(
+                      color: AppColors.borderDefault,
+                    ),
+                  ),
+                ),
+                onChanged: (val) => notifier.setSearch(val),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,

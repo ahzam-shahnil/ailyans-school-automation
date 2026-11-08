@@ -111,6 +111,265 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     final dateDisplay = DateFormat('dd-MMM-yyyy').format(state.selectedDate);
     final leaveCount = state.summaryCounts['Leave'] ?? 0;
     final from = _getFromOrigin(context);
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
+    Widget buildClassDropdown({double? width}) {
+      return SizedBox(
+        width: width,
+        height: 48,
+        child: DropdownButtonFormField<int>(
+          key: ValueKey(state.selectedClassId),
+          initialValue: state.selectedClassId,
+          isExpanded: true,
+          menuMaxHeight: 400,
+          decoration: const InputDecoration(
+            labelText: 'Class',
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(),
+          ),
+          items: state.classes.map((cls) {
+            return DropdownMenuItem<int>(
+              value: cls['ClassID'] as int,
+              child: Text(
+                cls['CName'] as String? ?? '',
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) {
+              notifier.loadSectionsForClass(val);
+            }
+          },
+        ),
+      );
+    }
+
+    Widget buildSectionDropdown({double? width}) {
+      return SizedBox(
+        width: width,
+        height: 48,
+        child: DropdownButtonFormField<int>(
+          key: ValueKey(state.selectedClassSecId),
+          initialValue: state.selectedClassSecId,
+          isExpanded: true,
+          menuMaxHeight: 400,
+          decoration: const InputDecoration(
+            labelText: 'Section',
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(),
+          ),
+          items: state.sections.map((sec) {
+            return DropdownMenuItem<int>(
+              value: sec['ClassSecID'] as int,
+              child: Text(
+                sec['SecName'] as String? ?? '',
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }).toList(),
+          onChanged: (val) {
+            if (val != null) {
+              notifier.selectSection(val);
+            }
+          },
+        ),
+      );
+    }
+
+    Widget buildDatePicker() {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: state.selectedDate,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) {
+              notifier.setDate(picked);
+            }
+          },
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          hoverColor: AppColors.brandPrimary.withValues(alpha: 0.04),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceRaised,
+              border: Border.all(color: AppColors.borderDefault),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.calendar_today_outlined,
+                  size: 16,
+                  color: AppColors.brandPrimary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  dateDisplay,
+                  style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.arrow_drop_down,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget buildTeacherDropdown({double? width}) {
+      return SizedBox(
+        width: width,
+        height: 48,
+        child: DropdownButtonFormField<int>(
+          key: ValueKey('teacher_${state.selectedTeacherId}'),
+          initialValue: state.selectedTeacherId,
+          hint: const Text('Select Teacher'),
+          isExpanded: true,
+          menuMaxHeight: 400,
+          decoration: const InputDecoration(
+            labelText: 'Teacher',
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(),
+          ),
+          items: state.teachers.map((t) {
+            return DropdownMenuItem<int>(
+              value: t['TeacherID'] as int,
+              child: Text(
+                t['TName'] as String? ?? '',
+                overflow: TextOverflow.ellipsis,
+              ),
+            );
+          }).toList(),
+          onChanged: (val) => notifier.setTeacher(val),
+        ),
+      );
+    }
+
+    Widget buildSessionYear() {
+      return Container(
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: AppColors.brandPrimary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          state.sessionYear,
+          style: AppTypography.bodySmall.copyWith(
+            fontWeight: FontWeight.w600,
+            color: AppColors.brandPrimary,
+          ),
+        ),
+      );
+    }
+
+    Widget buildLeaveButton() {
+      return OutlinedButton.icon(
+        onPressed: () {
+          _scaffoldKey.currentState?.openEndDrawer();
+        },
+        icon: Badge(
+          isLabelVisible: leaveCount > 0,
+          label: Text('$leaveCount'),
+          backgroundColor: AppColors.statusWarningText,
+          child: const Icon(Icons.description_outlined, size: 15),
+        ),
+        label: Text('Leave ($leaveCount)'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: leaveCount > 0
+              ? AppColors.statusWarningText
+              : AppColors.textPrimary,
+          side: BorderSide(
+            color: leaveCount > 0
+                ? AppColors.statusWarningText
+                : AppColors.borderDefault,
+          ),
+          minimumSize: const Size(0, 40),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+        ),
+      );
+    }
+
+    Widget buildReloadButton() {
+      return IconButton(
+        tooltip: 'Reload Roster',
+        onPressed: () => notifier.loadRoster(),
+        icon: const Icon(Icons.refresh, color: AppColors.textSecondary),
+      );
+    }
+
+    if (isMobile) {
+      return Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        color: AppColors.surface,
+        child: Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (from != null && from.isNotEmpty)
+              OutlinedButton.icon(
+                onPressed: () => context.go(from),
+                icon: const Icon(Icons.arrow_back, size: 14),
+                label: Text(
+                  from.contains('dashboard') ? 'Back to Dashboard' : 'Back',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  minimumSize: const Size(0, 32),
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+            buildClassDropdown(width: 140),
+            buildSectionDropdown(width: 120),
+            buildDatePicker(),
+            buildTeacherDropdown(width: 150),
+            buildSessionYear(),
+            buildLeaveButton(),
+            buildReloadButton(),
+          ],
+        ),
+      );
+    }
 
     return Container(
       height: 72,
@@ -142,220 +401,32 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               const SizedBox(width: AppSpacing.sm),
             ],
             // Class Dropdown
-            SizedBox(
-              width: 155,
-              height: 48,
-              child: DropdownButtonFormField<int>(
-                key: ValueKey(state.selectedClassId),
-                initialValue: state.selectedClassId,
-                isExpanded: true,
-                menuMaxHeight: 400,
-                decoration: const InputDecoration(
-                  labelText: 'Class',
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 14,
-                  ),
-                  border: OutlineInputBorder(),
-                ),
-                items: state.classes.map((cls) {
-                  return DropdownMenuItem<int>(
-                    value: cls['ClassID'] as int,
-                    child: Text(
-                      cls['CName'] as String? ?? '',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    notifier.loadSectionsForClass(val);
-                  }
-                },
-              ),
-            ),
+            buildClassDropdown(width: 155),
             const SizedBox(width: AppSpacing.xs),
 
             // Section Dropdown
-            SizedBox(
-              width: 130,
-              height: 48,
-              child: DropdownButtonFormField<int>(
-                key: ValueKey(state.selectedClassSecId),
-                initialValue: state.selectedClassSecId,
-                isExpanded: true,
-                menuMaxHeight: 400,
-                decoration: const InputDecoration(
-                  labelText: 'Section',
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 14,
-                  ),
-                  border: OutlineInputBorder(),
-                ),
-                items: state.sections.map((sec) {
-                  return DropdownMenuItem<int>(
-                    value: sec['ClassSecID'] as int,
-                    child: Text(
-                      sec['SecName'] as String? ?? '',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) {
-                  if (val != null) {
-                    notifier.selectSection(val);
-                  }
-                },
-              ),
-            ),
+            buildSectionDropdown(width: 130),
             const SizedBox(width: AppSpacing.xs),
 
             // Date Picker Field
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: state.selectedDate,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                  );
-                  if (picked != null) {
-                    notifier.setDate(picked);
-                  }
-                },
-                borderRadius: BorderRadius.circular(AppRadius.md),
-                hoverColor: AppColors.brandPrimary.withValues(alpha: 0.04),
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceRaised,
-                    border: Border.all(color: AppColors.borderDefault),
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.calendar_today_outlined,
-                        size: 16,
-                        color: AppColors.brandPrimary,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        dateDisplay,
-                        style: AppTypography.body.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(
-                        Icons.arrow_drop_down,
-                        size: 18,
-                        color: AppColors.textSecondary,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            buildDatePicker(),
             const SizedBox(width: AppSpacing.xs),
 
             // Teacher Dropdown
-            SizedBox(
-              width: 200,
-              height: 48,
-              child: DropdownButtonFormField<int>(
-                key: ValueKey('teacher_${state.selectedTeacherId}'),
-                initialValue: state.selectedTeacherId,
-                hint: const Text('Select Teacher'),
-                isExpanded: true,
-                menuMaxHeight: 400,
-                decoration: const InputDecoration(
-                  labelText: 'Teacher',
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 14,
-                  ),
-                  border: OutlineInputBorder(),
-                ),
-                items: state.teachers.map((t) {
-                  return DropdownMenuItem<int>(
-                    value: t['TeacherID'] as int,
-                    child: Text(
-                      t['TName'] as String? ?? '',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }).toList(),
-                onChanged: (val) => notifier.setTeacher(val),
-              ),
-            ),
+            buildTeacherDropdown(width: 200),
             const SizedBox(width: AppSpacing.xs),
 
             // Read-only Session Year
-            Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: AppColors.brandPrimary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                state.sessionYear,
-                style: AppTypography.bodySmall.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.brandPrimary,
-                ),
-              ),
-            ),
+            buildSessionYear(),
 
             const SizedBox(width: 16),
 
             // Leave Requests Drawer Button
-            OutlinedButton.icon(
-              onPressed: () {
-                _scaffoldKey.currentState?.openEndDrawer();
-              },
-              icon: Badge(
-                isLabelVisible: leaveCount > 0,
-                label: Text('$leaveCount'),
-                backgroundColor: AppColors.statusWarningText,
-                child: const Icon(Icons.description_outlined, size: 15),
-              ),
-              label: Text('Leave ($leaveCount)'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: leaveCount > 0
-                    ? AppColors.statusWarningText
-                    : AppColors.textPrimary,
-                side: BorderSide(
-                  color: leaveCount > 0
-                      ? AppColors.statusWarningText
-                      : AppColors.borderDefault,
-                ),
-                minimumSize: const Size(0, 40),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-              ),
-            ),
+            buildLeaveButton(),
             const SizedBox(width: AppSpacing.xs),
 
             // Reload Roster Button
-            IconButton(
-              tooltip: 'Reload Roster',
-              onPressed: () => notifier.loadRoster(),
-              icon: const Icon(Icons.refresh, color: AppColors.textSecondary),
-            ),
+            buildReloadButton(),
           ],
         ),
       ),

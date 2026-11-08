@@ -187,10 +187,164 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // ── 1. PAGE HEADER ──
-                _mobileBoundedScroll(
-                  context,
-                  width: 760,
-                  child: Row(
+                if (ResponsiveBreakpoints.isMobile(context))
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          Text(
+                            'Students',
+                            style: AppTypography.h1.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                              vertical: 3.0,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceSubtle,
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                              border: Border.all(color: AppColors.borderDefault),
+                            ),
+                            child: Text(
+                              switch (filters.status) {
+                                'Active' => '$totalCount Active Students',
+                                'Left' => '$totalCount Left Students',
+                                'All' => '$totalCount Total Students',
+                                _ => '$totalCount Students',
+                              },
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        alignment: WrapAlignment.start,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          if (canBulkEnrollment)
+                            OutlinedButton.icon(
+                              onPressed: () =>
+                                  context.go('/students/enrollment/bulk'),
+                              icon: const Icon(
+                                Icons.group_add_outlined,
+                                size: 16.0,
+                              ),
+                              label: const Text('Bulk Enrollment'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.textPrimary,
+                                side: const BorderSide(
+                                  color: AppColors.borderDefault,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                ),
+                                minimumSize: const Size(0, 36),
+                              ),
+                            ),
+                          if (canBatchPromotion)
+                            OutlinedButton.icon(
+                              onPressed: () => context.go('/students/promote'),
+                              icon: const Icon(Icons.trending_up, size: 16.0),
+                              label: const Text('Batch Promotion'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.textPrimary,
+                                side: const BorderSide(
+                                  color: AppColors.borderDefault,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                ),
+                                minimumSize: const Size(0, 36),
+                              ),
+                            ),
+                          if (canSchoolLeaving)
+                            OutlinedButton.icon(
+                              onPressed: () => context.go('/students/leaving'),
+                              icon: const Icon(Icons.exit_to_app, size: 16.0),
+                              label: const Text('School Leaving'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.textPrimary,
+                                side: const BorderSide(
+                                  color: AppColors.borderDefault,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                ),
+                                minimumSize: const Size(0, 36),
+                              ),
+                            ),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Export coming in Phase 2'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.download_outlined,
+                              size: 16.0,
+                            ),
+                            label: const Text('Export CSV'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.textPrimary,
+                              side: const BorderSide(
+                                color: AppColors.borderDefault,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(
+                                  AppRadius.md,
+                                ),
+                              ),
+                              minimumSize: const Size(0, 36),
+                            ),
+                          ),
+                          if (canNewAdmission)
+                            ElevatedButton.icon(
+                              onPressed: () => context.go('/students/new'),
+                              icon: const Icon(
+                                Icons.person_add_outlined,
+                                size: 16.0,
+                              ),
+                              label: const Text('+ New Student (Ctrl+N)'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.brandPrimary,
+                                foregroundColor: AppColors.textOnPrimary,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                ),
+                                minimumSize: const Size(0, 36),
+                                elevation: AppElevation.flat,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  )
+                else
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -346,7 +500,6 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     ),
                     ],
                   ),
-                ),
                 const SizedBox(height: AppSpacing.md),
 
                 // ── 2. FILTER BAR CARD ──
