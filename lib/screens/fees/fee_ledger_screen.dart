@@ -12,6 +12,8 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../models/fee_ledger_row.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -736,297 +738,37 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
 
     if (isMobile) {
       return Container(
-        padding: const EdgeInsets.all(AppSpacing.sm),
+        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.surfaceRaised,
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: AppColors.borderDefault),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Row 1: Session & Month
-            Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Session:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: DropdownButton<String>(
-                          value: state.selectedSessionYr.isNotEmpty
-                              ? state.selectedSessionYr
-                              : null,
-                          isDense: true,
-                          isExpanded: true,
-                          underline: const SizedBox.shrink(),
-                          items: {
-                            if (state.selectedSessionYr.isNotEmpty)
-                              state.selectedSessionYr,
-                            ...state.sessionYears,
-                          }
-                              .map(
-                                (y) => DropdownMenuItem(
-                                  value: y,
-                                  child: Text(
-                                    y,
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) {
-                            if (val != null) notifier.setSession(val);
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Month:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: DropdownButton<String?>(
-                          value: state.selectedMonth,
-                          isDense: true,
-                          isExpanded: true,
-                          underline: const SizedBox.shrink(),
-                          items: [
-                            const DropdownMenuItem<String?>(
-                              value: null,
-                              child: Text(
-                                'All Months',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            ...{
-                              if (state.selectedMonth != null)
-                                state.selectedMonth!,
-                              ...state.months,
-                            }.map(
-                              (m) => DropdownMenuItem<String?>(
-                                value: m,
-                                child: Text(
-                                  m,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: (val) => notifier.setMonth(val),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            // Row 2: Class & Section
-            Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Class:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: DropdownButton<int?>(
-                          value: state.selectedClassId,
-                          isDense: true,
-                          isExpanded: true,
-                          underline: const SizedBox.shrink(),
-                          items: [
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text(
-                                'All Classes',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            ...state.classes.map(
-                              (c) => DropdownMenuItem<int?>(
-                                value: c['ClassID'] as int,
-                                child: Text(
-                                  (c['CName'] as String?) ?? '',
-                                  style: const TextStyle(fontSize: 12),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: (val) => notifier.setClass(val),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Section:',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: DropdownButton<int?>(
-                          value: state.selectedClassSecId,
-                          isDense: true,
-                          isExpanded: true,
-                          underline: const SizedBox.shrink(),
-                          items: [
-                            const DropdownMenuItem<int?>(
-                              value: null,
-                              child: Text(
-                                'All Sections',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            ...filteredSections.map(
-                              (s) => DropdownMenuItem<int?>(
-                                value: s['ClassSecID'] as int,
-                                child: Text(
-                                  (s['SecName'] as String?) ?? '',
-                                  style: const TextStyle(fontSize: 12),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          ],
-                          onChanged: state.selectedClassId == null
-                              ? null
-                              : (val) => notifier.setSection(val),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            // Row 3: Status & Presets
-            Wrap(
-              spacing: AppSpacing.xs,
-              runSpacing: AppSpacing.xs,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Status:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    DropdownButton<String>(
-                      value: state.selectedStatus,
-                      isDense: true,
-                      underline: const SizedBox.shrink(),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'All',
-                          child: Text('All', style: TextStyle(fontSize: 12)),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Paid',
-                          child: Text('Paid', style: TextStyle(fontSize: 12)),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Unpaid',
-                          child: Text('Unpaid', style: TextStyle(fontSize: 12)),
-                        ),
-                        DropdownMenuItem(
-                          value: 'Overdue',
-                          child: Text('Overdue', style: TextStyle(fontSize: 12)),
-                        ),
-                      ],
-                      onChanged: (val) {
-                        if (val != null) notifier.setStatus(val);
-                      },
-                    ),
-                  ],
-                ),
-                ActionChip(
-                  label: const Text('This Month', style: TextStyle(fontSize: 11)),
-                  padding: EdgeInsets.zero,
-                  backgroundColor: state.activePreset == 'thisMonth'
-                      ? AppColors.brandPrimary
-                      : null,
-                  labelStyle: TextStyle(
-                    fontSize: 11,
-                    color: state.activePreset == 'thisMonth'
-                        ? AppColors.surfaceRaised
-                        : AppColors.textPrimary,
-                  ),
-                  side: state.activePreset == 'thisMonth'
-                      ? const BorderSide(color: AppColors.brandPrimary, width: 1)
-                      : null,
-                  onPressed: notifier.applyThisMonth,
-                ),
-                ActionChip(
-                  label: const Text('Today', style: TextStyle(fontSize: 11)),
-                  padding: EdgeInsets.zero,
-                  backgroundColor: state.activePreset == 'today'
-                      ? AppColors.brandPrimary
-                      : null,
-                  labelStyle: TextStyle(
-                    fontSize: 11,
-                    color: state.activePreset == 'today'
-                        ? AppColors.surfaceRaised
-                        : AppColors.textPrimary,
-                  ),
-                  side: state.activePreset == 'today'
-                      ? const BorderSide(color: AppColors.brandPrimary, width: 1)
-                      : null,
-                  onPressed: notifier.applyToday,
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            // Row 4: Search Field
+            // Row 0: Full-width 44px search TextField
             SizedBox(
-              height: 36,
+              height: 44,
               child: TextField(
                 controller: _searchController,
                 focusNode: _searchFocusNode,
-                style: const TextStyle(fontSize: 12),
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textPrimary,
+                ),
                 decoration: InputDecoration(
                   hintText: 'Search voucher or name...',
-                  prefixIcon: const Icon(Icons.search, size: 16),
+                  hintStyle: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
                   suffixIcon: _searchController.text.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 14),
+                          icon: const Icon(Icons.clear, size: 16),
                           onPressed: () {
                             _searchController.clear();
                             notifier.setSearch('');
@@ -1035,7 +777,7 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
                       : null,
                   contentPadding: const EdgeInsets.symmetric(
                     vertical: 0,
-                    horizontal: 8,
+                    horizontal: 10,
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -1043,9 +785,376 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
                       color: AppColors.borderDefault,
                     ),
                   ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    borderSide: const BorderSide(
+                      color: AppColors.borderDefault,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    borderSide: const BorderSide(
+                      color: AppColors.accentFees,
+                      width: 1.5,
+                    ),
+                  ),
                 ),
                 onChanged: (val) => notifier.setSearch(val),
               ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // Row 1: Session & Month (2-column 44px outlined dropdowns)
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey('session_${state.selectedSessionYr}'),
+                      initialValue: state.selectedSessionYr.isNotEmpty
+                          ? state.selectedSessionYr
+                          : null,
+                      isExpanded: true,
+                      isDense: true,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Session',
+                        labelStyle: AppTypography.label.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                      ),
+                      items: {
+                        if (state.selectedSessionYr.isNotEmpty)
+                          state.selectedSessionYr,
+                        ...state.sessionYears,
+                      }
+                          .map(
+                            (y) => DropdownMenuItem(
+                              value: y,
+                              child: Text(
+                                y,
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) notifier.setSession(val);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: DropdownButtonFormField<String?>(
+                      key: ValueKey('month_${state.selectedMonth}'),
+                      initialValue: state.selectedMonth,
+                      isExpanded: true,
+                      isDense: true,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Month',
+                        labelStyle: AppTypography.label.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                      ),
+                      items: [
+                        DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(
+                            'All Months',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        ...{
+                          if (state.selectedMonth != null)
+                            state.selectedMonth!,
+                          ...state.months,
+                        }.map(
+                          (m) => DropdownMenuItem<String?>(
+                            value: m,
+                            child: Text(
+                              m,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) => notifier.setMonth(val),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // Row 2: Class & Section (2-column 44px outlined dropdowns)
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: DropdownButtonFormField<int?>(
+                      key: ValueKey('class_${state.selectedClassId}'),
+                      initialValue: state.selectedClassId,
+                      isExpanded: true,
+                      isDense: true,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Class',
+                        labelStyle: AppTypography.label.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                      ),
+                      items: [
+                        DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text(
+                            'All Classes',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        ...state.classes.map(
+                          (c) => DropdownMenuItem<int?>(
+                            value: c['ClassID'] as int,
+                            child: Text(
+                              (c['CName'] as String?) ?? '',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (val) => notifier.setClass(val),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: DropdownButtonFormField<int?>(
+                      key: ValueKey('section_${state.selectedClassSecId}'),
+                      initialValue: state.selectedClassSecId,
+                      isExpanded: true,
+                      isDense: true,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Section',
+                        labelStyle: AppTypography.label.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                      ),
+                      items: [
+                        DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text(
+                            'All Sections',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                        ...filteredSections.map(
+                          (s) => DropdownMenuItem<int?>(
+                            value: s['ClassSecID'] as int,
+                            child: Text(
+                              (s['SecName'] as String?) ?? '',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: state.selectedClassId == null
+                          ? null
+                          : (val) => notifier.setSection(val),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+
+            // Row 3: Status & Reset button (2-column 44px)
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey('status_${state.selectedStatus}'),
+                      initialValue: state.selectedStatus,
+                      isExpanded: true,
+                      isDense: true,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Status',
+                        labelStyle: AppTypography.label.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'All',
+                          child: Text('All'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Paid',
+                          child: Text('Paid'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Unpaid',
+                          child: Text('Unpaid'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'Overdue',
+                          child: Text('Overdue'),
+                        ),
+                      ],
+                      onChanged: (val) {
+                        if (val != null) notifier.setStatus(val);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        _searchController.clear();
+                        notifier.clearFilters();
+                      },
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text(
+                        'Reset',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -1642,9 +1751,10 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
 
   Widget _buildMobileScaffold(FeeLedgerState state) {
     return Scaffold(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.surfaceCanvas,
       body: SafeArea(
-        bottom: true,
+        top: false,
+        bottom: false,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Column(
@@ -1673,33 +1783,41 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
           )
         : '0.0';
 
-    final card1 = _buildKpiCard(
-      title: 'GROSS RECEIVABLE',
+    final card1 = MobileKpiCard(
+      label: 'GROSS RECEIVABLE',
       value: 'Rs. ${_currencyFormat.format(state.grossReceivable)}',
-      subtitle: '${state.totalBilledCount} Billed Vouchers',
-      accentColor: AppColors.chartBlue,
       icon: Icons.receipt_outlined,
+      accentColor: AppColors.accentFees,
+      accentSoftBg: AppColors.accentFeesSoftBg,
+      statusPillText: '${state.totalBilledCount}',
+      statusVariant: MobileStatusVariant.neutral,
     );
-    final card2 = _buildKpiCard(
-      title: 'TOTAL CONCESSIONS',
+    final card2 = MobileKpiCard(
+      label: 'TOTAL CONCESSIONS',
       value: 'Rs. ${_currencyFormat.format(state.totalConcessions)}',
-      subtitle: '${state.fullWaiversCount} Full Waivers',
-      accentColor: AppColors.chartAmber,
       icon: Icons.card_giftcard,
+      accentColor: AppColors.chartAmber,
+      accentSoftBg: AppColors.chartAmber.withValues(alpha: 0.12),
+      statusPillText: '${state.fullWaiversCount}',
+      statusVariant: MobileStatusVariant.warning,
     );
-    final card3 = _buildKpiCard(
-      title: 'CASH COLLECTED',
+    final card3 = MobileKpiCard(
+      label: 'CASH COLLECTED',
       value: 'Rs. ${_currencyFormat.format(state.cashCollected)}',
-      subtitle: '${state.paidCount} Paid [$recoveryRate%]',
-      accentColor: AppColors.chartTeal,
       icon: Icons.check_circle_outline,
+      accentColor: AppColors.chartTeal,
+      accentSoftBg: AppColors.chartTeal.withValues(alpha: 0.12),
+      statusPillText: '$recoveryRate%',
+      statusVariant: MobileStatusVariant.success,
     );
-    final card4 = _buildKpiCard(
-      title: 'OUTSTANDING DUES',
+    final card4 = MobileKpiCard(
+      label: 'OUTSTANDING DUES',
       value: 'Rs. ${_currencyFormat.format(state.outstandingDues)}',
-      subtitle: '${state.defaultersCount} Defaulters',
-      accentColor: AppColors.chartRose,
       icon: Icons.warning_amber_rounded,
+      accentColor: AppColors.statusErrorText,
+      accentSoftBg: AppColors.statusErrorBg,
+      statusPillText: '${state.defaultersCount}',
+      statusVariant: MobileStatusVariant.error,
     );
 
     return Column(
@@ -1782,106 +1900,163 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
   }
 
   Widget _buildMobileLedgerCard(FeeLedgerRow r) {
-    return Card(
+    final Color accentColor = switch (r.isPaid) {
+      'Y' => AppColors.statusSuccessText,
+      'O' => AppColors.statusInfoText,
+      _ => AppColors.statusErrorText,
+    };
+
+    final (String statusLabel, MobileStatusVariant statusVariant) = switch (r.isPaid) {
+      'Y' => ('Paid', MobileStatusVariant.success),
+      'O' => ('Overdue', MobileStatusVariant.info),
+      _ => ('Unpaid', MobileStatusVariant.error),
+    };
+
+    return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Column(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    r.voucherMasId,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.brandPrimary,
+            Container(width: 3.5, color: accentColor),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            r.voucherMasId,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.monospace.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.accentFees,
+                            ),
+                          ),
+                        ),
+                        MobileStatusPill(
+                          label: statusLabel,
+                          variant: statusVariant,
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-                _buildStatusBadge(r),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              r.studentName,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'Reg ${r.stuRegId} · ${r.className}'
-              '${r.sectionName.isNotEmpty ? " - ${r.sectionName}" : ""}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: _mobileLedgerStat(
-                    'Gross',
-                    _currencyFormat.format(r.gross),
-                  ),
-                ),
-                Expanded(
-                  child: _mobileLedgerStat(
-                    'Disc',
-                    _currencyFormat.format(r.discount),
-                  ),
-                ),
-                Expanded(
-                  child: _mobileLedgerStat(
-                    'Net',
-                    _currencyFormat.format(r.netDue),
-                    color: r.netDue > 0
-                        ? AppColors.statusErrorText
-                        : AppColors.statusSuccessText,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    r.dueDate != null ? _dateFormat.format(r.dueDate!) : '-',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                    const SizedBox(height: 4),
+                    Text(
+                      r.studentName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Reg ${r.stuRegId} · ${r.className}'
+                      '${r.sectionName.isNotEmpty ? " - ${r.sectionName}" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surfaceSubtle,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(color: AppColors.borderSubtle),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: _mobileLedgerStat(
+                              'Gross',
+                              _currencyFormat.format(r.gross),
+                            ),
+                          ),
+                          Expanded(
+                            child: _mobileLedgerStat(
+                              'Disc',
+                              _currencyFormat.format(r.discount),
+                            ),
+                          ),
+                          Expanded(
+                            child: _mobileLedgerStat(
+                              'Net',
+                              _currencyFormat.format(r.netDue),
+                              color: r.netDue > 0
+                                  ? AppColors.statusErrorText
+                                  : AppColors.statusSuccessText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            r.dueDate != null
+                                ? _dateFormat.format(r.dueDate!)
+                                : '-',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          constraints: const BoxConstraints(
+                            minWidth: 44,
+                            minHeight: 44,
+                          ),
+                          icon: const Icon(Icons.visibility_outlined, size: 18),
+                          onPressed: () => _showVoucherDetail(r),
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(
+                            minWidth: 44,
+                            minHeight: 44,
+                          ),
+                          icon: const Icon(Icons.print_outlined, size: 18),
+                          onPressed:
+                              r.isPaid == 'Y' ? () => _reprintSlip(r) : null,
+                        ),
+                        IconButton(
+                          constraints: const BoxConstraints(
+                            minWidth: 44,
+                            minHeight: 44,
+                          ),
+                          icon: const Icon(Icons.sms_outlined, size: 18),
+                          onPressed: () => _sendReminder(r),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.visibility_outlined, size: 18),
-                  onPressed: () => _showVoucherDetail(r),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.print_outlined, size: 18),
-                  onPressed: r.isPaid == 'Y' ? () => _reprintSlip(r) : null,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.sms_outlined, size: 18),
-                  onPressed: () => _sendReminder(r),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -1903,7 +2078,7 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
           value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
+          style: AppTypography.monospace.copyWith(
             fontSize: 12,
             fontWeight: FontWeight.w600,
             color: color ?? AppColors.textPrimary,

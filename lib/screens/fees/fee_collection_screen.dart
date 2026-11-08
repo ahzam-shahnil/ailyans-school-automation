@@ -16,6 +16,7 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/fee_receipt_view.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -715,10 +716,11 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       },
       child: Focus(
         autofocus: true,
-        child: Container(
-          color: AppColors.surface,
-          child: SafeArea(
-            bottom: true,
+        child: Scaffold(
+          backgroundColor: AppColors.surfaceCanvas,
+          body: SafeArea(
+            top: false,
+            bottom: false,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -999,66 +1001,105 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     );
   }
 
+  MobileStatusVariant _mapFeeStatusVariant(String status) {
+    final upper = status.toUpperCase();
+    if (upper.contains('PAID') && !upper.contains('UNPAID')) {
+      return MobileStatusVariant.success;
+    } else if (upper.contains('OVERDUE')) {
+      return MobileStatusVariant.error;
+    } else if (upper.contains('UNPAID') || upper.contains('PARTIAL')) {
+      return MobileStatusVariant.warning;
+    }
+    return MobileStatusVariant.neutral;
+  }
+
   Widget _buildMobileDirectoryCard(
     FeeReceiptSummaryRow r,
     FeeCollectionNotifier notifier,
   ) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
       child: InkWell(
         onTap: () => notifier.selectFromDirectory(r.voucherMasId),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
+        child: IntrinsicHeight(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      r.voucherMasId,
-                      style: AppTypography.monospace.copyWith(
-                        fontSize: 12,
-                        color: AppColors.brandPrimary,
-                        fontWeight: FontWeight.w600,
+              Container(
+                width: 3.5,
+                color: AppColors.accentFees,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              r.voucherMasId,
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 12,
+                                color: AppColors.accentFees,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          MobileStatusPill(
+                            label: r.statusLabel,
+                            variant: _mapFeeStatusVariant(r.statusLabel),
+                          ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        r.studentName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Reg ${r.stuRegId} · ${r.classSecDisplay} · ${r.forMonth}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            'Net Due:',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const Spacer(),
+                          Text(
+                            'Rs. ${_currencyFormat.format(r.netPayable)}',
+                            style: AppTypography.monospace.copyWith(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  _buildSmallStatusBadge(r.statusLabel),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                r.studentName,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.body.copyWith(fontSize: 13),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Reg ${r.stuRegId} · ${r.classSecDisplay} · ${r.forMonth}',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
                 ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Text(
-                    'Net Due:',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'Rs. ${_currencyFormat.format(r.netPayable)}',
-                    style: AppTypography.monospace.copyWith(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
@@ -1442,7 +1483,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                 '#${item.feeParamId}',
                 style: AppTypography.monospace.copyWith(
                   fontSize: 11,
-                  color: AppColors.brandPrimary,
+                  color: AppColors.accentFees,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1659,6 +1700,38 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Net Due Stitch Summary Banner
+        Container(
+          margin: const EdgeInsets.only(bottom: AppSpacing.md),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AppColors.accentFeesSoftBg,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(
+              color: AppColors.accentFees.withValues(alpha: 0.3),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Net Due:',
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.accentFees,
+                ),
+              ),
+              Text(
+                'Rs. ${_currencyFormat.format(effectivePayable)}',
+                style: AppTypography.monospace.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accentFees,
+                ),
+              ),
+            ],
+          ),
+        ),
         // Partially Paid banner inside form
         if (receipt.isPartiallyPaid) ...[
           Container(
@@ -2013,7 +2086,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.textOnPrimary,
+                  ),
                 )
               : const Icon(Icons.receipt_long, size: 18),
           label: Text(
@@ -2021,8 +2097,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             style: const TextStyle(fontWeight: FontWeight.w600),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.brandPrimary,
-            foregroundColor: Colors.white,
+            backgroundColor: AppColors.accentFees,
+            foregroundColor: AppColors.textOnPrimary,
             minimumSize: const Size.fromHeight(48),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.md),
