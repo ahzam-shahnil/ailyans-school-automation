@@ -62,6 +62,36 @@ abstract class AppColors {
   static const Color chartEmerald = Color(0xFF059669);
   static const Color chartCyan = Color(0xFF0891B2);
   static const Color chartIndigo = Color(0xFF4F46E5);
+
+  // Mobile Canvas
+  static const Color surfaceCanvas = Color(0xFFF1F5F9);
+
+  // Status Neutral
+  static const Color statusNeutralBg = Color(0xFFF1F5F9);
+  static const Color statusNeutralBorder = Color(0xFFE2E8F0);
+  static const Color statusNeutralText = Color(0xFF475569);
+
+  // Module Accent Pairs
+  static const Color accentDashboard = Color(0xFF1E3A8A);
+  static const Color accentDashboardSoftBg = Color(0xFFEFF6FF);
+
+  static const Color accentStudents = Color(0xFF0891B2);
+  static const Color accentStudentsSoftBg = Color(0xFFECFEFF);
+
+  static const Color accentFees = Color(0xFF059669);
+  static const Color accentFeesSoftBg = Color(0xFFECFDF5);
+
+  static const Color accentAttendance = Color(0xFFD97706);
+  static const Color accentAttendanceSoftBg = Color(0xFFFFFBEB);
+
+  static const Color accentExams = Color(0xFF7C3AED);
+  static const Color accentExamsSoftBg = Color(0xFFF5F3FF);
+
+  static const Color accentStaff = Color(0xFF0D9488);
+  static const Color accentStaffSoftBg = Color(0xFFF0FDFA);
+
+  static const Color accentLibrary = Color(0xFF4F46E5);
+  static const Color accentLibrarySoftBg = Color(0xFFEEF2FF);
 }
 
 abstract class AppDarkColors {
@@ -122,6 +152,36 @@ abstract class AppDarkColors {
   static const Color chartEmerald = Color(0xFF34D399);
   static const Color chartCyan = Color(0xFF38BDF8);
   static const Color chartIndigo = Color(0xFF818CF8);
+
+  // Mobile Canvas (Dark)
+  static const Color surfaceCanvas = Color(0xFF090D16);
+
+  // Status Neutral (Dark)
+  static const Color statusNeutralBg = Color(0xFF1E293B);
+  static const Color statusNeutralBorder = Color(0xFF334155);
+  static const Color statusNeutralText = Color(0xFF94A3B8);
+
+  // Module Accent Pairs (Dark)
+  static const Color accentDashboard = Color(0xFF60A5FA);
+  static const Color accentDashboardSoftBg = Color(0xFF1E293B);
+
+  static const Color accentStudents = Color(0xFF38BDF8);
+  static const Color accentStudentsSoftBg = Color(0xFF164E63);
+
+  static const Color accentFees = Color(0xFF34D399);
+  static const Color accentFeesSoftBg = Color(0xFF064E3B);
+
+  static const Color accentAttendance = Color(0xFFFBBF24);
+  static const Color accentAttendanceSoftBg = Color(0xFF78350F);
+
+  static const Color accentExams = Color(0xFFA78BFA);
+  static const Color accentExamsSoftBg = Color(0xFF4C1D95);
+
+  static const Color accentStaff = Color(0xFF2DD4BF);
+  static const Color accentStaffSoftBg = Color(0xFF134E4A);
+
+  static const Color accentLibrary = Color(0xFF818CF8);
+  static const Color accentLibrarySoftBg = Color(0xFF312E81);
 }
 
 abstract class AppSpacing {
