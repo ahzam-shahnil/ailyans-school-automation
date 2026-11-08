@@ -1442,5 +1442,281 @@ void main() {
       expect(det.first['Amount'], 1500.0);
       expect(det.first['Discount'], 500.0);
     });
+
+    testWidgets(
+      'VoucherResultPanel success state renders after generation',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1400, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        const summary = BatchGenerationSummary(
+          generatedCount: 10,
+          skippedCount: 0,
+          totalBilled: 19200,
+          arrearsRolledOver: 0,
+          concessionsApplied: 0,
+          skippedReasons: [],
+        );
+        const mockState = VoucherGenState(
+          isGenerating: false,
+          generatedCount: 10,
+          totalToGenerate: 10,
+          completionSummary: summary,
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [],
+              ),
+              voucherGenExecutionProvider.overrideWith(
+                (ref) => _MockVoucherGenNotifier(ref, mockState),
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('10 vouchers created'), findsOneWidget);
+        expect(find.text('Print all'), findsOneWidget);
+        expect(find.text('Save PDF'), findsOneWidget);
+        expect(find.text('Generate another'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'VoucherResultPanel partial state renders on mid-batch',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1400, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        const summary = BatchGenerationSummary(
+          generatedCount: 6,
+          skippedCount: 0,
+          totalBilled: 11520,
+          arrearsRolledOver: 0,
+          concessionsApplied: 0,
+          skippedReasons: [],
+        );
+        const mockState = VoucherGenState(
+          isGenerating: false,
+          generatedCount: 6,
+          totalToGenerate: 10,
+          completionSummary: summary,
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [],
+              ),
+              voucherGenExecutionProvider.overrideWith(
+                (ref) => _MockVoucherGenNotifier(ref, mockState),
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.textContaining('6 of 10 vouchers created'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('4 not created'), findsOneWidget);
+        expect(find.text('Resume remaining'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'VoucherResultPanel cancelled state renders with 0 generated',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1400, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        const summary = BatchGenerationSummary(
+          generatedCount: 0,
+          skippedCount: 0,
+          totalBilled: 0,
+          arrearsRolledOver: 0,
+          concessionsApplied: 0,
+          skippedReasons: [],
+        );
+        const mockState = VoucherGenState(
+          isGenerating: false,
+          generatedCount: 0,
+          totalToGenerate: 10,
+          completionSummary: summary,
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [],
+              ),
+              voucherGenExecutionProvider.overrideWith(
+                (ref) => _MockVoucherGenNotifier(ref, mockState),
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.textContaining('Stopped.'), findsOneWidget);
+        expect(find.text('Print created'), findsOneWidget);
+      },
+    );
   });
+}
+
+class _MockVoucherGenNotifier extends VoucherGenExecutionNotifier {
+  _MockVoucherGenNotifier(super.ref, VoucherGenState initialState) {
+    state = initialState;
+  }
 }

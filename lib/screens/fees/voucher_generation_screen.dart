@@ -578,20 +578,26 @@ class _VoucherGenerationScreenState
 
         const SizedBox(height: AppSpacing.sm),
 
-        // Sticky bottom action bar
-        VoucherActionBar(
-          impactState: execState.error != null
-              ? VoucherImpactState.error
-              : (eligibleCount == 0
-                    ? VoucherImpactState.zero
-                    : VoucherImpactState.normal),
-          count: eligibleCount,
-          errorText: execState.error,
-          isGenerating: execState.isGenerating,
-          onGenerate: (eligibleCount > 0 && !execState.isGenerating)
-              ? () => _handleGenerateTrigger(eligibleCount)
-              : null,
-        ),
+        // Sticky bottom action bar or progress panel
+        if (execState.isGenerating)
+          _buildVoucherProgressPanel(execState)
+        else
+          if (execState.isGenerating)
+            _buildVoucherProgressPanel(execState)
+          else
+            VoucherActionBar(
+              impactState: execState.error != null
+                  ? VoucherImpactState.error
+                  : (eligibleCount == 0
+                        ? VoucherImpactState.zero
+                        : VoucherImpactState.normal),
+              count: eligibleCount,
+              errorText: execState.error,
+              isGenerating: execState.isGenerating,
+              onGenerate: (eligibleCount > 0 && !execState.isGenerating)
+                  ? () => _handleGenerateTrigger(eligibleCount)
+                  : null,
+            ),
       ],
     );
   }
@@ -658,19 +664,25 @@ class _VoucherGenerationScreenState
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        VoucherActionBar(
-          impactState: execState.error != null
-              ? VoucherImpactState.error
-              : (eligibleCount == 0
-                    ? VoucherImpactState.zero
-                    : VoucherImpactState.normal),
-          count: eligibleCount,
-          errorText: execState.error,
-          isGenerating: execState.isGenerating,
-          onGenerate: (eligibleCount > 0 && !execState.isGenerating)
-              ? () => _handleGenerateTrigger(eligibleCount)
-              : null,
-        ),
+        if (execState.isGenerating)
+          _buildVoucherProgressPanel(execState)
+        else
+          if (execState.isGenerating)
+            _buildVoucherProgressPanel(execState)
+          else
+            VoucherActionBar(
+              impactState: execState.error != null
+                  ? VoucherImpactState.error
+                  : (eligibleCount == 0
+                        ? VoucherImpactState.zero
+                        : VoucherImpactState.normal),
+              count: eligibleCount,
+              errorText: execState.error,
+              isGenerating: execState.isGenerating,
+              onGenerate: (eligibleCount > 0 && !execState.isGenerating)
+                  ? () => _handleGenerateTrigger(eligibleCount)
+                  : null,
+            ),
       ],
     );
   }
@@ -1205,6 +1217,94 @@ class _VoucherGenerationScreenState
   // RIGHT CARD — COHORT BILLING AUDIT & LEDGER PREVIEW
   // ---------------------------------------------------------------------------
 
+  VoucherResultKind _resultKindFor(BatchGenerationSummary s) {
+    if (s.generatedCount == 0) return VoucherResultKind.cancelled;
+    final total = ref.read(voucherGenExecutionProvider).totalToGenerate;
+    final effectiveTotal =
+        total > 0 ? total : (s.generatedCount + s.skippedCount);
+    if (s.generatedCount >= effectiveTotal) return VoucherResultKind.success;
+    return VoucherResultKind.partial;
+  }
+
+  Widget _buildVoucherProgressPanel(VoucherGenState execState) {
+    final total = execState.totalToGenerate;
+    final done = execState.generatedCount;
+    final progress = total > 0 ? done / total : 0.0;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Creating vouchers… $done of $total',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Cancel not supported'),
+                    ),
+                  );
+                },
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.full),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: AppColors.surfaceSubtle,
+              valueColor: const AlwaysStoppedAnimation(AppColors.brandPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVoucherResultPanel(BatchGenerationSummary s) {
+    final total = ref.read(voucherGenExecutionProvider).totalToGenerate;
+    final effectiveTotal =
+        total > 0 ? total : (s.generatedCount + s.skippedCount);
+    return Container(
+      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: VoucherResultPanel(
+        kind: _resultKindFor(s),
+        createdCount: s.generatedCount,
+        totalCount: effectiveTotal,
+        totalAmount: s.totalBilled,
+        onPrintAll: () => _openPrintPreview(),
+        onSavePdf: () {
+          // Dev-1 in spec: PDF generators return Uint8List, no save path.
+          // Route Save PDF to print preview for now.
+          _openPrintPreview();
+        },
+        onShare: null,
+        onGenerateAnother: _onEscape,
+        onResumeRemaining:
+            (s.generatedCount > 0 && s.generatedCount < effectiveTotal)
+                ? _onGenerate
+                : null,
+      ),
+    );
+  }
+
   Widget _buildPreviewPane(
     BuildContext context,
     VoucherGenFilters filters,
@@ -1219,24 +1319,7 @@ class _VoucherGenerationScreenState
     VoucherGenState execState,
   ) {
     if (execState.completionSummary != null) {
-      final summary = execState.completionSummary!;
-      return Container(
-        decoration: _cardDecoration(),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: VoucherResultPanel(
-          kind: VoucherResultKind.success,
-          createdCount: summary.generatedCount,
-          totalCount: summary.generatedCount + summary.skippedCount,
-          totalAmount: summary.totalBilled,
-          onPrintAll: () => _openPrintPreview(),
-          onSavePdf: () => _openPrintPreview(),
-          onShare: null,
-          onGenerateAnother: () {
-            ref.read(voucherGenExecutionProvider.notifier).clearSummary();
-          },
-          onResumeRemaining: null,
-        ),
-      );
+      return _buildVoucherResultPanel(execState.completionSummary!);
     }
 
     return _buildPreviewCard(
@@ -2034,19 +2117,22 @@ class _VoucherGenerationScreenState
               ),
             ),
           ),
-          VoucherActionBar(
-            impactState: execState.error != null
-                ? VoucherImpactState.error
-                : (eligibleCount == 0
-                      ? VoucherImpactState.zero
-                      : VoucherImpactState.normal),
-            count: eligibleCount,
-            errorText: execState.error,
-            isGenerating: execState.isGenerating,
-            onGenerate: (eligibleCount > 0 && !execState.isGenerating)
-                ? () => _handleGenerateTrigger(eligibleCount)
-                : null,
-          ),
+          if (execState.isGenerating)
+            _buildVoucherProgressPanel(execState)
+          else
+            VoucherActionBar(
+              impactState: execState.error != null
+                  ? VoucherImpactState.error
+                  : (eligibleCount == 0
+                        ? VoucherImpactState.zero
+                        : VoucherImpactState.normal),
+              count: eligibleCount,
+              errorText: execState.error,
+              isGenerating: execState.isGenerating,
+              onGenerate: (eligibleCount > 0 && !execState.isGenerating)
+                  ? () => _handleGenerateTrigger(eligibleCount)
+                  : null,
+            ),
         ],
       ),
     );
@@ -2328,24 +2414,7 @@ class _VoucherGenerationScreenState
     VoucherGenState execState,
   ) {
     if (execState.completionSummary != null) {
-      final summary = execState.completionSummary!;
-      return Container(
-        decoration: _cardDecoration(),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: VoucherResultPanel(
-          kind: VoucherResultKind.success,
-          createdCount: summary.generatedCount,
-          totalCount: summary.generatedCount + summary.skippedCount,
-          totalAmount: summary.totalBilled,
-          onPrintAll: () => _openPrintPreview(),
-          onSavePdf: () => _openPrintPreview(),
-          onShare: null,
-          onGenerateAnother: () {
-            ref.read(voucherGenExecutionProvider.notifier).clearSummary();
-          },
-          onResumeRemaining: null,
-        ),
-      );
+      return _buildVoucherResultPanel(execState.completionSummary!);
     }
 
     final tariffsAsync = ref.watch(
