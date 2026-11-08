@@ -197,9 +197,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.keyR, control: true): _refresh,
         const SingleActivator(LogicalKeyboardKey.keyN, control: true): () =>
-            context.go('/students/new?from=/dashboard'),
+            context.go('/students/new'),
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+            context.go('/fees/receipts'),
+        const SingleActivator(LogicalKeyboardKey.keyG, control: true): () =>
+            context.go('/fees/vouchers'),
+        const SingleActivator(LogicalKeyboardKey.keyA, control: true): () =>
+            context.go('/attendance'),
+        const SingleActivator(LogicalKeyboardKey.keyL, control: true): () =>
+            context.go('/fees/ledger'),
+        const SingleActivator(LogicalKeyboardKey.keyE, control: true): () =>
+            context.go('/exams/marks'),
+        const SingleActivator(LogicalKeyboardKey.f2): () =>
+            context.go('/fees/receipts'),
+        const SingleActivator(LogicalKeyboardKey.keyR, control: true): _refresh,
+        const SingleActivator(LogicalKeyboardKey.keyN, meta: true): () =>
+            context.go('/students/new'), // macOS Cmd+N
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
+            context.go('/fees/receipts'), // macOS Cmd+F
+        const SingleActivator(LogicalKeyboardKey.keyG, meta: true): () =>
+            context.go('/fees/vouchers'), // macOS Cmd+G
+        const SingleActivator(LogicalKeyboardKey.keyA, meta: true): () =>
+            context.go('/attendance'), // macOS Cmd+A
+        const SingleActivator(LogicalKeyboardKey.keyL, meta: true): () =>
+            context.go('/fees/ledger'), // macOS Cmd+L
+        const SingleActivator(LogicalKeyboardKey.keyE, meta: true): () =>
+            context.go('/exams/marks'), // macOS Cmd+E
+        const SingleActivator(LogicalKeyboardKey.keyR, meta: true): _refresh,
       },
       child: Focus(
         autofocus: true,
