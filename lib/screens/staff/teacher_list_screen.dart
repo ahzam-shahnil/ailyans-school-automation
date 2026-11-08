@@ -9,6 +9,8 @@ import 'package:intl/intl.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/teacher_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
+import '../../models/teacher_row.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -260,6 +262,10 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(teacherListProvider);
     final notifier = ref.read(teacherListProvider.notifier);
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(context, state, notifier);
+    }
 
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
@@ -1136,5 +1142,887 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
       return SizedBox(width: width, child: child);
     }
     return Expanded(flex: flex, child: child);
+  }
+
+  // ===========================================================================
+  // G-6b MOBILE BRANCH (< 600px)
+  // ===========================================================================
+  Widget _buildMobileScaffold(
+    BuildContext context,
+    TeacherListState state,
+    TeacherListNotifier notifier,
+  ) {
+    return Shortcuts(
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.keyN, control: true):
+            _NewTeacherIntent(),
+        SingleActivator(LogicalKeyboardKey.slash): _FocusSearchIntent(),
+        SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            _PrintDirectoryIntent(),
+        SingleActivator(LogicalKeyboardKey.escape): _ClearSearchIntent(),
+      },
+      child: Actions(
+        actions: <Type, Action<Intent>>{
+          _NewTeacherIntent: CallbackAction<_NewTeacherIntent>(
+            onInvoke: (_) => context.go('/staff/teachers/new'),
+          ),
+          _FocusSearchIntent: CallbackAction<_FocusSearchIntent>(
+            onInvoke: (_) {
+              _searchFocusNode.requestFocus();
+              return null;
+            },
+          ),
+          _PrintDirectoryIntent: CallbackAction<_PrintDirectoryIntent>(
+            onInvoke: (_) {
+              _showPhaseEStub(context, 'Print Directory');
+              return null;
+            },
+          ),
+          _ClearSearchIntent: CallbackAction<_ClearSearchIntent>(
+            onInvoke: (_) {
+              _clearSearch();
+              return null;
+            },
+          ),
+        },
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            backgroundColor: AppColors.surface,
+            body: SafeArea(
+              bottom: true,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeader(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileFilterBar(context, state, notifier),
+                    const SizedBox(height: AppSpacing.xs),
+                    if (state.errorMessage != null) ...[
+                      _buildMobileErrorBanner(state, notifier),
+                      const SizedBox(height: AppSpacing.xs),
+                    ],
+                    _buildMobileTeacherList(context, state, notifier),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileFooter(context),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(TeacherListState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Faculty & Staff Directory',
+          style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            _buildMetricBadge(
+              '${state.totalStaffCount} Total Staff',
+              AppColors.surfaceSubtle,
+              AppColors.textSecondary,
+            ),
+            _buildMetricBadge(
+              '${state.teacherCount} Teachers',
+              AppColors.statusSuccessBg,
+              AppColors.statusSuccessText,
+            ),
+            _buildMetricBadge(
+              '${state.staffAdminCount} Staff/Admin',
+              AppColors.statusInfoBg,
+              AppColors.statusInfoText,
+            ),
+            _buildMetricBadge(
+              '${state.activeStaffCount} Active',
+              AppColors.brandPrimary.withValues(alpha: 0.12),
+              AppColors.brandPrimary,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFilterBar(
+    BuildContext context,
+    TeacherListState state,
+    TeacherListNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: TextField(
+              key: const ValueKey('teacher_search_field'),
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              onChanged: _onSearchChanged,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+              ),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.surface,
+                hintText: 'Search by name, CNIC, mobile, or subject',
+                hintStyle: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  size: 16,
+                  color: AppColors.textMuted,
+                ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 14),
+                        onPressed: _clearSearch,
+                        splashRadius: 12,
+                      )
+                    : null,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildMobileDropdownRow(
+            label: 'Category',
+            child: _buildMobileDropdown<String>(
+              value: state.categories.contains(state.categoryFilter)
+                  ? state.categoryFilter
+                  : (state.categoryFilter == 'All'
+                        ? 'All Categories'
+                        : (state.categories.isNotEmpty
+                              ? state.categories.first
+                              : null)),
+              items: state.categories
+                  .map(
+                    (c) => DropdownMenuItem<String>(
+                      value: c,
+                      child: _mobileDropdownItemText(c),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  notifier.setCategoryFilter(val);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          InkWell(
+            onTap: () => notifier.setOnlyActive(!state.onlyActive),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Row(
+              children: [
+                SizedBox(
+                  height: 24,
+                  width: 24,
+                  child: Checkbox(
+                    value: state.onlyActive,
+                    onChanged: (val) => notifier.setOnlyActive(val ?? false),
+                    activeColor: AppColors.brandPrimary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    'Only Active Employees',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textPrimary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                _searchController.clear();
+                notifier.resetFilters();
+              },
+              icon: const Icon(Icons.refresh, size: 13),
+              label: const Text(
+                'Reset Filters',
+                style: TextStyle(fontSize: 11),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileErrorBanner(
+    TeacherListState state,
+    TeacherListNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.statusErrorBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.statusErrorBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: AppColors.statusErrorText,
+            size: 16,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              state.errorMessage!,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusErrorText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.close,
+              size: 14,
+              color: AppColors.statusErrorText,
+            ),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            onPressed: notifier.clearErrorMessage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTeacherList(
+    BuildContext context,
+    TeacherListState state,
+    TeacherListNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'STAFF DIRECTORY',
+            style: AppTypography.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              letterSpacing: 0.5,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (state.isLoading)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (state.filteredTeachers.isEmpty)
+            _buildMobileEmptyState(notifier)
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: state.paginatedTeachers.length,
+              itemBuilder: (ctx, index) => _buildMobileTeacherCard(
+                context,
+                state.paginatedTeachers[index],
+                index,
+              ),
+            ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildMobilePagination(state, notifier),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileEmptyState(TeacherListNotifier notifier) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.search_off_rounded,
+            size: 40,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Record Not Found',
+            textAlign: TextAlign.center,
+            style: AppTypography.h3.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'No staff members found matching your search criteria.',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                _searchController.clear();
+                notifier.resetFilters();
+              },
+              icon: const Icon(Icons.refresh, size: 14),
+              label: const Text('Reset Filters'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTeacherCard(
+    BuildContext context,
+    TeacherRow teacher,
+    int index,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: const BorderSide(color: AppColors.borderDefault),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: () => context.go('/staff/teachers/${teacher.teacherId}'),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: _getAvatarBg(teacher.teacherId),
+                    child: Text(
+                      teacher.initials,
+                      style: AppTypography.monospace.copyWith(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      teacher.tName,
+                      style: AppTypography.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  _buildStatusBadge(teacher.isActive),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                teacher.tfName.isEmpty ? '—' : 'S/O ${teacher.tfName}',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  _buildCategoryBadge(teacher.tCat),
+                  _buildMobileInfoPill(
+                    teacher.tSubject.isEmpty ? '—' : teacher.tSubject,
+                  ),
+                  _buildMobileInfoPill(teacher.tContactNo1),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                teacher.tCnic,
+                style: AppTypography.monospace.copyWith(
+                  fontSize: 11,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            context.go('/staff/teachers/${teacher.teacherId}'),
+                        icon: const Icon(Icons.visibility_outlined, size: 16),
+                        label: const Text(
+                          'View',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: SizedBox(
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _showPhaseEStub(context, 'Print Biodata'),
+                        icon: const Icon(Icons.print_outlined, size: 16),
+                        label: const Text(
+                          'Print',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileInfoPill(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.bodySmall.copyWith(
+          fontSize: 11,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobilePagination(
+    TeacherListState state,
+    TeacherListNotifier notifier,
+  ) {
+    final showingText = state.filteredTeachers.isEmpty
+        ? 'Showing 0-0 of 0 Staff Members'
+        : 'Showing ${state.startIndex}-${state.endIndex} of ${state.totalFilteredCount} Staff Members';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          showingText,
+          textAlign: TextAlign.center,
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 36,
+                child: OutlinedButton(
+                  onPressed: state.page > 1
+                      ? () => notifier.changePage(state.page - 1)
+                      : null,
+                  child: const Text(
+                    '< Previous',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Center(
+                child: Text(
+                  'Page ${state.page} of ${state.totalPages}',
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 36,
+                child: OutlinedButton(
+                  onPressed: state.page < state.totalPages
+                      ? () => notifier.changePage(state.page + 1)
+                      : null,
+                  child: const Text('Next >', style: TextStyle(fontSize: 11)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        _buildMobileDropdownRow(
+          label: 'Items per page',
+          child: _buildMobileDropdown<int>(
+            value: state.pageSize,
+            items: const [
+              DropdownMenuItem(value: 25, child: Text('25')),
+              DropdownMenuItem(value: 50, child: Text('50')),
+              DropdownMenuItem(value: 100, child: Text('100')),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                notifier.changePageSize(val);
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFooter(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: () => context.go('/staff/teachers/new'),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add New Teacher (Ctrl+N)'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton.icon(
+            onPressed: () => context.go('/staff/salary'),
+            icon: const Icon(Icons.payments_outlined, size: 16),
+            label: const Text('Monthly Payroll'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton.icon(
+            onPressed: _showMobileMonthSelectionDialog,
+            icon: const Icon(Icons.calendar_month, size: 16),
+            label: const Text('Attendance Register'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton(
+            onPressed: () => _showPhaseEStub(context, 'Export CSV'),
+            child: const Text('Export CSV'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton.icon(
+            onPressed: () => _showPhaseEStub(context, 'Print Roster'),
+            icon: const Icon(Icons.print_outlined, size: 16),
+            label: const Text('Print Faculty Roster'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFieldLabel(String label) {
+    return Text(
+      label,
+      style: AppTypography.bodySmall.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+
+  Widget _buildMobileDropdownRow({
+    required String label,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildMobileFieldLabel(label),
+        const SizedBox(height: 4),
+        Container(
+          height: 44,
+          alignment: AlignmentDirectional.centerStart,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: DropdownButtonHideUnderline(child: child),
+        ),
+      ],
+    );
+  }
+
+  Widget _mobileDropdownItemText(String label) {
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.body.copyWith(
+        color: AppColors.textPrimary,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _buildMobileDropdown<T>({
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    String? hint,
+  }) {
+    final effectiveValue = items.any((i) => i.value == value) ? value : null;
+    final itemStyle = AppTypography.body.copyWith(
+      color: AppColors.textPrimary,
+      fontSize: 13.5,
+      fontWeight: FontWeight.w600,
+    );
+    return DropdownButton<T>(
+      value: effectiveValue,
+      isExpanded: true,
+      isDense: true,
+      menuMaxHeight: 400.0,
+      dropdownColor: AppColors.surfaceRaised,
+      iconEnabledColor: AppColors.textPrimary,
+      iconDisabledColor: AppColors.textMuted,
+      style: itemStyle,
+      hint: hint == null
+          ? null
+          : Text(
+              hint,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+      selectedItemBuilder: (context) => items
+          .map(
+            (item) => Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                (item.child as Text).data ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: itemStyle,
+              ),
+            ),
+          )
+          .toList(),
+      items: items,
+      onChanged: onChanged,
+    );
+  }
+
+  Future<void> _showMobileMonthSelectionDialog() async {
+    final now = DateTime.now();
+    final months = List.generate(12, (index) {
+      final date = DateTime(now.year, now.month - index, 1);
+      return DateFormat('MMM-yyyy').format(date);
+    });
+
+    String selectedMonth = months.first;
+
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return Dialog(
+              insetPadding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+              ),
+              child: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Select Month for Attendance Register',
+                        style: AppTypography.h2.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      const Text(
+                        'Choose the month to generate staff attendance:',
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildMobileDropdownRow(
+                        label: 'Month',
+                        child: _buildMobileDropdown<String>(
+                          value: selectedMonth,
+                          items: months
+                              .map(
+                                (m) => DropdownMenuItem<String>(
+                                  value: m,
+                                  child: _mobileDropdownItemText(m),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setDialogState(() => selectedMonth = val);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      SizedBox(
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: () =>
+                              Navigator.of(ctx).pop(selectedMonth),
+                          child: const Text('Generate'),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      SizedBox(
+                        height: 44,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(ctx).pop(null),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (picked == null || !mounted) return;
+
+    final teachers = ref.read(teacherListProvider).allTeachers;
+    final staffAttendance = teachers.map((t) => {
+      'teacherName': t.tName,
+      'designation': t.tCat.isNotEmpty ? t.tCat : 'Staff',
+      'presentDays': 22,
+      'absentDays': 0,
+      'leaveDays': 0,
+      'totalDays': 22,
+    }).toList();
+
+    final meta = ref.read(shellMetadataProvider).value;
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.teacherAttendanceRegister,
+        titleOverride: 'Staff Attendance Register',
+        extraParams: {
+          'month': picked,
+          'staffAttendance': staffAttendance,
+          'branchName':
+              meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Mianwali',
+        },
+      ),
+    );
   }
 }
