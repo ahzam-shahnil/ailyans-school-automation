@@ -38,40 +38,23 @@ class VoucherResultPanel extends StatelessWidget {
     final Color bg;
     final Color border;
     final Color fg;
-    final Widget header;
+    final IconData icon;
+    final String title;
     final List<Widget> actions;
 
     switch (kind) {
       case VoucherResultKind.success:
-        bg = AppColors.statusSuccessBg;
-        border = AppColors.statusSuccessBorder;
-        fg = AppColors.statusSuccessText;
-        header = Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '$createdCount vouchers created',
-              style: AppTypography.h2.copyWith(
-                color: fg,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Total: Rs. ${currencyFormat.format(totalAmount)}',
-              style: AppTypography.bodySmall.copyWith(
-                color: fg,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        );
+        bg = AppStatusPill.readyBg;
+        border = AppStatusPill.readyBorder;
+        fg = AppStatusPill.readyText;
+        icon = Icons.check_circle_outline;
+        title = '$createdCount vouchers created';
         actions = [
-          OutlinedButton(
+          ElevatedButton(
             onPressed: onPrintAll,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: fg,
-              side: BorderSide(color: border),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: AppColors.textOnPrimary,
             ),
             child: const Text('Print all'),
           ),
@@ -93,10 +76,11 @@ class VoucherResultPanel extends StatelessWidget {
                 side: BorderSide(color: border),
               ),
             ),
-          TextButton(
+          OutlinedButton(
             onPressed: onGenerateAnother,
-            style: TextButton.styleFrom(
+            style: OutlinedButton.styleFrom(
               foregroundColor: fg,
+              side: BorderSide(color: border),
             ),
             child: const Text('Generate another'),
           ),
@@ -104,17 +88,21 @@ class VoucherResultPanel extends StatelessWidget {
         break;
 
       case VoucherResultKind.cancelled:
-        bg = AppColors.statusInfoBg;
-        border = AppColors.statusInfoBorder;
-        fg = AppColors.statusInfoText;
-        header = Text(
-          'Stopped. $createdCount vouchers were created.',
-          style: AppTypography.h2.copyWith(
-            color: fg,
-            fontWeight: FontWeight.w700,
-          ),
-        );
+        bg = AppStatusPill.waiverBg;
+        border = AppStatusPill.waiverBorder;
+        fg = AppStatusPill.waiverText;
+        icon = Icons.info_outline;
+        title = 'Stopped. $createdCount vouchers were created.';
         actions = [
+          if (onResumeRemaining != null)
+            ElevatedButton(
+              onPressed: onResumeRemaining,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: AppColors.textOnPrimary,
+              ),
+              child: const Text('Resume'),
+            ),
           OutlinedButton(
             onPressed: onPrintAll,
             style: OutlinedButton.styleFrom(
@@ -123,37 +111,24 @@ class VoucherResultPanel extends StatelessWidget {
             ),
             child: const Text('Print created'),
           ),
-          if (onResumeRemaining != null)
-            OutlinedButton(
-              onPressed: onResumeRemaining,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: fg,
-                side: BorderSide(color: border),
-              ),
-              child: const Text('Resume'),
-            ),
         ];
         break;
 
       case VoucherResultKind.partial:
-        bg = AppColors.statusWarningBg;
-        border = AppColors.statusWarningBorder;
-        fg = AppColors.statusWarningText;
+        bg = AppStatusPill.rolloverBg;
+        border = AppStatusPill.rolloverBorder;
+        fg = AppStatusPill.rolloverText;
+        icon = Icons.warning_amber_rounded;
         final notCreated = totalCount - createdCount;
-        header = Text(
-          '$createdCount of $totalCount vouchers created. $notCreated not created.',
-          style: AppTypography.h2.copyWith(
-            color: fg,
-            fontWeight: FontWeight.w700,
-          ),
-        );
+        title =
+            '$createdCount of $totalCount vouchers created. $notCreated not created.';
         actions = [
           if (onResumeRemaining != null)
-            OutlinedButton(
+            ElevatedButton(
               onPressed: onResumeRemaining,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: fg,
-                side: BorderSide(color: border),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: AppColors.textOnPrimary,
               ),
               child: const Text('Resume remaining'),
             ),
@@ -163,7 +138,7 @@ class VoucherResultPanel extends StatelessWidget {
               foregroundColor: fg,
               side: BorderSide(color: border),
             ),
-            child: Text('Print the $createdCount created'),
+            child: const Text('Print created'),
           ),
         ];
         break;
@@ -171,7 +146,7 @@ class VoucherResultPanel extends StatelessWidget {
 
     final content = Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -180,12 +155,50 @@ class VoucherResultPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          header,
+          Row(
+            children: [
+              Icon(icon, size: 32, color: fg),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTypography.h2.copyWith(
+                    color: fg,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Total: Rs. ${currencyFormat.format(totalAmount)}',
+            semanticsLabel:
+                'Total Billed: Rs. ${currencyFormat.format(totalAmount)}',
+            style: AppTypography.body.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.xs,
-            runSpacing: AppSpacing.xs,
-            children: actions,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= 600) {
+                return Row(
+                  children: [
+                    for (int i = 0; i < actions.length; i++) ...[
+                      if (i > 0) const SizedBox(width: AppSpacing.sm),
+                      actions[i],
+                    ],
+                  ],
+                );
+              }
+              return Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: actions,
+              );
+            },
           ),
         ],
       ),
