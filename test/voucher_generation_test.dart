@@ -2122,6 +2122,149 @@ void main() {
         expect(find.text('Edit tariffs'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'Late Fine (Rs.) is visible on desktop at 1440x900',
+      (tester) async {
+        tester.view.physicalSize = const Size(1440, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [],
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Late Fine (Rs.)'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'Changing the Late Fine value updates the provider state',
+      (tester) async {
+        tester.view.physicalSize = const Size(1440, 900);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        final container = ProviderContainer(
+          overrides: [
+            clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+            availableSessionsProvider.overrideWith(
+              (ref) async => ['2017-2018', '2026-27'],
+            ),
+            shellMetadataProvider.overrideWith(
+              (ref) async => const ShellMetadata(
+                branchName: "Ailyans's Higher Secondary School Mianwali",
+                branchAddress: 'Muslim Bazar Mianwali',
+                sessionYear: '2017-2018',
+                studentCount: 0,
+                classCount: 0,
+                staffCount: 0,
+                pendingVouchers: 0,
+              ),
+            ),
+            classesProvider.overrideWith(
+              (ref) async => [
+                const SchoolClass(classId: 13, cName: 'Class 10'),
+              ],
+            ),
+            sectionsProvider.overrideWith(
+              (ref) async => [
+                const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+              ],
+            ),
+            voucherBankListProvider.overrideWith(
+              (ref) async => [
+                const BankOption(
+                  bankInfoId: 1,
+                  bankName: 'Askari Bank',
+                  branch: 'Ballo Khel Road',
+                  acctNo: '4528',
+                  isDefault: true,
+                ),
+              ],
+            ),
+            voucherClassTariffsProvider(13).overrideWith(
+              (ref) async => [],
+            ),
+            voucherGenPreviewProvider.overrideWith(
+              (ref) async => [],
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(container.read(voucherGenFiltersProvider).lateFineAmount, 100);
+
+        final textFieldFinder = find.widgetWithText(TextField, '100');
+        expect(textFieldFinder, findsOneWidget);
+
+        await tester.enterText(textFieldFinder, '250');
+        await tester.pump();
+
+        expect(container.read(voucherGenFiltersProvider).lateFineAmount, 250);
+        expect(tester.takeException(), isNull);
+      },
+    );
   });
 }
 

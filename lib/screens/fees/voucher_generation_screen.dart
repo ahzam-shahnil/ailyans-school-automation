@@ -604,22 +604,19 @@ class _VoucherGenerationScreenState
     int generatedCount,
     VoucherGenState execState,
   ) {
-    final isWide = constraints.maxWidth >= 1280;
-    final leftPaneWidth = isWide ? 340.0 : 300.0;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildHeader(eligibleCount, filters, execState),
         const SizedBox(height: AppSpacing.sm),
 
-        // Main workspace: Left parameter card + Right preview pane
+        // Main workspace: Left parameter card (34%) + Right preview pane (66%)
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                width: leftPaneWidth,
+              Expanded(
+                flex: 34,
                 child: _buildConfigurationCard(
                   context,
                   filters,
@@ -630,6 +627,7 @@ class _VoucherGenerationScreenState
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
+                flex: 66,
                 child: _buildPreviewPane(
                   context,
                   filters,
@@ -1239,6 +1237,7 @@ class _VoucherGenerationScreenState
               bankId: filters.bankId,
               banks: banksData,
               bankError: null,
+              lateFineAmount: filters.lateFineAmount,
               columnCount: columnCount,
               onSessionYearChanged: (val) {
                 ref.read(voucherGenFiltersProvider.notifier).setSessionYr(val);
@@ -1264,6 +1263,11 @@ class _VoucherGenerationScreenState
                 if (val != null) {
                   ref.read(voucherGenFiltersProvider.notifier).setBankId(val);
                 }
+              },
+              onLateFineChanged: (val) {
+                ref
+                    .read(voucherGenFiltersProvider.notifier)
+                    .setLateFineAmount(val);
               },
               onPickIssueDate: () => _pickDate(
                 context,

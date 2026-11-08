@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
 /// Card hosting all parameter selection fields for cohort voucher generation.
-class VoucherParameterCard extends StatelessWidget {
+class VoucherParameterCard extends StatefulWidget {
   const VoucherParameterCard({
     required this.sessionYear,
     required this.sessionYears,
@@ -34,6 +34,8 @@ class VoucherParameterCard extends StatelessWidget {
     required this.onBankChanged,
     required this.onPickIssueDate,
     required this.onPickDueDate,
+    this.lateFineAmount = 100,
+    this.onLateFineChanged,
     super.key,
   });
 
@@ -74,7 +76,55 @@ class VoucherParameterCard extends StatelessWidget {
   final VoidCallback onPickIssueDate;
   final VoidCallback onPickDueDate;
 
-  Widget _buildFieldLabel(String labelText, {bool isRequired = false, bool isOptional = false}) {
+  final int lateFineAmount;
+  final ValueChanged<int>? onLateFineChanged;
+
+  @override
+  State<VoucherParameterCard> createState() => _VoucherParameterCardState();
+}
+
+class _VoucherParameterCardState extends State<VoucherParameterCard> {
+  late final TextEditingController _lateFineController;
+
+  @override
+  void initState() {
+    super.initState();
+    _lateFineController = TextEditingController(
+      text: widget.lateFineAmount.toString(),
+    );
+  }
+
+  @override
+  void didUpdateWidget(VoucherParameterCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.lateFineAmount != oldWidget.lateFineAmount &&
+        widget.lateFineAmount != int.tryParse(_lateFineController.text)) {
+      _lateFineController.text = widget.lateFineAmount.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    _lateFineController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildFieldLabel(
+    String labelText, {
+    bool isRequired = false,
+    bool isOptional = false,
+  }) {
+    if (!isRequired && !isOptional) {
+      return Semantics(
+        label: labelText,
+        child: Text(
+          labelText,
+          style: AppTypography.label.copyWith(
+            color: AppColors.textSecondary,
+          ),
+        ),
+      );
+    }
     return Semantics(
       label: isRequired ? '$labelText required' : labelText,
       child: Text.rich(
@@ -141,7 +191,9 @@ class VoucherParameterCard extends StatelessWidget {
       fontSize: 13.5,
       fontWeight: FontWeight.w600,
     );
-    final effectiveValue = sessionYears.contains(sessionYear) ? sessionYear : null;
+    final effectiveValue = widget.sessionYears.contains(widget.sessionYear)
+        ? widget.sessionYear
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -166,7 +218,7 @@ class VoucherParameterCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            selectedItemBuilder: (context) => sessionYears
+            selectedItemBuilder: (context) => widget.sessionYears
                 .map(
                   (y) => Align(
                     alignment: AlignmentDirectional.centerStart,
@@ -179,7 +231,7 @@ class VoucherParameterCard extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            items: sessionYears
+            items: widget.sessionYears
                 .map(
                   (y) => DropdownMenuItem(
                     value: y,
@@ -193,11 +245,11 @@ class VoucherParameterCard extends StatelessWidget {
                 )
                 .toList(),
             onChanged: (val) {
-              if (val != null) onSessionYearChanged(val);
+              if (val != null) widget.onSessionYearChanged(val);
             },
           ),
         ),
-        _buildErrorText(sessionYearError),
+        _buildErrorText(widget.sessionYearError),
       ],
     );
   }
@@ -208,7 +260,9 @@ class VoucherParameterCard extends StatelessWidget {
       fontSize: 13.5,
       fontWeight: FontWeight.w600,
     );
-    final effectiveValue = billingMonths.contains(billingMonth) ? billingMonth : null;
+    final effectiveValue = widget.billingMonths.contains(widget.billingMonth)
+        ? widget.billingMonth
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -233,7 +287,7 @@ class VoucherParameterCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            selectedItemBuilder: (context) => billingMonths
+            selectedItemBuilder: (context) => widget.billingMonths
                 .map(
                   (m) => Align(
                     alignment: AlignmentDirectional.centerStart,
@@ -246,7 +300,7 @@ class VoucherParameterCard extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            items: billingMonths
+            items: widget.billingMonths
                 .map(
                   (m) => DropdownMenuItem(
                     value: m,
@@ -260,11 +314,11 @@ class VoucherParameterCard extends StatelessWidget {
                 )
                 .toList(),
             onChanged: (val) {
-              if (val != null) onBillingMonthChanged(val);
+              if (val != null) widget.onBillingMonthChanged(val);
             },
           ),
         ),
-        _buildErrorText(billingMonthError),
+        _buildErrorText(widget.billingMonthError),
       ],
     );
   }
@@ -275,7 +329,9 @@ class VoucherParameterCard extends StatelessWidget {
       fontSize: 13.5,
       fontWeight: FontWeight.w600,
     );
-    final effectiveValue = classes.any((c) => c.id == classId) ? classId : null;
+    final effectiveValue = widget.classes.any((c) => c.id == widget.classId)
+        ? widget.classId
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -300,7 +356,7 @@ class VoucherParameterCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            selectedItemBuilder: (context) => classes
+            selectedItemBuilder: (context) => widget.classes
                 .map(
                   (c) => Align(
                     alignment: AlignmentDirectional.centerStart,
@@ -313,7 +369,7 @@ class VoucherParameterCard extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            items: classes
+            items: widget.classes
                 .map(
                   (c) => DropdownMenuItem<int?>(
                     value: c.id,
@@ -326,10 +382,10 @@ class VoucherParameterCard extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            onChanged: onClassChanged,
+            onChanged: widget.onClassChanged,
           ),
         ),
-        _buildErrorText(classError),
+        _buildErrorText(widget.classError),
       ],
     );
   }
@@ -342,9 +398,11 @@ class VoucherParameterCard extends StatelessWidget {
     );
     final allItems = [
       (id: null, label: 'All sections'),
-      ...sections.map((s) => (id: s.id as int?, label: s.label)),
+      ...widget.sections.map((s) => (id: s.id as int?, label: s.label)),
     ];
-    final effectiveValue = allItems.any((s) => s.id == sectionId) ? sectionId : null;
+    final effectiveValue = allItems.any((s) => s.id == widget.sectionId)
+        ? widget.sectionId
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -386,7 +444,7 @@ class VoucherParameterCard extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            onChanged: onSectionChanged,
+            onChanged: widget.onSectionChanged,
           ),
         ),
       ],
@@ -454,7 +512,9 @@ class VoucherParameterCard extends StatelessWidget {
       fontSize: 13.5,
       fontWeight: FontWeight.w600,
     );
-    final effectiveValue = banks.any((b) => b.id == bankId) ? bankId : null;
+    final effectiveValue = widget.banks.any((b) => b.id == widget.bankId)
+        ? widget.bankId
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -479,7 +539,7 @@ class VoucherParameterCard extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            selectedItemBuilder: (context) => banks
+            selectedItemBuilder: (context) => widget.banks
                 .map(
                   (b) => Align(
                     alignment: AlignmentDirectional.centerStart,
@@ -492,7 +552,7 @@ class VoucherParameterCard extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            items: banks
+            items: widget.banks
                 .map(
                   (b) => DropdownMenuItem<int?>(
                     value: b.id,
@@ -505,10 +565,50 @@ class VoucherParameterCard extends StatelessWidget {
                   ),
                 )
                 .toList(),
-            onChanged: onBankChanged,
+            onChanged: widget.onBankChanged,
           ),
         ),
-        _buildErrorText(bankError),
+        _buildErrorText(widget.bankError),
+      ],
+    );
+  }
+
+  Widget _buildLateFineField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildFieldLabel('Late Fine (Rs.)'),
+        const SizedBox(height: 4),
+        Container(
+          height: 44,
+          alignment: AlignmentDirectional.centerStart,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: TextField(
+            controller: _lateFineController,
+            keyboardType: TextInputType.number,
+            style: AppTypography.body.copyWith(
+              color: AppColors.textPrimary,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
+            ),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onChanged: (val) {
+              final parsed = int.tryParse(val.trim());
+              if (parsed != null && widget.onLateFineChanged != null) {
+                widget.onLateFineChanged!(parsed);
+              }
+            },
+          ),
+        ),
       ],
     );
   }
@@ -521,77 +621,97 @@ class VoucherParameterCard extends StatelessWidget {
     final sectionWidget = _buildSectionField();
     final issueDateWidget = _buildDateField(
       labelText: 'Issue Date',
-      date: issueDate,
-      error: issueDateError,
-      onTap: onPickIssueDate,
+      date: widget.issueDate,
+      error: widget.issueDateError,
+      onTap: widget.onPickIssueDate,
     );
     final dueDateWidget = _buildDateField(
       labelText: 'Payment Due Date',
-      date: dueDate,
-      error: dueDateError,
-      onTap: onPickDueDate,
+      date: widget.dueDate,
+      error: widget.dueDateError,
+      onTap: widget.onPickDueDate,
     );
     final bankWidget = _buildBankField();
+    final lateFineWidget = _buildLateFineField();
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
-      ),
-      child: columnCount == 2
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: sessionYearWidget),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: billingMonthWidget),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: classWidget),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: sectionWidget),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: issueDateWidget),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(child: dueDateWidget),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                bankWidget,
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                sessionYearWidget,
-                const SizedBox(height: AppSpacing.sm),
-                billingMonthWidget,
-                const SizedBox(height: AppSpacing.sm),
-                classWidget,
-                const SizedBox(height: AppSpacing.sm),
-                sectionWidget,
-                const SizedBox(height: AppSpacing.sm),
-                issueDateWidget,
-                const SizedBox(height: AppSpacing.sm),
-                dueDateWidget,
-                const SizedBox(height: AppSpacing.sm),
-                bankWidget,
-              ],
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final content = widget.columnCount == 2
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: sessionYearWidget),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: billingMonthWidget),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: classWidget),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: sectionWidget),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: issueDateWidget),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: dueDateWidget),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: bankWidget),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(child: lateFineWidget),
+                    ],
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  sessionYearWidget,
+                  const SizedBox(height: AppSpacing.sm),
+                  billingMonthWidget,
+                  const SizedBox(height: AppSpacing.sm),
+                  classWidget,
+                  const SizedBox(height: AppSpacing.sm),
+                  sectionWidget,
+                  const SizedBox(height: AppSpacing.sm),
+                  issueDateWidget,
+                  const SizedBox(height: AppSpacing.sm),
+                  dueDateWidget,
+                  const SizedBox(height: AppSpacing.sm),
+                  bankWidget,
+                  const SizedBox(height: AppSpacing.sm),
+                  lateFineWidget,
+                ],
+              );
+
+        final body = constraints.maxHeight.isFinite
+            ? SingleChildScrollView(child: content)
+            : content;
+
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: body,
+        );
+      },
     );
   }
 }
