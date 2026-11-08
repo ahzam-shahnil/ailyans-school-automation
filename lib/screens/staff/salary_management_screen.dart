@@ -8,6 +8,7 @@ import '../../core/providers/salary_management_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/salary_slip_row.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
@@ -434,6 +435,10 @@ class _SalaryManagementScreenState
         notifier.clearToast();
       }
     });
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(context, state, notifier);
+    }
 
     return CallbackShortcuts(
       bindings: {
@@ -1764,5 +1769,1362 @@ class _SalaryManagementScreenState
     if (parts.isEmpty || parts[0].isEmpty) return 'T';
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+  }
+
+  // ===========================================================================
+  // G-6b MOBILE BRANCH (< 600px)
+  // ===========================================================================
+  Widget _buildMobileScaffold(
+    BuildContext context,
+    SalaryManagementState state,
+    SalaryManagementNotifier notifier,
+  ) {
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyS, control: true):
+            _handleCommit,
+        const SingleActivator(LogicalKeyboardKey.keyS, meta: true):
+            _handleCommit,
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            _handlePrint,
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+            _handlePrint,
+        const SingleActivator(LogicalKeyboardKey.keyL, control: true):
+            _handleLoadCohort,
+        const SingleActivator(LogicalKeyboardKey.keyL, meta: true):
+            _handleLoadCohort,
+        const SingleActivator(LogicalKeyboardKey.escape): _handleDiscard,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: AppColors.surface,
+          body: SafeArea(
+            bottom: true,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildMobileHeader(context, notifier),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (state.errorMessage != null) ...[
+                    _buildMobileErrorBanner(state.errorMessage!, notifier),
+                    const SizedBox(height: AppSpacing.xs),
+                  ],
+                  _buildMobileFilterBar(context, state, notifier),
+                  const SizedBox(height: AppSpacing.sm),
+                  _buildMobileKpiGrid(state),
+                  const SizedBox(height: AppSpacing.sm),
+                  _buildMobileRosterSection(context, state, notifier),
+                  const SizedBox(height: AppSpacing.sm),
+                  _buildMobileSlipSection(context, state, notifier),
+                  if (state.selectedTeacherId != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileFooter(context, state),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(
+    BuildContext context,
+    SalaryManagementNotifier notifier,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Icon(
+              Icons.payments_outlined,
+              size: 20,
+              color: AppColors.brandPrimary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Staff Payroll & Salary Disbursement',
+                style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: () => notifier.loadPayrollCohort(),
+            icon: const Icon(Icons.refresh, size: 14),
+            label: const Text(
+              'Load Payroll Cohort (Ctrl+L)',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: AppColors.textOnPrimary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileErrorBanner(
+    String message,
+    SalaryManagementNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.statusErrorBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.statusErrorBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: AppColors.statusErrorText,
+            size: 16,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusErrorText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.close,
+              size: 14,
+              color: AppColors.statusErrorText,
+            ),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            onPressed: notifier.clearErrorMessage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileFilterBar(
+    BuildContext context,
+    SalaryManagementState state,
+    SalaryManagementNotifier notifier,
+  ) {
+    final dateDisplay = DateFormat('yyyy-MM-dd').format(state.disbursementDate);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildMobileDropdownRow(
+            label: 'Month',
+            child: _buildMobileDropdown<String>(
+              value: state.availableMonths.contains(state.selectedMonth)
+                  ? state.selectedMonth
+                  : null,
+              hint: state.selectedMonth,
+              items: state.availableMonths
+                  .map(
+                    (m) => DropdownMenuItem<String>(
+                      value: m,
+                      child: _mobileDropdownItemText(m),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) notifier.setMonth(val);
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildMobileFieldLabel('Disburse Date'),
+          const SizedBox(height: 4),
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: state.disbursementDate,
+                firstDate: DateTime(2015),
+                lastDate: DateTime(2030),
+              );
+              if (picked != null) {
+                notifier.setDisbursementDate(picked);
+              }
+            },
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            child: Container(
+              height: 44,
+              alignment: AlignmentDirectional.centerStart,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceRaised,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.borderDefault),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    dateDisplay,
+                    style: AppTypography.monospace.copyWith(
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildMobileDropdownRow(
+            label: 'Category',
+            child: _buildMobileDropdown<String>(
+              value: state.categoryFilter,
+              items: const [
+                DropdownMenuItem(value: 'All', child: Text('All')),
+                DropdownMenuItem(value: 'Teacher', child: Text('Teacher')),
+                DropdownMenuItem(value: 'Staff', child: Text('Staff')),
+                DropdownMenuItem(value: 'Principal', child: Text('Principal')),
+                DropdownMenuItem(value: 'V-P', child: Text('V-P')),
+              ],
+              onChanged: (val) {
+                if (val != null) notifier.setCategoryFilter(val);
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileKpiGrid(SalaryManagementState state) {
+    final currencyFormat = NumberFormat('#,##0');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMobileKpiCard(
+          title: 'Total Eligible Staff',
+          value: '${state.totalEligibleStaff}',
+          subtitle: 'Active roster members',
+          icon: Icons.people_outline,
+          accentColor: AppColors.brandPrimary,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        _buildMobileKpiCard(
+          title: 'Gross Payroll',
+          value: 'Rs. ${currencyFormat.format(state.grossPayroll)}',
+          subtitle: 'Base + allowances',
+          icon: Icons.account_balance_wallet_outlined,
+          accentColor: AppColors.statusInfoText,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        _buildMobileKpiCard(
+          title: 'Total Deductions',
+          value: 'Rs. ${currencyFormat.format(state.totalDeductions)}',
+          subtitle: 'Fines, leaves, loans',
+          icon: Icons.remove_circle_outline,
+          accentColor: AppColors.statusWarningText,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        _buildMobileKpiCard(
+          title: 'Net Disbursed',
+          value: 'Rs. ${currencyFormat.format(state.netDisbursed)}',
+          subtitle: 'Total settled pay',
+          icon: Icons.check_circle_outline,
+          accentColor: AppColors.statusSuccessText,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileKpiCard({
+    required String title,
+    required String value,
+    required String subtitle,
+    required IconData icon,
+    required Color accentColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Icon(icon, size: 18, color: accentColor),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: AppTypography.monospace.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodySmall.copyWith(
+                    fontSize: 10,
+                    color: AppColors.textMuted,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileRosterSection(
+    BuildContext context,
+    SalaryManagementState state,
+    SalaryManagementNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'PAYROLL REGISTER: ${state.selectedMonth}',
+            style: AppTypography.bodySmall.copyWith(
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+              color: AppColors.textPrimary,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: _handlePrintRegister,
+              icon: const Icon(Icons.print_outlined, size: 12),
+              label: const Text(
+                'Print Register',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: state.roster.any((r) => r.isPending)
+                  ? _showMobileBatchDisburseDialog
+                  : null,
+              icon: const Icon(Icons.flash_on, size: 12),
+              label: const Text(
+                'Disburse All Pending',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          if (state.isLoading)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (state.roster.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Text(
+                'Select month + category, then click [Load Payroll Cohort]',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: state.roster.length,
+              itemBuilder: (ctx, index) => _buildMobileRosterCard(
+                context,
+                state,
+                notifier,
+                state.roster[index],
+                index,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileRosterCard(
+    BuildContext context,
+    SalaryManagementState state,
+    SalaryManagementNotifier notifier,
+    SalarySlipRow row,
+    int index,
+  ) {
+    final currency = NumberFormat('#,##0');
+    final isSelected = row.teacherId == state.selectedTeacherId;
+    final gross = row.grossFromDet > 0
+        ? row.grossFromDet
+        : ((row.paidAmt ?? 0) + (row.tDeductions ?? 0));
+    final net = row.paidAmt ?? 0;
+    final deductions = row.tDeductions ?? 0;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: BorderSide(
+          color: isSelected ? AppColors.brandPrimary : AppColors.borderDefault,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: () => _handleMobileRowTap(row),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row.teacherName,
+                      style: AppTypography.body.copyWith(
+                        fontWeight: isSelected
+                            ? FontWeight.bold
+                            : FontWeight.w600,
+                        color: isSelected
+                            ? AppColors.brandPrimary
+                            : AppColors.textPrimary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  _buildStatusBadge(row.isPaid == 'Y'),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text(
+                    row.tSalMasId ?? '—',
+                    style: AppTypography.monospace.copyWith(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  _buildCategoryBadge(row.teacherCat),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  _buildMobileAmountPill('Gross', 'Rs. ${currency.format(gross)}'),
+                  _buildMobileAmountPill(
+                    'Deductions',
+                    'Rs. ${currency.format(deductions)}',
+                  ),
+                  _buildMobileAmountPill('Net', 'Rs. ${currency.format(net)}'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileAmountPill(String label, String value) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label: ',
+            style: AppTypography.bodySmall.copyWith(
+              fontSize: 10,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          Text(
+            value,
+            style: AppTypography.monospace.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileSlipSection(
+    BuildContext context,
+    SalaryManagementState state,
+    SalaryManagementNotifier notifier,
+  ) {
+    if (state.selectedTeacherId == null) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.receipt_long_outlined,
+              size: 40,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Select an employee to review or disburse salary',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final teacher = state.selectedTeacher;
+    final teacherId = state.selectedTeacherId!;
+    final avatarColor = _avatarPalette[teacherId.abs() % _avatarPalette.length];
+    final currency = NumberFormat('#,##0');
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: avatarColor,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.borderDefault),
+                ),
+                child: Center(
+                  child: Text(
+                    _computeInitials(teacher?.teacherName ?? 'T'),
+                    style: AppTypography.body.copyWith(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      teacher?.teacherName ?? 'Staff Member',
+                      style: AppTypography.body.copyWith(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'ID #${teacher?.teacherId} | ${teacher?.teacherCat ?? 'Staff'}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Slip: ${state.selectedSlipId ?? "Pending (New)"}',
+                      style: AppTypography.monospace.copyWith(
+                        fontSize: 11,
+                        color: AppColors.brandPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Allowance Heads',
+                  style: AppTypography.body.copyWith(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Text(
+                '${state.draftAllowances.length} items',
+                style: AppTypography.bodySmall.copyWith(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (state.draftAllowances.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                'No allowance heads added yet.',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: state.draftAllowances.length,
+              itemBuilder: (ctx, index) {
+                final item = state.draftAllowances[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    side: const BorderSide(color: AppColors.borderDefault),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          '${item.ser}. ',
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            item.detail,
+                            style: AppTypography.bodySmall.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textPrimary,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          'Rs. ${currency.format(item.amount)}',
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            size: 16,
+                            color: AppColors.statusErrorText,
+                          ),
+                          tooltip: 'Remove allowance',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () =>
+                              notifier.removeAllowanceHead(item.ser),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: _showMobileAddAllowanceModal,
+              icon: const Icon(Icons.add, size: 14),
+              label: const Text(
+                'Add Allowance Head',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _buildMobileFinancialCard(state, currency),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileFinancialCard(
+    SalaryManagementState state,
+    NumberFormat currency,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        border: Border.all(color: AppColors.borderDefault),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildMobileFinancialRow(
+            label: 'Gross Earnings:',
+            value: 'Rs. ${currency.format(state.grossEarnings)}',
+          ),
+          const SizedBox(height: 8),
+          _buildMobileFieldLabel('Deductions'),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 44,
+            child: TextField(
+              controller: _deductionsController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.right,
+              style: AppTypography.monospace.copyWith(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
+              decoration: InputDecoration(
+                prefixText: 'Rs. ',
+                prefixStyle: AppTypography.monospace.copyWith(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+                isDense: true,
+                filled: true,
+                fillColor: AppColors.surfaceRaised,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _buildMobileFinancialRow(
+            label: 'NET PAYABLE:',
+            value: 'Rs. ${currency.format(state.netPayable)}',
+            emphasize: true,
+          ),
+          const SizedBox(height: 8),
+          _buildMobileFieldLabel('Remarks'),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 44,
+            child: TextField(
+              controller: _remarksController,
+              maxLines: 1,
+              style: AppTypography.bodySmall.copyWith(
+                fontSize: 12,
+                color: AppColors.textPrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Disbursement remarks & notes...',
+                hintStyle: AppTypography.bodySmall.copyWith(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+                isDense: true,
+                filled: true,
+                fillColor: AppColors.surfaceRaised,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileFinancialRow({
+    required String label,
+    required String value,
+    bool emphasize = false,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: AppTypography.bodySmall.copyWith(
+              fontSize: emphasize ? 13 : 12,
+              fontWeight: emphasize ? FontWeight.bold : FontWeight.w600,
+              color: emphasize
+                  ? AppColors.textPrimary
+                  : AppColors.textSecondary,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Text(
+          value,
+          style: AppTypography.monospace.copyWith(
+            fontSize: emphasize ? 15 : 13,
+            fontWeight: FontWeight.bold,
+            color: emphasize ? AppColors.brandPrimary : AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFooter(
+    BuildContext context,
+    SalaryManagementState state,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: _handleCommit,
+            icon: const Icon(Icons.check, size: 14),
+            label: const Text(
+              'Commit & Disburse Slip (Ctrl+S)',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: AppColors.textOnPrimary,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton.icon(
+            onPressed: _handlePrint,
+            icon: const Icon(Icons.print, size: 13),
+            label: const Text(
+              'Print Salary Slip (Ctrl+P)',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton(
+            onPressed: _handleDiscard,
+            child: const Text(
+              'Discard Slip',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFieldLabel(String label) {
+    return Text(
+      label,
+      style: AppTypography.bodySmall.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+
+  Widget _buildMobileDropdownRow({
+    required String label,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildMobileFieldLabel(label),
+        const SizedBox(height: 4),
+        Container(
+          height: 44,
+          alignment: AlignmentDirectional.centerStart,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: DropdownButtonHideUnderline(child: child),
+        ),
+      ],
+    );
+  }
+
+  Widget _mobileDropdownItemText(String label) {
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.body.copyWith(
+        color: AppColors.textPrimary,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _buildMobileDropdown<T>({
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    String? hint,
+  }) {
+    final effectiveValue = items.any((i) => i.value == value) ? value : null;
+    final itemStyle = AppTypography.body.copyWith(
+      color: AppColors.textPrimary,
+      fontSize: 13.5,
+      fontWeight: FontWeight.w600,
+    );
+    return DropdownButton<T>(
+      value: effectiveValue,
+      isExpanded: true,
+      isDense: true,
+      menuMaxHeight: 400.0,
+      dropdownColor: AppColors.surfaceRaised,
+      iconEnabledColor: AppColors.textPrimary,
+      iconDisabledColor: AppColors.textMuted,
+      style: itemStyle,
+      hint: hint == null
+          ? null
+          : Text(
+              hint,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+      selectedItemBuilder: (context) => items
+          .map(
+            (item) => Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                (item.child as Text).data ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: itemStyle,
+              ),
+            ),
+          )
+          .toList(),
+      items: items,
+      onChanged: onChanged,
+    );
+  }
+
+  Future<void> _handleMobileRowTap(SalarySlipRow row) async {
+    final state = ref.read(salaryManagementProvider);
+    final notifier = ref.read(salaryManagementProvider.notifier);
+
+    if (state.selectedTeacherId == row.teacherId) return;
+
+    if (state.isDirty) {
+      final currentName = state.selectedTeacher?.teacherName ?? 'Employee';
+      final discard = await _showMobileDiscardDialog(currentName);
+      if (discard != true) return;
+    }
+
+    await notifier.selectEmployee(row.teacherId);
+    final newState = ref.read(salaryManagementProvider);
+    _deductionsController.text = newState.draftDeductions == 0.0
+        ? '0'
+        : (newState.draftDeductions % 1 == 0
+              ? newState.draftDeductions.toInt().toString()
+              : newState.draftDeductions.toString());
+    _remarksController.text = newState.draftRemarks;
+  }
+
+  Future<bool?> _showMobileDiscardDialog(String currentName) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Discard Unsaved Changes?',
+                  style: AppTypography.h2.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Discard unsaved changes to $currentName?',
+                  style: AppTypography.body,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SizedBox(
+                  height: 44,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.statusErrorText,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('Discard'),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('Keep Editing'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showMobileBatchDisburseDialog() async {
+    final state = ref.read(salaryManagementProvider);
+    final notifier = ref.read(salaryManagementProvider.notifier);
+    final session = ref.read(sessionProvider);
+    final userLvl = session?.user.userLevel ?? 1;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Confirm Batch Disburse',
+                  style: AppTypography.h2.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Disburse all pending salary slips for ${state.selectedMonth}? This cannot be undone.',
+                  style: AppTypography.body,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SizedBox(
+                  height: 44,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brandPrimary,
+                      foregroundColor: AppColors.textOnPrimary,
+                    ),
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('Confirm'),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed == true) {
+      await notifier.batchDisbursePending(userLvl: userLvl);
+    }
+  }
+
+  Future<void> _showMobileAddAllowanceModal() async {
+    final state = ref.read(salaryManagementProvider);
+    final notifier = ref.read(salaryManagementProvider.notifier);
+
+    int? selectedParamId = state.availableSalParams.isNotEmpty
+        ? (state.availableSalParams.first['SalParamID'] as num?)?.toInt()
+        : 1;
+    final amountController = TextEditingController(text: '1000');
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) => Dialog(
+          insetPadding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Add Allowance Head',
+                    style: AppTypography.h2.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _buildMobileDropdownRow(
+                    label: 'Allowance Head',
+                    child: _buildMobileDropdown<int>(
+                      value: selectedParamId,
+                      items: state.availableSalParams.map((p) {
+                        final id = (p['SalParamID'] as num).toInt();
+                        final name = p['SalParam']?.toString() ?? 'Allowance';
+                        return DropdownMenuItem<int>(
+                          value: id,
+                          child: _mobileDropdownItemText(name),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() => selectedParamId = val);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  _buildMobileFieldLabel('Amount (Rs.)'),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    height: 44,
+                    child: TextField(
+                      controller: amountController,
+                      keyboardType: TextInputType.number,
+                      style: AppTypography.monospace.copyWith(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        prefixText: 'Rs. ',
+                        prefixStyle: AppTypography.monospace.copyWith(
+                          fontSize: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                        filled: true,
+                        fillColor: AppColors.surfaceRaised,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          borderSide: const BorderSide(
+                            color: AppColors.borderDefault,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(
+                    height: 44,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandPrimary,
+                        foregroundColor: AppColors.textOnPrimary,
+                      ),
+                      onPressed: () {
+                        final amt =
+                            double.tryParse(amountController.text) ?? 0.0;
+                        if (selectedParamId != null && amt > 0) {
+                          notifier.addAllowanceHead(selectedParamId!, amt);
+                          Navigator.of(dialogCtx).pop();
+                        }
+                      },
+                      child: const Text('Add Head'),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  SizedBox(
+                    height: 44,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(dialogCtx).pop(),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
