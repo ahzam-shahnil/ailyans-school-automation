@@ -608,73 +608,75 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       suffix: 'Defaulters',
       subtitle:
           'Total Overdue: Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)}',
-      footerAction: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Tooltip(
-          message: 'Print fee defaulter list',
-          waitDuration: const Duration(milliseconds: 500),
-          child: InkWell(
-            onTap: () async {
-              final meta = ref.read(shellMetadataProvider).value;
-              final sy = meta?.sessionYear ?? '2026-27';
-              final buildData = await ref
-                  .read(feeCollectionProvider.notifier)
-                  .buildDefaulterList(sessionYr: sy);
-              if (!mounted) return;
-              final safeBranchName = (meta?.branchName != null &&
-                      meta!.branchName.trim().isNotEmpty)
-                  ? meta.branchName.trim()
-                  : "Ailyans's Higher Secondary School Mianwali";
-              final safeBranchAddress = (meta?.branchAddress != null &&
-                      meta!.branchAddress.trim().isNotEmpty)
-                  ? meta.branchAddress.trim()
-                  : 'Muslim Bazar Mianwali';
-              await ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.defaulterList,
-                  vouchers: buildData.groups,
-                  extraParams: {
-                    'summary': buildData.summary,
-                    'branchName': safeBranchName,
-                    'branchAddress': safeBranchAddress,
-                    'branchPhone': meta?.branchPhone,
-                    'branchPrincipal': meta?.branchPrincipal,
-                    'sessionYr': sy,
-                  },
-                ),
-              );
-            },
-            borderRadius: BorderRadius.circular(4),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.print_outlined,
-                    size: 14,
-                    color: AppColors.brandPrimary,
-                  ),
-                  const SizedBox(width: 3),
-                  Flexible(
-                    child: Text(
-                      'Print Defaulters',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.label.copyWith(
-                        fontSize: 11,
-                        color: AppColors.brandPrimary,
-                        fontWeight: FontWeight.w600,
+      footerAction: isMobile
+          ? null
+          : MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Tooltip(
+                message: 'Print fee defaulter list',
+                waitDuration: const Duration(milliseconds: 500),
+                child: InkWell(
+                  onTap: () async {
+                    final meta = ref.read(shellMetadataProvider).value;
+                    final sy = meta?.sessionYear ?? '2026-27';
+                    final buildData = await ref
+                        .read(feeCollectionProvider.notifier)
+                        .buildDefaulterList(sessionYr: sy);
+                    if (!mounted) return;
+                    final safeBranchName = (meta?.branchName != null &&
+                            meta!.branchName.trim().isNotEmpty)
+                        ? meta.branchName.trim()
+                        : "Ailyans's Higher Secondary School Mianwali";
+                    final safeBranchAddress = (meta?.branchAddress != null &&
+                            meta!.branchAddress.trim().isNotEmpty)
+                        ? meta.branchAddress.trim()
+                        : 'Muslim Bazar Mianwali';
+                    await ReportPreviewModal.show(
+                      context,
+                      request: ReportRequest(
+                        type: ReportType.defaulterList,
+                        vouchers: buildData.groups,
+                        extraParams: {
+                          'summary': buildData.summary,
+                          'branchName': safeBranchName,
+                          'branchAddress': safeBranchAddress,
+                          'branchPhone': meta?.branchPhone,
+                          'branchPrincipal': meta?.branchPrincipal,
+                          'sessionYr': sy,
+                        },
                       ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.print_outlined,
+                          size: 14,
+                          color: AppColors.brandPrimary,
+                        ),
+                        const SizedBox(width: 3),
+                        Flexible(
+                          child: Text(
+                            'Print Defaulters',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.label.copyWith(
+                              fontSize: 11,
+                              color: AppColors.brandPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
-      ),
       isLoading: isLoading,
       isMobile: isMobile,
       onTap: () => context.go('/fees/ledger?status=Unpaid&from=/dashboard'),
@@ -885,11 +887,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }) {
     if (isMobile) {
       return _StitchCard(
+        height: 115,
         accentColor: accentColor,
         onTap: onTap,
         tooltip: tooltip,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: [
@@ -914,7 +918,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 8),
             if (isLoading)
               _buildSkeletonBox(width: 80, height: 24)
             else
@@ -956,45 +959,52 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ],
                 ],
               ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.label.copyWith(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.3,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            if (subtitle.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textMuted,
-                  fontSize: 10.5,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.label.copyWith(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.3,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ),
-            ],
-            if (footerAction != null) ...[
-              const SizedBox(height: 4),
-              footerAction,
-            ],
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textMuted,
+                      fontSize: 10.5,
+                    ),
+                  ),
+                ],
+                if (footerAction != null) ...[
+                  const SizedBox(height: 2),
+                  footerAction,
+                ],
+              ],
+            ),
           ],
         ),
       );
     }
 
     return _StitchCard(
+      height: 135,
       accentColor: accentColor,
       onTap: onTap,
       tooltip: tooltip,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
@@ -1033,7 +1043,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ),
             ],
           ),
-          const SizedBox(height: 10),
           if (isLoading)
             _buildSkeletonBox(width: 110, height: 28)
           else
@@ -1070,24 +1079,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ],
               ],
             ),
-          const SizedBox(height: 8),
-          if (isLoading)
-            _buildSkeletonBox(width: 140, height: 12)
-          else ...[
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textMuted,
-                fontSize: 11.5,
-              ),
-            ),
-            if (footerAction != null) ...[
-              const SizedBox(height: 4),
-              footerAction,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isLoading)
+                _buildSkeletonBox(width: 140, height: 12)
+              else ...[
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                    fontSize: 11.5,
+                  ),
+                ),
+                if (footerAction != null) ...[
+                  const SizedBox(height: 4),
+                  footerAction,
+                ],
+              ],
             ],
-          ],
+          ),
         ],
       ),
     );
@@ -1103,11 +1117,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     String? tooltip,
   }) {
     return _StitchCard(
+      height: 135,
       accentColor: AppColors.accentAttendance,
       onTap: onTap,
       tooltip: tooltip,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
@@ -1148,7 +1164,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ),
             ],
           ),
-          const SizedBox(height: 10),
           if (isLoading)
             _buildSkeletonBox(width: 110, height: 28)
           else
@@ -1206,41 +1221,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
               ],
             ),
-          const SizedBox(height: 8),
-          // 6px-high rounded segmented horizontal progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: SizedBox(
-              height: 6,
-              child: Row(
-                children: [
-                  if (presentCount > 0)
-                    Expanded(
-                      flex: presentCount,
-                      child: Container(color: AppColors.statusSuccessText),
-                    ),
-                  if (absentCount > 0)
-                    Expanded(
-                      flex: absentCount,
-                      child: Container(color: AppColors.statusErrorText),
-                    ),
-                  if (presentCount == 0 && absentCount == 0)
-                    Expanded(
-                      child: Container(color: AppColors.surfaceSubtle),
-                    ),
-                ],
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: SizedBox(
+                  height: 6,
+                  child: Row(
+                    children: [
+                      if (presentCount > 0)
+                        Expanded(
+                          flex: presentCount,
+                          child: Container(color: AppColors.statusSuccessText),
+                        ),
+                      if (absentCount > 0)
+                        Expanded(
+                          flex: absentCount,
+                          child: Container(color: AppColors.statusErrorText),
+                        ),
+                      if (presentCount == 0 && absentCount == 0)
+                        Expanded(
+                          child: Container(color: AppColors.surfaceSubtle),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '$presentCount / $totalCount Present',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textMuted,
-              fontSize: 11.5,
-            ),
+              const SizedBox(height: 6),
+              Text(
+                '$presentCount / $totalCount Present',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 11.5,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -1644,13 +1663,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           const handleWidth = 12.0;
           final available = constraints.maxWidth - handleWidth;
           if (available < 760) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: recentPayments),
-                const SizedBox(width: handleWidth),
-                Expanded(child: classStrength),
-              ],
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: recentPayments),
+                  const SizedBox(width: handleWidth),
+                  Expanded(child: classStrength),
+                ],
+              ),
             );
           }
 
@@ -1658,27 +1679,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               .clamp(available * _minSplitRatio, available * _maxSplitRatio)
               .toDouble();
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(width: leftWidth, child: recentPayments),
-              _SplitHandle(
-                key: const ValueKey('dashboard-split-handle'),
-                onDrag: (delta) {
-                  if (!mounted) return;
-                  setState(() {
-                    _splitRatio = (_splitRatio + delta / available)
-                        .clamp(_minSplitRatio, _maxSplitRatio)
-                        .toDouble();
-                  });
-                },
-                onReset: () {
-                  if (!mounted) return;
-                  setState(() => _splitRatio = _defaultSplitRatio);
-                },
-              ),
-              Expanded(child: classStrength),
-            ],
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(width: leftWidth, child: recentPayments),
+                _SplitHandle(
+                  key: const ValueKey('dashboard-split-handle'),
+                  onDrag: (delta) {
+                    if (!mounted) return;
+                    setState(() {
+                      _splitRatio = (_splitRatio + delta / available)
+                          .clamp(_minSplitRatio, _maxSplitRatio)
+                          .toDouble();
+                    });
+                  },
+                  onReset: () {
+                    if (!mounted) return;
+                    setState(() => _splitRatio = _defaultSplitRatio);
+                  },
+                ),
+                Expanded(child: classStrength),
+              ],
+            ),
           );
         },
       ),
@@ -2232,12 +2255,14 @@ class _StitchCard extends StatefulWidget {
     required this.child,
     this.onTap,
     this.tooltip,
+    this.height,
   });
 
   final Color accentColor;
   final Widget child;
   final VoidCallback? onTap;
   final String? tooltip;
+  final double? height;
 
   @override
   State<_StitchCard> createState() => _StitchCardState();
@@ -2253,10 +2278,27 @@ class _StitchCardState extends State<_StitchCard> {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     final lifted = _hovered && _interactive && !reduceMotion;
 
+    final innerRow = Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          width: 3.5,
+          color: widget.accentColor,
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: widget.child,
+          ),
+        ),
+      ],
+    );
+
     Widget card = AnimatedContainer(
       duration: reduceMotion ? Duration.zero : AppDuration.fast,
       curve: Curves.easeOutCubic,
       transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
+      height: widget.height,
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -2273,23 +2315,9 @@ class _StitchCardState extends State<_StitchCard> {
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadius.lg - 1),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 3.5,
-                color: widget.accentColor,
-              ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: widget.child,
-                ),
-              ),
-            ],
-          ),
-        ),
+        child: widget.height != null
+            ? innerRow
+            : IntrinsicHeight(child: innerRow),
       ),
     );
 
