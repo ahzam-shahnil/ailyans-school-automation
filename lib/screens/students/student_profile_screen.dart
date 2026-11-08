@@ -17,6 +17,8 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/photo_picker.dart';
 import '../../models/student.dart';
+import '../../models/student_enrollment.dart';
+import '../../models/student_voucher.dart';
 import '../../repositories/photo_repository.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
@@ -434,31 +436,66 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             autofocus: true,
             child: Material(
               color: AppColors.surface,
-              child: Container(
-                color: AppColors.surface,
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Breadcrumb Bar
-                    _buildBreadcrumb(bundle.student, activeTab, isEditMode),
-                    const SizedBox(height: AppSpacing.md),
+              child: ResponsiveBreakpoints.isMobile(context)
+                  ? SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Breadcrumb Bar
+                          _buildBreadcrumb(
+                            bundle.student,
+                            activeTab,
+                            isEditMode,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
 
-                    // Top Hero Profile Card
-                    _buildHeroCard(bundle, isEditMode, canEditBiodata),
-                    const SizedBox(height: AppSpacing.md),
+                          // Top Hero Profile Card
+                          _buildHeroCard(bundle, isEditMode, canEditBiodata),
+                          const SizedBox(height: AppSpacing.md),
 
-                    // Tab Switcher
-                    _buildTabBar(activeTab),
-                    const SizedBox(height: AppSpacing.md),
+                          // Tab Switcher
+                          _buildTabBar(activeTab),
+                          const SizedBox(height: AppSpacing.md),
 
-                    // Tab Canvas (Expanded)
-                    Expanded(
-                      child: _buildTabContent(bundle, activeTab, isEditMode),
+                          // Tab Canvas
+                          _buildTabContent(bundle, activeTab, isEditMode),
+                        ],
+                      ),
+                    )
+                  : Container(
+                      color: AppColors.surface,
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Breadcrumb Bar
+                          _buildBreadcrumb(
+                            bundle.student,
+                            activeTab,
+                            isEditMode,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+
+                          // Top Hero Profile Card
+                          _buildHeroCard(bundle, isEditMode, canEditBiodata),
+                          const SizedBox(height: AppSpacing.md),
+
+                          // Tab Switcher
+                          _buildTabBar(activeTab),
+                          const SizedBox(height: AppSpacing.md),
+
+                          // Tab Canvas (Expanded)
+                          Expanded(
+                            child: _buildTabContent(
+                              bundle,
+                              activeTab,
+                              isEditMode,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-              ),
             ),
           ),
         );
@@ -939,13 +976,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final data = await buildBiodataPrintData(stuId, ref);
     if (!mounted) return;
     final safeBranchName =
-        (meta?.branchName != null &&
-            meta!.branchName.trim().isNotEmpty)
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
         : "Ailyans's Higher Secondary School Mianwali";
     final safeBranchAddress =
-        (meta?.branchAddress != null &&
-            meta!.branchAddress.trim().isNotEmpty)
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
         : 'Muslim Bazar Mianwali';
     await ReportPreviewModal.show(
@@ -962,7 +997,6 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         },
       ),
     );
-
   }
 
   Future<void> _withdrawStudent(Student student) async {
@@ -995,15 +1029,12 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     if (confirmed == true && mounted) {
       final fromOrigin = () {
         try {
-          return GoRouterState.of(context)
-              .uri
-              .queryParameters['from'];
+          return GoRouterState.of(context).uri.queryParameters['from'];
         } catch (_) {
           return null;
         }
       }();
-      final currentProfileUrl =
-          fromOrigin != null && fromOrigin.isNotEmpty
+      final currentProfileUrl = fromOrigin != null && fromOrigin.isNotEmpty
           ? '/students/${widget.studentId}?from=${Uri.encodeComponent(fromOrigin)}'
           : '/students/${widget.studentId}';
       context.go(
@@ -1011,7 +1042,6 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         '&from=${Uri.encodeComponent(currentProfileUrl)}',
       );
     }
-
   }
 
   Widget _buildMobileHeroCard(
@@ -1453,27 +1483,67 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               ),
             ),
 
-          // Scrollable Sections
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+          // Sections (scrollable on desktop; unconstrained on mobile since outer body scrolls)
+          if (ResponsiveBreakpoints.isMobile(context))
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (isEditMode) ...[
-                    _buildOverviewEditForm(bundle.student),
-                  ] else ...[
+                  if (isEditMode)
+                    _buildOverviewEditForm(bundle.student)
+                  else
                     _buildOverviewViewGrid(bundle.student, bundle),
-                  ],
                 ],
               ),
+            )
+          else
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isEditMode) ...[
+                      _buildOverviewEditForm(bundle.student),
+                    ] else ...[
+                      _buildOverviewViewGrid(bundle.student, bundle),
+                    ],
+                  ],
+                ),
+              ),
             ),
-          ),
 
           // Sticky Bottom Bar
           _buildOverviewBottomBar(bundle.student, isEditMode),
         ],
       ),
+    );
+  }
+
+  Widget _responsiveFieldRow(List<Widget> children, {List<int>? flexes}) {
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i > 0) const SizedBox(height: AppSpacing.md),
+            children[i],
+          ],
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (int i = 0; i < children.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            flex: flexes != null && i < flexes.length ? flexes[i] : 1,
+            child: children[i],
+          ),
+        ],
+      ],
     );
   }
 
@@ -1487,69 +1557,29 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           Icons.badge_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: _buildViewField('First Name', student.nameFirst)),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Middle Name (Optional)',
-                student.nameMiddle ?? '—',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField('Last Name', student.nameLast ?? '—'),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildViewField('First Name', student.nameFirst),
+          _buildViewField('Middle Name (Optional)', student.nameMiddle ?? '—'),
+          _buildViewField('Last Name', student.nameLast ?? '—'),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField('Date of Birth', student.formattedDob),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(child: _buildViewField('Gender', student.sex ?? 'Male')),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Student B-Form / Bay-Form No.',
-                student.bFormNo ?? '—',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildViewField('Date of Birth', student.formattedDob),
+          _buildViewField('Gender', student.sex ?? 'Male'),
+          _buildViewField(
+            'Student B-Form / Bay-Form No.',
+            student.bFormNo ?? '—',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField(
-                'Nationality',
-                student.nationality ?? 'Pakistani',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Religion / Community',
-                student.religion ?? 'Islam',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Blood Group',
-                student.docsDetail?.isNotEmpty == true
-                    ? student.docsDetail!
-                    : 'B+',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildViewField('Nationality', student.nationality ?? 'Pakistani'),
+          _buildViewField('Religion / Community', student.religion ?? 'Islam'),
+          _buildViewField(
+            'Blood Group',
+            student.docsDetail?.isNotEmpty == true ? student.docsDetail! : 'B+',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.xl),
 
         // Section 2: Guardian & Family Details
@@ -1558,54 +1588,20 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           Icons.family_restroom_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField(
-                'Father / Guardian Name',
-                student.fName ?? '—',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField('Father CNIC', student.cnicNo ?? '—'),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Occupation / Profession',
-                student.occupation ?? '—',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildViewField('Father / Guardian Name', student.fName ?? '—'),
+          _buildViewField('Father CNIC', student.cnicNo ?? '—'),
+          _buildViewField('Occupation / Profession', student.occupation ?? '—'),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField(
-                'Previous School Attended',
-                student.pSchool ?? '—',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Previous Class Attended',
-                student.pClass ?? '—',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'School Leaving Certificate (SLC)',
-                student.slCertificate ?? '—',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildViewField('Previous School Attended', student.pSchool ?? '—'),
+          _buildViewField('Previous Class Attended', student.pClass ?? '—'),
+          _buildViewField(
+            'School Leaving Certificate (SLC)',
+            student.slCertificate ?? '—',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.xl),
 
         // Section 3: Contact & Address Specifications
@@ -1614,74 +1610,51 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           Icons.contact_phone_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField(
-                'Primary Mobile 1 (SMS Alert)',
-                student.mobile1 ?? '—',
-                trailing: InkWell(
-                  onTap: () {
-                    if (student.mobile1 != null &&
-                        student.mobile1!.isNotEmpty) {
-                      Clipboard.setData(ClipboardData(text: student.mobile1!));
-                      _showSnackBar('Copied to clipboard');
-                    }
-                  },
-                  child: const Padding(
-                    padding: EdgeInsets.only(left: 6),
-                    child: Icon(
-                      Icons.copy_rounded,
-                      size: 14,
-                      color: AppColors.brandPrimary,
-                    ),
-                  ),
+        _responsiveFieldRow([
+          _buildViewField(
+            'Primary Mobile 1 (SMS Alert)',
+            student.mobile1 ?? '—',
+            trailing: InkWell(
+              onTap: () {
+                if (student.mobile1 != null && student.mobile1!.isNotEmpty) {
+                  Clipboard.setData(ClipboardData(text: student.mobile1!));
+                  _showSnackBar('Copied to clipboard');
+                }
+              },
+              child: const Padding(
+                padding: EdgeInsets.only(left: 6),
+                child: Icon(
+                  Icons.copy_rounded,
+                  size: 14,
+                  color: AppColors.brandPrimary,
                 ),
               ),
             ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Secondary Mobile 2 (Landline / WhatsApp)',
-                student.mobile2 ?? '—',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Emergency Contact Person',
-                student.emerContName ?? '—',
-              ),
-            ),
-          ],
-        ),
+          ),
+          _buildViewField(
+            'Secondary Mobile 2 (Landline / WhatsApp)',
+            student.mobile2 ?? '—',
+          ),
+          _buildViewField(
+            'Emergency Contact Person',
+            student.emerContName ?? '—',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField(
-                'Emergency Contact Mobile',
-                student.emerContMobile ?? '—',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Permanent Residential Address',
-                student.pAddress ?? '—',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Present Mailing Address',
-                student.tAddress ?? 'Same as permanent',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildViewField(
+            'Emergency Contact Mobile',
+            student.emerContMobile ?? '—',
+          ),
+          _buildViewField(
+            'Permanent Residential Address',
+            student.pAddress ?? '—',
+          ),
+          _buildViewField(
+            'Present Mailing Address',
+            student.tAddress ?? 'Same as permanent',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.xl),
 
         // Section 4: Academic Placement & Fee Concessions
@@ -1690,98 +1663,69 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           Icons.school_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField(
-                'Admitted In Class',
-                'Class ${student.admInClass ?? student.admClass ?? 13}',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Current Enrolled Class',
-                bundle.isEnrolled
-                    ? 'Class ${bundle.currentClassName}-${bundle.currentSectionName}'
-                    : 'Not Enrolled',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Date of Initial Admission',
-                student.formattedDoAdmission,
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildViewField(
+            'Admitted In Class',
+            'Class ${student.admInClass ?? student.admClass ?? 13}',
+          ),
+          _buildViewField(
+            'Current Enrolled Class',
+            bundle.isEnrolled
+                ? 'Class ${bundle.currentClassName}-${bundle.currentSectionName}'
+                : 'Not Enrolled',
+          ),
+          _buildViewField(
+            'Date of Initial Admission',
+            student.formattedDoAdmission,
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField(
-                'Monthly Tuition Concession',
-                'Rs. ${student.discount != null ? student.discount!.toStringAsFixed(2) : "0.00"}',
+        _responsiveFieldRow([
+          _buildViewField(
+            'Monthly Tuition Concession',
+            'Rs. ${student.discount != null ? student.discount!.toStringAsFixed(2) : "0.00"}',
+          ),
+          _buildViewField(
+            'Voucher Adjustment Concession',
+            'Rs. ${student.vmDiscount != null ? student.vmDiscount!.toString() : "0.00"}',
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildViewField(
+                'Full Fee Waiver',
+                student.fullDiscount == 1 ? 'Yes (100% Full Concession)' : 'No',
               ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: _buildViewField(
-                'Voucher Adjustment Concession',
-                'Rs. ${student.vmDiscount != null ? student.vmDiscount!.toString() : "0.00"}',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildViewField(
-                    'Full Fee Waiver',
-                    student.fullDiscount == 1
-                        ? 'Yes (100% Full Concession)'
-                        : 'No',
+              if (student.fullDiscount == 1) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
                   ),
-                  if (student.fullDiscount == 1) ...[
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.statusInfoBg,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        border: Border.all(color: AppColors.statusInfoBorder),
-                      ),
-                      child: Text(
-                        '100% fee waiver — no vouchers will be generated for this student.',
-                        style: AppTypography.monospace
-                            .copyWith(fontSize: 11)
-                            .copyWith(color: AppColors.statusInfoText),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
+                  decoration: BoxDecoration(
+                    color: AppColors.statusInfoBg,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    border: Border.all(color: AppColors.statusInfoBorder),
+                  ),
+                  child: Text(
+                    '100% fee waiver — no vouchers will be generated for this student.',
+                    style: AppTypography.monospace
+                        .copyWith(fontSize: 11)
+                        .copyWith(color: AppColors.statusInfoText),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildViewField(
-                'Administrative Remarks & Admission Notes',
-                student.remarls ?? '—',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildViewField(
+            'Administrative Remarks & Admission Notes',
+            student.remarls ?? '—',
+          ),
+        ]),
       ],
     );
   }
@@ -1855,95 +1799,62 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           Icons.badge_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildFormField(
-                label: 'First Name *',
-                controller: _firstNameController,
-                focusNode: _firstNameFocus,
-                hintText: 'e.g. Muhammad',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Middle Name (Optional)',
-                controller: _middleNameController,
-                hintText: 'e.g. Ali',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Last Name',
-                controller: _lastNameController,
-                hintText: 'e.g. Khan',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildFormField(
+            label: 'First Name *',
+            controller: _firstNameController,
+            focusNode: _firstNameFocus,
+            hintText: 'e.g. Muhammad',
+          ),
+          _buildFormField(
+            label: 'Middle Name (Optional)',
+            controller: _middleNameController,
+            hintText: 'e.g. Ali',
+          ),
+          _buildFormField(
+            label: 'Last Name',
+            controller: _lastNameController,
+            hintText: 'e.g. Khan',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildDatePickerField(
-                label: 'Date of Birth *',
-                value: _selectedDob,
-                onSelected: (date) => setState(() => _selectedDob = date),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildDropdownField<String>(
-                label: 'Gender *',
-                value: _selectedSex,
-                items: const ['Male', 'Female'],
-                onChanged: (val) => setState(() => _selectedSex = val),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Student B-Form / Bay-Form No.',
-                controller: _bFormController,
-                hintText: '38302-XXXXXXX-X',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildDatePickerField(
+            label: 'Date of Birth *',
+            value: _selectedDob,
+            onSelected: (date) => setState(() => _selectedDob = date),
+          ),
+          _buildDropdownField<String>(
+            label: 'Gender *',
+            value: _selectedSex,
+            items: const ['Male', 'Female'],
+            onChanged: (val) => setState(() => _selectedSex = val),
+          ),
+          _buildFormField(
+            label: 'Student B-Form / Bay-Form No.',
+            controller: _bFormController,
+            hintText: '38302-XXXXXXX-X',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildFormField(
-                label: 'Nationality',
-                controller: _nationalityController,
-                hintText: 'Pakistani',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildDropdownField<String>(
-                label: 'Religion / Community',
-                value: _selectedReligion,
-                items: const ['Islam', 'Christianity', 'Hinduism', 'Other'],
-                onChanged: (val) => setState(() => _selectedReligion = val),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Blood Group',
-                controller: TextEditingController(text: 'B+'),
-                hintText: 'B+',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildFormField(
+            label: 'Nationality',
+            controller: _nationalityController,
+            hintText: 'Pakistani',
+          ),
+          _buildDropdownField<String>(
+            label: 'Religion / Community',
+            value: _selectedReligion,
+            items: const ['Islam', 'Christianity', 'Hinduism', 'Other'],
+            onChanged: (val) => setState(() => _selectedReligion = val),
+          ),
+          _buildFormField(
+            label: 'Blood Group',
+            controller: TextEditingController(text: 'B+'),
+            hintText: 'B+',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.xl),
 
         // Section 2
@@ -1952,65 +1863,43 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           Icons.family_restroom_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildFormField(
-                label: 'Father / Guardian Name *',
-                controller: _fatherNameController,
-                focusNode: _fatherNameFocus,
-                hintText: 'Father full name',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Father CNIC *',
-                controller: _cnicController,
-                focusNode: _cnicFocus,
-                hintText: '38302-XXXXXXX-X',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Occupation / Profession',
-                controller: _occupationController,
-                hintText: 'e.g. Civil Engineer',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildFormField(
+            label: 'Father / Guardian Name *',
+            controller: _fatherNameController,
+            focusNode: _fatherNameFocus,
+            hintText: 'Father full name',
+          ),
+          _buildFormField(
+            label: 'Father CNIC *',
+            controller: _cnicController,
+            focusNode: _cnicFocus,
+            hintText: '38302-XXXXXXX-X',
+          ),
+          _buildFormField(
+            label: 'Occupation / Profession',
+            controller: _occupationController,
+            hintText: 'e.g. Civil Engineer',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildFormField(
-                label: 'Previous School Attended',
-                controller: _pSchoolController,
-                hintText: 'Previous school name',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Previous Class Attended',
-                controller: _pClassController,
-                hintText: 'e.g. Class 9',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'School Leaving Certificate (SLC)',
-                controller: _slCertificateController,
-                hintText: 'Certificate reference',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildFormField(
+            label: 'Previous School Attended',
+            controller: _pSchoolController,
+            hintText: 'Previous school name',
+          ),
+          _buildFormField(
+            label: 'Previous Class Attended',
+            controller: _pClassController,
+            hintText: 'e.g. Class 9',
+          ),
+          _buildFormField(
+            label: 'School Leaving Certificate (SLC)',
+            controller: _slCertificateController,
+            hintText: 'Certificate reference',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.xl),
 
         // Section 3
@@ -2019,97 +1908,75 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           Icons.contact_phone_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildFormField(
-                label: 'Primary Mobile 1 (SMS Alert) *',
-                controller: _mobile1Controller,
-                focusNode: _mobile1Focus,
-                hintText: '0300-XXXXXXX',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Secondary Mobile 2',
-                controller: _mobile2Controller,
-                hintText: '0321-XXXXXXX',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Emergency Contact Person',
-                controller: _emerContNameController,
-                hintText: 'Name & relation',
-              ),
-            ),
-          ],
-        ),
+        _responsiveFieldRow([
+          _buildFormField(
+            label: 'Primary Mobile 1 (SMS Alert) *',
+            controller: _mobile1Controller,
+            focusNode: _mobile1Focus,
+            hintText: '0300-XXXXXXX',
+          ),
+          _buildFormField(
+            label: 'Secondary Mobile 2',
+            controller: _mobile2Controller,
+            hintText: '0321-XXXXXXX',
+          ),
+          _buildFormField(
+            label: 'Emergency Contact Person',
+            controller: _emerContNameController,
+            hintText: 'Name & relation',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildFormField(
-                label: 'Emergency Contact Mobile',
-                controller: _emerContMobileController,
-                hintText: '0345-XXXXXXX',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Permanent Residential Address',
-                controller: _pAddressController,
-                hintText: 'Permanent street address, city',
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        _responsiveFieldRow([
+          _buildFormField(
+            label: 'Emergency Contact Mobile',
+            controller: _emerContMobileController,
+            hintText: '0345-XXXXXXX',
+          ),
+          _buildFormField(
+            label: 'Permanent Residential Address',
+            controller: _pAddressController,
+            hintText: 'Permanent street address, city',
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'Present Mailing Address',
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.label.copyWith(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
+                  Flexible(
+                    child: Text(
+                      'Present Mailing Address',
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
                       ),
-                      InkWell(
-                        onTap: () {
-                          _tAddressController.text = _pAddressController.text;
-                        },
-                        child: Text(
-                          'Copy Permanent',
-                          style: AppTypography.label.copyWith(
-                            color: AppColors.brandPrimary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  _buildFormField(
-                    label: '',
-                    controller: _tAddressController,
-                    hintText: 'Mailing address',
+                  InkWell(
+                    onTap: () {
+                      _tAddressController.text = _pAddressController.text;
+                    },
+                    child: Text(
+                      'Copy Permanent',
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.brandPrimary,
+                        fontSize: 11,
+                      ),
+                    ),
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
+              const SizedBox(height: 6),
+              _buildFormField(
+                label: '',
+                controller: _tAddressController,
+                hintText: 'Mailing address',
+              ),
+            ],
+          ),
+        ]),
         const SizedBox(height: AppSpacing.xl),
 
         // Section 4
@@ -2118,115 +1985,90 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           Icons.school_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: classesAsync.when(
-                loading: () => const SizedBox(
-                  height: 40,
-                  child: LinearProgressIndicator(),
-                ),
-                error: (_, __) => const Text(
-                  'Error loading classes',
-                  style: AppTypography.bodySmall,
-                ),
-                data: (classes) => _buildDropdownField<int>(
-                  label: 'Admitted In Class *',
-                  value: _selectedAdmInClass,
-                  items: classes.map((c) => c.classId).toList(),
-                  itemLabel: (id) =>
-                      classes.firstWhere((c) => c.classId == id).cName,
-                  onChanged: (val) => setState(() => _selectedAdmInClass = val),
-                ),
-              ),
+        _responsiveFieldRow([
+          classesAsync.when(
+            loading: () =>
+                const SizedBox(height: 40, child: LinearProgressIndicator()),
+            error: (_, __) => const Text(
+              'Error loading classes',
+              style: AppTypography.bodySmall,
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildDatePickerField(
-                label: 'Date of Initial Admission',
-                value: _selectedDoAdmission,
-                onSelected: (date) =>
-                    setState(() => _selectedDoAdmission = date),
-              ),
+            data: (classes) => _buildDropdownField<int>(
+              label: 'Admitted In Class *',
+              value: _selectedAdmInClass,
+              items: classes.map((c) => c.classId).toList(),
+              itemLabel: (id) =>
+                  classes.firstWhere((c) => c.classId == id).cName,
+              onChanged: (val) => setState(() => _selectedAdmInClass = val),
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Monthly Tuition Concession (Rs.)',
-                controller: _discountController,
-                hintText: '0.00',
-              ),
-            ),
-          ],
-        ),
+          ),
+          _buildDatePickerField(
+            label: 'Date of Initial Admission',
+            value: _selectedDoAdmission,
+            onSelected: (date) => setState(() => _selectedDoAdmission = date),
+          ),
+          _buildFormField(
+            label: 'Monthly Tuition Concession (Rs.)',
+            controller: _discountController,
+            hintText: '0.00',
+          ),
+        ]),
         const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildFormField(
-                label: 'Voucher Adjustment Concession (Rs.)',
-                controller: _vmDiscountController,
-                hintText: '0',
+        _responsiveFieldRow([
+          _buildFormField(
+            label: 'Voucher Adjustment Concession (Rs.)',
+            controller: _vmDiscountController,
+            hintText: '0',
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Full Fee Waiver',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 6),
+              Row(
                 children: [
+                  Checkbox(
+                    value: _fullDiscount == 1,
+                    activeColor: AppColors.brandPrimary,
+                    onChanged: (val) {
+                      setState(() {
+                        _fullDiscount = (val ?? false) ? 1 : 0;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 6),
                   Text(
-                    'Full Fee Waiver',
-                    style: AppTypography.label.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
+                    '100% Full Fee Concession',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: _fullDiscount == 1,
-                        activeColor: AppColors.brandPrimary,
-                        onChanged: (val) {
-                          setState(() {
-                            _fullDiscount = (val ?? false) ? 1 : 0;
-                          });
-                        },
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '100% Full Fee Concession',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_fullDiscount == 1) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '100% fee waiver — no vouchers will be generated for this student.',
-                      style: AppTypography.monospace
-                          .copyWith(fontSize: 11)
-                          .copyWith(color: AppColors.statusInfoText),
-                    ),
-                  ],
                 ],
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildFormField(
-                label: 'Administrative Remarks',
-                controller: _remarksController,
-                hintText: 'Notes / transfer info',
-              ),
-            ),
-          ],
-        ),
+              if (_fullDiscount == 1) ...[
+                const SizedBox(height: 4),
+                Text(
+                  '100% fee waiver — no vouchers will be generated for this student.',
+                  style: AppTypography.monospace
+                      .copyWith(fontSize: 11)
+                      .copyWith(color: AppColors.statusInfoText),
+                ),
+              ],
+            ],
+          ),
+          _buildFormField(
+            label: 'Administrative Remarks',
+            controller: _remarksController,
+            hintText: 'Notes / transfer info',
+          ),
+        ]),
       ],
     );
   }
@@ -2484,9 +2326,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                           label: const Text('Edit Profile'),
                           onPressed: () {
                             _populateForm(student);
-                            ref
-                                    .read(studentEditModeProvider.notifier)
-                                    .state =
+                            ref.read(studentEditModeProvider.notifier).state =
                                 true;
                           },
                         ),
@@ -2600,11 +2440,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 color: AppColors.brandPrimary,
               ),
               const SizedBox(width: 8),
-              Text(
-                'ACADEMIC ENROLLMENT & PROMOTION TIMELINE',
-                style: AppTypography.h3.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.bold,
+              Expanded(
+                child: Text(
+                  'ACADEMIC ENROLLMENT & PROMOTION TIMELINE',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.h3.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
@@ -2631,102 +2475,110 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               title: 'No Enrollment Records',
               subtitle: 'This student has no active or past session enrollments recorded in the database.',
             )
+          else if (ResponsiveBreakpoints.isMobile(context))
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 500),
+                child: _buildEnrollmentTable(enrollments),
+              ),
+            )
           else
             Expanded(
               child: SingleChildScrollView(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.borderDefault),
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                    child: Table(
-                      columnWidths: const {
-                        0: FlexColumnWidth(2.0),
-                        1: FlexColumnWidth(2.5),
-                        2: FlexColumnWidth(1.5),
-                        3: FlexColumnWidth(1.5),
-                        4: FlexColumnWidth(1.5),
-                        5: FlexColumnWidth(2.0),
-                      },
-                      children: [
-                        TableRow(
-                          decoration: const BoxDecoration(
-                            color: AppColors.surfaceSubtle,
-                          ),
-                          children: [
-                            _buildTableHeaderCell('Session Year'),
-                            _buildTableHeaderCell('Class'),
-                            _buildTableHeaderCell('Section'),
-                            _buildTableHeaderCell('Roll No'),
-                            _buildTableHeaderCell('Present'),
-                            _buildTableHeaderCell('Promotion Date'),
-                          ],
-                        ),
-                        ...enrollments.map((e) {
-                          return TableRow(
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                top: BorderSide(color: AppColors.borderDefault),
-                              ),
-                            ),
-                            children: [
-                              _buildTableCell(e.sessionYr, isBold: true),
-                              _buildTableCell(e.className),
-                              _buildTableCell(e.sectionName),
-                              _buildTableCell('${e.classRollNo}', isMono: true),
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: e.isActive
-                                            ? AppColors.statusSuccessBg
-                                            : AppColors.surfaceSubtle,
-                                        borderRadius: BorderRadius.circular(
-                                          AppRadius.sm,
-                                        ),
-                                        border: Border.all(
-                                          color: e.isActive
-                                              ? AppColors.statusSuccessBorder
-                                              : AppColors.borderDefault,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        e.isActive ? 'Active ✓' : 'Left',
-                                        style: AppTypography.monospace
-                                            .copyWith(fontSize: 11)
-                                            .copyWith(
-                                              color: e.isActive
-                                                  ? AppColors.statusSuccessText
-                                                  : AppColors.textSecondary,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              _buildTableCell(e.formattedPromotionDate),
-                            ],
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                ),
+                child: _buildEnrollmentTable(enrollments),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEnrollmentTable(List<StudentEnrollment> enrollments) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.borderDefault),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Table(
+          columnWidths: const {
+            0: FlexColumnWidth(2.0),
+            1: FlexColumnWidth(2.5),
+            2: FlexColumnWidth(1.5),
+            3: FlexColumnWidth(1.5),
+            4: FlexColumnWidth(1.5),
+            5: FlexColumnWidth(2.0),
+          },
+          children: [
+            TableRow(
+              decoration: const BoxDecoration(color: AppColors.surfaceSubtle),
+              children: [
+                _buildTableHeaderCell('Session Year'),
+                _buildTableHeaderCell('Class'),
+                _buildTableHeaderCell('Section'),
+                _buildTableHeaderCell('Roll No'),
+                _buildTableHeaderCell('Present'),
+                _buildTableHeaderCell('Promotion Date'),
+              ],
+            ),
+            ...enrollments.map((e) {
+              return TableRow(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: AppColors.borderDefault),
+                  ),
+                ),
+                children: [
+                  _buildTableCell(e.sessionYr, isBold: true),
+                  _buildTableCell(e.className),
+                  _buildTableCell(e.sectionName),
+                  _buildTableCell('${e.classRollNo}', isMono: true),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: e.isActive
+                                ? AppColors.statusSuccessBg
+                                : AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                            border: Border.all(
+                              color: e.isActive
+                                  ? AppColors.statusSuccessBorder
+                                  : AppColors.borderDefault,
+                            ),
+                          ),
+                          child: Text(
+                            e.isActive ? 'Active ✓' : 'Left',
+                            style: AppTypography.monospace
+                                .copyWith(fontSize: 11)
+                                .copyWith(
+                                  color: e.isActive
+                                      ? AppColors.statusSuccessText
+                                      : AppColors.textSecondary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildTableCell(e.formattedPromotionDate),
+                ],
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -2744,409 +2596,415 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         : 100;
 
     final currencyFormat = NumberFormat('#,##0');
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
 
-    return Column(
+    final kpiCards = [
+      _buildKpiCard(
+        title: 'TOTAL BILLED (2017-2018 SESSION)',
+        value: 'Rs. ${currencyFormat.format(totalBilled)}',
+        subtitle:
+            '${vouchers.length} Regular Voucher${vouchers.length == 1 ? "" : "s"} Generated',
+        icon: Icons.receipt_long_outlined,
+      ),
+      _buildKpiCard(
+        title: 'TOTAL PAID TO DATE',
+        value: 'Rs. ${currencyFormat.format(totalPaid)}',
+        valueColor: AppColors.statusSuccessText,
+        subtitle: '$realizationRate% Realization Rate',
+        icon: Icons.check_circle_outline,
+      ),
+      _buildKpiCard(
+        title: 'OUTSTANDING ARREARS',
+        value: 'Rs. ${currencyFormat.format(outstanding)}',
+        valueColor: outstanding > 0
+            ? AppColors.statusErrorText
+            : AppColors.textPrimary,
+        subtitle: outstanding <= 0
+            ? 'No pending fines or dues'
+            : 'Action Required',
+        badgeText: outstanding <= 0 ? 'ALL CLEARED' : 'PENDING DUES',
+        badgeColor: outstanding <= 0
+            ? AppColors.statusSuccessText
+            : AppColors.statusErrorText,
+        badgeBg: outstanding <= 0
+            ? AppColors.statusSuccessBg
+            : AppColors.statusErrorBg,
+        icon: Icons.account_balance_wallet_outlined,
+      ),
+    ];
+
+    final kpiSection = isMobile
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < kpiCards.length; i++) ...[
+                if (i > 0) const SizedBox(height: AppSpacing.sm),
+                kpiCards[i],
+              ],
+            ],
+          )
+        : Row(
+            children: [
+              for (int i = 0; i < kpiCards.length; i++) ...[
+                if (i > 0) const SizedBox(width: AppSpacing.md),
+                Expanded(child: kpiCards[i]),
+              ],
+            ],
+          );
+
+    final voucherHeader = Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      alignment: WrapAlignment.spaceBetween,
+      spacing: 8,
+      runSpacing: 8,
       children: [
-        // 3 KPI Cards Row
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: _buildKpiCard(
-                title: 'TOTAL BILLED (2017-2018 SESSION)',
-                value: 'Rs. ${currencyFormat.format(totalBilled)}',
-                subtitle:
-                    '${vouchers.length} Regular Voucher${vouchers.length == 1 ? "" : "s"} Generated',
-                icon: Icons.receipt_long_outlined,
+            const Icon(
+              Icons.table_chart_outlined,
+              size: 18,
+              color: AppColors.brandPrimary,
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'OFFICIAL VOUCHER ISSUANCE & PAYMENT LEDGER',
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
             ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildKpiCard(
-                title: 'TOTAL PAID TO DATE',
-                value: 'Rs. ${currencyFormat.format(totalPaid)}',
-                valueColor: AppColors.statusSuccessText,
-                subtitle: '$realizationRate% Realization Rate',
-                icon: Icons.check_circle_outline,
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSubtle,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.borderDefault),
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildKpiCard(
-                title: 'OUTSTANDING ARREARS',
-                value: 'Rs. ${currencyFormat.format(outstanding)}',
-                valueColor: outstanding > 0
-                    ? AppColors.statusErrorText
-                    : AppColors.textPrimary,
-                subtitle: outstanding <= 0
-                    ? 'No pending fines or dues'
-                    : 'Action Required',
-                badgeText: outstanding <= 0 ? 'ALL CLEARED' : 'PENDING DUES',
-                badgeColor: outstanding <= 0
-                    ? AppColors.statusSuccessText
-                    : AppColors.statusErrorText,
-                badgeBg: outstanding <= 0
-                    ? AppColors.statusSuccessBg
-                    : AppColors.statusErrorBg,
-                icon: Icons.account_balance_wallet_outlined,
+              child: Text(
+                '${vouchers.length} Records',
+                style: AppTypography.monospace
+                    .copyWith(fontSize: 11)
+                    .copyWith(color: AppColors.textSecondary),
               ),
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
-
-        // Voucher Table Card
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.surfaceRaised,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: AppColors.borderDefault),
-            ),
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header row
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.table_chart_outlined,
-                        size: 18,
-                        color: AppColors.brandPrimary,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          'OFFICIAL VOUCHER ISSUANCE & PAYMENT LEDGER',
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.label.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceSubtle,
-                          borderRadius: BorderRadius.circular(AppRadius.sm),
-                          border: Border.all(color: AppColors.borderDefault),
-                        ),
-                        child: Text(
-                          '${vouchers.length} Records',
-                          style: AppTypography.monospace
-                              .copyWith(fontSize: 11)
-                              .copyWith(color: AppColors.textSecondary),
-                        ),
-                      ),
-                      const Spacer(),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.print_outlined, size: 14),
-                        label: const Text('Print All Vouchers'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          textStyle: AppTypography.label.copyWith(fontSize: 12),
-                        ),
-                        onPressed: () =>
-                            _showSnackBar('Print coming in Phase 2'),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.add, size: 14),
-                        label: const Text('+ Generate Single Voucher'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          textStyle: AppTypography.label.copyWith(fontSize: 12),
-                        ),
-                        onPressed: () => context.go('/fees/vouchers'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-
-                  // Table or Empty state
-                  if (vouchers.isEmpty)
-                    _buildEmptyTabState(
-                      icon: Icons.receipt_long_outlined,
-                      title: 'No vouchers issued yet',
-                      subtitle: 'No monthly tuition or fee vouchers have been created for this student registration.',
-                      buttonLabel: 'Generate Voucher',
-                      onButtonTap: () => context.go('/fees/vouchers'),
-                    )
-                  else
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          border: Border.all(color: AppColors.borderDefault),
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        child: Table(
-                          columnWidths: const {
-                            0: FlexColumnWidth(1.4),
-                            1: FlexColumnWidth(1.5),
-                            2: FlexColumnWidth(1.2),
-                            3: FlexColumnWidth(1.2),
-                            4: FlexColumnWidth(1.3),
-                            5: FlexColumnWidth(1.1),
-                            6: FlexColumnWidth(1.3),
-                            7: FlexColumnWidth(1.2),
-                            8: FlexColumnWidth(1.1),
-                            9: FlexColumnWidth(2.8),
-                          },
-                          children: [
-                            TableRow(
-                              decoration: const BoxDecoration(
-                                color: AppColors.surfaceSubtle,
-                              ),
-                              children: [
-                                _buildTableHeaderCell('VOUCHER ID'),
-                                _buildTableHeaderCell('BILLING MONTH'),
-                                _buildTableHeaderCell('ISSUE DATE'),
-                                _buildTableHeaderCell('DUE DATE'),
-                                _buildTableHeaderCell('TOTAL BILLABLE'),
-                                _buildTableHeaderCell('CONCESSION'),
-                                _buildTableHeaderCell('PAID AMOUNT'),
-                                _buildTableHeaderCell('PAID ON'),
-                                _buildTableHeaderCell('STATUS'),
-                                _buildTableHeaderCell('ACTIONS'),
-                              ],
-                            ),
-                            ...vouchers.map((v) {
-                              final remainingBalance =
-                                  (v.subtotal - v.discount) -
-                                  (v.paidAmount ?? 0);
-                              final isFullyPaid =
-                                  v.isPaid == 'Y' && remainingBalance <= 0;
-                              final canCollect = !isFullyPaid;
-                              final isPaid = isFullyPaid;
-                              return TableRow(
-                                decoration: const BoxDecoration(
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: AppColors.borderDefault,
-                                    ),
-                                  ),
-                                ),
-                                children: [
-                                  _buildTableCell(v.voucherMasId, isMono: true),
-                                  _buildTableCell(v.forMonth, isBold: true),
-                                  _buildTableCell(v.formattedVDate),
-                                  _buildTableCell(v.formattedDueDate),
-                                  _buildTableCell(
-                                    'Rs. ${currencyFormat.format(v.subtotal)}',
-                                    isMono: true,
-                                  ),
-                                  _buildTableCell(
-                                    'Rs. ${currencyFormat.format(v.discount)}',
-                                    isMono: true,
-                                  ),
-                                  _buildTableCell(
-                                    v.paidAmount != null
-                                        ? 'Rs. ${currencyFormat.format(v.paidAmount)}'
-                                        : '—',
-                                    isMono: true,
-                                  ),
-                                  _buildTableCell(v.formattedPaidDate),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 8,
-                                    ),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isPaid
-                                            ? AppColors.statusSuccessBg
-                                            : AppColors.statusErrorBg,
-                                        borderRadius: BorderRadius.circular(
-                                          AppRadius.sm,
-                                        ),
-                                        border: Border.all(
-                                          color: isPaid
-                                              ? AppColors.statusSuccessBorder
-                                              : AppColors.statusErrorBorder,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        v.statusText,
-                                        textAlign: TextAlign.center,
-                                        style: AppTypography.monospace
-                                            .copyWith(fontSize: 11)
-                                            .copyWith(
-                                              color: isPaid
-                                                  ? AppColors.statusSuccessText
-                                                  : AppColors.statusErrorText,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 10,
-                                            ),
-                                      ),
-                                    ),
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 3,
-                                    ),
-                                    child: canCollect
-                                        ? Wrap(
-                                            spacing: 4,
-                                            runSpacing: 2,
-                                            crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            children: [
-                                              ElevatedButton.icon(
-                                                icon: const Icon(
-                                                  Icons.payments_outlined,
-                                                  size: 12,
-                                                ),
-                                                label: const Text(
-                                                  'Collect Fee',
-                                                  style: TextStyle(
-                                                    fontSize: 10.5,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                                style: ElevatedButton.styleFrom(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 6,
-                                                        vertical: 2,
-                                                      ),
-                                                  minimumSize: const Size(
-                                                    0,
-                                                    26,
-                                                  ),
-                                                ),
-                                                onPressed: () {
-                                                  final fromPath =
-                                                      Uri.encodeComponent(
-                                                        '/students/${widget.studentId}',
-                                                      );
-                                                  context.go(
-                                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
-                                                  );
-                                                },
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.visibility_outlined,
-                                                  size: 15,
-                                                  color: AppColors.textMuted,
-                                                ),
-                                                tooltip:
-                                                    'View in Fee Collection',
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                padding: EdgeInsets.zero,
-                                                constraints:
-                                                    const BoxConstraints(
-                                                      minWidth: 26,
-                                                      minHeight: 26,
-                                                    ),
-                                                onPressed: () {
-                                                  final fromPath =
-                                                      Uri.encodeComponent(
-                                                        '/students/${widget.studentId}',
-                                                      );
-                                                  context.go(
-                                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          )
-                                        : Wrap(
-                                            spacing: 4,
-                                            runSpacing: 2,
-                                            crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            children: [
-                                              OutlinedButton.icon(
-                                                icon: const Icon(
-                                                  Icons.print_outlined,
-                                                  size: 12,
-                                                ),
-                                                label: const Text(
-                                                  'Print Receipt',
-                                                  style: TextStyle(
-                                                    fontSize: 10.5,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                                style: OutlinedButton.styleFrom(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 6,
-                                                        vertical: 2,
-                                                      ),
-                                                  minimumSize: const Size(
-                                                    0,
-                                                    26,
-                                                  ),
-                                                ),
-                                                onPressed: () =>
-                                                    _onPrintReceipt(
-                                                      v.voucherMasId,
-                                                    ),
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(
-                                                  Icons.visibility_outlined,
-                                                  size: 15,
-                                                  color: AppColors.textMuted,
-                                                ),
-                                                tooltip:
-                                                    'View in Fee Collection',
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                padding: EdgeInsets.zero,
-                                                constraints:
-                                                    const BoxConstraints(
-                                                      minWidth: 26,
-                                                      minHeight: 26,
-                                                    ),
-                                                onPressed: () {
-                                                  final fromPath =
-                                                      Uri.encodeComponent(
-                                                        '/students/${widget.studentId}',
-                                                      );
-                                                  context.go(
-                                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                  ),
-                                ],
-                              );
-                            }),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
+          children: [
+            OutlinedButton.icon(
+              icon: const Icon(Icons.print_outlined, size: 14),
+              label: const Text('Print All Vouchers'),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                textStyle: AppTypography.label.copyWith(fontSize: 12),
               ),
+              onPressed: () => _showSnackBar('Print coming in Phase 2'),
             ),
-          ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add, size: 14),
+              label: const Text('+ Generate Single Voucher'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                textStyle: AppTypography.label.copyWith(fontSize: 12),
+              ),
+              onPressed: () => context.go('/fees/vouchers'),
+            ),
+          ],
         ),
       ],
+    );
+
+    final tableBody = vouchers.isEmpty
+        ? _buildEmptyTabState(
+            icon: Icons.receipt_long_outlined,
+            title: 'No vouchers issued yet',
+            subtitle: 'No monthly tuition or fee vouchers have been created for this student registration.',
+            buttonLabel: 'Generate Voucher',
+            onButtonTap: () => context.go('/fees/vouchers'),
+          )
+        : isMobile
+        ? SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 900),
+              child: _buildVoucherTable(vouchers, currencyFormat),
+            ),
+          )
+        : _buildVoucherTable(vouchers, currencyFormat);
+
+    final voucherCardContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        voucherHeader,
+        const SizedBox(height: AppSpacing.md),
+        tableBody,
+      ],
+    );
+
+    final voucherCard = Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: isMobile
+          ? voucherCardContent
+          : SingleChildScrollView(child: voucherCardContent),
+    );
+
+    return Column(
+      children: [
+        kpiSection,
+        const SizedBox(height: AppSpacing.md),
+        if (isMobile) voucherCard else Expanded(child: voucherCard),
+      ],
+    );
+  }
+
+  Widget _buildVoucherTable(
+    List<StudentVoucher> vouchers,
+    NumberFormat currencyFormat,
+  ) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.borderDefault),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Table(
+          columnWidths: const {
+            0: FlexColumnWidth(1.4),
+            1: FlexColumnWidth(1.5),
+            2: FlexColumnWidth(1.2),
+            3: FlexColumnWidth(1.2),
+            4: FlexColumnWidth(1.3),
+            5: FlexColumnWidth(1.1),
+            6: FlexColumnWidth(1.3),
+            7: FlexColumnWidth(1.2),
+            8: FlexColumnWidth(1.1),
+            9: FlexColumnWidth(2.8),
+          },
+          children: [
+            TableRow(
+              decoration: const BoxDecoration(color: AppColors.surfaceSubtle),
+              children: [
+                _buildTableHeaderCell('VOUCHER ID'),
+                _buildTableHeaderCell('BILLING MONTH'),
+                _buildTableHeaderCell('ISSUE DATE'),
+                _buildTableHeaderCell('DUE DATE'),
+                _buildTableHeaderCell('TOTAL BILLABLE'),
+                _buildTableHeaderCell('CONCESSION'),
+                _buildTableHeaderCell('PAID AMOUNT'),
+                _buildTableHeaderCell('PAID ON'),
+                _buildTableHeaderCell('STATUS'),
+                _buildTableHeaderCell('ACTIONS'),
+              ],
+            ),
+            ...vouchers.map((v) {
+              final remainingBalance =
+                  (v.subtotal - v.discount) - (v.paidAmount ?? 0);
+              final isFullyPaid = v.isPaid == 'Y' && remainingBalance <= 0;
+              final canCollect = !isFullyPaid;
+              final isPaid = isFullyPaid;
+              return TableRow(
+                decoration: const BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: AppColors.borderDefault),
+                  ),
+                ),
+                children: [
+                  _buildTableCell(v.voucherMasId, isMono: true),
+                  _buildTableCell(v.forMonth, isBold: true),
+                  _buildTableCell(v.formattedVDate),
+                  _buildTableCell(v.formattedDueDate),
+                  _buildTableCell(
+                    'Rs. ${currencyFormat.format(v.subtotal)}',
+                    isMono: true,
+                  ),
+                  _buildTableCell(
+                    'Rs. ${currencyFormat.format(v.discount)}',
+                    isMono: true,
+                  ),
+                  _buildTableCell(
+                    v.paidAmount != null
+                        ? 'Rs. ${currencyFormat.format(v.paidAmount)}'
+                        : '—',
+                    isMono: true,
+                  ),
+                  _buildTableCell(v.formattedPaidDate),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isPaid
+                            ? AppColors.statusSuccessBg
+                            : AppColors.statusErrorBg,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(
+                          color: isPaid
+                              ? AppColors.statusSuccessBorder
+                              : AppColors.statusErrorBorder,
+                        ),
+                      ),
+                      child: Text(
+                        v.statusText,
+                        textAlign: TextAlign.center,
+                        style: AppTypography.monospace
+                            .copyWith(fontSize: 11)
+                            .copyWith(
+                              color: isPaid
+                                  ? AppColors.statusSuccessText
+                                  : AppColors.statusErrorText,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                            ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 3,
+                    ),
+                    child: canCollect
+                        ? Wrap(
+                            spacing: 4,
+                            runSpacing: 2,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              ElevatedButton.icon(
+                                icon: const Icon(
+                                  Icons.payments_outlined,
+                                  size: 12,
+                                ),
+                                label: const Text(
+                                  'Collect Fee',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  minimumSize: const Size(0, 26),
+                                ),
+                                onPressed: () {
+                                  final fromPath = Uri.encodeComponent(
+                                    '/students/${widget.studentId}',
+                                  );
+                                  context.go(
+                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
+                                  );
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.visibility_outlined,
+                                  size: 15,
+                                  color: AppColors.textMuted,
+                                ),
+                                tooltip: 'View in Fee Collection',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 26,
+                                  minHeight: 26,
+                                ),
+                                onPressed: () {
+                                  final fromPath = Uri.encodeComponent(
+                                    '/students/${widget.studentId}',
+                                  );
+                                  context.go(
+                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
+                                  );
+                                },
+                              ),
+                            ],
+                          )
+                        : Wrap(
+                            spacing: 4,
+                            runSpacing: 2,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              OutlinedButton.icon(
+                                icon: const Icon(
+                                  Icons.print_outlined,
+                                  size: 12,
+                                ),
+                                label: const Text(
+                                  'Print Receipt',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  minimumSize: const Size(0, 26),
+                                ),
+                                onPressed: () =>
+                                    _onPrintReceipt(v.voucherMasId),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.visibility_outlined,
+                                  size: 15,
+                                  color: AppColors.textMuted,
+                                ),
+                                tooltip: 'View in Fee Collection',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 26,
+                                  minHeight: 26,
+                                ),
+                                onPressed: () {
+                                  final fromPath = Uri.encodeComponent(
+                                    '/students/${widget.studentId}',
+                                  );
+                                  context.go(
+                                    '/fees/receipts?voucherId=${v.voucherMasId}&studentId=${widget.studentId}&from=$fromPath',
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                  ),
+                ],
+              );
+            }),
+          ],
+        ),
+      ),
     );
   }
 
@@ -3277,8 +3135,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        Expanded(
-          child: Container(
+        if (ResponsiveBreakpoints.isMobile(context))
+          Container(
             decoration: BoxDecoration(
               color: AppColors.surfaceRaised,
               borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -3293,8 +3151,26 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         'Student has not deposited any advance fee credits.',
                   )
                 : const SizedBox.shrink(),
+          )
+        else
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.surfaceRaised,
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                border: Border.all(color: AppColors.borderDefault),
+              ),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: advances.isEmpty
+                  ? _buildEmptyTabState(
+                      icon: Icons.account_balance_wallet_outlined,
+                      title: 'No advance payments recorded',
+                      subtitle:
+                          'Student has not deposited any advance fee credits.',
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -3364,8 +3240,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
                   children: [
                     Text(
                       'MONTHLY ATTENDANCE HEATMAP (OCTOBER 2026)',
@@ -3386,8 +3265,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 const SizedBox(height: AppSpacing.lg),
 
                 // Heatmap Calendar Grid (7 columns x 5 rows)
-                Expanded(
-                  child: Column(
+                if (ResponsiveBreakpoints.isMobile(context))
+                  Column(
                     children: [
                       // Day names header
                       const Row(
@@ -3404,81 +3283,78 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                       ),
                       const SizedBox(height: 8),
                       // 5 Weeks Grid
-                      Expanded(
-                        child: GridView.builder(
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 7,
-                                crossAxisSpacing: 8,
-                                mainAxisSpacing: 8,
-                                childAspectRatio: 1.6,
-                              ),
-                          itemCount: 35,
-                          itemBuilder: (context, index) {
-                            final dayNumber = index + 1;
-                            if (dayNumber > 31) return const SizedBox.shrink();
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 7,
+                              crossAxisSpacing: 6,
+                              mainAxisSpacing: 6,
+                              childAspectRatio: 1.2,
+                            ),
+                        itemCount: 35,
+                        itemBuilder: (context, index) {
+                          final dayNumber = index + 1;
+                          if (dayNumber > 31) {
+                            return const SizedBox.shrink();
+                          }
 
-                            // Seeded attendance or simulation for weekdays
-                            final isWeekend =
-                                (index % 7 == 5) || (index % 7 == 6);
-                            Color cellColor = AppColors.surfaceSubtle;
-                            Color textColor = AppColors.textDisabled;
+                          final isWeekend =
+                              (index % 7 == 5) || (index % 7 == 6);
+                          Color cellColor = AppColors.surfaceSubtle;
+                          Color textColor = AppColors.textDisabled;
 
-                            if (!isWeekend) {
-                              cellColor = AppColors.statusSuccessBg;
-                              textColor = AppColors.statusSuccessText;
-                            }
+                          if (!isWeekend) {
+                            cellColor = AppColors.statusSuccessBg;
+                            textColor = AppColors.statusSuccessText;
+                          }
 
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: cellColor,
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.sm,
-                                ),
-                                border: Border.all(
-                                  color: isWeekend
-                                      ? AppColors.borderDefault
-                                      : AppColors.statusSuccessBorder,
-                                ),
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: cellColor,
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                              border: Border.all(
+                                color: isWeekend
+                                    ? AppColors.borderDefault
+                                    : AppColors.statusSuccessBorder,
                               ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                '$dayNumber',
-                                style: AppTypography.monospace
-                                    .copyWith(fontSize: 11)
-                                    .copyWith(
-                                      color: textColor,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                              ),
-                            );
-                          },
-                        ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$dayNumber',
+                              style: AppTypography.monospace
+                                  .copyWith(fontSize: 11)
+                                  .copyWith(
+                                    color: textColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 12),
                       // Legend
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 12,
+                        runSpacing: 6,
                         children: [
                           _buildLegendDot(
                             AppColors.statusSuccessBg,
                             AppColors.statusSuccessBorder,
                             'Present',
                           ),
-                          const SizedBox(width: 16),
                           _buildLegendDot(
                             AppColors.statusErrorBg,
                             AppColors.statusErrorBorder,
                             'Absent',
                           ),
-                          const SizedBox(width: 16),
                           _buildLegendDot(
                             AppColors.statusWarningBg,
                             AppColors.statusWarningBorder,
                             'Leave',
                           ),
-                          const SizedBox(width: 16),
                           _buildLegendDot(
                             AppColors.surfaceSubtle,
                             AppColors.borderDefault,
@@ -3487,8 +3363,113 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         ],
                       ),
                     ],
+                  )
+                else
+                  Expanded(
+                    child: Column(
+                      children: [
+                        // Day names header
+                        const Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _DayHeader('Mon'),
+                            _DayHeader('Tue'),
+                            _DayHeader('Wed'),
+                            _DayHeader('Thu'),
+                            _DayHeader('Fri'),
+                            _DayHeader('Sat'),
+                            _DayHeader('Sun'),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        // 5 Weeks Grid
+                        Expanded(
+                          child: GridView.builder(
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 7,
+                                  crossAxisSpacing: 8,
+                                  mainAxisSpacing: 8,
+                                  childAspectRatio: 1.6,
+                                ),
+                            itemCount: 35,
+                            itemBuilder: (context, index) {
+                              final dayNumber = index + 1;
+                              if (dayNumber > 31) {
+                                return const SizedBox.shrink();
+                              }
+
+                              // Seeded attendance or simulation for weekdays
+                              final isWeekend =
+                                  (index % 7 == 5) || (index % 7 == 6);
+                              Color cellColor = AppColors.surfaceSubtle;
+                              Color textColor = AppColors.textDisabled;
+
+                              if (!isWeekend) {
+                                cellColor = AppColors.statusSuccessBg;
+                                textColor = AppColors.statusSuccessText;
+                              }
+
+                              return Container(
+                                decoration: BoxDecoration(
+                                  color: cellColor,
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.sm,
+                                  ),
+                                  border: Border.all(
+                                    color: isWeekend
+                                        ? AppColors.borderDefault
+                                        : AppColors.statusSuccessBorder,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  '$dayNumber',
+                                  style: AppTypography.monospace
+                                      .copyWith(fontSize: 11)
+                                      .copyWith(
+                                        color: textColor,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Legend
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            _buildLegendDot(
+                              AppColors.statusSuccessBg,
+                              AppColors.statusSuccessBorder,
+                              'Present',
+                            ),
+                            const SizedBox(width: 16),
+                            _buildLegendDot(
+                              AppColors.statusErrorBg,
+                              AppColors.statusErrorBorder,
+                              'Absent',
+                            ),
+                            const SizedBox(width: 16),
+                            _buildLegendDot(
+                              AppColors.statusWarningBg,
+                              AppColors.statusWarningBorder,
+                              'Leave',
+                            ),
+                            const SizedBox(width: 16),
+                            _buildLegendDot(
+                              AppColors.surfaceSubtle,
+                              AppColors.borderDefault,
+                              'Weekend',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
     );
@@ -3522,6 +3503,22 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   // TAB 7: DOCUMENTS
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildDocumentsTab(StudentProfileBundle bundle) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+    final doc1 = _buildDocCard(
+      title: 'Print Biodata Dossier',
+      description: 'Comprehensive single-page student summary with demographic records, enrollment history, and guardian contact details for school archives.',
+      buttonLabel: 'Print Dossier →',
+      icon: Icons.badge_outlined,
+      onTap: () => _showSnackBar('Print coming in Phase 2'),
+    );
+    final doc2 = _buildDocCard(
+      title: 'Print School Leaving Certificate (SLC)',
+      description: 'Official transfer clearance certificate issued upon formal withdrawal, verifying conduct, session progression, and clear dues.',
+      buttonLabel: 'Print SLC →',
+      icon: Icons.description_outlined,
+      onTap: () => context.go('/students/leaving'),
+    );
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
@@ -3540,29 +3537,23 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDocCard(
-                  title: 'Print Biodata Dossier',
-                  description: 'Comprehensive single-page student summary with demographic records, enrollment history, and guardian contact details for school archives.',
-                  buttonLabel: 'Print Dossier →',
-                  icon: Icons.badge_outlined,
-                  onTap: () => _showSnackBar('Print coming in Phase 2'),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: _buildDocCard(
-                  title: 'Print School Leaving Certificate (SLC)',
-                  description: 'Official transfer clearance certificate issued upon formal withdrawal, verifying conduct, session progression, and clear dues.',
-                  buttonLabel: 'Print SLC →',
-                  icon: Icons.description_outlined,
-                  onTap: () => context.go('/students/leaving'),
-                ),
-              ),
-            ],
-          ),
+          if (isMobile)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                doc1,
+                const SizedBox(height: AppSpacing.md),
+                doc2,
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(child: doc1),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(child: doc2),
+              ],
+            ),
         ],
       ),
     );
@@ -3797,6 +3788,217 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   Widget _buildFamilyTab(StudentProfileBundle bundle) {
     final stuId = bundle.student.stuRegId;
     final siblingsAsync = ref.watch(siblingLinksForStudentProvider(stuId));
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
+    final siblingsContent = siblingsAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Text(
+          'Error loading siblings: $e',
+          style: const TextStyle(color: AppColors.statusErrorText),
+        ),
+      ),
+      data: (siblings) {
+        if (siblings.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.people_outline,
+                  size: 48,
+                  color: AppColors.textMuted,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'No siblings linked for this student.',
+                  style: AppTypography.body.copyWith(
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.link, size: 16),
+                  label: const Text('Manage Sibling Links'),
+                  onPressed: () =>
+                      _showManageSiblingLinksDialog(context, stuId),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.separated(
+          shrinkWrap: isMobile,
+          physics: isMobile ? const NeverScrollableScrollPhysics() : null,
+          itemCount: siblings.length,
+          separatorBuilder: (context, index) =>
+              const SizedBox(height: AppSpacing.sm),
+          itemBuilder: (context, index) {
+            final sib = siblings[index];
+            final sibId = (sib['Stu_RegID'] as num).toInt();
+            final first = (sib['NameFirst'] as String? ?? '').trim();
+            final last = (sib['NameLast'] as String? ?? '').trim();
+            final fullName = last.isNotEmpty ? '$first $last' : first;
+            final cName = (sib['CName'] as String?)?.trim();
+            final secName = (sib['SecName'] as String?)?.trim();
+            final linkId = (sib['LinkID'] as num?)?.toInt();
+
+            final classDisplay = (cName != null && cName.isNotEmpty)
+                ? (secName != null && secName.isNotEmpty
+                      ? '$cName-$secName'
+                      : cName)
+                : 'Not Enrolled';
+
+            String initials = 'ST';
+            if (fullName.isNotEmpty) {
+              final parts = fullName
+                  .split(' ')
+                  .where((p) => p.isNotEmpty)
+                  .toList();
+              if (parts.length == 1) {
+                initials = parts[0]
+                    .substring(0, parts[0].length >= 2 ? 2 : 1)
+                    .toUpperCase();
+              } else {
+                initials = '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+              }
+            }
+
+            return Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.borderDefault),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: AppColors.brandPrimary,
+                    child: Text(
+                      initials,
+                      style: const TextStyle(
+                        color: AppColors.textOnPrimary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              fullName,
+                              style: AppTypography.label.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '(Reg #$sibId)',
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          child: Text(
+                            classDisplay,
+                            style: AppTypography.bodySmall.copyWith(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new, size: 14),
+                    label: const Text('View Profile'),
+                    onPressed: () => context.go('/students/$sibId'),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.link_off,
+                      size: 18,
+                      color: AppColors.statusErrorText,
+                    ),
+                    tooltip: 'Unlink Sibling',
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Unlink Sibling?'),
+                          content: Text(
+                            'Are you sure you want to remove the sibling link with $fullName (Reg #$sibId)?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.of(ctx).pop(true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.statusErrorText,
+                                foregroundColor: AppColors.textOnPrimary,
+                              ),
+                              child: const Text('Unlink'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true && mounted) {
+                        if (linkId != null) {
+                          await ref
+                              .read(siblingLinksProvider.notifier)
+                              .unlink(linkId);
+                        } else {
+                          final links = await ref
+                              .read(siblingLinksProvider.notifier)
+                              .loadForStudent(stuId);
+                          for (final l in links) {
+                            if (l.stu1RegId == sibId || l.stu2RegId == sibId) {
+                              await ref
+                                  .read(siblingLinksProvider.notifier)
+                                  .unlink(l.linkId);
+                              break;
+                            }
+                          }
+                        }
+                        ref.invalidate(siblingLinksForStudentProvider(stuId));
+                        _showSnackBar('Sibling unlinked successfully.');
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -3808,8 +4010,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               Text(
                 'LINKED SIBLINGS & FAMILY MEMBERS',
@@ -3826,225 +4031,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          Expanded(
-            child: siblingsAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(
-                child: Text(
-                  'Error loading siblings: $e',
-                  style: const TextStyle(color: AppColors.statusErrorText),
-                ),
-              ),
-              data: (siblings) {
-                if (siblings.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.people_outline,
-                          size: 48,
-                          color: AppColors.textMuted,
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'No siblings linked for this student.',
-                          style: AppTypography.body.copyWith(
-                            color: AppColors.textMuted,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        OutlinedButton.icon(
-                          icon: const Icon(Icons.link, size: 16),
-                          label: const Text('Manage Sibling Links'),
-                          onPressed: () =>
-                              _showManageSiblingLinksDialog(context, stuId),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.separated(
-                  itemCount: siblings.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (context, index) {
-                    final sib = siblings[index];
-                    final sibId = (sib['Stu_RegID'] as num).toInt();
-                    final first = (sib['NameFirst'] as String? ?? '').trim();
-                    final last = (sib['NameLast'] as String? ?? '').trim();
-                    final fullName = last.isNotEmpty ? '$first $last' : first;
-                    final cName = (sib['CName'] as String?)?.trim();
-                    final secName = (sib['SecName'] as String?)?.trim();
-                    final linkId = (sib['LinkID'] as num?)?.toInt();
-
-                    final classDisplay = (cName != null && cName.isNotEmpty)
-                        ? (secName != null && secName.isNotEmpty
-                              ? '$cName-$secName'
-                              : cName)
-                        : 'Not Enrolled';
-
-                    String initials = 'ST';
-                    if (fullName.isNotEmpty) {
-                      final parts = fullName
-                          .split(' ')
-                          .where((p) => p.isNotEmpty)
-                          .toList();
-                      if (parts.length == 1) {
-                        initials = parts[0]
-                            .substring(0, parts[0].length >= 2 ? 2 : 1)
-                            .toUpperCase();
-                      } else {
-                        initials = '${parts.first[0]}${parts.last[0]}'
-                            .toUpperCase();
-                      }
-                    }
-
-                    return Container(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: AppColors.borderDefault),
-                      ),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 18,
-                            backgroundColor: AppColors.brandPrimary,
-                            child: Text(
-                              initials,
-                              style: const TextStyle(
-                                color: AppColors.textOnPrimary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      fullName,
-                                      style: AppTypography.label.copyWith(
-                                        color: AppColors.textPrimary,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '(Reg #$sibId)',
-                                      style: AppTypography.monospace.copyWith(
-                                        fontSize: 12,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 2),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.surfaceSubtle,
-                                    borderRadius: BorderRadius.circular(
-                                      AppRadius.sm,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    classDisplay,
-                                    style: AppTypography.bodySmall.copyWith(
-                                      fontSize: 11,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          TextButton.icon(
-                            icon: const Icon(Icons.open_in_new, size: 14),
-                            label: const Text('View Profile'),
-                            onPressed: () => context.go('/students/$sibId'),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          IconButton(
-                            icon: const Icon(
-                              Icons.link_off,
-                              size: 18,
-                              color: AppColors.statusErrorText,
-                            ),
-                            tooltip: 'Unlink Sibling',
-                            onPressed: () async {
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  title: const Text('Unlink Sibling?'),
-                                  content: Text(
-                                    'Are you sure you want to remove the sibling link with $fullName (Reg #$sibId)?',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(ctx).pop(false),
-                                      child: const Text('Cancel'),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () =>
-                                          Navigator.of(ctx).pop(true),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor:
-                                            AppColors.statusErrorText,
-                                        foregroundColor:
-                                            AppColors.textOnPrimary,
-                                      ),
-                                      child: const Text('Unlink'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirm == true && mounted) {
-                                if (linkId != null) {
-                                  await ref
-                                      .read(siblingLinksProvider.notifier)
-                                      .unlink(linkId);
-                                } else {
-                                  final links = await ref
-                                      .read(siblingLinksProvider.notifier)
-                                      .loadForStudent(stuId);
-                                  for (final l in links) {
-                                    if (l.stu1RegId == sibId ||
-                                        l.stu2RegId == sibId) {
-                                      await ref
-                                          .read(siblingLinksProvider.notifier)
-                                          .unlink(l.linkId);
-                                      break;
-                                    }
-                                  }
-                                }
-                                ref.invalidate(
-                                  siblingLinksForStudentProvider(stuId),
-                                );
-                                _showSnackBar('Sibling unlinked successfully.');
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
+          if (isMobile) siblingsContent else Expanded(child: siblingsContent),
         ],
       ),
     );

@@ -126,10 +126,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             labelText: 'Class',
             floatingLabelBehavior: FloatingLabelBehavior.always,
             isDense: true,
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 14,
-            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             border: OutlineInputBorder(),
           ),
           items: state.classes.map((cls) {
@@ -163,10 +160,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             labelText: 'Section',
             floatingLabelBehavior: FloatingLabelBehavior.always,
             isDense: true,
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 14,
-            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             border: OutlineInputBorder(),
           ),
           items: state.sections.map((sec) {
@@ -206,7 +200,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           hoverColor: AppColors.brandPrimary.withValues(alpha: 0.04),
           child: Container(
             height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               color: AppColors.surfaceRaised,
               border: Border.all(color: AppColors.borderDefault),
@@ -220,10 +214,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   size: 16,
                   color: AppColors.brandPrimary,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Text(
                   dateDisplay,
-                  style: AppTypography.body.copyWith(
+                  style: AppTypography.bodySmall.copyWith(
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
                   ),
@@ -255,10 +249,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             labelText: 'Teacher',
             floatingLabelBehavior: FloatingLabelBehavior.always,
             isDense: true,
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 14,
-            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
             border: OutlineInputBorder(),
           ),
           items: state.teachers.map((t) {
@@ -305,7 +296,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           backgroundColor: AppColors.statusWarningText,
           child: const Icon(Icons.description_outlined, size: 15),
         ),
-        label: Text('Leave ($leaveCount)'),
+        label: Text('Leave ($leaveCount)', overflow: TextOverflow.ellipsis),
         style: OutlinedButton.styleFrom(
           foregroundColor: leaveCount > 0
               ? AppColors.statusWarningText
@@ -331,14 +322,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     if (isMobile) {
       return Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
+        padding: const EdgeInsets.all(AppSpacing.sm),
         color: AppColors.surface,
         child: Wrap(
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xs,
+          spacing: 8.0,
+          runSpacing: 8.0,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (from != null && from.isNotEmpty)
@@ -359,10 +347,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   side: const BorderSide(color: AppColors.borderDefault),
                 ),
               ),
-            buildClassDropdown(width: 140),
-            buildSectionDropdown(width: 120),
+            buildClassDropdown(width: 150),
+            buildSectionDropdown(width: 130),
             buildDatePicker(),
-            buildTeacherDropdown(width: 150),
+            buildTeacherDropdown(width: 200),
             buildSessionYear(),
             buildLeaveButton(),
             buildReloadButton(),
@@ -445,77 +433,77 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     final summaryRow = Row(
       children: [
-          // Edit mode badge if attendance already entered
-          if (state.isEditMode) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.statusWarningBg,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(
-                  color: AppColors.statusWarningText.withValues(alpha: 0.4),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.edit_note,
-                    size: 16,
-                    color: AppColors.statusWarningText,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'EDIT MODE',
-                    style: AppTypography.bodySmall.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.statusWarningText,
-                    ),
-                  ),
-                ],
+        // Edit mode badge if attendance already entered
+        if (state.isEditMode) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.statusWarningBg,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(
+                color: AppColors.statusWarningText.withValues(alpha: 0.4),
               ),
             ),
-            const SizedBox(width: AppSpacing.md),
-          ],
-
-          Text(
-            'Enrolled: $total',
-            style: AppTypography.body.copyWith(
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.edit_note,
+                  size: 16,
+                  color: AppColors.statusWarningText,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'EDIT MODE',
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.statusWarningText,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: AppSpacing.md),
+        ],
 
-          _buildMetricChip(
-            label: 'Present',
-            count: present,
-            bgColor: AppColors.statusSuccessBg,
-            textColor: AppColors.statusSuccessText,
+        Text(
+          'Enrolled: $total',
+          style: AppTypography.body.copyWith(
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
           ),
-          const SizedBox(width: AppSpacing.xs),
+        ),
+        const SizedBox(width: AppSpacing.md),
 
-          _buildMetricChip(
-            label: 'Absent',
-            count: absent,
-            bgColor: AppColors.statusErrorBg,
-            textColor: AppColors.statusErrorText,
-          ),
-          const SizedBox(width: AppSpacing.xs),
+        _buildMetricChip(
+          label: 'Present',
+          count: present,
+          bgColor: AppColors.statusSuccessBg,
+          textColor: AppColors.statusSuccessText,
+        ),
+        const SizedBox(width: AppSpacing.xs),
 
-          _buildMetricChip(
-            label: 'Leave',
-            count: leave,
-            bgColor: AppColors.statusWarningBg,
-            textColor: AppColors.statusWarningText,
-          ),
-          const SizedBox(width: AppSpacing.xs),
+        _buildMetricChip(
+          label: 'Absent',
+          count: absent,
+          bgColor: AppColors.statusErrorBg,
+          textColor: AppColors.statusErrorText,
+        ),
+        const SizedBox(width: AppSpacing.xs),
 
-          _buildMetricChip(
-            label: 'Late',
-            count: late,
-            bgColor: const Color(0xFFEFF6FF),
-            textColor: const Color(0xFF2563EB),
-          ),
+        _buildMetricChip(
+          label: 'Leave',
+          count: leave,
+          bgColor: AppColors.statusWarningBg,
+          textColor: AppColors.statusWarningText,
+        ),
+        const SizedBox(width: AppSpacing.xs),
+
+        _buildMetricChip(
+          label: 'Late',
+          count: late,
+          bgColor: const Color(0xFFEFF6FF),
+          textColor: const Color(0xFF2563EB),
+        ),
       ],
     );
 
@@ -758,169 +746,167 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       mainAxisSize: isMobile ? MainAxisSize.min : MainAxisSize.max,
       children: [
         // Cancel / Reset
-          OutlinedButton(
-            onPressed:
-                (state.selectedClassId != null || state.roster.isNotEmpty)
-                ? () {
-                    final hasRoster = ref
-                        .read(attendanceProvider)
-                        .roster
-                        .isNotEmpty;
-                    if (hasRoster) {
-                      ref.read(attendanceProvider.notifier).discardEdits();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Edits discarded')),
-                      );
-                    } else {
-                      ref.read(attendanceProvider.notifier).clearSelection();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Selection cleared')),
-                      );
-                    }
+        OutlinedButton(
+          onPressed: (state.selectedClassId != null || state.roster.isNotEmpty)
+              ? () {
+                  final hasRoster = ref
+                      .read(attendanceProvider)
+                      .roster
+                      .isNotEmpty;
+                  if (hasRoster) {
+                    ref.read(attendanceProvider.notifier).discardEdits();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Edits discarded')),
+                    );
+                  } else {
+                    ref.read(attendanceProvider.notifier).clearSelection();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Selection cleared')),
+                    );
                   }
-                : null,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.borderDefault),
-              minimumSize: const Size(90, 42),
-            ),
-            child: const Text('Cancel'),
+                }
+              : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.textPrimary,
+            side: const BorderSide(color: AppColors.borderDefault),
+            minimumSize: const Size(90, 42),
           ),
-          const SizedBox(width: AppSpacing.sm),
+          child: const Text('Cancel'),
+        ),
+        const SizedBox(width: AppSpacing.sm),
 
-          // Print Roll Call (S26)
-          OutlinedButton.icon(
-            onPressed: () async {
-              final className =
-                  state.classes.firstWhere(
-                        (c) => c['ClassID'] == state.selectedClassId,
-                        orElse: () => {'CName': ''},
-                      )['CName']
-                      as String? ??
-                  '';
+        // Print Roll Call (S26)
+        OutlinedButton.icon(
+          onPressed: () async {
+            final className =
+                state.classes.firstWhere(
+                      (c) => c['ClassID'] == state.selectedClassId,
+                      orElse: () => {'CName': ''},
+                    )['CName']
+                    as String? ??
+                '';
 
-              // If no attendance held for class or roster empty
-              if (state.roster.isEmpty ||
-                  (!state.isEditMode && state.existingAttMasId == null)) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('No Attandace held for Class $className'),
-                    backgroundColor: AppColors.statusErrorText,
-                    duration: const Duration(seconds: 3),
-                  ),
-                );
-                return;
-              }
-
-              final meta = ref.read(shellMetadataProvider).value;
-              final safeBranchName =
-                  (meta?.branchName != null &&
-                      meta!.branchName.trim().isNotEmpty)
-                  ? meta.branchName.trim()
-                  : "Ailyans's Higher Secondary School Mianwali";
-              final safeBranchAddress =
-                  (meta?.branchAddress != null &&
-                      meta!.branchAddress.trim().isNotEmpty)
-                  ? meta.branchAddress.trim()
-                  : 'Muslim Bazar Mianwali';
-              final sectionName =
-                  state.sections.firstWhere(
-                        (s) => s['ClassSecID'] == state.selectedClassSecId,
-                        orElse: () => {'SecName': ''},
-                      )['SecName']
-                      as String? ??
-                  '';
-              final teacherName =
-                  state.teachers.firstWhere(
-                        (t) => t['TeacherID'] == state.selectedTeacherId,
-                        orElse: () => {'TName': ''},
-                      )['TName']
-                      as String? ??
-                  '';
-
-              await ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.attendanceRegister,
-                  extraParams: {
-                    'attendanceData': AttendancePdfData(
-                      branchName: safeBranchName,
-                      branchAddress: safeBranchAddress,
-                      branchPhone: meta?.branchPhone ?? '',
-                      branchPrincipal: meta?.branchPrincipal ?? '',
-                      className: className,
-                      sectionName: sectionName,
-                      teacherName: teacherName,
-                      sessionYear: state.sessionYear,
-                      attDate: state.selectedDate,
-                      roster: state.roster,
-                      presentCount: state.summaryCounts['Present'] ?? 0,
-                      absentCount: state.summaryCounts['Absent'] ?? 0,
-                      leaveCount: state.summaryCounts['Leave'] ?? 0,
-                      lateCount: state.summaryCounts['Late'] ?? 0,
-                      totalCount: state.roster.length,
-                    ),
-                  },
+            // If no attendance held for class or roster empty
+            if (state.roster.isEmpty ||
+                (!state.isEditMode && state.existingAttMasId == null)) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('No Attandace held for Class $className'),
+                  backgroundColor: AppColors.statusErrorText,
+                  duration: const Duration(seconds: 3),
                 ),
               );
-            },
-            icon: const Icon(Icons.print_outlined, size: 16),
-            label: const Text('Print Roll Call'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.borderDefault),
-              minimumSize: const Size(0, 42),
+              return;
+            }
+
+            final meta = ref.read(shellMetadataProvider).value;
+            final safeBranchName =
+                (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+                ? meta.branchName.trim()
+                : "Ailyans's Higher Secondary School Mianwali";
+            final safeBranchAddress =
+                (meta?.branchAddress != null &&
+                    meta!.branchAddress.trim().isNotEmpty)
+                ? meta.branchAddress.trim()
+                : 'Muslim Bazar Mianwali';
+            final sectionName =
+                state.sections.firstWhere(
+                      (s) => s['ClassSecID'] == state.selectedClassSecId,
+                      orElse: () => {'SecName': ''},
+                    )['SecName']
+                    as String? ??
+                '';
+            final teacherName =
+                state.teachers.firstWhere(
+                      (t) => t['TeacherID'] == state.selectedTeacherId,
+                      orElse: () => {'TName': ''},
+                    )['TName']
+                    as String? ??
+                '';
+
+            await ReportPreviewModal.show(
+              context,
+              request: ReportRequest(
+                type: ReportType.attendanceRegister,
+                extraParams: {
+                  'attendanceData': AttendancePdfData(
+                    branchName: safeBranchName,
+                    branchAddress: safeBranchAddress,
+                    branchPhone: meta?.branchPhone ?? '',
+                    branchPrincipal: meta?.branchPrincipal ?? '',
+                    className: className,
+                    sectionName: sectionName,
+                    teacherName: teacherName,
+                    sessionYear: state.sessionYear,
+                    attDate: state.selectedDate,
+                    roster: state.roster,
+                    presentCount: state.summaryCounts['Present'] ?? 0,
+                    absentCount: state.summaryCounts['Absent'] ?? 0,
+                    leaveCount: state.summaryCounts['Leave'] ?? 0,
+                    lateCount: state.summaryCounts['Late'] ?? 0,
+                    totalCount: state.roster.length,
+                  ),
+                },
+              ),
+            );
+          },
+          icon: const Icon(Icons.print_outlined, size: 16),
+          label: const Text('Print Roll Call'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.textPrimary,
+            side: const BorderSide(color: AppColors.borderDefault),
+            minimumSize: const Size(0, 42),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+
+        // Mark All Present Bulk Action
+        OutlinedButton.icon(
+          onPressed: state.roster.isNotEmpty
+              ? () => notifier.markAllAs('Present')
+              : null,
+          icon: const Icon(Icons.done_all, size: 16),
+          label: const Text('Mark All Present'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.statusSuccessText,
+            side: const BorderSide(color: AppColors.statusSuccessText),
+            minimumSize: const Size(0, 42),
+          ),
+        ),
+
+        if (!isMobile) const Spacer(),
+
+        // Submit Attendance OR Update Attendance
+        if (state.isEditMode)
+          ElevatedButton.icon(
+            onPressed: state.isLoading
+                ? null
+                : () async {
+                    await notifier.updateAttendance();
+                  },
+            icon: const Icon(Icons.sync, size: 16),
+            label: const Text('Update Attendance'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(160, 44),
+            ),
+          )
+        else
+          ElevatedButton.icon(
+            onPressed: state.isLoading
+                ? null
+                : () async {
+                    await notifier.submitAttendance();
+                  },
+            icon: const Icon(Icons.check, size: 16),
+            label: const Text('Submit Attendance'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(160, 44),
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-
-          // Mark All Present Bulk Action
-          OutlinedButton.icon(
-            onPressed: state.roster.isNotEmpty
-                ? () => notifier.markAllAs('Present')
-                : null,
-            icon: const Icon(Icons.done_all, size: 16),
-            label: const Text('Mark All Present'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.statusSuccessText,
-              side: const BorderSide(color: AppColors.statusSuccessText),
-              minimumSize: const Size(0, 42),
-            ),
-          ),
-
-          if (!isMobile) const Spacer(),
-
-          // Submit Attendance OR Update Attendance
-          if (state.isEditMode)
-            ElevatedButton.icon(
-              onPressed: state.isLoading
-                  ? null
-                  : () async {
-                      await notifier.updateAttendance();
-                    },
-              icon: const Icon(Icons.sync, size: 16),
-              label: const Text('Update Attendance'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandPrimary,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(160, 44),
-              ),
-            )
-          else
-            ElevatedButton.icon(
-              onPressed: state.isLoading
-                  ? null
-                  : () async {
-                      await notifier.submitAttendance();
-                    },
-              icon: const Icon(Icons.check, size: 16),
-              label: const Text('Submit Attendance'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandPrimary,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(160, 44),
-              ),
-            ),
       ],
     );
 
@@ -1387,7 +1373,6 @@ String? _getFromOrigin(BuildContext context) {
     return null;
   }
 }
-
 
 class _MobileAttendanceCard extends StatefulWidget {
   final AttendanceRosterRow row;
