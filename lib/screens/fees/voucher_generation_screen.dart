@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 
 import '../../core/db/database.dart';
 import '../../core/providers/available_sessions_provider.dart';
@@ -11,6 +12,7 @@ import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
+import '../../core/utils/voucher_pdf_generator.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../models/school_class.dart';
 import '../../models/voucher_preview_row.dart';
@@ -284,6 +286,51 @@ class _VoucherGenerationScreenState
         },
       ),
     );
+  }
+
+  Future<void> _sharePdf() async {
+    List<FeeReceiptView> receipts;
+    try {
+      receipts = await _loadGeneratedVouchers();
+    } catch (e, st) {
+      debugPrint('Share PDF voucher load failed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load vouchers: $e')),
+      );
+      return;
+    }
+    if (receipts.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No generated vouchers to share')),
+      );
+      return;
+    }
+    try {
+      final bytes = await ThreeCopyVouchersPdf.generate(
+        vouchers: receipts,
+        branchName: 'Ailyans Higher Secondary School',
+        branchAddress: 'Muslim Bazar Mianwali',
+        bankName: 'Askari Bank Limited',
+        bankBranch: 'Ballo Khel Road',
+        bankAcctNo: '4528',
+      );
+      final monthStr = ref
+          .read(voucherGenFiltersProvider)
+          .billingMonth
+          .replaceAll(' ', '_');
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'Fee_Vouchers_$monthStr.pdf',
+      );
+    } catch (e, st) {
+      debugPrint('Share PDF failed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to share PDF: $e')),
+      );
+    }
   }
 
   Future<List<FeeReceiptView>> _loadGeneratedVouchers() async {
@@ -1252,11 +1299,9 @@ class _VoucherGenerationScreenState
               ),
               TextButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Cancel not supported'),
-                    ),
-                  );
+                  ref
+                      .read(voucherGenExecutionProvider.notifier)
+                      .cancelGeneration();
                 },
                 child: const Text('Cancel'),
               ),
@@ -1295,7 +1340,7 @@ class _VoucherGenerationScreenState
           // Route Save PDF to print preview for now.
           _openPrintPreview();
         },
-        onShare: null,
+        onShare: ResponsiveBreakpoints.isMobile(context) ? _sharePdf : null,
         onGenerateAnother: _onEscape,
         onResumeRemaining:
             (s.generatedCount > 0 && s.generatedCount < effectiveTotal)

@@ -656,11 +656,17 @@ class VoucherGenState {
 /// Notifier executing batch generation and batch maintenance routines.
 class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
   final Ref ref;
+  bool _cancelRequested = false;
 
   VoucherGenExecutionNotifier(this.ref) : super(const VoucherGenState());
 
   void clearSummary() {
     state = state.copyWith(clearSummary: true, clearError: true);
+  }
+
+  /// Signals cooperative cancellation of an in-progress batch generation.
+  void cancelGeneration() {
+    _cancelRequested = true;
   }
 
   /// Executes batch cohort voucher generation.
@@ -706,11 +712,19 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     int arrearsRolled = 0;
     int concessions = 0;
     final skippedReasons = <String>[];
+    _cancelRequested = false;
 
     final vDateStr = DateFormat('yyyy-MM-dd').format(filters.issueDate);
     final dueDateStr = DateFormat('yyyy-MM-dd').format(filters.dueDate);
 
     for (int i = 0; i < previewRows.length; i++) {
+      if (_cancelRequested) {
+        _cancelRequested = false;
+        skippedReasons.add(
+          'Batch cancelled by user after $generated vouchers.',
+        );
+        break;
+      }
       final row = previewRows[i];
 
       state = state.copyWith(

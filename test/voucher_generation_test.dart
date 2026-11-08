@@ -1712,11 +1712,142 @@ void main() {
         expect(find.text('Print created'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'cancel button triggers cancelGeneration and compact tier wires onShare to VoucherResultPanel',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        const mockGeneratingState = VoucherGenState(
+          isGenerating: true,
+          generatedCount: 2,
+          totalToGenerate: 10,
+        );
+        late _MockVoucherGenNotifier mockNotifier;
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [],
+              ),
+              voucherGenExecutionProvider.overrideWith(
+                (ref) {
+                  mockNotifier =
+                      _MockVoucherGenNotifier(ref, mockGeneratingState);
+                  return mockNotifier;
+                },
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        // 1. Verify Cancel button on progress panel invokes cancelGeneration()
+        expect(find.text('Cancel'), findsOneWidget);
+        expect(mockNotifier.cancelCalled, isFalse);
+        await tester.tap(find.text('Cancel'));
+        await tester.pump();
+        expect(mockNotifier.cancelCalled, isTrue);
+
+        // 2. Set completion summary on compact screen (mobile < 600)
+        mockNotifier.setMockState(
+          const VoucherGenState(
+            isGenerating: false,
+            generatedCount: 10,
+            totalToGenerate: 10,
+            completionSummary: BatchGenerationSummary(
+              generatedCount: 10,
+              skippedCount: 0,
+              totalBilled: 19200,
+              arrearsRolledOver: 0,
+              concessionsApplied: 0,
+              skippedReasons: [],
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Verify onShare button rendered on compact screen
+        expect(find.text('Share'), findsOneWidget);
+        expect(find.byIcon(Icons.share_outlined), findsOneWidget);
+
+        // 3. Switch view to desktop (>= 1024), verify onShare is null (Share button absent)
+        tester.view.physicalSize = const Size(1400, 900);
+        await tester.pumpAndSettle();
+        expect(find.text('Share'), findsNothing);
+      },
+    );
   });
 }
 
 class _MockVoucherGenNotifier extends VoucherGenExecutionNotifier {
   _MockVoucherGenNotifier(super.ref, VoucherGenState initialState) {
     state = initialState;
+  }
+
+  bool cancelCalled = false;
+
+  void setMockState(VoucherGenState s) {
+    state = s;
+  }
+
+  @override
+  void cancelGeneration() {
+    cancelCalled = true;
+    super.cancelGeneration();
   }
 }
