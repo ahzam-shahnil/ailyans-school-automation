@@ -7,6 +7,8 @@ import '../../core/providers/library_books_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
+import '../../models/library_book_row.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -117,6 +119,10 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
         ref.read(libraryBooksProvider.notifier).clearToast();
       }
     });
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(context, state, notifier);
+    }
 
     return CallbackShortcuts(
       bindings: {
@@ -1102,6 +1108,763 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ===========================================================================
+  // G-6b MOBILE BRANCH (< 600px)
+  // ===========================================================================
+  Widget _buildMobileScaffold(
+    BuildContext context,
+    LibraryBooksState state,
+    LibraryBooksNotifier notifier,
+  ) {
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyN, control: true):
+            _onAddNewBook,
+        const SingleActivator(LogicalKeyboardKey.keyN, meta: true):
+            _onAddNewBook,
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () =>
+            _searchFocusNode.requestFocus(),
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () =>
+            _searchFocusNode.requestFocus(),
+        const SingleActivator(LogicalKeyboardKey.keyP, control: true):
+            _printCatalog,
+        const SingleActivator(LogicalKeyboardKey.keyP, meta: true):
+            _printCatalog,
+        const SingleActivator(LogicalKeyboardKey.escape): _onResetFilters,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          backgroundColor: AppColors.surface,
+          body: SafeArea(
+            bottom: true,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildMobileHeader(state),
+                  const SizedBox(height: AppSpacing.sm),
+                  _buildMobileFilterBar(context, state, notifier),
+                  if (state.errorMessage != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    _buildMobileErrorBanner(state.errorMessage!, notifier),
+                  ],
+                  const SizedBox(height: AppSpacing.sm),
+                  _buildMobileBookList(context, state, notifier),
+                  const SizedBox(height: AppSpacing.sm),
+                  _buildMobileFooter(context),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(LibraryBooksState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Library Book Catalog',
+          style: AppTypography.h2.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            _buildKpiBadge('${state.totalBooksAvailable} Books Available'),
+            _buildKpiBadge('${state.categoryCount} Subject Categories'),
+            _buildKpiBadge(
+              'Total Valuation Rs. ${_formatCurrency(state.totalValuation)}',
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFilterBar(
+    BuildContext context,
+    LibraryBooksState state,
+    LibraryBooksNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildMobileFieldLabel('Search Catalog'),
+          const SizedBox(height: 4),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: TextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              style: AppTypography.body.copyWith(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Search by Book ID, Title, Author, or Publisher',
+                hintStyle: AppTypography.bodySmall.copyWith(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.clear,
+                          size: 16,
+                          color: AppColors.textSecondary,
+                        ),
+                        padding: EdgeInsets.zero,
+                        onPressed: () {
+                          _searchController.clear();
+                          notifier.setSearchQuery('');
+                          setState(() {});
+                        },
+                      )
+                    : null,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+              onChanged: (val) {
+                notifier.setSearchQuery(val);
+                setState(() {});
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildMobileDropdownRow(
+            label: 'Subject Category',
+            child: _buildMobileDropdown<int?>(
+              value: state.selectedCategoryId,
+              items: [
+                DropdownMenuItem<int?>(
+                  value: null,
+                  child: _mobileDropdownItemText('All Subjects'),
+                ),
+                ...state.subjects.map(
+                  (s) => DropdownMenuItem<int?>(
+                    value: s['SubjID'] as int,
+                    child: _mobileDropdownItemText(
+                      s['SubjName'] as String? ?? '',
+                    ),
+                  ),
+                ),
+              ],
+              onChanged: (val) {
+                notifier.setCategory(val);
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: notifier.applyCategoryFilter,
+              icon: const Icon(Icons.filter_list, size: 16),
+              label: const Text(
+                'Filter by Category',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: OutlinedButton.icon(
+              onPressed: notifier.showAll,
+              icon: const Icon(Icons.list_alt, size: 16),
+              label: const Text(
+                'Show All Books',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: TextButton.icon(
+              onPressed: _onResetFilters,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text(
+                'Reset Filters',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileErrorBanner(
+    String message,
+    LibraryBooksNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      decoration: BoxDecoration(
+        color: AppColors.statusErrorBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: AppColors.statusErrorText.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline,
+            size: 16,
+            color: AppColors.statusErrorText,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusErrorText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.close,
+              size: 16,
+              color: AppColors.statusErrorText,
+            ),
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: notifier.clearError,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileBookList(
+    BuildContext context,
+    LibraryBooksState state,
+    LibraryBooksNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'CATALOG',
+            style: AppTypography.bodySmall.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              letterSpacing: 0.5,
+              color: AppColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (state.isLoading)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (state.allRows.isEmpty)
+            _buildMobileEmptyState(notifier)
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: state.rows.length,
+              itemBuilder: (ctx, index) => _buildMobileBookCard(
+                context,
+                state.rows[index],
+                index,
+              ),
+            ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildMobilePagination(state, notifier),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileEmptyState(LibraryBooksNotifier notifier) {
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.menu_book_outlined,
+            size: 48,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'No books match the current search criteria',
+            textAlign: TextAlign.center,
+            style: AppTypography.body.copyWith(color: AppColors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Adjust filters or clear search to see the full catalog',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: TextButton.icon(
+              onPressed: _onResetFilters,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Reset Filters'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileBookCard(
+    BuildContext context,
+    LibraryBookRow row,
+    int index,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: const BorderSide(color: AppColors.borderDefault),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        onTap: () => context.push('/library/${row.bookId}'),
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceSubtle,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: const Icon(
+                      Icons.menu_book_outlined,
+                      size: 20,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          row.bookName,
+                          style: AppTypography.body.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.brandPrimary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${row.accessionDisplay} · ${row.bAuthor ?? '—'}',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.statusInfoBg,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: Text(
+                      row.categoryName ?? 'Unassigned',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.statusInfoText,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  _buildMobileInfoPill(row.pulishedBy ?? '—'),
+                  _buildMobileInfoPill(row.publishedYr?.toString() ?? '—'),
+                  _buildMobileInfoPill('${row.pages ?? '—'} pages'),
+                  _buildMobileInfoPill(row.priceDisplay),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            context.push('/library/${row.bookId}'),
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: const Text(
+                          'View',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: SizedBox(
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Spine label coming in Phase E',
+                              ),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.print_outlined, size: 16),
+                        label: const Text(
+                          'Spine',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileInfoPill(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.bodySmall.copyWith(
+          fontSize: 11,
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobilePagination(
+    LibraryBooksState state,
+    LibraryBooksNotifier notifier,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Showing ${state.rows.length} of ${state.allRows.length} Books (${state.totalBooksAvailable} Books Available)',
+          textAlign: TextAlign.center,
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 36,
+                child: OutlinedButton(
+                  onPressed: state.currentPage > 1
+                      ? () => notifier.setPage(state.currentPage - 1)
+                      : null,
+                  child: const Text(
+                    '< Previous',
+                    style: TextStyle(fontSize: 11),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Center(
+                child: Text(
+                  'Page ${state.currentPage} of ${state.totalPages}',
+                  style: AppTypography.monospace.copyWith(
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 36,
+                child: OutlinedButton(
+                  onPressed: state.currentPage < state.totalPages
+                      ? () => notifier.setPage(state.currentPage + 1)
+                      : null,
+                  child: const Text('Next >', style: TextStyle(fontSize: 11)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        _buildMobileDropdownRow(
+          label: 'Items per page',
+          child: _buildMobileDropdown<int>(
+            value: state.pageSize,
+            items: [
+              DropdownMenuItem(
+                value: 10,
+                child: _mobileDropdownItemText('10'),
+              ),
+              DropdownMenuItem(
+                value: 25,
+                child: _mobileDropdownItemText('25'),
+              ),
+              DropdownMenuItem(
+                value: 50,
+                child: _mobileDropdownItemText('50'),
+              ),
+              DropdownMenuItem(
+                value: 100,
+                child: _mobileDropdownItemText('100'),
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) {
+                notifier.setPageSize(val);
+              }
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFooter(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: _onAddNewBook,
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add New Book (Ctrl+N)'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton.icon(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('CSV export coming in Phase E'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            },
+            icon: const Icon(Icons.download_outlined, size: 16),
+            label: const Text('Export Catalog (CSV)'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton.icon(
+            onPressed: _printCatalog,
+            icon: const Icon(Icons.print_outlined, size: 16),
+            label: const Text('Print Catalog'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFieldLabel(String label) {
+    return Text(
+      label,
+      style: AppTypography.bodySmall.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+
+  Widget _buildMobileDropdownRow({
+    required String label,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildMobileFieldLabel(label),
+        const SizedBox(height: 4),
+        Container(
+          height: 44,
+          alignment: AlignmentDirectional.centerStart,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: DropdownButtonHideUnderline(child: child),
+        ),
+      ],
+    );
+  }
+
+  Widget _mobileDropdownItemText(String label) {
+    return Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: AppTypography.body.copyWith(
+        color: AppColors.textPrimary,
+        fontSize: 13.5,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  Widget _buildMobileDropdown<T>({
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?> onChanged,
+    String? hint,
+  }) {
+    final effectiveValue = items.any((i) => i.value == value) ? value : null;
+    final itemStyle = AppTypography.body.copyWith(
+      color: AppColors.textPrimary,
+      fontSize: 13.5,
+      fontWeight: FontWeight.w600,
+    );
+    return DropdownButton<T>(
+      value: effectiveValue,
+      isExpanded: true,
+      isDense: true,
+      menuMaxHeight: 400.0,
+      dropdownColor: AppColors.surfaceRaised,
+      iconEnabledColor: AppColors.textPrimary,
+      iconDisabledColor: AppColors.textMuted,
+      style: itemStyle,
+      hint: hint == null
+          ? null
+          : Text(
+              hint,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+      selectedItemBuilder: (context) => items
+          .map(
+            (item) => Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(
+                (item.child as Text).data ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: itemStyle,
+              ),
+            ),
+          )
+          .toList(),
+      items: items,
+      onChanged: onChanged,
     );
   }
 }
