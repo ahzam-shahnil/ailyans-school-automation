@@ -6,6 +6,10 @@ import 'package:intl/intl.dart';
 import '../../models/voucher_preview_row.dart';
 import '../db/database.dart';
 
+/// Default offset between issue date and due date, in days.
+/// Preserves the pre-G-7 behavior of issueDate=day 1 -> dueDate=day 10.
+const int kDefaultDueOffsetDays = 9;
+
 /// Filter state for cohort voucher generation.
 class VoucherGenFilters {
   final String sessionYr;
@@ -306,7 +310,7 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
       };
       final m = monthMap[monthName] ?? 10;
       final newIssue = DateTime(year, m, 1);
-      final newDue = DateTime(year, m, 10);
+      final newDue = newIssue.add(const Duration(days: kDefaultDueOffsetDays));
       state = state.copyWith(
         billingMonth: normalized,
         issueDate: newIssue,
@@ -318,10 +322,17 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
   }
 
   void setIssueDate(DateTime date) {
-    state = state.copyWith(issueDate: date);
+    final newDueDate = state.dueDate.isBefore(date)
+        ? date.add(const Duration(days: kDefaultDueOffsetDays))
+        : state.dueDate;
+    state = state.copyWith(issueDate: date, dueDate: newDueDate);
   }
 
   void setDueDate(DateTime date) {
+    // Validation error text is surfaced at the widget layer
+    // (VoucherParameterCard, G-7.1). This provider method silently
+    // rejects invalid dates and leaves state unchanged.
+    if (date.isBefore(state.issueDate)) return;
     state = state.copyWith(dueDate: date);
   }
 
