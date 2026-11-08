@@ -42,6 +42,8 @@ class _VoucherGenerationScreenState
   final dateFormat = DateFormat('dd-MMM-yyyy');
   late final TextEditingController _lateFineController;
   bool _hasValidated = false;
+  bool _isParamExpanded = true;
+  bool _hasAutoCollapsed = false;
 
   // Layout constants for the preview table.
   static const double _kIdColWidth = 82;
@@ -622,6 +624,22 @@ class _VoucherGenerationScreenState
       }
     });
 
+    // Preview auto-collapse listener for medium tier
+    ref.listen<AsyncValue<List<VoucherPreviewRow>>>(voucherGenPreviewProvider, (
+      prev,
+      next,
+    ) {
+      if (mounted &&
+          (prev?.valueOrNull == null || prev!.valueOrNull!.isEmpty) &&
+          next.valueOrNull != null &&
+          next.valueOrNull!.isNotEmpty) {
+        setState(() {
+          _hasAutoCollapsed = true;
+          _isParamExpanded = false;
+        });
+      }
+    });
+
     if (ResponsiveBreakpoints.isMobile(context)) {
       return _buildMobileScaffold(
         context,
@@ -656,71 +674,247 @@ class _VoucherGenerationScreenState
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 1280;
-              final leftPaneWidth = isWide ? 340.0 : 300.0;
+              if (constraints.maxWidth < 1024) {
+                return _buildMediumLayout(
+                  context,
+                  filters,
+                  previewAsync,
+                  previewList,
+                  eligibleCount,
+                  waiverCount,
+                  displayLabel,
+                  displayBilled,
+                  readyCount,
+                  generatedCount,
+                  execState,
+                );
+              }
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildHeader(eligibleCount, filters, execState),
-                  const SizedBox(height: AppSpacing.sm),
-
-                  // Main workspace: Left parameter card + Right preview pane
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          width: leftPaneWidth,
-                          child: _buildConfigurationCard(
-                            context,
-                            filters,
-                            readyCount,
-                            generatedCount,
-                            execState.isGenerating,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: _buildPreviewPane(
-                            context,
-                            filters,
-                            previewAsync,
-                            previewList,
-                            eligibleCount,
-                            waiverCount,
-                            displayLabel,
-                            displayBilled,
-                            readyCount,
-                            generatedCount,
-                            execState,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: AppSpacing.sm),
-
-                  // Sticky bottom action bar
-                  VoucherActionBar(
-                    impactState: execState.error != null
-                        ? VoucherImpactState.error
-                        : (eligibleCount == 0
-                              ? VoucherImpactState.zero
-                              : VoucherImpactState.normal),
-                    count: eligibleCount,
-                    errorText: execState.error,
-                    isGenerating: execState.isGenerating,
-                    onGenerate: (eligibleCount > 0 && !execState.isGenerating)
-                        ? () => _handleGenerateTrigger(eligibleCount)
-                        : null,
-                  ),
-                ],
+              return _buildExpandedLayout(
+                context,
+                constraints,
+                filters,
+                previewAsync,
+                previewList,
+                eligibleCount,
+                waiverCount,
+                displayLabel,
+                displayBilled,
+                readyCount,
+                generatedCount,
+                execState,
               );
             },
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildExpandedLayout(
+    BuildContext context,
+    BoxConstraints constraints,
+    VoucherGenFilters filters,
+    AsyncValue<List<VoucherPreviewRow>> previewAsync,
+    List<VoucherPreviewRow> previewList,
+    int eligibleCount,
+    int waiverCount,
+    String displayLabel,
+    int displayBilled,
+    int readyCount,
+    int generatedCount,
+    VoucherGenState execState,
+  ) {
+    final isWide = constraints.maxWidth >= 1280;
+    final leftPaneWidth = isWide ? 340.0 : 300.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeader(eligibleCount, filters, execState),
+        const SizedBox(height: AppSpacing.sm),
+
+        // Main workspace: Left parameter card + Right preview pane
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: leftPaneWidth,
+                child: _buildConfigurationCard(
+                  context,
+                  filters,
+                  readyCount,
+                  generatedCount,
+                  execState.isGenerating,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _buildPreviewPane(
+                  context,
+                  filters,
+                  previewAsync,
+                  previewList,
+                  eligibleCount,
+                  waiverCount,
+                  displayLabel,
+                  displayBilled,
+                  readyCount,
+                  generatedCount,
+                  execState,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AppSpacing.sm),
+
+        // Sticky bottom action bar
+        VoucherActionBar(
+          impactState: execState.error != null
+              ? VoucherImpactState.error
+              : (eligibleCount == 0
+                    ? VoucherImpactState.zero
+                    : VoucherImpactState.normal),
+          count: eligibleCount,
+          errorText: execState.error,
+          isGenerating: execState.isGenerating,
+          onGenerate: (eligibleCount > 0 && !execState.isGenerating)
+              ? () => _handleGenerateTrigger(eligibleCount)
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMediumLayout(
+    BuildContext context,
+    VoucherGenFilters filters,
+    AsyncValue<List<VoucherPreviewRow>> previewAsync,
+    List<VoucherPreviewRow> previewList,
+    int eligibleCount,
+    int waiverCount,
+    String displayLabel,
+    int displayBilled,
+    int readyCount,
+    int generatedCount,
+    VoucherGenState execState,
+  ) {
+    if (!_hasAutoCollapsed && previewList.isNotEmpty) {
+      _hasAutoCollapsed = true;
+      _isParamExpanded = false;
+    }
+    final showParamCard = _isParamExpanded || previewList.isEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeader(eligibleCount, filters, execState, isMedium: true),
+        const SizedBox(height: AppSpacing.sm),
+        Expanded(
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: showParamCard
+                    ? _buildConfigurationCard(
+                        context,
+                        filters,
+                        readyCount,
+                        generatedCount,
+                        execState.isGenerating,
+                        columnCount: 2,
+                      )
+                    : _buildParamSummaryCard(filters),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.md)),
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 580,
+                  child: _buildPreviewPane(
+                    context,
+                    filters,
+                    previewAsync,
+                    previewList,
+                    eligibleCount,
+                    waiverCount,
+                    displayLabel,
+                    displayBilled,
+                    readyCount,
+                    generatedCount,
+                    execState,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        VoucherActionBar(
+          impactState: execState.error != null
+              ? VoucherImpactState.error
+              : (eligibleCount == 0
+                    ? VoucherImpactState.zero
+                    : VoucherImpactState.normal),
+          count: eligibleCount,
+          errorText: execState.error,
+          isGenerating: execState.isGenerating,
+          onGenerate: (eligibleCount > 0 && !execState.isGenerating)
+              ? () => _handleGenerateTrigger(eligibleCount)
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildParamSummaryCard(VoucherGenFilters filters) {
+    final classesAsync = ref.watch(classesProvider);
+    final classes = classesAsync.valueOrNull ?? [];
+    final matchClass = classes
+        .where((c) => c.classId == filters.classId)
+        .firstOrNull;
+    final classLabel =
+        matchClass?.cName ??
+        (filters.classId == null ? 'All Classes' : 'Class ${filters.classId}');
+
+    final sectionsAsync = ref.watch(sectionsProvider);
+    final sections = sectionsAsync.valueOrNull ?? [];
+    final matchSec = sections
+        .where((s) => s.classSecId == filters.classSecId)
+        .firstOrNull;
+    final sectionLabel = filters.classSecId == null
+        ? 'All Sections'
+        : 'Section ${matchSec?.secName ?? filters.classSecId}';
+
+    final summaryText = '$classLabel · $sectionLabel · ${filters.billingMonth}';
+
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              summaryText,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          TextButton(
+            onPressed: () => setState(() => _isParamExpanded = true),
+            child: const Text('Edit'),
+          ),
+        ],
       ),
     );
   }
@@ -745,8 +939,9 @@ class _VoucherGenerationScreenState
   Widget _buildHeader(
     int eligibleCount,
     VoucherGenFilters filters,
-    VoucherGenState execState,
-  ) {
+    VoucherGenState execState, {
+    bool isMedium = false,
+  }) {
     final from = _getFromOrigin(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -759,56 +954,66 @@ class _VoucherGenerationScreenState
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (from != null && from.isNotEmpty) ...[
-                  OutlinedButton.icon(
-                    onPressed: () => context.go(from),
-                    icon: const Icon(Icons.arrow_back, size: 14),
-                    label: Text(
-                      from.contains('dashboard') ? 'Back to Dashboard' : 'Back',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
+            Expanded(
+              child: Row(
+                children: [
+                  if (from != null && from.isNotEmpty) ...[
+                    OutlinedButton.icon(
+                      onPressed: () => context.go(from),
+                      icon: const Icon(Icons.arrow_back, size: 14),
+                      label: Text(
+                        from.contains('dashboard')
+                            ? 'Back to Dashboard'
+                            : 'Back',
+                        style: const TextStyle(fontSize: 12),
                       ),
-                      minimumSize: const Size(0, 32),
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.borderDefault),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        minimumSize: const Size(0, 32),
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.borderDefault),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
+                  Flexible(
+                    child: Text(
+                      'Monthly Voucher Generation Engine',
+                      style: AppTypography.h1.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(width: AppSpacing.md),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceSubtle,
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                      border: Border.all(color: AppColors.borderDefault),
+                    ),
+                    child: Text(
+                      '$eligibleCount Eligible Students',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ],
-                Text(
-                  'Monthly Voucher Generation Engine',
-                  style: AppTypography.h1.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(AppRadius.full),
-                    border: Border.all(color: AppColors.borderDefault),
-                  ),
-                  child: Text(
-                    '$eligibleCount Eligible Students',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
+            const SizedBox(width: AppSpacing.sm),
             OutlinedButton.icon(
               onPressed: () => context.go('/fees/receipts?from=vouchers'),
               icon: const Icon(Icons.point_of_sale_outlined, size: 16),
@@ -825,13 +1030,27 @@ class _VoucherGenerationScreenState
         ),
         const SizedBox(height: AppSpacing.xs),
         // Header strip: [Batch | Single] ........ StepIndicator
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _buildModeSwitch(filters),
-            _buildStepIndicator(filters, execState),
-          ],
-        ),
+        if (isMedium) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildModeSwitch(filters),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: _buildStepIndicator(filters, execState),
+          ),
+        ] else ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildModeSwitch(filters),
+              _buildStepIndicator(filters, execState),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -1050,8 +1269,9 @@ class _VoucherGenerationScreenState
     VoucherGenFilters filters,
     int readyCount,
     int generatedCount,
-    bool isGenerating,
-  ) {
+    bool isGenerating, {
+    int columnCount = 1,
+  }) {
     final classesAsync = ref.watch(classesProvider);
     final sectionsAsync = ref.watch(sectionsProvider);
     final bankListAsync = ref.watch(voucherBankListProvider);
@@ -1128,7 +1348,7 @@ class _VoucherGenerationScreenState
               bankId: filters.bankId,
               banks: banksData,
               bankError: null,
-              columnCount: 1,
+              columnCount: columnCount,
               onSessionYearChanged: (val) {
                 ref.read(voucherGenFiltersProvider.notifier).setSessionYr(val);
               },
