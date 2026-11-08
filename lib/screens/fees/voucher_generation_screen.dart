@@ -652,22 +652,19 @@ class _VoucherGenerationScreenState
         if (execState.isGenerating)
           _buildVoucherProgressPanel(execState)
         else
-          if (execState.isGenerating)
-            _buildVoucherProgressPanel(execState)
-          else
-            VoucherActionBar(
-              impactState: execState.error != null
-                  ? VoucherImpactState.error
-                  : (eligibleCount == 0
-                        ? VoucherImpactState.zero
-                        : VoucherImpactState.normal),
-              count: eligibleCount,
-              errorText: execState.error,
-              isGenerating: execState.isGenerating,
-              onGenerate: (eligibleCount > 0 && !execState.isGenerating)
-                  ? () => _handleGenerateTrigger(eligibleCount)
-                  : null,
-            ),
+          VoucherActionBar(
+            impactState: execState.error != null
+                ? VoucherImpactState.error
+                : (eligibleCount == 0
+                      ? VoucherImpactState.zero
+                      : VoucherImpactState.normal),
+            count: eligibleCount,
+            errorText: execState.error,
+            isGenerating: execState.isGenerating,
+            onGenerate: (eligibleCount > 0 && !execState.isGenerating)
+                ? () => _handleGenerateTrigger(eligibleCount)
+                : null,
+          ),
       ],
     );
   }
@@ -737,22 +734,19 @@ class _VoucherGenerationScreenState
         if (execState.isGenerating)
           _buildVoucherProgressPanel(execState)
         else
-          if (execState.isGenerating)
-            _buildVoucherProgressPanel(execState)
-          else
-            VoucherActionBar(
-              impactState: execState.error != null
-                  ? VoucherImpactState.error
-                  : (eligibleCount == 0
-                        ? VoucherImpactState.zero
-                        : VoucherImpactState.normal),
-              count: eligibleCount,
-              errorText: execState.error,
-              isGenerating: execState.isGenerating,
-              onGenerate: (eligibleCount > 0 && !execState.isGenerating)
-                  ? () => _handleGenerateTrigger(eligibleCount)
-                  : null,
-            ),
+          VoucherActionBar(
+            impactState: execState.error != null
+                ? VoucherImpactState.error
+                : (eligibleCount == 0
+                      ? VoucherImpactState.zero
+                      : VoucherImpactState.normal),
+            count: eligibleCount,
+            errorText: execState.error,
+            isGenerating: execState.isGenerating,
+            onGenerate: (eligibleCount > 0 && !execState.isGenerating)
+                ? () => _handleGenerateTrigger(eligibleCount)
+                : null,
+          ),
       ],
     );
   }
@@ -1309,10 +1303,8 @@ class _VoucherGenerationScreenState
   }
 
   Widget _buildVoucherProgressPanel(VoucherGenState execState) {
-    final total = execState.totalToGenerate;
-    final done = execState.generatedCount;
-    final progress = total > 0 ? done / total : 0.0;
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: const BoxDecoration(
         color: AppColors.surfaceRaised,
@@ -1320,37 +1312,63 @@ class _VoucherGenerationScreenState
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
+          Row(
+            children: [
+              Flexible(
+                child: Text(
+                  'Creating vouchers…',
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${execState.generatedCount} of ${execState.totalToGenerate}',
+                style: AppTypography.monospace,
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () => ref
+                    .read(voucherGenExecutionProvider.notifier)
+                    .cancelGeneration(),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(color: AppColors.statusErrorText),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppRadius.full),
+            child: LinearProgressIndicator(
+              value: execState.totalToGenerate > 0
+                  ? execState.generatedCount / execState.totalToGenerate
+                  : 0.0,
+              minHeight: 8,
+              backgroundColor: AppColors.surfaceSubtle,
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                AppColors.brandPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
           Row(
             children: [
               Expanded(
                 child: Text(
-                  'Creating vouchers… $done of $total',
+                  execState.currentProgressText ?? '',
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMuted,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              TextButton(
-                onPressed: () {
-                  ref
-                      .read(voucherGenExecutionProvider.notifier)
-                      .cancelGeneration();
-                },
-                child: const Text('Cancel'),
-              ),
             ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.full),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: AppColors.surfaceSubtle,
-              valueColor: const AlwaysStoppedAnimation(AppColors.brandPrimary),
-            ),
           ),
         ],
       ),
