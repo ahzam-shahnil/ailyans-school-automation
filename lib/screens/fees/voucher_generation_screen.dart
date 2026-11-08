@@ -10,6 +10,7 @@ import '../../core/providers/clock_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/fee_head_display.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../models/voucher_preview_row.dart';
@@ -564,6 +565,22 @@ class _VoucherGenerationScreenState
       }
     });
 
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(
+        context,
+        filters,
+        previewAsync,
+        previewList,
+        eligibleCount,
+        waiverCount,
+        displayLabel,
+        displayBilled,
+        readyCount,
+        generatedCount,
+        execState,
+      );
+    }
+
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyG, control: true):
@@ -856,6 +873,7 @@ class _VoucherGenerationScreenState
 
           // Group 1: Session + Month
           _buildFieldGroup(
+            context,
             left: _labeledField(
               'Session Year *',
               DropdownButtonFormField<String>(
@@ -895,6 +913,7 @@ class _VoucherGenerationScreenState
 
           // Group 2: Class + Section
           _buildFieldGroup(
+            context,
             left: _labeledField(
               'Target Class *',
               classesAsync.when(
@@ -1062,6 +1081,7 @@ class _VoucherGenerationScreenState
 
           // Group 3: Issue + Due
           _buildFieldGroup(
+            context,
             left: _labeledField(
               'Issue Date *',
               _pickerField(
@@ -1216,7 +1236,28 @@ class _VoucherGenerationScreenState
   }
 
   /// Subtle tinted container grouping a logical pair of inputs (no border).
-  Widget _buildFieldGroup({required Widget left, required Widget right}) {
+  Widget _buildFieldGroup(
+    BuildContext context, {
+    required Widget left,
+    required Widget right,
+  }) {
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceSubtle,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            left,
+            const SizedBox(height: AppSpacing.xs),
+            right,
+          ],
+        ),
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
@@ -2626,6 +2667,923 @@ class _VoucherGenerationScreenState
       ),
     );
   }
+  // ---------------------------------------------------------------------------
+  // MOBILE LAYOUT (page-level scroll; no vertical Expanded/Flexible/Spacer)
+  // ---------------------------------------------------------------------------
+
+  Widget _buildMobileScaffold(
+    BuildContext context,
+    VoucherGenFilters filters,
+    AsyncValue<List<VoucherPreviewRow>> previewAsync,
+    List<VoucherPreviewRow> previewList,
+    int eligibleCount,
+    int waiverCount,
+    String displayLabel,
+    int displayBilled,
+    int readyCount,
+    int generatedCount,
+    VoucherGenState execState,
+  ) {
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        bottom: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: _buildMobileHeader(context, eligibleCount),
+            ),
+            if (execState.isGenerating) _buildGeneratingBanner(execState),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  0,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildConfigurationCardMobile(
+                      context,
+                      filters,
+                      readyCount,
+                      generatedCount,
+                      execState.isGenerating,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _buildPreviewCardMobile(
+                      previewAsync,
+                      previewList,
+                      eligibleCount,
+                      waiverCount,
+                      displayLabel,
+                      displayBilled,
+                      readyCount,
+                      generatedCount,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (execState.completionSummary != null)
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: _buildBatchCompleteDialog(
+                  context,
+                  execState.completionSummary!,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(BuildContext context, int eligibleCount) {
+    final filters = ref.watch(voucherGenFiltersProvider);
+    final from = _getFromOrigin(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Home  >  Fees  >  Monthly Voucher Generation',
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Monthly Voucher Generation Engine',
+                style: AppTypography.h1.copyWith(color: AppColors.textPrimary),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceSubtle,
+                borderRadius: BorderRadius.circular(AppRadius.full),
+                border: Border.all(color: AppColors.borderDefault),
+              ),
+              child: Text(
+                '$eligibleCount Eligible',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        SegmentedButton<String>(
+          expandedInsets: EdgeInsets.zero,
+          style: SegmentedButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+          ),
+          segments: const [
+            ButtonSegment<String>(
+              value: 'batch',
+              label: Text('Batch'),
+              icon: Icon(Icons.dynamic_feed_outlined, size: 16),
+            ),
+            ButtonSegment<String>(
+              value: 'single',
+              label: Text('Single'),
+              icon: Icon(Icons.person_outline, size: 16),
+            ),
+          ],
+          selected: {filters.mode},
+          onSelectionChanged: (s) {
+            ref.read(voucherGenFiltersProvider.notifier).setMode(s.first);
+            ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+          },
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: OutlinedButton.icon(
+            onPressed: () => context.go('/fees/receipts?from=vouchers'),
+            icon: const Icon(Icons.point_of_sale_outlined, size: 16),
+            label: const Text('Collect Fee'),
+          ),
+        ),
+        if (from != null && from.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: OutlinedButton.icon(
+              onPressed: () => context.go(from),
+              icon: const Icon(Icons.arrow_back, size: 14),
+              label: Text(
+                from.contains('dashboard') ? 'Back to Dashboard' : 'Back',
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildConfigurationCardMobile(
+    BuildContext context,
+    VoucherGenFilters filters,
+    int readyCount,
+    int generatedCount,
+    bool isGenerating,
+  ) {
+    final classesAsync = ref.watch(classesProvider);
+    final sectionsAsync = ref.watch(sectionsProvider);
+    final bankListAsync = ref.watch(voucherBankListProvider);
+    final tariffsAsync = ref.watch(
+      voucherClassTariffsProvider(filters.classId),
+    );
+    final availableSessionsAsync = ref.watch(availableSessionsProvider);
+    final availableSessions =
+        availableSessionsAsync.valueOrNull ?? const <String>[];
+    final effectiveSessions = <String>{
+      if (filters.sessionYr.isNotEmpty) filters.sessionYr,
+      ...availableSessions,
+      '2017-2018',
+    }.toList()..sort((a, b) => b.compareTo(a));
+
+    return Container(
+      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Batch Generation Parameters',
+            style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Group 1: Session + Month
+          _buildFieldGroup(
+            context,
+            left: _labeledField(
+              'Session Year *',
+              DropdownButtonFormField<String>(
+                key: ValueKey(filters.sessionYr),
+                initialValue: effectiveSessions.contains(filters.sessionYr)
+                    ? filters.sessionYr
+                    : (effectiveSessions.isNotEmpty
+                          ? effectiveSessions.first
+                          : '2017-2018'),
+                isExpanded: true,
+                decoration: _inputDecoration(),
+                items: effectiveSessions.map((s) {
+                  return DropdownMenuItem(value: s, child: Text(s));
+                }).toList(),
+                onChanged: isGenerating
+                    ? null
+                    : (val) {
+                        if (val != null) {
+                          ref
+                              .read(voucherGenFiltersProvider.notifier)
+                              .setSessionYr(val);
+                        }
+                      },
+              ),
+            ),
+            right: _labeledField(
+              'Billing Month *',
+              _pickerField(
+                text: filters.billingMonth,
+                icon: Icons.calendar_today,
+                iconAtStart: true,
+                onTap: isGenerating ? null : () => _pickBillingMonth(context),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Group 2: Class + Section
+          _buildFieldGroup(
+            context,
+            left: _labeledField(
+              'Target Class *',
+              classesAsync.when(
+                data: (classes) => DropdownButtonFormField<int?>(
+                  key: ValueKey(filters.classId),
+                  initialValue: filters.classId,
+                  isExpanded: true,
+                  decoration: _inputDecoration(),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('All Classes'),
+                    ),
+                    ...classes.map(
+                      (c) => DropdownMenuItem<int?>(
+                        value: c.classId,
+                        child: Text(c.cName, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ],
+                  onChanged: isGenerating
+                      ? null
+                      : (val) {
+                          ref
+                              .read(voucherGenFiltersProvider.notifier)
+                              .setClassId(val);
+                        },
+                ),
+                loading: () => const SizedBox(
+                  height: _kFieldHeight,
+                  child: Center(child: LinearProgressIndicator()),
+                ),
+                error: (_, __) => const Text('Error loading classes'),
+              ),
+            ),
+            right: _labeledField(
+              'Target Section',
+              sectionsAsync.when(
+                data: (sections) {
+                  final filtered = (filters.classId == null)
+                      ? sections
+                      : sections
+                            .where((s) => s.classId == filters.classId)
+                            .toList();
+                  return DropdownButtonFormField<int?>(
+                    key: ValueKey(filters.classSecId),
+                    initialValue: filters.classSecId,
+                    isExpanded: true,
+                    decoration: _inputDecoration(),
+                    items: [
+                      const DropdownMenuItem<int?>(
+                        value: null,
+                        child: Text('All Sections'),
+                      ),
+                      ...filtered.map(
+                        (s) => DropdownMenuItem<int?>(
+                          value: s.classSecId,
+                          child: Text(
+                            'Section ${s.secName}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                    onChanged: isGenerating
+                        ? null
+                        : (val) {
+                            ref
+                                .read(voucherGenFiltersProvider.notifier)
+                                .setClassSecId(val);
+                          },
+                  );
+                },
+                loading: () => const SizedBox(
+                  height: _kFieldHeight,
+                  child: Center(child: LinearProgressIndicator()),
+                ),
+                error: (_, __) => const Text('Error loading sections'),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          if (filters.mode == 'single') ...[
+            _buildFieldLabel('Target Student *'),
+            const SizedBox(height: 4),
+            SizedBox(
+              height: 38,
+              child: ref
+                  .watch(voucherCohortStudentsProvider)
+                  .when(
+                    data: (students) {
+                      final validVal =
+                          students.any(
+                            (s) => s['Stu_RegID'] == filters.selectedStuRegId,
+                          )
+                          ? filters.selectedStuRegId
+                          : null;
+                      return DropdownButtonFormField<int?>(
+                        key: ValueKey(validVal),
+                        initialValue: validVal,
+                        isExpanded: true,
+                        isDense: true,
+                        menuMaxHeight: 400,
+                        dropdownColor: AppColors.surfaceRaised,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 13,
+                        ),
+                        decoration: _inputDecoration(),
+                        hint: const Text(
+                          'Select student...',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                        items: students.map((s) {
+                          final regId = s['Stu_RegID'] as int;
+                          final roll = s['ClassRollNo'];
+                          final first = (s['NameFirst'] as String? ?? '')
+                              .trim();
+                          final mid = (s['NameMiddle'] as String? ?? '').trim();
+                          final last = (s['NameLast'] as String? ?? '').trim();
+                          final name = [
+                            first,
+                            mid,
+                            last,
+                          ].where((p) => p.isNotEmpty).join(' ');
+                          final label =
+                              '#$regId - $name (Roll: ${roll ?? "-"})';
+                          return DropdownMenuItem<int?>(
+                            value: regId,
+                            child: Text(
+                              label,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: isGenerating
+                            ? null
+                            : (val) {
+                                ref
+                                    .read(voucherGenFiltersProvider.notifier)
+                                    .setSelectedStuRegId(val);
+                                ref
+                                    .read(voucherGenExecutionProvider.notifier)
+                                    .clearSummary();
+                              },
+                      );
+                    },
+                    loading: () => const SizedBox(
+                      height: 38,
+                      child: Center(child: LinearProgressIndicator()),
+                    ),
+                    error: (_, __) => const Text('Error loading students'),
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+
+          // Group 3: Issue + Due
+          _buildFieldGroup(
+            context,
+            left: _labeledField(
+              'Issue Date *',
+              _pickerField(
+                text: dateFormat.format(filters.issueDate),
+                icon: Icons.calendar_month,
+                onTap: isGenerating
+                    ? null
+                    : () => _pickDate(
+                        context,
+                        filters.issueDate,
+                        (d) => ref
+                            .read(voucherGenFiltersProvider.notifier)
+                            .setIssueDate(d),
+                      ),
+              ),
+            ),
+            right: _labeledField(
+              'Payment Due Date *',
+              _pickerField(
+                text: dateFormat.format(filters.dueDate),
+                icon: Icons.calendar_month,
+                onTap: isGenerating
+                    ? null
+                    : () => _pickDate(
+                        context,
+                        filters.dueDate,
+                        (d) => ref
+                            .read(voucherGenFiltersProvider.notifier)
+                            .setDueDate(d),
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Receiving bank: actionable selection with bank icon tile
+          _labeledField(
+            'Receiving Bank *',
+            bankListAsync.when(
+              data: (banks) {
+                final currentBankId =
+                    banks.any((b) => b.bankInfoId == filters.bankId)
+                    ? filters.bankId
+                    : (banks.isNotEmpty ? banks.first.bankInfoId : 1);
+                return DropdownButtonFormField<int>(
+                  key: ValueKey(currentBankId),
+                  initialValue: currentBankId,
+                  isExpanded: true,
+                  icon: const Icon(
+                    Icons.unfold_more,
+                    size: 18,
+                    color: AppColors.textMuted,
+                  ),
+                  decoration: _inputDecoration(
+                    prefixIcon: const Icon(
+                      Icons.account_balance,
+                      size: 18,
+                      color: AppColors.brandPrimary,
+                    ),
+                  ),
+                  items: banks
+                      .map(
+                        (b) => DropdownMenuItem<int>(
+                          value: b.bankInfoId,
+                          child: Text(
+                            b.displayName,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: isGenerating
+                      ? null
+                      : (val) {
+                          if (val != null) {
+                            ref
+                                .read(voucherGenFiltersProvider.notifier)
+                                .setBankId(val);
+                          }
+                        },
+                );
+              },
+              loading: () => const SizedBox(
+                height: _kFieldHeight,
+                child: Center(child: LinearProgressIndicator()),
+              ),
+              error: (_, __) => const Text('Error loading banks'),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Late fine pill + secondary Sync button (single compact row)
+          Row(
+            children: [
+              Expanded(flex: 11, child: _buildLateFinePill()),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                flex: 9,
+                child: Tooltip(
+                  message: 'Apply the Payment Due Date to existing vouchers',
+                  child: SizedBox(
+                    height: _kFieldHeight,
+                    child: TextButton.icon(
+                      onPressed: _onSyncDueDate,
+                      icon: const Icon(Icons.event_repeat, size: 16),
+                      label: const Text(
+                        'Sync Due Date',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                        backgroundColor: AppColors.surfaceSubtle,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          _buildFeeHeadsCompactMobile(tariffsAsync, filters),
+          const SizedBox(height: AppSpacing.md),
+
+          _buildBottomAction(
+            readyCount,
+            generatedCount,
+            isGenerating,
+            _onGenerate,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeeHeadsCompactMobile(
+    AsyncValue<List<FeeHeadSummary>> tariffsAsync,
+    VoucherGenFilters filters,
+  ) {
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tune, size: 12, color: AppColors.textMuted),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Text(
+                  'FEE HEADS',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => context.go('/fees/parameters'),
+                icon: const Icon(Icons.edit_outlined, size: 12),
+                label: const Text(
+                  'Edit tariffs',
+                  style: TextStyle(fontSize: 11),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          tariffsAsync.when(
+            data: (tariffs) {
+              return LayoutBuilder(
+                builder: (context, c) {
+                  const gap = 6.0;
+                  final w = (c.maxWidth - gap) / 2;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (tariffs.isEmpty)
+                        const Text(
+                          'No tariffs defined for this selection',
+                          style: AppTypography.bodySmall,
+                        )
+                      else
+                        Wrap(
+                          spacing: gap,
+                          runSpacing: gap,
+                          children: tariffs.map((t) {
+                            final isIncluded = !filters.excludedFeeParamIds
+                                .contains(t.feeParamId);
+                            return SizedBox(
+                              width: w,
+                              child: _buildFeeChip(t, isIncluded),
+                            );
+                          }).toList(),
+                        ),
+                      const SizedBox(height: 8),
+                      _buildMobileArrearsChip(filters.includeArrears),
+                    ],
+                  );
+                },
+              );
+            },
+            loading: () =>
+                const SizedBox(height: 12, child: LinearProgressIndicator()),
+            error: (_, __) => const Text(
+              'Error loading fee heads',
+              style: TextStyle(fontSize: 11),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileArrearsChip(bool includeArrears) {
+    return InkWell(
+      onTap: () {
+        ref
+            .read(voucherGenFiltersProvider.notifier)
+            .setIncludeArrears(!includeArrears);
+        ref.invalidate(voucherGenPreviewProvider);
+      },
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Container(
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: includeArrears
+              ? AppColors.surfaceRaised
+              : AppColors.surfaceSubtle,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(
+            color: includeArrears
+                ? AppColors.brandPrimary
+                : AppColors.borderDefault,
+            width: includeArrears ? 1.5 : 1.0,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              includeArrears ? Icons.check_box : Icons.check_box_outline_blank,
+              size: 14,
+              color: includeArrears
+                  ? AppColors.brandPrimary
+                  : AppColors.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                'Include Past Arrears',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: includeArrears
+                      ? FontWeight.w600
+                      : FontWeight.normal,
+                  color: includeArrears
+                      ? AppColors.textPrimary
+                      : AppColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewCardMobile(
+    AsyncValue<List<VoucherPreviewRow>> previewAsync,
+    List<VoucherPreviewRow> previewList,
+    int eligibleCount,
+    int waiverCount,
+    String displayLabel,
+    int displayBilled,
+    int readyCount,
+    int generatedCount,
+  ) {
+    final rows = previewAsync.valueOrNull ?? previewList;
+    return Container(
+      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Preview (${rows.length})',
+                  style: AppTypography.h3.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              Text(
+                '$readyCount ready',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              _mobileStat('Eligible', '$eligibleCount'),
+              _mobileStat('Waivers', '$waiverCount'),
+              _mobileStat(
+                displayLabel,
+                'Rs. ${currencyFormat.format(displayBilled)}',
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (rows.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Text(
+                'No eligible students for this cohort',
+                textAlign: TextAlign.center,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: rows.length,
+              itemBuilder: (_, i) => _buildMobilePreviewCard(rows[i], i),
+            ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '$readyCount ready  ·  $generatedCount generated',
+            textAlign: TextAlign.center,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobilePreviewCard(VoucherPreviewRow row, int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: index.isEven ? AppColors.surfaceRaised : AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  row.voucherId,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.monospace.copyWith(
+                    fontSize: 12,
+                    color: AppColors.brandPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              _buildStatusBadge(row.status),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            row.studentName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.body.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: _mobileStat(
+                  'SubTotal',
+                  currencyFormat.format(row.subtotal),
+                ),
+              ),
+              Expanded(
+                child: _mobileStat(
+                  'Arrears',
+                  currencyFormat.format(row.arrears),
+                ),
+              ),
+              Expanded(
+                child: _mobileStat(
+                  'Discount',
+                  currencyFormat.format(row.discount),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(
+                'Net Pay:',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  'Rs. ${currencyFormat.format(row.netPayable)}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                  style: AppTypography.monospace.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.print_outlined, size: 16),
+                onPressed: () async {
+                  final filters = ref.read(voucherGenFiltersProvider);
+                  final all = await _loadGeneratedVouchers();
+                  final match = all
+                      .where(
+                        (r) =>
+                            r.stuRegId == row.stuRegId &&
+                            r.forMonth == filters.billingMonth,
+                      )
+                      .toList();
+                  if (match.isNotEmpty && mounted) {
+                    await _openPrintPreview(specific: match);
+                  }
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _mobileStat(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+        ),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.monospace.copyWith(fontSize: 12),
+        ),
+      ],
+    );
+  }
+
 }
 
 String? _getFromOrigin(BuildContext context) {
