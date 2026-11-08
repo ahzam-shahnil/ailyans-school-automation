@@ -834,6 +834,185 @@ void main() {
     );
 
     testWidgets(
+      'Compact tier (360x800) renders mode switch + Generate without overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 800);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [
+                  const VoucherPreviewRow(
+                    stuRegId: 4411,
+                    studentName: 'Muhammad Ali Khan',
+                    subtotal: 1920,
+                    arrears: 0,
+                    discount: 0,
+                    netPayable: 1920,
+                    status: VoucherPreviewStatus.ready,
+                    voucherId: '1710-4411',
+                  ),
+                ],
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle(const Duration(milliseconds: 300));
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'zero overflow at 360x800',
+        );
+        expect(find.text('Batch'), findsOneWidget);
+        expect(find.text('Single'), findsOneWidget);
+        expect(find.text('Generate'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Compact tier (390x844) renders loaded preview with zero overflow',
+      (tester) async {
+        tester.view.physicalSize = const Size(390, 844);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+        });
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [
+                  const VoucherPreviewRow(
+                    stuRegId: 4411,
+                    studentName: 'Muhammad Ali Khan',
+                    subtotal: 1920,
+                    arrears: 0,
+                    discount: 0,
+                    netPayable: 1920,
+                    status: VoucherPreviewStatus.ready,
+                    voucherId: '1710-4411',
+                  ),
+                ],
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle(const Duration(milliseconds: 300));
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'zero overflow at 390x844',
+        );
+      },
+    );
+
+    testWidgets(
       'Numeric columns render full Rs amounts without truncation at 1440×900',
       (tester) async {
         tester.view.physicalSize = const Size(1440, 900);
