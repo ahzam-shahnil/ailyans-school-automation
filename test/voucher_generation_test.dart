@@ -447,6 +447,107 @@ void main() {
       },
     );
 
+    testWidgets(
+      'tapping Generate with eligible students opens confirm dialog and generates on Create',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1400, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [
+                  const VoucherPreviewRow(
+                    stuRegId: 4411,
+                    studentName: 'Muhammad Ali Khan',
+                    subtotal: 1500,
+                    arrears: 0,
+                    discount: 0,
+                    netPayable: 1500,
+                    status: VoucherPreviewStatus.ready,
+                    voucherId: '1710-4411',
+                  ),
+                ],
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        // 1. Click Generate in VoucherActionBar
+        final generateBtn = find.widgetWithText(ElevatedButton, 'Generate');
+        expect(generateBtn, findsOneWidget);
+        await tester.tap(generateBtn);
+        await tester.pumpAndSettle();
+
+        // 2. Expect confirm dialog per Section 5 Flow 4
+        expect(
+          find.text('Create 1 vouchers for Class 10, October 2017?'),
+          findsOneWidget,
+        );
+        expect(find.text('Cancel'), findsOneWidget);
+        expect(find.text('Create'), findsOneWidget);
+
+        // 3. Tap Create to trigger generation
+        await tester.tap(find.text('Create'));
+        await tester.pump();
+        await tester.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        });
+        await tester.pumpAndSettle();
+      },
+    );
+
     // Fix 4: Layout regression — screen must fit 1440×900 without overflow
     testWidgets('VoucherGenerationScreen fits 1440x900 without overflow', (
       tester,

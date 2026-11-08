@@ -13,10 +13,12 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/fee_head_display.dart';
 import '../../models/fee_receipt_view.dart';
+import '../../models/school_class.dart';
 import '../../models/voucher_preview_row.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
+import '../../widgets/voucher/voucher.dart';
 
 /// Production VoucherGenerationScreen hosted within AppShell.
 /// Matches locked designs:
@@ -39,6 +41,7 @@ class _VoucherGenerationScreenState
   final currencyFormat = NumberFormat('#,##0');
   final dateFormat = DateFormat('dd-MMM-yyyy');
   late final TextEditingController _lateFineController;
+  bool _hasValidated = false;
 
   // Layout constants for the preview table.
   static const double _kIdColWidth = 82;
@@ -112,11 +115,65 @@ class _VoucherGenerationScreenState
   // LOGIC (unchanged)
   // ---------------------------------------------------------------------------
 
-  void _onGenerate() {
+  Future<void> _handleGenerateTrigger(int eligibleCount) async {
     final execState = ref.read(voucherGenExecutionProvider);
     if (execState.isGenerating) return;
 
-    ref.read(voucherGenExecutionProvider.notifier).generateVouchers();
+    final filters = ref.read(voucherGenFiltersProvider);
+    if (filters.classId == null ||
+        filters.sessionYr.isEmpty ||
+        filters.billingMonth.isEmpty ||
+        filters.dueDate.isBefore(filters.issueDate)) {
+      setState(() => _hasValidated = true);
+      return;
+    }
+
+    if (eligibleCount <= 0) return;
+
+    final classesAsync = ref.read(classesProvider);
+    final classes = classesAsync.valueOrNull ?? [];
+    final match = classes
+        .where((c) => c.classId == filters.classId)
+        .firstOrNull;
+    final rawClassName = match?.cName ?? '${filters.classId}';
+    final classLabel = rawClassName.replaceFirst(
+      RegExp(r'^Class\s*', caseSensitive: false),
+      '',
+    );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Create $eligibleCount vouchers for Class $classLabel, ${filters.billingMonth}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.brandPrimary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await _onGenerate();
+    }
+  }
+
+  Future<void> _onGenerate() async {
+    final execState = ref.read(voucherGenExecutionProvider);
+    if (execState.isGenerating) return;
+
+    await ref.read(voucherGenExecutionProvider.notifier).generateVouchers();
   }
 
   Future<void> _onRegenerateUnpaid() async {
@@ -583,9 +640,10 @@ class _VoucherGenerationScreenState
 
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyG, control: true):
-            _onGenerate,
-        const SingleActivator(LogicalKeyboardKey.keyG, meta: true): _onGenerate,
+        const SingleActivator(LogicalKeyboardKey.keyG, control: true): () =>
+            _handleGenerateTrigger(eligibleCount),
+        const SingleActivator(LogicalKeyboardKey.keyG, meta: true): () =>
+            _handleGenerateTrigger(eligibleCount),
         const SingleActivator(LogicalKeyboardKey.escape): _onEscape,
       },
       child: Focus(
@@ -596,26 +654,24 @@ class _VoucherGenerationScreenState
             horizontal: AppSpacing.lg,
             vertical: AppSpacing.md,
           ),
-          child: Stack(
-            children: [
-              Column(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 1280;
+              final leftPaneWidth = isWide ? 340.0 : 300.0;
+
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildHeader(eligibleCount),
+                  _buildHeader(eligibleCount, filters, execState),
                   const SizedBox(height: AppSpacing.sm),
 
-                  if (execState.isGenerating) ...[
-                    _buildGeneratingBanner(execState),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-
-                  // Main workspace: 34 / 66 split, no page scrolling.
+                  // Main workspace: Left parameter card + Right preview pane
                   Expanded(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          flex: 34,
+                        SizedBox(
+                          width: leftPaneWidth,
                           child: _buildConfigurationCard(
                             context,
                             filters,
@@ -626,8 +682,9 @@ class _VoucherGenerationScreenState
                         ),
                         const SizedBox(width: AppSpacing.md),
                         Expanded(
-                          flex: 66,
-                          child: _buildPreviewCard(
+                          child: _buildPreviewPane(
+                            context,
+                            filters,
                             previewAsync,
                             previewList,
                             eligibleCount,
@@ -636,22 +693,32 @@ class _VoucherGenerationScreenState
                             displayBilled,
                             readyCount,
                             generatedCount,
+                            execState,
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              ),
 
-              if (execState.completionSummary != null)
-                Positioned.fill(
-                  child: _buildBatchCompleteDialog(
-                    context,
-                    execState.completionSummary!,
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // Sticky bottom action bar
+                  VoucherActionBar(
+                    impactState: execState.error != null
+                        ? VoucherImpactState.error
+                        : (eligibleCount == 0
+                              ? VoucherImpactState.zero
+                              : VoucherImpactState.normal),
+                    count: eligibleCount,
+                    errorText: execState.error,
+                    isGenerating: execState.isGenerating,
+                    onGenerate: (eligibleCount > 0 && !execState.isGenerating)
+                        ? () => _handleGenerateTrigger(eligibleCount)
+                        : null,
                   ),
-                ),
-            ],
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -675,11 +742,14 @@ class _VoucherGenerationScreenState
   // HEADER
   // ---------------------------------------------------------------------------
 
-  Widget _buildHeader(int eligibleCount) {
-    final filters = ref.watch(voucherGenFiltersProvider);
+  Widget _buildHeader(
+    int eligibleCount,
+    VoucherGenFilters filters,
+    VoucherGenState execState,
+  ) {
     final from = _getFromOrigin(context);
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
           'Home  >  Fees  >  Monthly Voucher Generation',
@@ -687,95 +757,58 @@ class _VoucherGenerationScreenState
         ),
         const SizedBox(height: 6),
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  if (from != null && from.isNotEmpty) ...[
-                    OutlinedButton.icon(
-                      onPressed: () => context.go(from),
-                      icon: const Icon(Icons.arrow_back, size: 14),
-                      label: Text(
-                        from.contains('dashboard')
-                            ? 'Back to Dashboard'
-                            : 'Back',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        minimumSize: const Size(0, 32),
-                        foregroundColor: AppColors.textPrimary,
-                        side: const BorderSide(color: AppColors.borderDefault),
-                      ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (from != null && from.isNotEmpty) ...[
+                  OutlinedButton.icon(
+                    onPressed: () => context.go(from),
+                    icon: const Icon(Icons.arrow_back, size: 14),
+                    label: Text(
+                      from.contains('dashboard') ? 'Back to Dashboard' : 'Back',
+                      style: const TextStyle(fontSize: 12),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                  ],
-                  Flexible(
-                    flex: 3,
-                    child: Text(
-                      'Monthly Voucher Generation Engine',
-                      style: AppTypography.h1.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Flexible(
-                    fit: FlexFit.loose,
-                    child: Container(
+                    style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
-                        vertical: 4,
+                        vertical: 6,
                       ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceSubtle,
-                        borderRadius: BorderRadius.circular(AppRadius.full),
-                        border: Border.all(color: AppColors.borderDefault),
-                      ),
-                      child: Text(
-                        '$eligibleCount Eligible Students',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      minimumSize: const Size(0, 32),
+                      foregroundColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.borderDefault),
                     ),
                   ),
+                  const SizedBox(width: AppSpacing.sm),
                 ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            SegmentedButton<String>(
-              style: SegmentedButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-              ),
-              segments: const [
-                ButtonSegment<String>(
-                  value: 'batch',
-                  label: Text('Batch Generation (Cohort)'),
-                  icon: Icon(Icons.dynamic_feed_outlined, size: 16),
+                Text(
+                  'Monthly Voucher Generation Engine',
+                  style: AppTypography.h1.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-                ButtonSegment<String>(
-                  value: 'single',
-                  label: Text('Single Student Voucher'),
-                  icon: Icon(Icons.person_outline, size: 16),
+                const SizedBox(width: AppSpacing.md),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSubtle,
+                    borderRadius: BorderRadius.circular(AppRadius.full),
+                    border: Border.all(color: AppColors.borderDefault),
+                  ),
+                  child: Text(
+                    '$eligibleCount Eligible Students',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
-              selected: {filters.mode},
-              onSelectionChanged: (s) {
-                ref.read(voucherGenFiltersProvider.notifier).setMode(s.first);
-                ref.read(voucherGenExecutionProvider.notifier).clearSummary();
-              },
             ),
-            const SizedBox(width: AppSpacing.sm),
             OutlinedButton.icon(
               onPressed: () => context.go('/fees/receipts?from=vouchers'),
               icon: const Icon(Icons.point_of_sale_outlined, size: 16),
@@ -790,46 +823,227 @@ class _VoucherGenerationScreenState
             ),
           ],
         ),
+        const SizedBox(height: AppSpacing.xs),
+        // Header strip: [Batch | Single] ........ StepIndicator
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildModeSwitch(filters),
+            _buildStepIndicator(filters, execState),
+          ],
+        ),
       ],
     );
   }
 
-  Widget _buildGeneratingBanner(VoucherGenState execState) {
+  Widget _buildModeSwitch(VoucherGenFilters filters) {
+    final isBatch = filters.mode == 'batch';
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
       decoration: BoxDecoration(
-        color: AppColors.statusErrorBg,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.statusErrorBorder),
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
       ),
+      padding: const EdgeInsets.all(2),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.sync, color: AppColors.statusErrorText, size: 18),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              'Voucher Generation in Progress: Generating vouchers for the selected cohort. '
-              'Please do not navigate away or close the application until the process finishes.',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.statusErrorText,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+          _modeButton(
+            label: 'Batch (Cohort)',
+            icon: Icons.dynamic_feed_outlined,
+            isSelected: isBatch,
+            onTap: () {
+              ref.read(voucherGenFiltersProvider.notifier).setMode('batch');
+              ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+            },
+          ),
+          _modeButton(
+            label: 'Single Student',
+            icon: Icons.person_outline,
+            isSelected: !isBatch,
+            onTap: () {
+              ref.read(voucherGenFiltersProvider.notifier).setMode('single');
+              ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+            },
           ),
         ],
       ),
     );
   }
 
+  Widget _modeButton({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.surfaceRaised : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          boxShadow: isSelected
+              ? const [
+                  BoxShadow(
+                    color: Color(0x0A0F172A),
+                    blurRadius: 4,
+                    offset: Offset(0, 1),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isSelected
+                  ? AppColors.brandPrimary
+                  : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator(
+    VoucherGenFilters filters,
+    VoucherGenState execState,
+  ) {
+    final int activeIndex;
+    if (execState.completionSummary != null) {
+      activeIndex = 3;
+    } else if (execState.isGenerating) {
+      activeIndex = 2;
+    } else if (filters.classId != null) {
+      activeIndex = 1;
+    } else {
+      activeIndex = 0;
+    }
+
+    const steps = ['Select', 'Preview', 'Confirm', 'Print'];
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (int i = 0; i < steps.length; i++) ...[
+          if (i > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Icon(
+                Icons.chevron_right,
+                size: 14,
+                color: i <= activeIndex
+                    ? AppColors.brandPrimary
+                    : AppColors.textMuted,
+              ),
+            ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: i == activeIndex
+                  ? AppColors.brandPrimary.withAlpha(20)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: i < activeIndex
+                        ? AppColors.brandPrimary
+                        : (i == activeIndex
+                              ? AppColors.brandPrimary
+                              : AppColors.surfaceSubtle),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: i <= activeIndex
+                          ? AppColors.brandPrimary
+                          : AppColors.borderDefault,
+                    ),
+                  ),
+                  child: i < activeIndex
+                      ? const Icon(Icons.check, size: 10, color: Colors.white)
+                      : Text(
+                          '${i + 1}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: i == activeIndex
+                                ? Colors.white
+                                : AppColors.textSecondary,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  steps[i],
+                  style: AppTypography.bodySmall.copyWith(
+                    fontWeight: i == activeIndex
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: i <= activeIndex
+                        ? AppColors.textPrimary
+                        : AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // LEFT CARD — BATCH GENERATION PARAMETERS
   // ---------------------------------------------------------------------------
+
+  List<String> _effectiveBillingMonths(String billingMonth, String sessionYr) {
+    final parts = billingMonth.trim().split(RegExp(r'[\s\-/]+'));
+    final year =
+        (parts.length >= 2 ? int.tryParse(parts[1]) : null) ??
+        int.tryParse(sessionYr.split('-').first) ??
+        2017;
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    final list = months.map((m) => '$m $year').toList();
+    if (billingMonth.isNotEmpty && !list.contains(billingMonth)) {
+      list.insert(0, billingMonth);
+    }
+    return list;
+  }
 
   Widget _buildConfigurationCard(
     BuildContext context,
@@ -841,10 +1055,8 @@ class _VoucherGenerationScreenState
     final classesAsync = ref.watch(classesProvider);
     final sectionsAsync = ref.watch(sectionsProvider);
     final bankListAsync = ref.watch(voucherBankListProvider);
-    final tariffsAsync = ref.watch(
-      voucherClassTariffsProvider(filters.classId),
-    );
     final availableSessionsAsync = ref.watch(availableSessionsProvider);
+
     final availableSessions =
         availableSessionsAsync.valueOrNull ?? const <String>[];
     final effectiveSessions = <String>{
@@ -853,384 +1065,111 @@ class _VoucherGenerationScreenState
       '2017-2018',
     }.toList()..sort((a, b) => b.compareTo(a));
 
-    return Container(
-      decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-          Text(
-            'Batch Generation Parameters',
-            style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
-          ),
-          const SizedBox(height: AppSpacing.sm),
+    final classList = classesAsync.valueOrNull ?? const <SchoolClass>[];
+    final classesData = classList
+        .map((c) => (id: c.classId, label: c.cName))
+        .toList();
 
-          // Group 1: Session + Month
-          _buildFieldGroup(
-            context,
-            left: _labeledField(
-              'Session Year *',
-              DropdownButtonFormField<String>(
-                key: ValueKey(filters.sessionYr),
-                initialValue: effectiveSessions.contains(filters.sessionYr)
-                    ? filters.sessionYr
-                    : (effectiveSessions.isNotEmpty
-                          ? effectiveSessions.first
-                          : '2017-2018'),
-                isExpanded: true,
-                decoration: _inputDecoration(),
-                items: effectiveSessions.map((s) {
-                  return DropdownMenuItem(value: s, child: Text(s));
-                }).toList(),
-                onChanged: isGenerating
-                    ? null
-                    : (val) {
-                        if (val != null) {
-                          ref
-                              .read(voucherGenFiltersProvider.notifier)
-                              .setSessionYr(val);
-                        }
-                      },
-              ),
-            ),
-            right: _labeledField(
-              'Billing Month *',
-              _pickerField(
-                text: filters.billingMonth,
-                icon: Icons.calendar_today,
-                iconAtStart: true,
-                onTap: isGenerating ? null : () => _pickBillingMonth(context),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
+    final sectionList = sectionsAsync.valueOrNull ?? const <ClassSec>[];
+    final filteredSections = filters.classId == null
+        ? sectionList
+        : sectionList.where((s) => s.classId == filters.classId).toList();
+    final sectionsData = filteredSections
+        .map((s) => (id: s.classSecId, label: s.secName))
+        .toList();
 
-          // Group 2: Class + Section
-          _buildFieldGroup(
-            context,
-            left: _labeledField(
-              'Target Class *',
-              classesAsync.when(
-                data: (classes) => DropdownButtonFormField<int?>(
-                  key: ValueKey(filters.classId),
-                  initialValue: filters.classId,
-                  isExpanded: true,
-                  decoration: _inputDecoration(),
-                  items: [
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text('All Classes'),
-                    ),
-                    ...classes.map(
-                      (c) => DropdownMenuItem<int?>(
-                        value: c.classId,
-                        child: Text(c.cName, overflow: TextOverflow.ellipsis),
-                      ),
-                    ),
-                  ],
-                  onChanged: isGenerating
-                      ? null
-                      : (val) {
-                          ref
-                              .read(voucherGenFiltersProvider.notifier)
-                              .setClassId(val);
-                        },
-                ),
-                loading: () => const SizedBox(
-                  height: _kFieldHeight,
-                  child: Center(child: LinearProgressIndicator()),
-                ),
-                error: (_, __) => const Text('Error loading classes'),
-              ),
-            ),
-            right: _labeledField(
-              'Target Section',
-              sectionsAsync.when(
-                data: (sections) {
-                  final filtered = (filters.classId == null)
-                      ? sections
-                      : sections
-                            .where((s) => s.classId == filters.classId)
-                            .toList();
-                  return DropdownButtonFormField<int?>(
-                    key: ValueKey(filters.classSecId),
-                    initialValue: filters.classSecId,
-                    isExpanded: true,
-                    decoration: _inputDecoration(),
-                    items: [
-                      const DropdownMenuItem<int?>(
-                        value: null,
-                        child: Text('All Sections'),
-                      ),
-                      ...filtered.map(
-                        (s) => DropdownMenuItem<int?>(
-                          value: s.classSecId,
-                          child: Text(
-                            'Section ${s.secName}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ],
-                    onChanged: isGenerating
-                        ? null
-                        : (val) {
-                            ref
-                                .read(voucherGenFiltersProvider.notifier)
-                                .setClassSecId(val);
-                          },
-                  );
-                },
-                loading: () => const SizedBox(
-                  height: _kFieldHeight,
-                  child: Center(child: LinearProgressIndicator()),
-                ),
-                error: (_, __) => const Text('Error loading sections'),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
+    final bankList = bankListAsync.valueOrNull ?? const <BankOption>[];
+    final banksData = bankList
+        .map((b) => (id: b.bankInfoId, label: '${b.bankName} - ${b.branch}'))
+        .toList();
 
-          if (filters.mode == 'single') ...[
-            _buildFieldLabel('Target Student *'),
-            const SizedBox(height: 4),
-            SizedBox(
-              height: 38,
-              child: ref
-                  .watch(voucherCohortStudentsProvider)
-                  .when(
-                    data: (students) {
-                      final validVal =
-                          students.any(
-                            (s) => s['Stu_RegID'] == filters.selectedStuRegId,
-                          )
-                          ? filters.selectedStuRegId
-                          : null;
-                      return DropdownButtonFormField<int?>(
-                        key: ValueKey(validVal),
-                        initialValue: validVal,
-                        isExpanded: true,
-                        isDense: true,
-                        menuMaxHeight: 400,
-                        dropdownColor: AppColors.surfaceRaised,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 13,
-                        ),
-                        decoration: _inputDecoration(),
-                        hint: const Text(
-                          'Select student...',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                        items: students.map((s) {
-                          final regId = s['Stu_RegID'] as int;
-                          final roll = s['ClassRollNo'];
-                          final first = (s['NameFirst'] as String? ?? '')
-                              .trim();
-                          final mid = (s['NameMiddle'] as String? ?? '').trim();
-                          final last = (s['NameLast'] as String? ?? '').trim();
-                          final name = [
-                            first,
-                            mid,
-                            last,
-                          ].where((p) => p.isNotEmpty).join(' ');
-                          final label =
-                              '#$regId - $name (Roll: ${roll ?? "-"})';
-                          return DropdownMenuItem<int?>(
-                            value: regId,
-                            child: Text(
-                              label,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 13,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: isGenerating
-                            ? null
-                            : (val) {
-                                ref
-                                    .read(voucherGenFiltersProvider.notifier)
-                                    .setSelectedStuRegId(val);
-                                ref
-                                    .read(voucherGenExecutionProvider.notifier)
-                                    .clearSummary();
-                              },
-                      );
-                    },
-                    loading: () => const SizedBox(
-                      height: 38,
-                      child: Center(child: LinearProgressIndicator()),
-                    ),
-                    error: (_, __) => const Text('Error loading students'),
-                  ),
+    final effectiveBillingMonths = _effectiveBillingMonths(
+      filters.billingMonth,
+      filters.sessionYr,
+    );
+
+    return SingleChildScrollView(
+      child: Container(
+        decoration: _cardDecoration(),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Batch Generation Parameters',
+              style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
             ),
             const SizedBox(height: AppSpacing.sm),
-          ],
-
-          // Group 3: Issue + Due
-          _buildFieldGroup(
-            context,
-            left: _labeledField(
-              'Issue Date *',
-              _pickerField(
-                text: dateFormat.format(filters.issueDate),
-                icon: Icons.calendar_month,
-                onTap: isGenerating
-                    ? null
-                    : () => _pickDate(
-                        context,
-                        filters.issueDate,
-                        (d) => ref
-                            .read(voucherGenFiltersProvider.notifier)
-                            .setIssueDate(d),
-                      ),
-              ),
-            ),
-            right: _labeledField(
-              'Payment Due Date *',
-              _pickerField(
-                text: dateFormat.format(filters.dueDate),
-                icon: Icons.calendar_month,
-                onTap: isGenerating
-                    ? null
-                    : () => _pickDate(
-                        context,
-                        filters.dueDate,
-                        (d) => ref
-                            .read(voucherGenFiltersProvider.notifier)
-                            .setDueDate(d),
-                      ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // Receiving bank: actionable selection with bank icon tile
-          _labeledField(
-            'Receiving Bank *',
-            bankListAsync.when(
-              data: (banks) {
-                final currentBankId =
-                    banks.any((b) => b.bankInfoId == filters.bankId)
-                    ? filters.bankId
-                    : (banks.isNotEmpty ? banks.first.bankInfoId : 1);
-                return DropdownButtonFormField<int>(
-                  key: ValueKey(currentBankId),
-                  initialValue: currentBankId,
-                  isExpanded: true,
-                  icon: const Icon(
-                    Icons.unfold_more,
-                    size: 18,
-                    color: AppColors.textMuted,
-                  ),
-                  decoration: _inputDecoration(
-                    prefixIcon: const Icon(
-                      Icons.account_balance,
-                      size: 18,
-                      color: AppColors.brandPrimary,
-                    ),
-                  ),
-                  items: banks
-                      .map(
-                        (b) => DropdownMenuItem<int>(
-                          value: b.bankInfoId,
-                          child: Text(
-                            b.displayName,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: isGenerating
-                      ? null
-                      : (val) {
-                          if (val != null) {
-                            ref
-                                .read(voucherGenFiltersProvider.notifier)
-                                .setBankId(val);
-                          }
-                        },
-                );
+            VoucherParameterCard(
+              sessionYear: filters.sessionYr,
+              sessionYears: effectiveSessions,
+              sessionYearError: _hasValidated && filters.sessionYr.isEmpty
+                  ? 'Select a session year'
+                  : null,
+              billingMonth: filters.billingMonth,
+              billingMonths: effectiveBillingMonths,
+              billingMonthError: _hasValidated && filters.billingMonth.isEmpty
+                  ? 'Select a billing month'
+                  : null,
+              classId: filters.classId,
+              classes: classesData,
+              classError: _hasValidated && filters.classId == null
+                  ? 'Select a class to continue'
+                  : null,
+              sectionId: filters.classSecId,
+              sections: sectionsData,
+              issueDate: filters.issueDate,
+              issueDateError: null,
+              dueDate: filters.dueDate,
+              dueDateError: filters.dueDate.isBefore(filters.issueDate)
+                  ? 'Due date must be on or after the issue date'
+                  : null,
+              bankId: filters.bankId,
+              banks: banksData,
+              bankError: null,
+              columnCount: 1,
+              onSessionYearChanged: (val) {
+                ref.read(voucherGenFiltersProvider.notifier).setSessionYr(val);
               },
-              loading: () => const SizedBox(
-                height: _kFieldHeight,
-                child: Center(child: LinearProgressIndicator()),
+              onBillingMonthChanged: (val) {
+                ref
+                    .read(voucherGenFiltersProvider.notifier)
+                    .setBillingMonth(val);
+              },
+              onClassChanged: (val) {
+                ref.read(voucherGenFiltersProvider.notifier).setClassId(val);
+              },
+              onSectionChanged: (val) {
+                ref.read(voucherGenFiltersProvider.notifier).setClassSecId(val);
+              },
+              onIssueDateChanged: (val) {
+                ref.read(voucherGenFiltersProvider.notifier).setIssueDate(val);
+              },
+              onDueDateChanged: (val) {
+                ref.read(voucherGenFiltersProvider.notifier).setDueDate(val);
+              },
+              onBankChanged: (val) {
+                if (val != null) {
+                  ref.read(voucherGenFiltersProvider.notifier).setBankId(val);
+                }
+              },
+              onPickIssueDate: () => _pickDate(
+                context,
+                filters.issueDate,
+                (d) => ref
+                    .read(voucherGenFiltersProvider.notifier)
+                    .setIssueDate(d),
               ),
-              error: (_, __) => const Text('Error loading banks'),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // Late fine pill + secondary Sync button (single compact row)
-          Row(
-            children: [
-              Expanded(flex: 11, child: _buildLateFinePill()),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                flex: 9,
-                child: Tooltip(
-                  message: 'Apply the Payment Due Date to existing vouchers',
-                  child: SizedBox(
-                    height: _kFieldHeight,
-                    child: TextButton.icon(
-                      onPressed: _onSyncDueDate,
-                      icon: const Icon(Icons.event_repeat, size: 16),
-                      label: const Text(
-                        'Sync Due Date',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      style: TextButton.styleFrom(
-                        foregroundColor: AppColors.textSecondary,
-                        backgroundColor: AppColors.surfaceSubtle,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-
-                  // Fee heads are height-bounded so their internal scroll view
-                  // never receives unbounded vertical constraints.
-                  SizedBox(
-                    height: 220,
-                    child: _buildFeeHeadsCompact(tariffsAsync, filters),
-                  ),
-                ],
+              onPickDueDate: () => _pickDate(
+                context,
+                filters.dueDate,
+                (d) =>
+                    ref.read(voucherGenFiltersProvider.notifier).setDueDate(d),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-
-          _buildBottomAction(
-            readyCount,
-            generatedCount,
-            isGenerating,
-            _onGenerate,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1386,108 +1325,6 @@ class _VoucherGenerationScreenState
     );
   }
 
-  /// Fee heads as a compact 2-column chip grid with monospace amounts.
-  /// The whole panel scrolls internally, so it can never overflow no matter
-  /// how little vertical space the card has left.
-  Widget _buildFeeHeadsCompact(
-    AsyncValue<List<FeeHeadSummary>> tariffsAsync,
-    VoucherGenFilters filters,
-  ) {
-    return Container(
-      width: double.infinity,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.borderDefault),
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.tune, size: 12, color: AppColors.textMuted),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    'FEE HEADS',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-                TextButton.icon(
-                  onPressed: () => context.go('/fees/parameters'),
-                  icon: const Icon(Icons.edit_outlined, size: 12),
-                  label: const Text(
-                    'Edit tariffs',
-                    style: TextStyle(fontSize: 11),
-                  ),
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 2,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            tariffsAsync.when(
-              data: (tariffs) {
-                return LayoutBuilder(
-                  builder: (context, c) {
-                    const gap = 6.0;
-                    final w = (c.maxWidth - gap) / 2;
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (tariffs.isEmpty)
-                          const Text(
-                            'No tariffs defined for this selection',
-                            style: AppTypography.bodySmall,
-                          )
-                        else
-                          Wrap(
-                            spacing: gap,
-                            runSpacing: gap,
-                            children: tariffs.map((t) {
-                              final isIncluded = !filters.excludedFeeParamIds
-                                  .contains(t.feeParamId);
-                              return SizedBox(
-                                width: w,
-                                child: _buildFeeChip(t, isIncluded),
-                              );
-                            }).toList(),
-                          ),
-                        const SizedBox(height: 8),
-                        _buildArrearsChip(filters.includeArrears),
-                      ],
-                    );
-                  },
-                );
-              },
-              loading: () =>
-                  const SizedBox(height: 12, child: LinearProgressIndicator()),
-              error: (_, __) => const Text(
-                'Error loading fee heads',
-                style: TextStyle(fontSize: 11),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildFeeChip(FeeHeadSummary t, bool isIncluded) {
     return InkWell(
       onTap: () {
@@ -1536,59 +1373,6 @@ class _VoucherGenerationScreenState
                     fontSize: 10.5,
                   ),
                 ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildArrearsChip(bool includeArrears) {
-    return InkWell(
-      onTap: () {
-        ref
-            .read(voucherGenFiltersProvider.notifier)
-            .setIncludeArrears(!includeArrears);
-        ref.invalidate(voucherGenPreviewProvider);
-      },
-      borderRadius: BorderRadius.circular(AppRadius.sm),
-      child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        decoration: BoxDecoration(
-          color: includeArrears
-              ? AppColors.surfaceRaised
-              : AppColors.surfaceSubtle,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(
-            color: includeArrears
-                ? AppColors.brandPrimary
-                : AppColors.borderDefault,
-            width: includeArrears ? 1.5 : 1.0,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              includeArrears ? Icons.check_box : Icons.check_box_outline_blank,
-              size: 14,
-              color: includeArrears
-                  ? AppColors.brandPrimary
-                  : AppColors.textMuted,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              'Include Past Arrears',
-              style: AppTypography.bodySmall.copyWith(
-                fontWeight: includeArrears
-                    ? FontWeight.w600
-                    : FontWeight.normal,
-                color: includeArrears
-                    ? AppColors.textPrimary
-                    : AppColors.textMuted,
-                fontSize: 11,
               ),
             ),
           ],
@@ -1738,6 +1522,52 @@ class _VoucherGenerationScreenState
   // RIGHT CARD — COHORT BILLING AUDIT & LEDGER PREVIEW
   // ---------------------------------------------------------------------------
 
+  Widget _buildPreviewPane(
+    BuildContext context,
+    VoucherGenFilters filters,
+    AsyncValue<List<VoucherPreviewRow>> previewAsync,
+    List<VoucherPreviewRow> previewList,
+    int eligibleCount,
+    int waiverCount,
+    String displayLabel,
+    int displayBilled,
+    int readyCount,
+    int generatedCount,
+    VoucherGenState execState,
+  ) {
+    if (execState.completionSummary != null) {
+      final summary = execState.completionSummary!;
+      return Container(
+        decoration: _cardDecoration(),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: VoucherResultPanel(
+          kind: VoucherResultKind.success,
+          createdCount: summary.generatedCount,
+          totalCount: summary.generatedCount + summary.skippedCount,
+          totalAmount: summary.totalBilled,
+          onPrintAll: () => _openPrintPreview(),
+          onSavePdf: () => _openPrintPreview(),
+          onShare: null,
+          onGenerateAnother: () {
+            ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+          },
+          onResumeRemaining: null,
+        ),
+      );
+    }
+
+    return _buildPreviewCard(
+      previewAsync,
+      previewList,
+      eligibleCount,
+      waiverCount,
+      displayLabel,
+      displayBilled,
+      readyCount,
+      generatedCount,
+    );
+  }
+
   Widget _buildPreviewCard(
     AsyncValue<List<VoucherPreviewRow>> previewAsync,
     List<VoucherPreviewRow> previewList,
@@ -1749,6 +1579,7 @@ class _VoucherGenerationScreenState
     int generatedCount,
   ) {
     final filters = ref.watch(voucherGenFiltersProvider);
+    final execState = ref.watch(voucherGenExecutionProvider);
     final generatedRows = previewList
         .where((r) => r.status == VoucherPreviewStatus.alreadyGenerated)
         .toList();
@@ -1780,6 +1611,28 @@ class _VoucherGenerationScreenState
         persistedSum != null &&
         currentToggleSum != null &&
         currentToggleSum != persistedSum;
+
+    final tariffsAsync = ref.watch(
+      voucherClassTariffsProvider(filters.classId),
+    );
+    final feeHeadList = tariffsAsync.valueOrNull ?? const <FeeHeadSummary>[];
+    final heads = feeHeadList.map((t) {
+      final isChecked = !filters.excludedFeeParamIds.contains(t.feeParamId);
+      return FeeHeadItem(
+        feeParamId: t.feeParamId,
+        name: t.description.trim(),
+        amount: t.fee.toInt(),
+        isChecked: isChecked,
+      );
+    }).toList();
+
+    final noTariffMsg = (filters.classId == null)
+        ? 'Select a class to configure fee heads'
+        : (feeHeadList.isEmpty && !tariffsAsync.isLoading
+              ? 'No fees set up for this class.'
+              : null);
+
+    final errorMsg = tariffsAsync.hasError ? "Couldn't load fee heads." : null;
 
     return Container(
       decoration: _cardDecoration(),
@@ -1815,31 +1668,61 @@ class _VoucherGenerationScreenState
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Re-calculate'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textPrimary,
-                  side: const BorderSide(color: AppColors.borderDefault),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+              if (generatedCount > 0) ...[
+                ElevatedButton.icon(
+                  onPressed: () => _openPrintPreview(),
+                  icon: const Icon(Icons.print, size: 16),
+                  label: Text('Print $generatedCount Vouchers (Ctrl+P)'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandPrimary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                   ),
                 ),
-                onPressed: () => ref.invalidate(voucherGenPreviewProvider),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              OutlinedButton.icon(
-                onPressed: () => context.go('/fees/ledger'),
-                icon: const Icon(Icons.assessment_outlined, size: 16),
-                label: const Text('View Full Ledger'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textPrimary,
-                  side: const BorderSide(color: AppColors.borderDefault),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: execState.isGenerating
+                      ? null
+                      : _onRegenerateUnpaid,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Regenerate'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.brandPrimary,
+                    side: const BorderSide(color: AppColors.brandPrimary),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                   ),
                 ),
-              ),
+              ] else ...[
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Re-calculate'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    side: const BorderSide(color: AppColors.borderDefault),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                  ),
+                  onPressed: () => ref.invalidate(voucherGenPreviewProvider),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                OutlinedButton.icon(
+                  onPressed: () => context.go('/fees/ledger'),
+                  icon: const Icon(Icons.assessment_outlined, size: 16),
+                  label: const Text('View Full Ledger'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    side: const BorderSide(color: AppColors.borderDefault),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1884,7 +1767,7 @@ class _VoucherGenerationScreenState
           ),
           const SizedBox(height: AppSpacing.sm),
 
-          if (hasDrift)
+          if (hasDrift) ...[
             Container(
               margin: const EdgeInsets.only(bottom: AppSpacing.sm),
               padding: const EdgeInsets.symmetric(
@@ -1916,6 +1799,7 @@ class _VoucherGenerationScreenState
                 ],
               ),
             ),
+          ],
 
           // Table (header sticky, body scrolls internally, footer pinned)
           Expanded(
@@ -1933,39 +1817,19 @@ class _VoucherGenerationScreenState
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.sm),
 
-          // Commit notice
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            decoration: BoxDecoration(
-              color: AppColors.statusWarningBg,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.info_outline,
-                  size: 16,
-                  color: AppColors.statusWarningText,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    '$readyCount vouchers will be created in VoucharMas + VoucharDet. '
-                    'This action cannot be undone after commit.',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.statusWarningText,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          // Fee heads accordion at bottom of preview pane
+          FeeHeadsAccordion(
+            heads: heads,
+            isLoading: tariffsAsync.isLoading,
+            errorMessage: errorMsg,
+            noTariffMessage: noTariffMsg,
+            onToggleHead: (id) =>
+                ref.read(voucherGenFiltersProvider.notifier).toggleFeeHead(id),
+            onRetry: () =>
+                ref.invalidate(voucherClassTariffsProvider(filters.classId)),
+            onOpenFeeParams: () => context.go('/fees/parameters'),
           ),
         ],
       ),
@@ -2670,6 +2534,39 @@ class _VoucherGenerationScreenState
   // ---------------------------------------------------------------------------
   // MOBILE LAYOUT (page-level scroll; no vertical Expanded/Flexible/Spacer)
   // ---------------------------------------------------------------------------
+
+  Widget _buildGeneratingBanner(VoucherGenState execState) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.statusErrorBg,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.statusErrorBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.sync, color: AppColors.statusErrorText, size: 18),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              'Voucher Generation in Progress: Generating vouchers for the selected cohort. '
+              'Please do not navigate away or close the application until the process finishes.',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusErrorText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildMobileScaffold(
     BuildContext context,
@@ -3583,7 +3480,6 @@ class _VoucherGenerationScreenState
       ],
     );
   }
-
 }
 
 String? _getFromOrigin(BuildContext context) {
