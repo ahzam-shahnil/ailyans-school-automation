@@ -9,6 +9,7 @@ import '../../core/providers/fee_ledger_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../models/fee_ledger_row.dart';
 import '../../widgets/reports/report_definition.dart';
@@ -374,6 +375,10 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(feeLedgerProvider);
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(state);
+    }
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
@@ -1312,6 +1317,359 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
       ),
     );
   }
+
+  // ── MOBILE LAYOUT (page-level scroll; no vertical Expanded/Flexible/Spacer) ─
+
+  Widget _buildMobileScaffold(FeeLedgerState state) {
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      body: SafeArea(
+        bottom: true,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildHeader(state),
+              const SizedBox(height: AppSpacing.sm),
+              _buildMobileKpiSummary(state),
+              const SizedBox(height: AppSpacing.sm),
+              _buildFilterBar(state),
+              const SizedBox(height: AppSpacing.xs),
+              _buildMobileLedgerList(state),
+              const SizedBox(height: AppSpacing.sm),
+              _buildMobilePaginationFooter(state),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileKpiSummary(FeeLedgerState state) {
+    final recoveryRate = state.grossReceivable > 0
+        ? ((state.cashCollected / state.grossReceivable) * 100).toStringAsFixed(
+            1,
+          )
+        : '0.0';
+
+    final card1 = _buildKpiCard(
+      title: 'GROSS RECEIVABLE',
+      value: 'Rs. ${_currencyFormat.format(state.grossReceivable)}',
+      subtitle: '${state.totalBilledCount} Billed Vouchers',
+      accentColor: AppColors.chartBlue,
+      icon: Icons.receipt_outlined,
+    );
+    final card2 = _buildKpiCard(
+      title: 'TOTAL CONCESSIONS',
+      value: 'Rs. ${_currencyFormat.format(state.totalConcessions)}',
+      subtitle: '${state.fullWaiversCount} Full Waivers',
+      accentColor: AppColors.chartAmber,
+      icon: Icons.card_giftcard,
+    );
+    final card3 = _buildKpiCard(
+      title: 'CASH COLLECTED',
+      value: 'Rs. ${_currencyFormat.format(state.cashCollected)}',
+      subtitle: '${state.paidCount} Paid [$recoveryRate%]',
+      accentColor: AppColors.chartTeal,
+      icon: Icons.check_circle_outline,
+    );
+    final card4 = _buildKpiCard(
+      title: 'OUTSTANDING DUES',
+      value: 'Rs. ${_currencyFormat.format(state.outstandingDues)}',
+      subtitle: '${state.defaultersCount} Defaulters',
+      accentColor: AppColors.chartRose,
+      icon: Icons.warning_amber_rounded,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: card1),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: card2),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(child: card3),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: card4),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileLedgerList(FeeLedgerState state) {
+    if (state.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(AppSpacing.lg),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (state.rows.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.receipt_long_outlined,
+              size: 48,
+              color: AppColors.textSecondary,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              state.selectedStatus == 'Paid'
+                  ? 'No Paid Vouchar' // Verbatim [Sic]
+                  : 'Record Not Found',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              state.selectedStatus == 'Paid'
+                  ? 'No paid vouchers recorded for this selection.'
+                  : 'No vouchers match your filter criteria.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton(
+              onPressed: ref.read(feeLedgerProvider.notifier).clearFilters,
+              child: const Text('Reset All Filters'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: state.rows.map(_buildMobileLedgerCard).toList(),
+    );
+  }
+
+  Widget _buildMobileLedgerCard(FeeLedgerRow r) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    r.voucherMasId,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.brandPrimary,
+                    ),
+                  ),
+                ),
+                _buildStatusBadge(r),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              r.studentName,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Reg ${r.stuRegId} · ${r.className}'
+              '${r.sectionName.isNotEmpty ? " - ${r.sectionName}" : ""}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: _mobileLedgerStat(
+                    'Gross',
+                    _currencyFormat.format(r.gross),
+                  ),
+                ),
+                Expanded(
+                  child: _mobileLedgerStat(
+                    'Disc',
+                    _currencyFormat.format(r.discount),
+                  ),
+                ),
+                Expanded(
+                  child: _mobileLedgerStat(
+                    'Net',
+                    _currencyFormat.format(r.netDue),
+                    color: r.netDue > 0
+                        ? AppColors.statusErrorText
+                        : AppColors.statusSuccessText,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    r.dueDate != null ? _dateFormat.format(r.dueDate!) : '-',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.visibility_outlined, size: 18),
+                  onPressed: () => _showVoucherDetail(r),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.print_outlined, size: 18),
+                  onPressed: r.isPaid == 'Y' ? () => _reprintSlip(r) : null,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.sms_outlined, size: 18),
+                  onPressed: () => _sendReminder(r),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _mobileLedgerStat(String label, String value, {Color? color}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+        ),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: color ?? AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobilePaginationFooter(FeeLedgerState state) {
+    final totalPages = (state.totalRowCount / state.pageSize).ceil().clamp(
+      1,
+      9999,
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Showing ${state.rows.length} of ${state.totalRowCount} records '
+            '(Page ${state.page} of $totalPages)',
+            style: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Rows:', style: TextStyle(fontSize: 12)),
+              const SizedBox(width: 4),
+              DropdownButton<int>(
+                value: state.pageSize,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                items: const [
+                  DropdownMenuItem(
+                    value: 25,
+                    child: Text('25', style: TextStyle(fontSize: 12)),
+                  ),
+                  DropdownMenuItem(
+                    value: 50,
+                    child: Text('50', style: TextStyle(fontSize: 12)),
+                  ),
+                  DropdownMenuItem(
+                    value: 100,
+                    child: Text('100', style: TextStyle(fontSize: 12)),
+                  ),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    ref.read(feeLedgerProvider.notifier).setPageSize(val);
+                  }
+                },
+              ),
+              const SizedBox(width: AppSpacing.md),
+              IconButton(
+                icon: const Icon(Icons.chevron_left, size: 22),
+                onPressed: state.page > 1
+                    ? () => ref
+                          .read(feeLedgerProvider.notifier)
+                          .setPage(state.page - 1)
+                    : null,
+              ),
+              Text(
+                '${state.page} / $totalPages',
+                style: const TextStyle(fontSize: 12),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, size: 22),
+                onPressed: state.page < totalPages
+                    ? () => ref
+                          .read(feeLedgerProvider.notifier)
+                          .setPage(state.page + 1)
+                    : null,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1333,6 +1691,253 @@ class _VoucherDetailDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return Dialog(
+        insetPadding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: SafeArea(
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.receipt, color: AppColors.brandPrimary),
+                    const SizedBox(width: AppSpacing.xs),
+                    Expanded(
+                      child: Text(
+                        'Voucher Details - ${row.voucherMasId}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: AppColors.borderDefault),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Student: ${row.studentName} (Reg ID: ${row.stuRegId})',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Class: ${row.className}${row.sectionName.isNotEmpty ? " - ${row.sectionName}" : ""}',
+                      ),
+                      const SizedBox(height: 4),
+                      Text('Billing Month: ${row.forMonth}'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Due Date: ${row.dueDate != null ? _fmt.format(row.dueDate!) : "N/A"}',
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Status: ${row.isPaid == "Y" ? "Paid" : (row.isPaid == "O" ? "Overdue" : "Unpaid")}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: row.isPaid == 'Y'
+                              ? AppColors.statusSuccessText
+                              : AppColors.statusErrorText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                const Text(
+                  'Fee Parameter Breakdown:',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.borderDefault),
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                    ),
+                    child: items.isEmpty
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Text('No line item breakdown found.'),
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                headingRowHeight: 32,
+                                dataRowMinHeight: 30,
+                                dataRowMaxHeight: 34,
+                                columnSpacing: 16,
+                                columns: const [
+                                  DataColumn(
+                                    label: Text(
+                                      '#',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Text(
+                                      'Fee Head',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Amount (Rs)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Discount (Rs)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Net (Rs)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                rows: items.map((it) {
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(
+                                          it.feeParamId.toString(),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          it.paramDescription,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          _curr.format(it.amount),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          _curr.format(it.discount),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          _curr.format(it.net),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      'Gross: Rs. ${_curr.format(row.gross)}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    Text(
+                      'Concessions: Rs. ${_curr.format(row.discount)}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    Text(
+                      'Net Due: Rs. ${_curr.format(row.netDue)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: row.netDue > 0
+                            ? AppColors.statusErrorText
+                            : AppColors.statusSuccessText,
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 20),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (onReprintSlip != null)
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          onReprintSlip!();
+                        },
+                        icon: const Icon(Icons.print, size: 16),
+                        label: const Text('Reprint Payment Slip'),
+                      ),
+                    if (onReprintSlip != null)
+                      const SizedBox(height: AppSpacing.xs),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -1606,6 +2211,220 @@ class _ClassSummaryDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return Dialog(
+        insetPadding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: SafeArea(
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Class Collection Summary ($month, Session $sessionYr)',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(height: 16),
+                Expanded(
+                  child: Container(
+                    child: summaryRows.isEmpty
+                        ? const Center(
+                            child: Text('No class collection data recorded.'),
+                          )
+                        : SingleChildScrollView(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                headingRowHeight: 32,
+                                dataRowMinHeight: 30,
+                                dataRowMaxHeight: 34,
+                                columnSpacing: 14,
+                                columns: const [
+                                  DataColumn(
+                                    label: Text(
+                                      'Class',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Billed',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Gross (Rs)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Discounts (Rs)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Collected (Rs)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Dues (Rs)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Recovery %',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                rows: summaryRows.map((r) {
+                                  final billed =
+                                      (r['totalBilled'] as num?)?.toInt() ?? 0;
+                                  final gross =
+                                      (r['grossReceivable'] as num?)?.toInt() ??
+                                      0;
+                                  final disc =
+                                      (r['totalDiscounts'] as num?)?.toInt() ??
+                                      0;
+                                  final coll =
+                                      (r['cashCollected'] as num?)?.toInt() ??
+                                      0;
+                                  final dues =
+                                      (r['outstandingDues'] as num?)?.toInt() ??
+                                      0;
+                                  final pct = gross > 0
+                                      ? ((coll / gross) * 100).toStringAsFixed(
+                                          1,
+                                        )
+                                      : '0.0';
+
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(
+                                          (r['className'] as String?) ??
+                                              'Unknown',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          billed.toString(),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          _curr.format(gross),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          _curr.format(disc),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          _curr.format(coll),
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          _curr.format(dues),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.statusErrorText,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          '$pct%',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                const Divider(height: 20),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Close'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -1824,6 +2643,245 @@ class _DailyLedgerDialog extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final totalCollected = paidRows.fold<int>(0, (sum, r) => sum + r.paidAmt);
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return Dialog(
+        insetPadding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: SafeArea(
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Daily Collection Ledger ($month, Session $sessionYr)',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const Divider(height: 16),
+                Expanded(
+                  child: Container(
+                    child: paidRows.isEmpty
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Text(
+                                'No Paid Vouchar',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                headingRowHeight: 32,
+                                dataRowMinHeight: 30,
+                                dataRowMaxHeight: 34,
+                                columnSpacing: 16,
+                                columns: const [
+                                  DataColumn(
+                                    label: Text(
+                                      'Voucher ID',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Text(
+                                      'Student Name',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Text(
+                                      'Class',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    numeric: true,
+                                    label: Text(
+                                      'Paid Amount (Rs)',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  DataColumn(
+                                    label: Text(
+                                      'Paid Date',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                rows: paidRows.map((r) {
+                                  return DataRow(
+                                    cells: [
+                                      DataCell(
+                                        Text(
+                                          r.voucherMasId,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          r.studentName,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          r.className,
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          _curr.format(r.paidAmt),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                      DataCell(
+                                        Text(
+                                          r.paidDate != null
+                                              ? _fmt.format(r.paidDate!)
+                                              : 'N/A',
+                                          style: const TextStyle(fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Paid Count: ${paidRows.length}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Total Collected: Rs. ${_curr.format(totalCollected)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.statusSuccessText,
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 20),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    FilledButton.icon(
+                      icon: const Icon(Icons.print, size: 16),
+                      label: const Text('Print Ledger'),
+                      onPressed: paidRows.isEmpty
+                          ? null
+                          : () {
+                              final meta = ref
+                                  .read(shellMetadataProvider)
+                                  .value;
+                              final collections = paidRows
+                                  .map(
+                                    (r) => {
+                                      'voucherNo': r.voucherMasId,
+                                      'date': r.paidDate != null
+                                          ? _fmt.format(r.paidDate!)
+                                          : '',
+                                      'studentName': r.studentName,
+                                      'className': r.className,
+                                      'bank': r.bankId != null
+                                          ? 'Bank #${r.bankId}'
+                                          : 'Cash',
+                                      'amount': r.paidAmt,
+                                    },
+                                  )
+                                  .toList();
+
+                              final safeBranchName =
+                                  (meta?.branchName != null &&
+                                      meta!.branchName.trim().isNotEmpty)
+                                  ? meta.branchName.trim()
+                                  : "Ailyans's Higher Secondary School Mianwali";
+                              final safeBranchAddress =
+                                  (meta?.branchAddress != null &&
+                                      meta!.branchAddress.trim().isNotEmpty)
+                                  ? meta.branchAddress.trim()
+                                  : 'Muslim Bazar Mianwali';
+
+                              ReportPreviewModal.show(
+                                context,
+                                request: ReportRequest(
+                                  type: ReportType.dailyCollection,
+                                  titleOverride: 'Daily Collection - $month',
+                                  extraParams: {
+                                    'date': month,
+                                    'collections': collections,
+                                    'branchName': safeBranchName,
+                                    'branchAddress': safeBranchAddress,
+                                  },
+                                ),
+                              );
+                            },
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Dialog(
       shape: RoundedRectangleBorder(
