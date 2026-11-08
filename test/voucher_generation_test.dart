@@ -2044,6 +2044,84 @@ void main() {
         expect(element.read(voucherGenFiltersProvider).classId, isNull);
       },
     );
+
+    testWidgets(
+      'FeeHeadsAccordion expands and shows Edit tariffs button',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(1400, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              clockProvider.overrideWithValue(() => DateTime(2017, 10, 1)),
+              availableSessionsProvider.overrideWith(
+                (ref) async => ['2017-2018', '2026-27'],
+              ),
+              shellMetadataProvider.overrideWith(
+                (ref) async => const ShellMetadata(
+                  branchName: "Ailyans's Higher Secondary School Mianwali",
+                  branchAddress: 'Muslim Bazar Mianwali',
+                  sessionYear: '2017-2018',
+                  studentCount: 0,
+                  classCount: 0,
+                  staffCount: 0,
+                  pendingVouchers: 0,
+                ),
+              ),
+              classesProvider.overrideWith(
+                (ref) async => [
+                  const SchoolClass(classId: 13, cName: 'Class 10'),
+                ],
+              ),
+              sectionsProvider.overrideWith(
+                (ref) async => [
+                  const ClassSec(classSecId: 1, classId: 13, secName: 'A'),
+                ],
+              ),
+              voucherBankListProvider.overrideWith(
+                (ref) async => [
+                  const BankOption(
+                    bankInfoId: 1,
+                    bankName: 'Askari Bank',
+                    branch: 'Ballo Khel Road',
+                    acctNo: '4528',
+                    isDefault: true,
+                  ),
+                ],
+              ),
+              voucherClassTariffsProvider(13).overrideWith(
+                (ref) async => [
+                  const FeeHeadSummary(
+                    feeParamId: 2,
+                    description: 'Tuition Fee ',
+                    fee: 1500.0,
+                  ),
+                ],
+              ),
+              voucherGenPreviewProvider.overrideWith(
+                (ref) async => [],
+              ),
+            ],
+            child: const MaterialApp(
+              home: Scaffold(body: VoucherGenerationScreen()),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // 1. Initially collapsed
+        expect(find.byType(FeeHeadsAccordion), findsOneWidget);
+        expect(find.text('Edit tariffs'), findsNothing);
+
+        // 2. Tap to expand
+        await tester.tap(find.textContaining('fee heads'));
+        await tester.pumpAndSettle();
+
+        // 3. Edit tariffs button is visible
+        expect(find.text('Edit tariffs'), findsOneWidget);
+      },
+    );
   });
 }
 

@@ -1666,6 +1666,7 @@ class _VoucherGenerationScreenState
             onRetry: () =>
                 ref.invalidate(voucherClassTariffsProvider(filters.classId)),
             onOpenFeeParams: () => context.go('/fees/parameters'),
+            onEditTariffs: () => context.go('/fees/parameters'),
           ),
         ],
       ),
@@ -2598,6 +2599,7 @@ class _VoucherGenerationScreenState
           onRetry: () =>
               ref.invalidate(voucherClassTariffsProvider(filters.classId)),
           onOpenFeeParams: () => context.go('/fees/parameters'),
+          onEditTariffs: () => context.go('/fees/parameters'),
         ),
       ],
     );

@@ -28,6 +28,7 @@ class FeeHeadsAccordion extends StatefulWidget {
     required this.onToggleHead,
     required this.onRetry,
     required this.onOpenFeeParams,
+    this.onEditTariffs,
     super.key,
   });
 
@@ -38,6 +39,7 @@ class FeeHeadsAccordion extends StatefulWidget {
   final ValueChanged<int> onToggleHead;
   final VoidCallback? onRetry;
   final VoidCallback? onOpenFeeParams;
+  final VoidCallback? onEditTariffs;
 
   @override
   State<FeeHeadsAccordion> createState() => _FeeHeadsAccordionState();
@@ -213,6 +215,24 @@ class _FeeHeadsAccordionState extends State<FeeHeadsAccordion> {
     return Column(children: rows);
   }
 
+  Widget _buildLoadedBody(BoxConstraints constraints) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeadsGrid(constraints),
+        if (widget.onEditTariffs != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: widget.onEditTariffs,
+              icon: const Icon(Icons.edit_outlined, size: 14),
+              label: const Text('Edit tariffs', style: TextStyle(fontSize: 12)),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
@@ -275,7 +295,7 @@ class _FeeHeadsAccordionState extends State<FeeHeadsAccordion> {
                                   ? _buildErrorCard()
                                   : widget.noTariffMessage != null
                                       ? _buildNoTariffCard()
-                                      : _buildHeadsGrid(constraints),
+                                      : _buildLoadedBody(constraints),
                         )
                       : const SizedBox.shrink())
                   : AnimatedSize(
@@ -294,7 +314,7 @@ class _FeeHeadsAccordionState extends State<FeeHeadsAccordion> {
                                       ? _buildErrorCard()
                                       : widget.noTariffMessage != null
                                           ? _buildNoTariffCard()
-                                          : _buildHeadsGrid(constraints),
+                                          : _buildLoadedBody(constraints),
                             )
                           : const SizedBox.shrink(),
                     ),
