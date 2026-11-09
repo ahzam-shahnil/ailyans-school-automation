@@ -12,9 +12,11 @@ import '../../core/providers/voucher_generation_provider.dart'
     show voucherClassTariffsProvider;
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/fee_head_display.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/bank_account_row.dart';
 import '../../models/class_fee_summary.dart';
 import '../../models/fee_parameter_row.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -162,6 +164,11 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
       }
     });
 
+    // Phase G-9 Shot 1b — mobile guard (< 600px). Desktop layout untouched.
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileLayout(context, feeParamState, feeParamNotifier);
+    }
+
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyN, control: true): () {
@@ -247,6 +254,556 @@ class _FeeParameterScreenState extends ConsumerState<FeeParameterScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  // ==========================================================================
+  // MOBILE LAYOUT (< 600px) — Phase G-9 Shot 1b
+  // ==========================================================================
+  Widget _buildMobileLayout(
+    BuildContext context,
+    FeeParameterState state,
+    FeeParameterNotifier notifier,
+  ) {
+    final selectedClass = state.classSummaries.firstWhere(
+      (c) => c.classId == state.selectedClassId,
+      orElse: () => const ClassFeeSummary(
+        classId: 0,
+        cName: 'Class',
+        headCount: 0,
+        totalFee: 0,
+      ),
+    );
+    final bankState = ref.watch(bankAccountProvider);
+    final isBanksTab = state.selectedTab == 1;
+
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header strip: back button + title
+            Container(
+              color: AppColors.surface,
+              padding: const EdgeInsets.fromLTRB(4, 4, 12, 4),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, size: 20),
+                    tooltip: 'Back to Fee Vouchers',
+                    onPressed: () => context.go('/fees/vouchers'),
+                    constraints: const BoxConstraints(
+                      minWidth: 44,
+                      minHeight: 44,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Fee Structure & Bank Setup',
+                      style: AppTypography.h2.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.borderDefault,
+            ),
+
+            // Horizontal tab switcher (horizontal scroll on narrow screens)
+            _buildMobileTabSwitcher(state.selectedTab),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: AppColors.borderDefault,
+            ),
+
+            // Scrollable body
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (isBanksTab) ...[
+                      // Tab 2: Institutional Bank Accounts
+                      Text(
+                        'INSTITUTIONAL BANK ACCOUNTS (${bankState.banks.length})',
+                        style: _mobileSectionLabelStyle,
+                      ),
+                      const SizedBox(height: 8),
+                      if (bankState.banks.isEmpty)
+                        _buildMobileAccentCard(
+                          accentColor: AppColors.textMuted,
+                          child: Text(
+                            'No bank accounts registered yet. Use the add button below to create one.',
+                            style: AppTypography.body.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        )
+                      else
+                        for (final bank in bankState.banks)
+                          _buildMobileBankCard(bank),
+                    ] else ...[
+                      // Tab 1: Class Fee Structure
+                      _buildMobileSessionSelector(state, notifier),
+                      const SizedBox(height: 12),
+                      const Text('CLASSES', style: _mobileSectionLabelStyle),
+                      const SizedBox(height: 8),
+                      for (final c in state.classSummaries)
+                        _buildMobileClassCard(c, state, notifier),
+
+                      // Selected Class Fee Schedule
+                      if (state.selectedClassId != null) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'FEE SCHEDULE: ${selectedClass.cName}',
+                          style: _mobileSectionLabelStyle,
+                        ),
+                        const SizedBox(height: 8),
+                        if (state.currentClassRows.isEmpty)
+                          _buildMobileAccentCard(
+                            accentColor: AppColors.textMuted,
+                            child: Text(
+                              'No fee parameters defined for ${selectedClass.cName} in session ${state.selectedFeeYr}.',
+                              style: AppTypography.body.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          )
+                        else ...[
+                          for (final r in state.currentClassRows)
+                            _buildMobileFeeParamCard(r, selectedClass),
+                          const SizedBox(height: 12),
+                          _buildMobileTotalStrip(state),
+                        ],
+                      ],
+                    ],
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+
+            // Sticky Action Bar
+            _buildMobileStickyBar(context, state, notifier, selectedClass),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static const TextStyle _mobileSectionLabelStyle = TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.4,
+    color: AppColors.textSecondary,
+  );
+
+  /// Safe left-strip accent card: clip + uniform border + 3.5px strip Row.
+  /// Never combines a non-uniform Border with borderRadius on one BoxDecoration.
+  Widget _buildMobileAccentCard({
+    required Color accentColor,
+    required Widget child,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+    EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 8),
+    Color? backgroundColor,
+    VoidCallback? onTap,
+  }) {
+    final row = IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(width: 3.5, color: accentColor),
+          Expanded(child: Padding(padding: padding, child: child)),
+        ],
+      ),
+    );
+    return Container(
+      margin: margin,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: backgroundColor ?? AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: onTap != null
+          ? Material(
+              color: Colors.transparent,
+              child: InkWell(onTap: onTap, child: row),
+            )
+          : row,
+    );
+  }
+
+  Widget _buildMobileTabSwitcher(int selectedTab) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildMobileTabButton(
+            label: '1. Class Fee Structure',
+            isSelected: selectedTab == 0,
+            onTap: () =>
+                ref.read(feeParameterProvider.notifier).setSelectedTab(0),
+          ),
+          _buildMobileTabButton(
+            label: '2. Institutional Bank Accounts',
+            isSelected: selectedTab == 1,
+            onTap: () {
+              ref.read(feeParameterProvider.notifier).setSelectedTab(1);
+              ref.read(bankAccountProvider.notifier).loadBanks();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTabButton({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isSelected ? AppColors.accentFees : Colors.transparent,
+              width: 3.0,
+            ),
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: AppTypography.bodySmall.copyWith(
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppColors.accentFees : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 44px-high outlined session dropdown.
+  Widget _buildMobileSessionSelector(
+    FeeParameterState state,
+    FeeParameterNotifier notifier,
+  ) {
+    final sessionYearsAsync = ref.watch(availableSessionsProvider);
+    final sessionYears = sessionYearsAsync.valueOrNull ?? const <String>[];
+    final effectiveSessions = <String>{
+      if (state.selectedFeeYr.isNotEmpty) state.selectedFeeYr,
+      ...sessionYears,
+      '2017-2018',
+    }.toList()..sort((a, b) => b.compareTo(a));
+    final currentValue = effectiveSessions.contains(state.selectedFeeYr)
+        ? state.selectedFeeYr
+        : (effectiveSessions.isNotEmpty
+              ? effectiveSessions.first
+              : '2017-2018');
+
+    return Container(
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: DropdownButton<String>(
+        value: currentValue,
+        isExpanded: true,
+        isDense: true,
+        underline: const SizedBox.shrink(),
+        icon: const Icon(Icons.keyboard_arrow_down, size: 20),
+        style: AppTypography.body.copyWith(color: AppColors.textPrimary),
+        dropdownColor: AppColors.surface,
+        items: effectiveSessions.map((s) {
+          return DropdownMenuItem(
+            value: s,
+            child: Text(
+              s,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textPrimary,
+              ),
+            ),
+          );
+        }).toList(),
+        onChanged: (val) {
+          if (val != null && val != state.selectedFeeYr) {
+            notifier.setSelectedFeeYr(val);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildMobileClassCard(
+    ClassFeeSummary c,
+    FeeParameterState state,
+    FeeParameterNotifier notifier,
+  ) {
+    final isSelected = c.classId == state.selectedClassId;
+    return _buildMobileAccentCard(
+      accentColor: AppColors.accentFees,
+      backgroundColor: isSelected ? AppColors.accentFeesSoftBg : null,
+      onTap: () => notifier.setSelectedClassId(c.classId),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  c.cName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body.copyWith(
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (c.headCount > 0) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Rs. ${NumberFormat('#,##0.00').format(c.totalFee)} total',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          MobileStatusPill(
+            label: '${c.headCount} Heads',
+            variant: c.headCount > 0
+                ? MobileStatusVariant.success
+                : MobileStatusVariant.neutral,
+          ),
+          Icon(
+            Icons.chevron_right,
+            size: 20,
+            color: isSelected ? AppColors.accentFees : AppColors.textMuted,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileFeeParamCard(FeeParameterRow row, ClassFeeSummary selectedClass) {
+    return _buildMobileAccentCard(
+      accentColor: AppColors.accentFees,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              row.displayName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.body.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            row.formatAmount(),
+            style: AppTypography.monospace.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppColors.accentFees,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            tooltip: 'Edit Tariff',
+            onPressed: () =>
+                _showEditFeeParamModal(context, row, selectedClass.cName),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.delete_outline,
+              size: 18,
+              color: AppColors.statusErrorText,
+            ),
+            tooltip: 'Remove Tariff',
+            onPressed: () =>
+                _showDeleteFeeParamModal(context, row, selectedClass.cName),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTotalStrip(FeeParameterState state) {
+    final total = state.currentClassRows.fold<double>(
+      0.0,
+      (sum, r) => sum + r.fee,
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.accentFeesSoftBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.accentFees.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Total Class Package',
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Rs. ${NumberFormat('#,##0.00').format(total)}',
+            style: AppTypography.monospace.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppColors.accentFees,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileBankCard(BankAccountRow bank) {
+    return _buildMobileAccentCard(
+      accentColor: AppColors.accentFees,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  bank.bankName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  bank.branch,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                Text(
+                  bank.acctNo,
+                  style: AppTypography.monospace.copyWith(
+                    fontSize: 12,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          MobileStatusPill(
+            label: bank.isActive ? 'Active' : 'Inactive',
+            variant: bank.isActive
+                ? MobileStatusVariant.success
+                : MobileStatusVariant.error,
+          ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            tooltip: 'Edit Bank Account',
+            onPressed: () => _showBankModal(context, bank),
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileStickyBar(
+    BuildContext context,
+    FeeParameterState state,
+    FeeParameterNotifier notifier,
+    ClassFeeSummary selectedClass,
+  ) {
+    final isBanksTab = state.selectedTab == 1;
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        12,
+        8,
+        12,
+        MediaQuery.paddingOf(context).bottom + 8,
+      ),
+      child: SizedBox(
+        height: 48,
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: isBanksTab
+              ? () => _showBankModal(context)
+              : () => _handleMobileAddAction(state, notifier, selectedClass),
+          icon: const Icon(Icons.add, size: 18),
+          label: Text(
+            isBanksTab ? 'Add Bank Account' : 'Add Fee Parameter (Ctrl+N)',
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accentFees,
+            foregroundColor: AppColors.textOnPrimary,
+            iconColor: AppColors.textOnPrimary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleMobileAddAction(
+    FeeParameterState state,
+    FeeParameterNotifier notifier,
+    ClassFeeSummary selectedClass,
+  ) {
+    if (state.selectedClassId == null || selectedClass.classId == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Select a class first to add a fee parameter.'),
+          backgroundColor: AppColors.statusErrorText,
+        ),
+      );
+      return;
+    }
+    _showAddFeeParamModal(
+      context,
+      selectedClass.cName,
+      selectedClass.classId,
+      state.selectedFeeYr,
     );
   }
 
