@@ -269,11 +269,15 @@ class _AppShellState extends ConsumerState<AppShell> {
           ),
         ),
         drawer: const MobileDrawer(),
-        body: Column(
-          children: [
-            Expanded(child: widget.child),
-            const AppStatusBar(showSyncStatus: true),
-          ],
+        body: GestureDetector(
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            children: [
+              Expanded(child: widget.child),
+              const AppStatusBar(showSyncStatus: true),
+            ],
+          ),
         ),
         bottomNavigationBar: MobileBottomNav(currentLocation: currentLocation),
       ),

@@ -10,6 +10,7 @@ import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -459,6 +460,93 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     String todayFormatted, {
     required bool isStacked,
   }) {
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      final sessionYr = shellMeta?.sessionYear ?? '2017-2018';
+      return _SurfaceCard(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              flex: 5,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'PRINCIPAL CONSOLE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.6,
+                      color: AppColors.accentDashboard,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Operational Overview — $todayFormatted',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.h2.copyWith(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              flex: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xs,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.statusInfoBg,
+                      borderRadius: BorderRadius.circular(AppRadius.full),
+                      border: Border.all(color: AppColors.statusInfoBorder),
+                    ),
+                    child: Text(
+                      '[ Academic Session: $sessionYr ]',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.monospace.copyWith(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.statusInfoText,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.refresh,
+                        size: 20,
+                        color: AppColors.textSecondary,
+                      ),
+                      tooltip: 'Refresh Dashboard (Ctrl+R)',
+                      onPressed: _refresh,
+                      padding: EdgeInsets.zero,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final title = Row(
       children: [
         Container(
