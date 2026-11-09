@@ -8,6 +8,9 @@ import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 
 /// Screen 25 - ClassSectionScreen at `/academics/classes`.
 /// Implements §S6 (`frmClass` at `0x00415b24`, `ObjID: 4`).
@@ -266,6 +269,11 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
       }
     });
 
+    // Phase G-9 Shot 2b: mobile (< 600px) branch — desktop tree untouched.
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileLayout(context, state, notifier);
+    }
+
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyN, control: true):
@@ -351,6 +359,656 @@ class _ClassSectionScreenState extends ConsumerState<ClassSectionScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // MOBILE (< 600px) LAYOUT — Phase G-9 Shot 2b
+  // ===========================================================================
+
+  Widget _buildMobileLayout(
+    BuildContext context,
+    ClassSectionState state,
+    ClassSectionNotifier notifier,
+  ) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeader(context, state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileKpiRow(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (state.isClassEditMode || state.isNewClassMode) ...[
+                      _buildMobileClassFormCard(context, state, notifier),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    if (state.errorMessage != null) ...[
+                      _buildErrorBanner(state.errorMessage!, notifier),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    _buildMobileClassSection(context, state, notifier),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileSectionSection(context, state, notifier),
+                  ],
+                ),
+              ),
+            ),
+            _buildMobileStickyBar(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Inline class add/edit form reusing the exact desktop `_classNameCtrl`
+  /// controller and save/cancel handlers.
+  Widget _buildMobileClassFormCard(
+    BuildContext context,
+    ClassSectionState state,
+    ClassSectionNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: AppColors.accentStudents.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            state.isNewClassMode ? 'New Class' : 'Edit Class',
+            style: AppTypography.h3.copyWith(
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildExternalLabel(
+            state.isNewClassMode ? 'New Class Name *' : 'Selected Class Name *',
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 44,
+            child: TextField(
+              controller: _classNameCtrl,
+              autofocus: true,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: 'e.g. Class 10, Play Group',
+                hintStyle: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textMuted,
+                ),
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: _handleCancelClassEdit,
+                    child: const Text('Cancel', style: TextStyle(fontSize: 12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    onPressed: _handleSaveClass,
+                    icon: const Icon(Icons.save_outlined, size: 16),
+                    label: const Text(
+                      'Save Class (Ctrl+S)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accentStudents,
+                      foregroundColor: AppColors.textOnPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(BuildContext context, ClassSectionState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: IconButton(
+                tooltip: 'Back to Dashboard',
+                onPressed: () => context.go('/dashboard'),
+                icon: const Icon(Icons.arrow_back),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Text(
+                'Class & Section Management',
+                style: AppTypography.h2.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Maintain academic classes and their section cohorts.',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.statusInfoBg,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                '#${state.selectedClassId ?? "none"}',
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.statusInfoText,
+                ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            OutlinedButton.icon(
+              onPressed: () => context.go('/academics/subjects'),
+              icon: const Icon(Icons.menu_book_outlined, size: 14),
+              label: const Text(
+                'Subject Catalog',
+                style: TextStyle(fontSize: 11),
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+              ),
+            ),
+            if (state.readOnly) ...[
+              const SizedBox(width: AppSpacing.xs),
+              const MobileStatusPill(
+                label: 'Read-only',
+                variant: MobileStatusVariant.warning,
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileKpiRow(ClassSectionState state) {
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'TOTAL CLASSES',
+            value: '${state.classes.length}',
+            icon: Icons.class_outlined,
+            accentColor: AppColors.accentStudents,
+            accentSoftBg: AppColors.accentStudentsSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'TOTAL SECTIONS',
+            value: '${state.sections.length}',
+            icon: Icons.groups_outlined,
+            accentColor: AppColors.accentStudents,
+            accentSoftBg: AppColors.accentStudentsSoftBg,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileSectionLabel(String title, String detail) {
+    return Text(
+      '$title  ·  $detail',
+      style: AppTypography.bodySmall.copyWith(
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
+        letterSpacing: 0.5,
+        color: AppColors.textMuted,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildMobileClassSection(
+    BuildContext context,
+    ClassSectionState state,
+    ClassSectionNotifier notifier,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMobileSectionLabel('CLASSES', '${state.classes.length} total'),
+        const SizedBox(height: AppSpacing.xs),
+        if (state.classes.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Text(
+              'No classes configured yet.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            ),
+          )
+        else
+          ...state.classes.map((row) {
+            final cid = (row['ClassID'] as num).toInt();
+            final cname = row['CName'] as String? ?? '';
+            final secCount = (row['SectionCount'] as num?)?.toInt() ?? 0;
+            final isSelected =
+                !state.isNewClassMode && state.selectedClassId == cid;
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+              clipBehavior: Clip.antiAlias,
+              color: isSelected ? AppColors.accentStudentsSoftBg : null,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                side: BorderSide(
+                  color: isSelected
+                      ? AppColors.accentStudents
+                      : AppColors.borderDefault,
+                  width: isSelected ? 1.4 : 1.0,
+                ),
+              ),
+              child: InkWell(
+                onTap: () {
+                  notifier.selectClass(cid);
+                  _classNameCtrl.text = cname;
+                },
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 3.5,
+                        color: isSelected
+                            ? AppColors.accentStudents
+                            : AppColors.borderDefault,
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          child: Row(
+                            children: [
+                              Text(
+                                '#$cid',
+                                style: AppTypography.monospace.copyWith(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isSelected
+                                      ? AppColors.accentStudents
+                                      : AppColors.textMuted,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              Expanded(
+                                child: Text(
+                                  cname,
+                                  style: AppTypography.body.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: isSelected
+                                        ? AppColors.accentStudents
+                                        : AppColors.textPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              MobileStatusPill(
+                                label: '$secCount Sec',
+                                variant: secCount > 0
+                                    ? MobileStatusVariant.info
+                                    : MobileStatusVariant.neutral,
+                              ),
+                              SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: IconButton(
+                                  tooltip: 'Edit class',
+                                  icon: const Icon(
+                                    Icons.edit_outlined,
+                                    size: 18,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  onPressed: () {
+                                    notifier.selectClass(cid);
+                                    _classNameCtrl.text = cname;
+                                    _handleEditClass();
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _buildMobileSectionSection(
+    BuildContext context,
+    ClassSectionState state,
+    ClassSectionNotifier notifier,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildMobileSectionLabel(
+          'SECTIONS',
+          state.selectedClassId != null
+              ? 'for ${state.selectedClassName}'
+              : 'no class selected',
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        if (state.selectedClassId == null)
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Text(
+              'Select a class above to view and manage sections.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            ),
+          )
+        else if (state.sections.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Text(
+              'No sections in ${state.selectedClassName}. Use + Add Section below.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            ),
+          )
+        else
+          ...state.sections.map((row) {
+            final secId = (row['ClassSecID'] as num).toInt();
+            final secName = row['SecName'] as String? ?? '';
+            final teacher = row['TeacherName'] as String? ?? 'Not assigned';
+            final proctor = row['ProctorName'] as String? ?? 'Not assigned';
+            final room = row['RoomNo'] as String? ?? '-';
+            final enrolled = (row['EnrolledCount'] as num?)?.toInt() ?? 0;
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                side: const BorderSide(color: AppColors.borderDefault),
+              ),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(
+                      width: 3.5,
+                      child: ColoredBox(color: AppColors.accentStudents),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  '#$secId',
+                                  style: AppTypography.monospace.copyWith(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(
+                                  child: Text(
+                                    secName,
+                                    style: AppTypography.body.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                MobileStatusPill(
+                                  label: enrolled > 0
+                                      ? '$enrolled students'
+                                      : 'Empty',
+                                  variant: enrolled > 0
+                                      ? MobileStatusVariant.success
+                                      : MobileStatusVariant.neutral,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Room $room',
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Teacher: $teacher',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: teacher == 'Not assigned'
+                                          ? AppColors.textMuted
+                                          : AppColors.textSecondary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Proctor: $proctor',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: proctor == 'Not assigned'
+                                          ? AppColors.textMuted
+                                          : AppColors.textSecondary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 44,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () =>
+                                          _handleEditSection(secId),
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 16,
+                                      ),
+                                      label: const Text(
+                                        'Edit',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 44,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () =>
+                                          _handleDeleteSection(secId),
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 16,
+                                        color: AppColors.statusErrorText,
+                                      ),
+                                      label: const Text(
+                                        'Delete',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.statusErrorText,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _buildMobileStickyBar(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+        MediaQuery.paddingOf(context).bottom + AppSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 48,
+              child: OutlinedButton.icon(
+                onPressed: _handleNewClass,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text(
+                  '+ Add Class',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: SizedBox(
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: _handleNewSection,
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text(
+                  '+ Add Section',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentStudents,
+                  foregroundColor: AppColors.textOnPrimary,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

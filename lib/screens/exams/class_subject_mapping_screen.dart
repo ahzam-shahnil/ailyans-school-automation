@@ -8,6 +8,8 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/subject_mapping_row.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -1219,35 +1221,130 @@ class _ClassSubjectMappingScreenState
         child: Focus(
           autofocus: true,
           child: Scaffold(
-            backgroundColor: AppColors.surface,
+            backgroundColor: AppColors.surfaceCanvas,
             body: SafeArea(
-              bottom: true,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildMobileHeader(context),
-                    const SizedBox(height: AppSpacing.sm),
-                    _buildMobileFormCard(context, state, notifier),
-                    const SizedBox(height: AppSpacing.xs),
-                    if (state.isEditMode && state.nonTeacherCurrent != null) ...[
-                      _buildMobileWarningBanner(state),
-                      const SizedBox(height: AppSpacing.xs),
-                    ],
-                    if (state.errorMessage != null) ...[
-                      _buildMobileErrorBanner(state, notifier),
-                      const SizedBox(height: AppSpacing.xs),
-                    ],
-                    _buildMobileMappingList(context, state, notifier),
-                    const SizedBox(height: AppSpacing.sm),
-                    _buildMobileFooter(context),
-                  ],
-                ),
+              top: false,
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildMobileHeader(context),
+                          const SizedBox(height: AppSpacing.sm),
+                          // 2-up KPI summary row (Phase G-9 Shot 2b)
+                          _buildMobileSummaryRow(state),
+                          const SizedBox(height: AppSpacing.sm),
+                          _buildMobileFormCard(context, state, notifier),
+                          const SizedBox(height: AppSpacing.xs),
+                          if (state.isEditMode &&
+                              state.nonTeacherCurrent != null) ...[
+                            _buildMobileWarningBanner(state),
+                            const SizedBox(height: AppSpacing.xs),
+                          ],
+                          if (state.errorMessage != null) ...[
+                            _buildMobileErrorBanner(state, notifier),
+                            const SizedBox(height: AppSpacing.xs),
+                          ],
+                          _buildMobileMappingList(context, state, notifier),
+                          const SizedBox(height: AppSpacing.sm),
+                          _buildMobileFooter(context),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Sticky bottom action bar (Phase G-9 Shot 2b)
+                  _buildMobileStickyBar(context, state),
+                ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// 2-up MobileKpiCard summary row (Phase G-9 Shot 2b).
+  Widget _buildMobileSummaryRow(ClassSubjectMappingState state) {
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'MAPPED SUBJECTS',
+            value: '${state.mappings.length}',
+            icon: Icons.fork_right,
+            accentColor: AppColors.accentExams,
+            accentSoftBg: AppColors.accentExamsSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'AVAILABLE SUBJECTS',
+            value: '${state.subjects.length}',
+            icon: Icons.menu_book_outlined,
+            accentColor: AppColors.accentExams,
+            accentSoftBg: AppColors.accentExamsSoftBg,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Pinned bottom bar: Reset Form + primary Save/Update Mapping button
+  /// (Phase G-9 Shot 2b).
+  Widget _buildMobileStickyBar(
+    BuildContext context,
+    ClassSubjectMappingState state,
+  ) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+        MediaQuery.paddingOf(context).bottom + AppSpacing.xs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _handleSaveMapping,
+              icon: const Icon(Icons.save, size: 18),
+              label: Text(
+                state.isEditMode
+                    ? 'Update Mapping (Ctrl+S)'
+                    : 'Save Mapping (Ctrl+S)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentExams,
+                foregroundColor: AppColors.textOnPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: OutlinedButton(
+              onPressed: () =>
+                  ref.read(classSubjectMappingProvider.notifier).resetForm(),
+              child: const Text('Reset Form'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1445,35 +1542,6 @@ class _ClassSubjectMappingScreenState
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
-              onPressed: _handleSaveMapping,
-              icon: const Icon(Icons.save, size: 18),
-              label: Text(
-                state.isEditMode
-                    ? 'Update Mapping (Ctrl+S)'
-                    : 'Save Mapping (Ctrl+S)',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandPrimary,
-                foregroundColor: AppColors.textOnPrimary,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: OutlinedButton(
-              onPressed: notifier.resetForm,
-              child: const Text('Reset Form'),
-            ),
-          ),
         ],
       ),
     );
@@ -1646,133 +1714,156 @@ class _ClassSubjectMappingScreenState
     ClassSubjectMappingNotifier notifier,
   ) {
     final isEditing = state.editingMapping?.subjClsId == item.subjClsId;
+    // Phase G-9 Shot 2b: safe left-strip accent card (no non-uniform Border).
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         side: BorderSide(
-          color: isEditing ? AppColors.brandPrimary : AppColors.borderDefault,
+          color: isEditing ? AppColors.accentExams : AppColors.borderDefault,
+          width: isEditing ? 1.4 : 1.0,
         ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         onTap: () => notifier.selectMappingForEdit(item.subjClsId),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
+        child: IntrinsicHeight(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSubtle,
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    child: Text(
-                      '#${item.subjClsId}',
-                      style: AppTypography.monospace.copyWith(
-                        fontSize: 11,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      item.subjName,
-                      style: AppTypography.body.copyWith(
-                        fontWeight: isEditing
-                            ? FontWeight.w700
-                            : FontWeight.w600,
-                        color: isEditing
-                            ? AppColors.brandPrimary
-                            : AppColors.textPrimary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (item.hasNonTeacher) ...[
-                    const SizedBox(width: AppSpacing.xs),
-                    const Icon(
-                      Icons.warning_amber_rounded,
-                      size: 16,
-                      color: AppColors.statusWarningText,
-                    ),
-                  ],
-                ],
+              Container(
+                width: 3.5,
+                color: isEditing
+                    ? AppColors.accentExams
+                    : AppColors.borderDefault,
               ),
-              const SizedBox(height: 4),
-              Text(
-                item.hasNonTeacher
-                    ? '${item.teacherName} (${item.teacherCategory})'
-                    : item.teacherName,
-                style: AppTypography.bodySmall.copyWith(
-                  color: item.hasNonTeacher
-                      ? AppColors.statusWarningText
-                      : AppColors.textSecondary,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Wrap(
-                spacing: AppSpacing.xs,
-                runSpacing: AppSpacing.xs,
-                children: [
-                  _buildMobileMarksPill('Theory', '${item.totalMarks}'),
-                  _buildMobileMarksPill(
-                    'Practical',
-                    '${item.totalPracticalMarks}',
-                  ),
-                  _buildMobileMarksPill('Total', '${item.combinedMarks}'),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            notifier.selectMappingForEdit(item.subjClsId),
-                        icon: const Icon(Icons.edit_outlined, size: 16),
-                        label: const Text(
-                          'Edit',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _handleMobileDeleteMapping(item, notifier),
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          size: 16,
-                          color: AppColors.statusErrorText,
-                        ),
-                        label: const Text(
-                          'Delete',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.statusErrorText,
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            '#${item.subjClsId}',
+                            style: AppTypography.monospace.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isEditing
+                                  ? AppColors.accentExams
+                                  : AppColors.textMuted,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: Text(
+                              item.subjName,
+                              style: AppTypography.body.copyWith(
+                                fontWeight: isEditing
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                                color: isEditing
+                                    ? AppColors.accentExams
+                                    : AppColors.textPrimary,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          if (item.hasNonTeacher)
+                            const MobileStatusPill(
+                              label: 'Non-Teacher',
+                              variant: MobileStatusVariant.warning,
+                            )
+                          else if (isEditing)
+                            const MobileStatusPill(
+                              label: 'Editing',
+                              variant: MobileStatusVariant.info,
+                            )
+                          else
+                            const MobileStatusPill(
+                              label: 'Assigned',
+                              variant: MobileStatusVariant.success,
+                            ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.hasNonTeacher
+                            ? '${item.teacherName} (${item.teacherCategory})'
+                            : item.teacherName,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: item.hasNonTeacher
+                              ? AppColors.statusWarningText
+                              : AppColors.textSecondary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Wrap(
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          _buildMobileMarksPill('Theory', '${item.totalMarks}'),
+                          _buildMobileMarksPill(
+                            'Practical',
+                            '${item.totalPracticalMarks}',
+                          ),
+                          _buildMobileMarksPill(
+                            'Total',
+                            '${item.combinedMarks}',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () => notifier.selectMappingForEdit(
+                                  item.subjClsId,
+                                ),
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                                label: const Text(
+                                  'Edit',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    _handleMobileDeleteMapping(item, notifier),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 16,
+                                  color: AppColors.statusErrorText,
+                                ),
+                                label: const Text(
+                                  'Delete',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.statusErrorText,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ],
           ),

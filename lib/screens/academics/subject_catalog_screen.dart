@@ -10,6 +10,9 @@ import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/subject_catalog_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 
 /// Screen 26 - SubjectCatalogScreen at `/academics/subjects`.
 /// Rebuild-only administrative catalog workspace for foundational `Subject` table.
@@ -28,6 +31,9 @@ class _SubjectCatalogScreenState extends ConsumerState<SubjectCatalogScreen> {
 
   final ScrollController _gridScrollController = ScrollController();
   final ScrollController _drawerScrollController = ScrollController();
+
+  // Phase G-9 Shot 2b: mobile-only catalog search box (filters locally).
+  final TextEditingController _mobileSearchCtrl = TextEditingController();
 
   int get _userLvl => ref.read(sessionProvider)?.user.userLevel ?? 1;
 
@@ -60,6 +66,7 @@ class _SubjectCatalogScreenState extends ConsumerState<SubjectCatalogScreen> {
     _subjNameCtrl.dispose();
     _subjDetailCtrl.dispose();
     _subjIdDisplayCtrl.dispose();
+    _mobileSearchCtrl.dispose();
     _gridScrollController.dispose();
     _drawerScrollController.dispose();
     super.dispose();
@@ -212,6 +219,11 @@ class _SubjectCatalogScreenState extends ConsumerState<SubjectCatalogScreen> {
       }
     });
 
+    // Phase G-9 Shot 2b: mobile (< 600px) branch — desktop tree untouched.
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileLayout(context, state, notifier);
+    }
+
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyN, control: true):
@@ -266,6 +278,594 @@ class _SubjectCatalogScreenState extends ConsumerState<SubjectCatalogScreen> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // MOBILE (< 600px) LAYOUT — Phase G-9 Shot 2b
+  // ===========================================================================
+
+  Widget _buildMobileLayout(
+    BuildContext context,
+    SubjectCatalogState state,
+    SubjectCatalogNotifier notifier,
+  ) {
+    final query = _mobileSearchCtrl.text.trim().toLowerCase();
+    final visibleSubjects = query.isEmpty
+        ? state.subjects
+        : state.subjects
+              .where(
+                (row) => ((row['SubjName'] as String?) ?? '')
+                    .toLowerCase()
+                    .contains(query),
+              )
+              .toList();
+
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeader(context, state, notifier),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileKpiRow(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (state.errorMessage != null) ...[
+                      _buildErrorBanner(state.errorMessage!, notifier),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    if (state.isDrawerOpen) ...[
+                      _buildMobileFormCard(context, state, notifier),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    _buildMobileSubjectList(visibleSubjects, state, notifier),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Showing ${visibleSubjects.length} of ${state.subjects.length} Subjects',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _buildMobileStickyBar(context, state, notifier),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(
+    BuildContext context,
+    SubjectCatalogState state,
+    SubjectCatalogNotifier notifier,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: 44,
+              height: 44,
+              child: IconButton(
+                tooltip: 'Back to Classes & Sections',
+                onPressed: () => context.go('/academics/classes'),
+                icon: const Icon(Icons.arrow_back),
+                padding: EdgeInsets.zero,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: Text(
+                'Subject Catalog',
+                style: AppTypography.h2.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 18),
+              tooltip: 'Refresh subjects',
+              onPressed: () => notifier.loadInitialData(),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          'Foundational Subject table. ${state.subjectCount} Subjects Configured · ${state.totalMappedClasses} Classes Assigned.',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textSecondary,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        SizedBox(
+          height: 44,
+          child: TextField(
+            controller: _mobileSearchCtrl,
+            onChanged: (_) => setState(() {}),
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Search subjects by name',
+              hintStyle: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textMuted,
+              ),
+              prefixIcon: const Icon(Icons.search, size: 18),
+              isDense: true,
+              filled: true,
+              fillColor: AppColors.surfaceRaised,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
+              ),
+            ),
+          ),
+        ),
+        if (state.readOnly) ...[
+          const SizedBox(height: AppSpacing.xs),
+          const Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: MobileStatusPill(
+              label: 'Read-only',
+              variant: MobileStatusVariant.warning,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMobileKpiRow(SubjectCatalogState state) {
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'TOTAL SUBJECTS',
+            value: '${state.subjectCount}',
+            icon: Icons.menu_book_outlined,
+            accentColor: AppColors.accentStudents,
+            accentSoftBg: AppColors.accentStudentsSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'CLASSES ASSIGNED',
+            value: '${state.totalMappedClasses}',
+            icon: Icons.fork_right,
+            accentColor: AppColors.accentStudents,
+            accentSoftBg: AppColors.accentStudentsSoftBg,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Inline add/edit form card reusing the exact desktop controllers so they
+  /// stay mounted while the drawer state is open on mobile.
+  Widget _buildMobileFormCard(
+    BuildContext context,
+    SubjectCatalogState state,
+    SubjectCatalogNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(
+          color: AppColors.accentStudents.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  state.isAddingNew
+                      ? 'Add New Subject'
+                      : 'Edit Subject #${state.editingSubjectId}',
+                  style: AppTypography.h3.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: IconButton(
+                  tooltip: 'Cancel (Esc)',
+                  onPressed: _handleCloseDrawer,
+                  icon: const Icon(Icons.close, size: 18),
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildExternalLabel('Subject ID'),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 44,
+            child: TextField(
+              controller: _subjIdDisplayCtrl,
+              readOnly: true,
+              style: AppTypography.monospace.copyWith(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.surfaceSubtle,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildExternalLabel('Subject Name *'),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 44,
+            child: TextField(
+              controller: _subjNameCtrl,
+              autofocus: state.isAddingNew,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textPrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: 'e.g. Physics, Chemistry, Biology',
+                hintStyle: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
+                filled: true,
+                fillColor: AppColors.surfaceRaised,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  borderSide: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildExternalLabel('Description / Curriculum'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _subjDetailCtrl,
+            maxLines: 3,
+            minLines: 3,
+            maxLength: 255,
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Curriculum scope, syllabus notes',
+              hintStyle: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textMuted,
+              ),
+              filled: true,
+              fillColor: AppColors.surfaceRaised,
+              isDense: true,
+              contentPadding: const EdgeInsets.all(10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                borderSide: const BorderSide(color: AppColors.borderDefault),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: OutlinedButton(
+              onPressed: _handleCloseDrawer,
+              child: const Text('Cancel (Esc)', style: TextStyle(fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileSubjectList(
+    List<Map<String, dynamic>> subjects,
+    SubjectCatalogState state,
+    SubjectCatalogNotifier notifier,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _mobileSectionLabel('SUBJECTS', '${subjects.length} shown'),
+        const SizedBox(height: AppSpacing.xs),
+        if (state.isLoading && subjects.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (subjects.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Text(
+              'No subjects match the current search.',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+            ),
+          )
+        else
+          ...subjects.map((row) {
+            final subjId = (row['SubjID'] as num).toInt();
+            final subjName = (row['SubjName'] as String?) ?? '';
+            final subjDetail = row['SubjDetail'] as String?;
+            final assignedClasses =
+                (row['AssignedClasses'] as num?)?.toInt() ?? 0;
+            final isEditing = state.editingSubjectId == subjId;
+
+            return Card(
+              margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                side: BorderSide(
+                  color: isEditing
+                      ? AppColors.accentStudents
+                      : AppColors.borderDefault,
+                  width: isEditing ? 1.4 : 1.0,
+                ),
+              ),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: 3.5,
+                      color: isEditing
+                          ? AppColors.accentStudents
+                          : AppColors.accentStudents,
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.sm),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  '#$subjId',
+                                  style: AppTypography.monospace.copyWith(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: isEditing
+                                        ? AppColors.accentStudents
+                                        : AppColors.textMuted,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(
+                                  child: Text(
+                                    subjName,
+                                    style: AppTypography.body.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: isEditing
+                                          ? AppColors.accentStudents
+                                          : AppColors.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                MobileStatusPill(
+                                  label: '$assignedClasses Cls',
+                                  variant: assignedClasses > 0
+                                      ? MobileStatusVariant.info
+                                      : MobileStatusVariant.neutral,
+                                ),
+                              ],
+                            ),
+                            if (subjDetail != null &&
+                                subjDetail.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                subjDetail,
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 44,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () =>
+                                          _handleEditSubject(subjId),
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 16,
+                                      ),
+                                      label: const Text(
+                                        'Edit',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 44,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () =>
+                                          context.go('/exams/subjects'),
+                                      icon: const Icon(Icons.link, size: 16),
+                                      label: const Text(
+                                        'Map',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.xs),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 44,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => _handleDeleteSubject(
+                                        subjId,
+                                        subjName,
+                                      ),
+                                      icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 16,
+                                        color: AppColors.statusErrorText,
+                                      ),
+                                      label: const Text(
+                                        'Delete',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.statusErrorText,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
+  Widget _mobileSectionLabel(String title, String detail) {
+    return Text(
+      '$title  ·  $detail',
+      style: AppTypography.bodySmall.copyWith(
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
+        letterSpacing: 0.5,
+        color: AppColors.textMuted,
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildMobileStickyBar(
+    BuildContext context,
+    SubjectCatalogState state,
+    SubjectCatalogNotifier notifier,
+  ) {
+    final isDrawerOpen = state.isDrawerOpen;
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+        MediaQuery.paddingOf(context).bottom + AppSpacing.xs,
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: state.isSaving
+              ? null
+              : isDrawerOpen
+              ? _handleSaveSubject
+              : _handleAddNew,
+          icon: state.isSaving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppColors.textOnPrimary,
+                  ),
+                )
+              : isDrawerOpen
+              ? const Icon(Icons.save_outlined, size: 18)
+              : const Icon(Icons.add, size: 18),
+          label: Text(
+            isDrawerOpen ? 'Save Subject (Ctrl+S)' : 'Add New Subject (Ctrl+N)',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accentStudents,
+            foregroundColor: AppColors.textOnPrimary,
           ),
         ),
       ),
