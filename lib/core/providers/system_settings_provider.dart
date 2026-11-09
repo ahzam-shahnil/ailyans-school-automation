@@ -9,7 +9,10 @@ import '../sync/supabase_client.dart';
 import '../sync/sync_provider.dart';
 import '../sync/sync_service.dart';
 import 'available_sessions_provider.dart';
+import 'batch_promotion_provider.dart';
+import 'dashboard_metrics_provider.dart';
 import 'shell_metadata_provider.dart';
+import 'student_list_provider.dart';
 
 /// Immutable representation of the institution / branch profile from InstBranch (BrnachID = 1).
 class InstBranchData {
@@ -809,9 +812,17 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
         );
       });
 
-      // Invalidate shellMetadataProvider so top-bar immediately displays the updated institution name
+      // Invalidate shellMetadataProvider so top-bar immediately displays the updated institution name & active session
       _ref?.invalidate(shellMetadataProvider);
       _ref?.invalidate(availableSessionsProvider);
+      final normalizedSession =
+          _normalizeSessionYr(state.config.defaultSessionYr.trim());
+      _ref
+          ?.read(studentListFiltersProvider.notifier)
+          .setSessionYr(normalizedSession);
+      _ref?.invalidate(studentListProvider);
+      _ref?.invalidate(dashboardMetricsProvider);
+      _ref?.invalidate(batchPromotionProvider);
 
       // Follow-ups: node block re-allocation and live client reconfiguration.
       if (state.config.nodeId != oldConfig.nodeId) {

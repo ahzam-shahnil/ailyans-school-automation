@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/promotion_candidate_row.dart';
 import '../db/database.dart';
+import 'available_sessions_provider.dart';
 import 'clock_provider.dart';
 
 @immutable
@@ -151,24 +152,41 @@ class BatchPromotionNotifier extends StateNotifier<BatchPromotionState> {
     try {
       final db = await DatabaseService.instance.database;
 
-      // 1. Query distinct sessions from Student_Class
+      // 1. Read default_session_yr from app_config (e.g. '2026-27')
+      String? defaultSessionYr;
+      try {
+        final configRows = await db.rawQuery(
+          "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
+        );
+        if (configRows.isNotEmpty) {
+          final val = (configRows.first['config_value'] as String?)?.trim();
+          if (val != null && val.isNotEmpty) {
+            defaultSessionYr = val;
+          }
+        }
+      } catch (_) {}
+
+      // 2. Query distinct sessions from Student_Class
       final sessionRows = await db.rawQuery(
         "SELECT DISTINCT SessionYr FROM Student_Class WHERE SessionYr IS NOT NULL AND SessionYr != ''",
       );
 
       final sessionSet = <String>{};
+      if (defaultSessionYr != null) {
+        sessionSet.add(defaultSessionYr);
+        final next = computeNextAcademicYear(defaultSessionYr);
+        if (next != null) {
+          sessionSet.add(next);
+        }
+      }
+
       for (final row in sessionRows) {
         final yr = (row['SessionYr'] as String?)?.trim();
         if (yr != null && yr.isNotEmpty) {
           sessionSet.add(yr);
-          // Parse start and end year to generate next academic year
-          final match = RegExp(r'^(\d{4})-(\d{4})$').firstMatch(yr);
-          if (match != null) {
-            final start = int.tryParse(match.group(1)!);
-            final end = int.tryParse(match.group(2)!);
-            if (start != null && end != null) {
-              sessionSet.add('${start + 1}-${end + 1}');
-            }
+          final next = computeNextAcademicYear(yr);
+          if (next != null) {
+            sessionSet.add(next);
           }
         }
       }
@@ -182,17 +200,34 @@ class BatchPromotionNotifier extends StateNotifier<BatchPromotionState> {
       final availableSessions = sessionSet.toList()
         ..sort((a, b) => b.compareTo(a)); // Descending order
 
-      // 2. Query classes
+      // 3. Query classes
       final classRows = await db.rawQuery(
         'SELECT ClassID, CName FROM Class ORDER BY ClassID ASC',
       );
 
-      // Default source to 2017-2018 if present, else oldest
-      final defaultSource = availableSessions.contains('2017-2018')
-          ? '2017-2018'
-          : availableSessions.last;
-      // Default target to newest (2018-2019)
-      final defaultTarget = availableSessions.first;
+      // Default source and target sessions
+      String defaultSource;
+      String defaultTarget;
+
+      if (defaultSessionYr != null && sessionSet.contains(defaultSessionYr)) {
+        defaultSource = defaultSessionYr;
+        final next = computeNextAcademicYear(defaultSessionYr);
+        if (next != null && sessionSet.contains(next)) {
+          defaultTarget = next;
+        } else {
+          defaultTarget = availableSessions.first;
+        }
+      } else {
+        // Fallback for tests or when default_session_yr is not in DB:
+        // Default source to 2017-2018 if present, else oldest
+        defaultSource = availableSessions.contains('2017-2018')
+            ? '2017-2018'
+            : availableSessions.last;
+        // Default target to newest (2018-2019)
+        defaultTarget = availableSessions.contains('2018-2019')
+            ? '2018-2019'
+            : availableSessions.first;
+      }
 
       if (!mounted) return;
       state = state.copyWith(

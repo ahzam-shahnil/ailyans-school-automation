@@ -3,6 +3,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../db/database.dart';
 import 'clock_provider.dart';
 
+/// Helper to compute next academic year for both YYYY-YYYY and YYYY-YY formats.
+String? computeNextAcademicYear(String session) {
+  final trimmed = session.trim();
+  final m4 = RegExp(r'^(\d{4})-(\d{4})$').firstMatch(trimmed);
+  if (m4 != null) {
+    final start = int.tryParse(m4.group(1)!);
+    final end = int.tryParse(m4.group(2)!);
+    if (start != null && end != null) {
+      return '${start + 1}-${end + 1}';
+    }
+  }
+  final m2 = RegExp(r'^(\d{4})-(\d{2})$').firstMatch(trimmed);
+  if (m2 != null) {
+    final start = int.tryParse(m2.group(1)!);
+    final end = int.tryParse(m2.group(2)!);
+    if (start != null && end != null) {
+      final nextStart = start + 1;
+      final nextEnd = (end + 1) % 100;
+      return '$nextStart-${nextEnd.toString().padLeft(2, '0')}';
+    }
+  }
+  return null;
+}
+
 /// Distinct session years available for dropdowns.
 ///
 /// Sources (in priority order):
@@ -51,9 +75,9 @@ final availableSessionsProvider = FutureProvider<List<String>>((ref) async {
   final now = ref.read(clockProvider)();
   final currentYear = now.year;
   final calSessions = <String>{
-    '$currentYear-${(currentYear + 1) % 100}',
-    '${currentYear + 1}-${(currentYear + 2) % 100}',
-    '${currentYear + 2}-${(currentYear + 3) % 100}',
+    '$currentYear-${((currentYear + 1) % 100).toString().padLeft(2, '0')}',
+    '${currentYear + 1}-${((currentYear + 2) % 100).toString().padLeft(2, '0')}',
+    '${currentYear + 2}-${((currentYear + 3) % 100).toString().padLeft(2, '0')}',
   };
 
   // Add anchor-year neighbors if anchor exists
@@ -61,10 +85,10 @@ final availableSessionsProvider = FutureProvider<List<String>>((ref) async {
       ? int.tryParse(anchor.split('-').first)
       : null;
   if (anchorYear != null) {
-    calSessions.add('${anchorYear - 1}-${anchorYear % 100}');
-    calSessions.add('$anchorYear-${(anchorYear + 1) % 100}');
-    calSessions.add('${anchorYear + 1}-${(anchorYear + 2) % 100}');
-    calSessions.add('${anchorYear + 2}-${(anchorYear + 3) % 100}');
+    calSessions.add('${anchorYear - 1}-${(anchorYear % 100).toString().padLeft(2, '0')}');
+    calSessions.add('$anchorYear-${((anchorYear + 1) % 100).toString().padLeft(2, '0')}');
+    calSessions.add('${anchorYear + 1}-${((anchorYear + 2) % 100).toString().padLeft(2, '0')}');
+    calSessions.add('${anchorYear + 2}-${((anchorYear + 3) % 100).toString().padLeft(2, '0')}');
   }
 
   final all = <String>{
@@ -72,6 +96,11 @@ final availableSessionsProvider = FutureProvider<List<String>>((ref) async {
     ...calSessions,
     if (anchor != null && anchor.isNotEmpty) anchor,
   };
+
+  if (anchor != null && anchor.isNotEmpty) {
+    final next = computeNextAcademicYear(anchor);
+    if (next != null) all.add(next);
+  }
 
   final sorted = all.toList()..sort((a, b) => b.compareTo(a));
   return sorted;
