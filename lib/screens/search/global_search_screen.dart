@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 
 import '../../core/providers/global_search_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 
 /// Screen for Global Omni-Search across Students, Vouchers, Staff, and Books.
 class GlobalSearchScreen extends ConsumerStatefulWidget {
@@ -100,6 +102,71 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
   @override
   Widget build(BuildContext context) {
     final searchAsync = ref.watch(globalSearchProvider(_activeQuery));
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+
+    if (isMobile) {
+      return Scaffold(
+        backgroundColor: AppColors.surface,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.sm,
+              AppSpacing.xs,
+              AppSpacing.sm,
+              AppSpacing.sm,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Mobile Search Bar (44px)
+                _buildMobileSearchBar(context),
+                const SizedBox(height: AppSpacing.xs),
+
+                // 2. Category Filter Chip Strip (44px)
+                searchAsync.when(
+                  data: (results) => _buildFilterChipStrip(results),
+                  loading: () => _buildFilterChipStrip(
+                    GlobalSearchResults.empty(_activeQuery),
+                    isLoading: true,
+                  ),
+                  error: (_, _) => _buildFilterChipStrip(
+                    GlobalSearchResults.empty(_activeQuery),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+
+                // 3. Results Body
+                Expanded(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceRaised,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      border: Border.all(color: AppColors.borderDefault),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                      child: searchAsync.when(
+                        data: (results) => _buildMobileResultsView(results),
+                        loading: () =>
+                            const Center(child: CircularProgressIndicator()),
+                        error: (err, _) => Center(
+                          child: Text(
+                            'Error loading search results: $err',
+                            style: AppTypography.body.copyWith(
+                              color: AppColors.statusErrorText,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppColors.surface,
@@ -152,6 +219,573 @@ class _GlobalSearchScreenState extends ConsumerState<GlobalSearchScreen> {
                   ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileSearchBar(BuildContext context) {
+    return Container(
+      height: 44.0,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.search,
+            size: 20.0,
+            color: AppColors.textMuted,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: TextField(
+              controller: _searchCtrl,
+              autofocus: _activeQuery.isEmpty,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textPrimary,
+                fontSize: 14.0,
+              ),
+              textInputAction: TextInputAction.search,
+              onChanged: _onSearchChanged,
+              onSubmitted: _onSearchSubmitted,
+              decoration: InputDecoration(
+                hintText: 'Search students, vouchers, staff, books...',
+                hintStyle: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 13.0,
+                ),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10.0),
+                isDense: true,
+                filled: false,
+              ),
+            ),
+          ),
+          if (_searchCtrl.text.isNotEmpty)
+            IconButton(
+              icon: const Icon(
+                Icons.clear,
+                size: 18.0,
+                color: AppColors.textMuted,
+              ),
+              splashRadius: 16.0,
+              onPressed: _clearSearch,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileResultsView(GlobalSearchResults results) {
+    if (_activeQuery.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.manage_search,
+                size: 48.0,
+                color: AppColors.textMuted,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Search School Database',
+                style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 4.0),
+              Text(
+                'Type a name, Registration ID, or Voucher ID (e.g. 2610-4808) to search across students, fee vouchers, staff, and library books.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (results.totalCount == 0) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.search_off_outlined,
+                size: 48.0,
+                color: AppColors.textMuted,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'No Records Found',
+                style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
+              ),
+              const SizedBox(height: 4.0),
+              Text(
+                'No matching records found for "$_activeQuery". Try checking the spelling or searching by Reg ID.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final showStudents =
+        (_activeFilter == 'all' || _activeFilter == 'students') &&
+        results.students.isNotEmpty;
+    final showVouchers =
+        (_activeFilter == 'all' || _activeFilter == 'vouchers') &&
+        results.vouchers.isNotEmpty;
+    final showStaff =
+        (_activeFilter == 'all' || _activeFilter == 'staff') &&
+        results.staff.isNotEmpty;
+    final showBooks =
+        (_activeFilter == 'all' || _activeFilter == 'books') &&
+        results.books.isNotEmpty;
+
+    return Scrollbar(
+      controller: _scrollController,
+      child: ListView(
+        controller: _scrollController,
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+        children: [
+          if (showVouchers) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              child: _buildSectionHeader(
+                'Fee Vouchers (${results.vouchers.length})',
+                Icons.payments_outlined,
+              ),
+            ),
+            ..._buildSeparatedMobileRows(
+              results.vouchers.map(_buildMobileVoucherRow).toList(),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          if (showStudents) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              child: _buildSectionHeader(
+                'Students (${results.students.length})',
+                Icons.people_outline,
+              ),
+            ),
+            ..._buildSeparatedMobileRows(
+              results.students.map(_buildMobileStudentRow).toList(),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          if (showStaff) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              child: _buildSectionHeader(
+                'Staff & Faculty (${results.staff.length})',
+                Icons.badge_outlined,
+              ),
+            ),
+            ..._buildSeparatedMobileRows(
+              results.staff.map(_buildMobileStaffRow).toList(),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          if (showBooks) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+              child: _buildSectionHeader(
+                'Library Books (${results.books.length})',
+                Icons.local_library_outlined,
+              ),
+            ),
+            ..._buildSeparatedMobileRows(
+              results.books.map(_buildMobileBookRow).toList(),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildSeparatedMobileRows(List<Widget> rows) {
+    if (rows.isEmpty) return const [];
+    final List<Widget> items = [];
+    for (int i = 0; i < rows.length; i++) {
+      items.add(rows[i]);
+      if (i < rows.length - 1) {
+        items.add(
+          const Divider(
+            height: 1,
+            thickness: 1,
+            color: AppColors.borderSubtle,
+            indent: AppSpacing.sm,
+            endIndent: AppSpacing.sm,
+          ),
+        );
+      }
+    }
+    return items;
+  }
+
+  Widget _buildMobileVoucherRow(VoucherSearchHit v) {
+    final returnUrl = Uri.encodeComponent(_currentSearchReturnUrl());
+    final statusVariant = v.isPaidStatus
+        ? MobileStatusVariant.success
+        : (v.isRolledOver
+            ? MobileStatusVariant.warning
+            : MobileStatusVariant.error);
+
+    return InkWell(
+      onTap: () {
+        if (v.isUnpaid) {
+          context.go(
+            '/fees/receipts?voucherId=${Uri.encodeComponent(v.voucherId)}&studentId=${v.stuRegId}&from=$returnUrl',
+          );
+        } else {
+          context.go(
+            '/fees/ledger?search=${Uri.encodeComponent(v.voucherId)}&from=$returnUrl',
+          );
+        }
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56.0),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34.0,
+                height: 34.0,
+                decoration: BoxDecoration(
+                  color: AppColors.accentFees.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(
+                    color: AppColors.accentFees.withValues(alpha: 0.25),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.receipt_long_outlined,
+                  size: 18.0,
+                  color: AppColors.accentFees,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      v.studentName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2.0),
+                    Text(
+                      '#${v.voucherId} · ${v.forMonth}${v.className != null ? " · ${v.className}" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 11.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    v.isPaidStatus
+                        ? 'Rs. ${_currencyFormat.format(v.paidAmt)}'
+                        : 'Rs. ${_currencyFormat.format(v.netDue)}',
+                    style: AppTypography.monospace.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: v.isPaidStatus
+                          ? AppColors.statusSuccessText
+                          : AppColors.statusErrorText,
+                      fontSize: 12.0,
+                    ),
+                  ),
+                  const SizedBox(height: 2.0),
+                  MobileStatusPill(
+                    label: v.statusLabel,
+                    variant: statusVariant,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileStudentRow(StudentSearchHit s) {
+    final returnUrl = Uri.encodeComponent(_currentSearchReturnUrl());
+
+    return InkWell(
+      onTap: () {
+        context.go('/students/${s.stuRegId}?from=$returnUrl');
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56.0),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34.0,
+                height: 34.0,
+                decoration: BoxDecoration(
+                  color: AppColors.accentStudents.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(
+                    color: AppColors.accentStudents.withValues(alpha: 0.25),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.person_outline,
+                  size: 18.0,
+                  color: AppColors.accentStudents,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      s.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2.0),
+                    Text(
+                      '#${s.stuRegId} · ${s.classSectionDisplay}${s.fatherName != null ? " · S/O ${s.fatherName}" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 11.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              MobileStatusPill(
+                label: s.isPresent ? 'Active' : 'Alumni',
+                variant: s.isPresent
+                    ? MobileStatusVariant.success
+                    : MobileStatusVariant.neutral,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileStaffRow(StaffSearchHit t) {
+    final returnUrl = Uri.encodeComponent(_currentSearchReturnUrl());
+
+    return InkWell(
+      onTap: () {
+        context.go('/staff/teachers/${t.teacherId}?from=$returnUrl');
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56.0),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34.0,
+                height: 34.0,
+                decoration: BoxDecoration(
+                  color: AppColors.accentStaff.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(
+                    color: AppColors.accentStaff.withValues(alpha: 0.25),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.badge_outlined,
+                  size: 18.0,
+                  color: AppColors.accentStaff,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      t.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2.0),
+                    Text(
+                      '#${t.teacherId} · ${t.category}${t.subject != null ? " · ${t.subject}" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 11.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              MobileStatusPill(
+                label: t.isPresent ? 'Active' : 'Inactive',
+                variant: t.isPresent
+                    ? MobileStatusVariant.success
+                    : MobileStatusVariant.neutral,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileBookRow(BookSearchHit b) {
+    final returnUrl = Uri.encodeComponent(_currentSearchReturnUrl());
+
+    return InkWell(
+      onTap: () {
+        context.go('/library/${b.bookId}?from=$returnUrl');
+      },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56.0),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34.0,
+                height: 34.0,
+                decoration: BoxDecoration(
+                  color: AppColors.accentLibrary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(
+                    color: AppColors.accentLibrary.withValues(alpha: 0.25),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: const Icon(
+                  Icons.local_library_outlined,
+                  size: 18.0,
+                  color: AppColors.accentLibrary,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      b.bookName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2.0),
+                    Text(
+                      '#${b.bookId}${b.author != null ? " · ${b.author}" : ""}${b.categoryName != null ? " · ${b.categoryName}" : ""}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 11.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              if (b.price != null)
+                Text(
+                  'Rs. ${_currencyFormat.format(b.price)}',
+                  style: AppTypography.monospace.copyWith(
+                    fontSize: 11.0,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                )
+              else
+                const Icon(
+                  Icons.chevron_right,
+                  size: 18.0,
+                  color: AppColors.textMuted,
+                ),
             ],
           ),
         ),

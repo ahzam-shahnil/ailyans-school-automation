@@ -985,7 +985,6 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        ...filtered.map((r) => _buildMobileDirectoryCard(r, notifier)),
         if (filtered.isEmpty)
           Padding(
             padding: const EdgeInsets.all(AppSpacing.lg),
@@ -995,6 +994,17 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                   : 'No unpaid vouchers found',
               textAlign: TextAlign.center,
               style: AppTypography.body.copyWith(color: AppColors.textMuted),
+            ),
+          )
+        else
+          SizedBox(
+            height: 440,
+            child: Scrollbar(
+              child: ListView.builder(
+                itemCount: filtered.length,
+                itemBuilder: (context, i) =>
+                    _buildMobileDirectoryCard(filtered[i], notifier),
+              ),
             ),
           ),
       ],
@@ -1027,82 +1037,85 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       ),
       child: InkWell(
         onTap: () => notifier.selectFromDirectory(r.voucherMasId),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 3.5,
-                color: AppColors.accentFees,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm + 4,
+                AppSpacing.sm,
+                AppSpacing.sm,
+                AppSpacing.sm,
               ),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              r.voucherMasId,
-                              style: AppTypography.monospace.copyWith(
-                                fontSize: 12,
-                                color: AppColors.accentFees,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                      Expanded(
+                        child: Text(
+                          r.voucherMasId,
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 12,
+                            color: AppColors.accentFees,
+                            fontWeight: FontWeight.w600,
                           ),
-                          MobileStatusPill(
-                            label: r.statusLabel,
-                            variant: _mapFeeStatusVariant(r.statusLabel),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        r.studentName,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.body.copyWith(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      MobileStatusPill(
+                        label: r.statusLabel,
+                        variant: _mapFeeStatusVariant(r.statusLabel),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    r.studentName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Reg ${r.stuRegId} · ${r.classSecDisplay} · ${r.forMonth}',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
                       Text(
-                        'Reg ${r.stuRegId} · ${r.classSecDisplay} · ${r.forMonth}',
+                        'Net Due:',
                         style: AppTypography.bodySmall.copyWith(
                           color: AppColors.textSecondary,
                         ),
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Text(
-                            'Net Due:',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            'Rs. ${_currencyFormat.format(r.netPayable)}',
-                            style: AppTypography.monospace.copyWith(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ],
+                      const Spacer(),
+                      Text(
+                        'Rs. ${_currencyFormat.format(r.netPayable)}',
+                        style: AppTypography.monospace.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ],
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: 3.5,
+              child: Container(color: AppColors.accentFees),
+            ),
+          ],
         ),
       ),
     );

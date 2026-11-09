@@ -533,6 +533,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  'PRINCIPAL CONSOLE',
+                  style: AppTypography.label.copyWith(
+                    fontSize: 10,
+                    color: AppColors.brandPrimary,
+                    letterSpacing: 1.0,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
                 title,
                 const SizedBox(height: AppSpacing.xs),
                 Align(alignment: Alignment.centerLeft, child: controls),
