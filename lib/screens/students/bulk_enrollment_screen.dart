@@ -7,8 +7,12 @@ import '../../core/providers/bulk_enrollment_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/enrollment_row.dart';
 import '../../models/school_class.dart';
+import '../../widgets/mobile/mobile_dropdown_field.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 
 /// Screen 9: BulkEnrollmentScreen at `/students/enrollment/bulk`.
 ///
@@ -262,6 +266,15 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
     final sections = state.selectedClassId == null
         ? allSections
         : allSections.where((s) => s.classId == state.selectedClassId).toList();
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(
+        state,
+        classes,
+        sections,
+        effectiveSessions,
+      );
+    }
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
@@ -912,6 +925,609 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showHelpDialog() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('How to use Bulk Enrollment'),
+        content: const SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'This screen lets you manage the student roster for any class.',
+                style: AppTypography.body,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Workflow:',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              SizedBox(height: 4),
+              Text(
+                '1. Select Session Year, Class, and Section\n'
+                '2. Click Load Roster to see currently enrolled students\n'
+                '3. Type Reg ID and Roll No to enroll a student\n'
+                '4. Click Re-roll to reassign sequential roll numbers\n'
+                '5. Click Missing to find unassigned students',
+                style: AppTypography.bodySmall,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileScaffold(
+    BulkEnrollmentState state,
+    List<SchoolClass> classes,
+    List<ClassSec> sections,
+    List<String> effectiveSessions,
+  ) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeader(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileKpiRow(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileFilterCard(
+                      state,
+                      classes,
+                      sections,
+                      effectiveSessions,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (state.isRosterLoaded) ...[
+                      _buildMobileEnrollCard(state),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    _buildMobileRosterSection(state),
+                  ],
+                ),
+              ),
+            ),
+            if (state.isRosterLoaded) _buildMobileStickyFooter(state),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(BulkEnrollmentState state) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Bulk Class Enrollment',
+                      style: AppTypography.h2.copyWith(
+                        color: AppColors.textPrimary,
+                        fontSize: 18,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8.0,
+                      vertical: 3.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.surfaceSubtle,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      border: Border.all(color: AppColors.borderDefault),
+                    ),
+                    child: Text(
+                      state.isRosterLoaded
+                          ? '${state.roster.length} Enrolled'
+                          : 'Ready',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Manage student roster and class roll assignments.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.help_outline, size: 20),
+          tooltip: 'Keyboard Shortcuts & Help',
+          onPressed: _showHelpDialog,
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileKpiRow(BulkEnrollmentState state) {
+    final activeCount = state.roster.where((r) => r.present).length;
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'ENROLLED STUDENTS',
+            value: '${state.roster.length}',
+            icon: Icons.people_outline,
+            accentColor: AppColors.accentStudents,
+            accentSoftBg: AppColors.accentStudentsSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'ACTIVE STATUS',
+            value: '$activeCount Active',
+            icon: Icons.check_circle_outline,
+            accentColor: AppColors.chartTeal,
+            accentSoftBg: AppColors.chartTeal.withValues(alpha: 0.12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileFilterCard(
+    BulkEnrollmentState state,
+    List<SchoolClass> classes,
+    List<ClassSec> sections,
+    List<String> effectiveSessions,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'COHORT SELECTION',
+            style: AppTypography.label.copyWith(
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              color: AppColors.textSecondary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          MobileDropdownField<String>(
+            label: 'Session Year',
+            value: state.selectedSessionYr.isNotEmpty
+                ? state.selectedSessionYr
+                : null,
+            hintText: 'Select Session',
+            items: effectiveSessions.map((s) {
+              return DropdownMenuItem<String>(
+                value: s,
+                child: Text(s),
+              );
+            }).toList(),
+            onChanged: (val) {
+              if (val != null) {
+                ref.read(bulkEnrollmentProvider.notifier).setSessionYr(val);
+              }
+            },
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(
+                child: MobileDropdownField<int>(
+                  label: 'Class',
+                  value: state.selectedClassId,
+                  hintText: 'Select Class',
+                  items: classes.map((c) {
+                    return DropdownMenuItem<int>(
+                      value: c.classId,
+                      child: Text(c.cName),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    ref.read(bulkEnrollmentProvider.notifier).setClassId(val);
+                  },
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: MobileDropdownField<int>(
+                  label: 'Section',
+                  value: state.selectedSecId,
+                  hintText: 'Select Section',
+                  items: sections.map((s) {
+                    return DropdownMenuItem<int>(
+                      value: s.classSecId,
+                      child: Text(s.secName),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    ref.read(bulkEnrollmentProvider.notifier).setSecId(val);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: state.isLoading ? null : _handleLoadRoster,
+              icon: state.isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.refresh, size: 18),
+              label: const Text('Load Roster'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentStudents,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileEnrollCard(BulkEnrollmentState state) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 3.5,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AppColors.accentStudents,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'QUICK ENROLL STUDENT',
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: TextField(
+                    controller: _regIdController,
+                    focusNode: _regIdFocusNode,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Reg ID',
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(),
+                    ),
+                    style: AppTypography.bodySmall,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: TextField(
+                    controller: _rollNoController,
+                    focusNode: _rollNoFocusNode,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Roll No',
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 10,
+                      ),
+                      border: OutlineInputBorder(),
+                    ),
+                    style: AppTypography.bodySmall,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          SizedBox(
+            height: 40,
+            child: ElevatedButton.icon(
+              onPressed: state.isLoading ? null : _handleEnroll,
+              icon: const Icon(Icons.person_add, size: 16),
+              label: const Text('+ Enroll Student'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileRosterSection(BulkEnrollmentState state) {
+    if (!state.isRosterLoaded) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.format_list_bulleted,
+              size: 40,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Select Class, Section, and Session, then click Load Roster',
+              textAlign: TextAlign.center,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (state.roster.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.people_outline,
+              size: 40,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No students enrolled in this cohort.',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: state.roster.length,
+      itemBuilder: (context, index) {
+        final row = state.roster[index];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3.5, color: AppColors.accentStudents),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              '#${row.stuRegId}',
+                              style: AppTypography.monospace.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: AppColors.accentStudents,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                row.fullName,
+                                style: AppTypography.label.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            MobileStatusPill(
+                              label: 'Roll #${row.classRollNo}',
+                              variant: MobileStatusVariant.neutral,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Father: ${row.fatherName ?? '-'}',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                size: 18,
+                                color: AppColors.statusErrorText,
+                              ),
+                              onPressed: () => _confirmRemoveStudent(row),
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 32,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileStickyFooter(BulkEnrollmentState state) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 8,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _handleShowMissing,
+              icon: const Icon(Icons.search, size: 16),
+              label: const Text('Missing'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.textPrimary,
+                side: const BorderSide(color: AppColors.borderDefault),
+                minimumSize: const Size(0, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _handleAutoReRoll,
+              icon: const Icon(Icons.format_list_numbered, size: 16),
+              label: const Text('Re-roll'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brandPrimary,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -7,7 +7,10 @@ import 'package:intl/intl.dart';
 import '../../core/providers/school_leaving_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/leaving_student_row.dart';
+import '../../widgets/mobile/mobile_dropdown_field.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -305,6 +308,17 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     final backLabel = backTarget != null && backTarget.startsWith('/students/')
         ? 'Back to Student Profile'
         : 'Back to Students';
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(
+        state,
+        student,
+        printEnabled,
+        commitDisabled,
+        backTarget,
+        backLabel,
+      );
+    }
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
@@ -1342,6 +1356,723 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           ),
           const SizedBox(width: 4),
           Text(label, style: AppTypography.bodySmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileScaffold(
+    SchoolLeavingState state,
+    LeavingStudentRow? student,
+    bool printEnabled,
+    bool commitDisabled,
+    String? backTarget,
+    String backLabel,
+  ) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeader(state, student, backTarget, backLabel),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileKpiRow(state, student),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileStudentSelectorCard(state, student),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (student != null) ...[
+                      _buildMobileStudentIdentityCard(student),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildMobileArrearsGateCard(state),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildStatusBanner(state),
+                      const SizedBox(height: AppSpacing.sm),
+                      _buildMobileWithdrawalForm(state),
+                      const SizedBox(height: AppSpacing.sm),
+                    ] else ...[
+                      _buildEmptyState(),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            _buildMobileStickyActions(state, printEnabled, commitDisabled),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(
+    SchoolLeavingState state,
+    LeavingStudentRow? student,
+    String? backTarget,
+    String backLabel,
+  ) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Row(
+            children: [
+              if (backTarget != null) ...[
+                IconButton(
+                  icon: const Icon(Icons.arrow_back, size: 20),
+                  onPressed: () => context.go(backTarget),
+                  tooltip: backLabel,
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 4),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'School Leaving',
+                      style: AppTypography.h2.copyWith(
+                        color: AppColors.textPrimary,
+                        fontSize: 18,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Withdrawal clearance and Leaving Certificate',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (student != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: state.hasExistingSlc
+                  ? AppColors.statusInfoBg
+                  : (state.hasDues
+                      ? AppColors.statusErrorBg
+                      : AppColors.statusSuccessBg),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(
+                color: state.hasExistingSlc
+                    ? AppColors.statusInfoBorder
+                    : (state.hasDues
+                        ? AppColors.statusErrorBorder
+                        : AppColors.statusSuccessBorder),
+              ),
+            ),
+            child: Text(
+              state.hasExistingSlc
+                  ? 'SLC Issued'
+                  : (state.hasDues ? 'Blocked' : 'Cleared'),
+              style: AppTypography.bodySmall.copyWith(
+                color: state.hasExistingSlc
+                    ? AppColors.statusInfoText
+                    : (state.hasDues
+                        ? AppColors.statusErrorText
+                        : AppColors.statusSuccessText),
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMobileKpiRow(
+    SchoolLeavingState state,
+    LeavingStudentRow? student,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'ISSUED CERTIFICATES',
+            value: '${state.students.where((s) => s.hasSLC).length}',
+            icon: Icons.history_edu,
+            accentColor: AppColors.accentStudents,
+            accentSoftBg: AppColors.accentStudentsSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'CLEARANCE STATUS',
+            value: student != null
+                ? (state.hasDues ? 'Arrears' : 'Cleared')
+                : 'No Student',
+            icon: Icons.verified_user_outlined,
+            accentColor: state.hasDues
+                ? AppColors.statusErrorText
+                : AppColors.chartTeal,
+            accentSoftBg: state.hasDues
+                ? AppColors.statusErrorBg
+                : AppColors.chartTeal.withValues(alpha: 0.12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileStudentSelectorCard(
+    SchoolLeavingState state,
+    LeavingStudentRow? student,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 3.5,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AppColors.accentStudents,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'STUDENT CLEARANCE DOSSIER',
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          MobileDropdownField<int>(
+            label: 'Student',
+            value: (student != null &&
+                    state.students.any((s) => s.stuRegId == student.stuRegId))
+                ? student.stuRegId
+                : null,
+            hintText: 'Search by Reg ID or name',
+            items: state.students.map((s) {
+              return DropdownMenuItem<int>(
+                value: s.stuRegId,
+                child: Text(
+                  '${s.stuRegId} - ${s.studentName}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+            onChanged: (val) {
+              ref.read(schoolLeavingProvider.notifier).selectStudent(val);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileStudentIdentityCard(LeavingStudentRow student) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.brandPrimary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.borderDefault),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              student.nameFirst.isNotEmpty
+                  ? student.nameFirst[0].toUpperCase()
+                  : 'S',
+              style: AppTypography.h3.copyWith(color: AppColors.brandPrimary),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  student.studentName,
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Father: ${student.fatherName ?? '-'}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Class: ${student.classSecDisplay}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Admitted: ${student.admissionDate ?? '-'}',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileArrearsGateCard(SchoolLeavingState state) {
+    final dues = state.outstandingDues;
+    final isBlocked = dues > 0;
+
+    if (isBlocked) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.statusErrorBg,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.statusErrorBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'OUTSTANDING DUES BALANCE',
+                    style: AppTypography.label.copyWith(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.statusErrorText,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.statusErrorText,
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                  ),
+                  child: Text(
+                    'BLOCKED',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Rs. ${dues.toStringAsFixed(0)}',
+              style: AppTypography.h3.copyWith(
+                color: AppColors.statusErrorText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Status: BLOCKED',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusErrorText,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              onPressed: () {
+                final stuId = state.selectedStudent?.stuRegId;
+                final fromParam = () {
+                  try {
+                    return GoRouterState.of(context)
+                        .uri
+                        .queryParameters['from'];
+                  } catch (_) {
+                    return null;
+                  }
+                }();
+                final returnToLeavingUrl =
+                    '/students/leaving?studentId=$stuId'
+                    '${fromParam != null && fromParam.isNotEmpty ? '&from=${Uri.encodeComponent(fromParam)}' : ''}';
+                context.go(
+                  '/fees/receipts?studentId=$stuId'
+                  '&from=${Uri.encodeComponent(returnToLeavingUrl)}',
+                );
+              },
+              icon: const Icon(Icons.payment, size: 16),
+              label: const Text('Pay Arrears Now'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.statusErrorText,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(0, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            OutlinedButton.icon(
+              onPressed: () {
+                ref
+                    .read(schoolLeavingProvider.notifier)
+                    .refreshSelectedStudent();
+              },
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Refresh Status'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.statusErrorText,
+                side: const BorderSide(color: AppColors.statusErrorBorder),
+                minimumSize: const Size(0, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _buildArrearsGateCard(state);
+  }
+
+  Widget _buildMobileWithdrawalForm(SchoolLeavingState state) {
+    final enabled = state.isFormEditable;
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 3.5,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'WITHDRAWAL DETAILS',
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          IgnorePointer(
+            ignoring: !enabled,
+            child: Opacity(
+              opacity: enabled ? 1.0 : 0.65,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Effective Leaving Date + Today
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: enabled ? _selectLeavingDate : null,
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'Effective Leaving Date',
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              border: OutlineInputBorder(),
+                              suffixIcon:
+                                  Icon(Icons.calendar_today, size: 16),
+                            ),
+                            child: Text(
+                              DateFormat('dd-MMM-yyyy')
+                                  .format(state.leavingDate),
+                              style: AppTypography.bodySmall,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      OutlinedButton(
+                        onPressed: enabled
+                            ? () => ref
+                                .read(schoolLeavingProvider.notifier)
+                                .setTodayDate()
+                            : null,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textPrimary,
+                          minimumSize: const Size(60, 40),
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppRadius.md),
+                          ),
+                        ),
+                        child: const Text('Today'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Reason for Leaving
+                  Text(
+                    'Reason for Leaving',
+                    style: AppTypography.label.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: 4,
+                    children: [
+                      _buildRadioOption<String>(
+                        value: 'Leaving',
+                        groupValue: state.reason,
+                        label: 'Leaving',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setReason(val),
+                      ),
+                      _buildRadioOption<String>(
+                        value: 'Completed Studies',
+                        groupValue: state.reason,
+                        label: 'Completed Studies',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setReason(val),
+                      ),
+                      _buildRadioOption<String>(
+                        value: 'Dismissed',
+                        groupValue: state.reason,
+                        label: 'Dismissed',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setReason(val),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Character & Conduct
+                  Text(
+                    'Character & Conduct',
+                    style: AppTypography.label.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: 4,
+                    children: [
+                      _buildRadioOption<String>(
+                        value: 'Good ',
+                        groupValue: state.conduct,
+                        label: 'Good',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setConduct(val),
+                      ),
+                      _buildRadioOption<String>(
+                        value: 'Satisfactory',
+                        groupValue: state.conduct,
+                        label: 'Satisfactory',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setConduct(val),
+                      ),
+                      _buildRadioOption<String>(
+                        value: 'Bad',
+                        groupValue: state.conduct,
+                        label: 'Bad',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setConduct(val),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+
+                  // Remarks
+                  TextField(
+                    controller: _remarksController,
+                    enabled: enabled,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Administrative Remarks',
+                      hintText: 'Enter any remarks for the certificate',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(10),
+                    ),
+                    style: AppTypography.bodySmall,
+                    onChanged: (val) => ref
+                        .read(schoolLeavingProvider.notifier)
+                        .setRemarks(val),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileStickyActions(
+    SchoolLeavingState state,
+    bool printEnabled,
+    bool commitDisabled,
+  ) {
+    final student = state.selectedStudent;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 8,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _handlePrintRegister,
+                  icon: const Icon(Icons.print_outlined, size: 16),
+                  label: const Text('SLC Register'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    minimumSize: const Size(0, 44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: printEnabled ? _handlePrintCertificate : null,
+                  icon: const Icon(Icons.description_outlined, size: 16),
+                  label: Text(
+                    state.hasExistingSlc ? 'Reprint SLC' : 'Print SLC',
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.textPrimary,
+                    minimumSize: const Size(0, 44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (student != null && !commitDisabled) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed: commitDisabled ? null : _handleCommit,
+                icon: const Icon(Icons.exit_to_app, size: 16),
+                label: const Text('Commit School Leaving'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.statusErrorText,
+                  foregroundColor: AppColors.textOnPrimary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -6,7 +6,11 @@ import 'package:intl/intl.dart';
 import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/batch_promotion_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/promotion_candidate_row.dart';
+import '../../widgets/mobile/mobile_dropdown_field.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 
 class BatchPromotionScreen extends ConsumerStatefulWidget {
   const BatchPromotionScreen({super.key});
@@ -211,6 +215,10 @@ class _BatchPromotionScreenState extends ConsumerState<BatchPromotionScreen> {
     final allSelected =
         eligibleCandidates.isNotEmpty &&
         eligibleCandidates.every((c) => c.isSelected);
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileScaffold(state, eligibleCandidates, allSelected);
+    }
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
@@ -1306,6 +1314,697 @@ class _BatchPromotionScreenState extends ConsumerState<BatchPromotionScreen> {
           fontWeight: FontWeight.w600,
         ),
         overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Widget _buildMobileScaffold(
+    BatchPromotionState state,
+    List<PromotionCandidateRow> eligibleCandidates,
+    bool allSelected,
+  ) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeader(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileKpiRow(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileCohortsCard(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (state.loadedRoster && state.candidates.isNotEmpty) ...[
+                      _buildMobileCandidateControls(
+                        state,
+                        eligibleCandidates,
+                        allSelected,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    _buildMobileCandidateList(state),
+                  ],
+                ),
+              ),
+            ),
+            if (state.loadedRoster) _buildMobileStickyPromoteBar(state),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(BatchPromotionState state) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Batch Promotion',
+                      style: AppTypography.h2.copyWith(
+                        color: AppColors.textPrimary,
+                        fontSize: 18,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8.0,
+                      vertical: 3.0,
+                    ),
+                    decoration: BoxDecoration(
+                      color: state.isGraduationMode
+                          ? AppColors.statusWarningBg
+                          : AppColors.surfaceSubtle,
+                      borderRadius: BorderRadius.circular(AppRadius.sm),
+                      border: Border.all(
+                        color: state.isGraduationMode
+                            ? AppColors.statusWarningBorder
+                            : AppColors.borderDefault,
+                      ),
+                    ),
+                    child: Text(
+                      state.isGraduationMode
+                          ? 'Graduation'
+                          : (state.loadedRoster
+                              ? '${state.candidates.length} Candidates'
+                              : 'Ready'),
+                      style: AppTypography.bodySmall.copyWith(
+                        color: state.isGraduationMode
+                            ? AppColors.statusWarningText
+                            : AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Move students to the next session and class cohort.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 12,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.history, size: 20),
+          tooltip: 'Clear Temporary Staging History',
+          onPressed: _handleClearHistory,
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileKpiRow(BatchPromotionState state) {
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'CANDIDATES',
+            value: '${state.candidates.length}',
+            icon: Icons.groups_outlined,
+            accentColor: AppColors.accentStudents,
+            accentSoftBg: AppColors.accentStudentsSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'SELECTED FOR ACTION',
+            value: '${state.selectedCount}',
+            icon: Icons.check_circle_outline,
+            accentColor: AppColors.chartTeal,
+            accentSoftBg: AppColors.chartTeal.withValues(alpha: 0.12),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileCohortsCard(BatchPromotionState state) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 3.5,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: AppColors.brandPrimary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'SOURCE COHORT (FROM)',
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          MobileDropdownField<String>(
+            label: 'Session',
+            value: state.sourceSessionYr,
+            hintText: 'Select Session',
+            items: state.availableSessions.map((yr) {
+              return DropdownMenuItem<String>(
+                value: yr,
+                child: Text(yr),
+              );
+            }).toList(),
+            onChanged: (val) {
+              ref.read(batchPromotionProvider.notifier).setSourceSessionYr(val);
+            },
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(
+                child: MobileDropdownField<int>(
+                  label: 'Class',
+                  value: state.sourceClassId,
+                  hintText: 'Select Class',
+                  items: state.classes.map((c) {
+                    return DropdownMenuItem<int>(
+                      value: c['ClassID'] as int,
+                      child: Text(c['CName'] as String),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    ref
+                        .read(batchPromotionProvider.notifier)
+                        .setSourceClassId(val);
+                  },
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: MobileDropdownField<int>(
+                  label: 'Section',
+                  value: state.sourceClassSecId,
+                  hintText: 'Select Sec',
+                  items: state.sourceSections.map((s) {
+                    return DropdownMenuItem<int>(
+                      value: s['ClassSecID'] as int,
+                      child: Text(s['SecName'] as String),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    ref
+                        .read(batchPromotionProvider.notifier)
+                        .setSourceClassSecId(val);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Divider(height: 1),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Container(
+                width: 3.5,
+                height: 14,
+                decoration: BoxDecoration(
+                  color: state.isGraduationMode
+                      ? AppColors.statusWarningText
+                      : AppColors.chartTeal,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'DESTINATION COHORT (TO)',
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: AppColors.textPrimary,
+                    letterSpacing: 0.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (state.isGraduationMode)
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.sm),
+              decoration: BoxDecoration(
+                color: AppColors.statusWarningBg,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.statusWarningBorder),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.school,
+                    size: 20,
+                    color: AppColors.statusWarningText,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Graduation Mode: Students will graduate and record in School Leaving.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.statusWarningText,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else ...[
+            MobileDropdownField<String>(
+              label: 'Target Session',
+              value: state.targetSessionYr,
+              hintText: 'Select Target Session',
+              items: state.availableSessions.map((yr) {
+                return DropdownMenuItem<String>(
+                  value: yr,
+                  child: Text(yr),
+                );
+              }).toList(),
+              onChanged: (val) {
+                ref
+                    .read(batchPromotionProvider.notifier)
+                    .setTargetSessionYr(val);
+              },
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Expanded(
+                  child: MobileDropdownField<int>(
+                    label: 'Target Class',
+                    value: state.targetClassId,
+                    hintText: 'Select Class',
+                    items: state.classes.map((c) {
+                      return DropdownMenuItem<int>(
+                        value: c['ClassID'] as int,
+                        child: Text(c['CName'] as String),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      ref
+                          .read(batchPromotionProvider.notifier)
+                          .setTargetClassId(val);
+                    },
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: MobileDropdownField<int>(
+                    label: 'Target Section',
+                    value: state.targetClassSecId,
+                    hintText: 'Select Sec',
+                    items: state.targetSections.map((s) {
+                      return DropdownMenuItem<int>(
+                        value: s['ClassSecID'] as int,
+                        child: Text(s['SecName'] as String),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      ref
+                          .read(batchPromotionProvider.notifier)
+                          .setTargetClassSecId(val);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          SizedBox(
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: state.loading ? null : _handleLoadCandidates,
+              icon: state.loading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.refresh, size: 18),
+              label: const Text('Load Candidates (Ctrl+L)'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentStudents,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileCandidateControls(
+    BatchPromotionState state,
+    List<PromotionCandidateRow> eligibleCandidates,
+    bool allSelected,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.accentStudentsSoftBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          Checkbox(
+            value: allSelected,
+            onChanged: eligibleCandidates.isEmpty
+                ? null
+                : (_) {
+                    ref.read(batchPromotionProvider.notifier).toggleSelectAll();
+                  },
+            activeColor: AppColors.accentStudents,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              'Select All (${eligibleCandidates.length} eligible)',
+              style: AppTypography.label.copyWith(
+                fontSize: 12,
+                color: AppColors.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          InkWell(
+            onTap: _selectPromotionDate,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.surfaceRaised,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: AppColors.borderDefault),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    DateFormat('dd-MMM-yyyy').format(state.promotionDate),
+                    style: AppTypography.monospace.copyWith(fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileTargetStatusBadge(
+    BatchPromotionState state,
+    PromotionCandidateRow c,
+  ) {
+    if (c.isFailed) {
+      return const MobileStatusPill(
+        label: 'Failed',
+        variant: MobileStatusVariant.error,
+      );
+    }
+    if (state.isGraduationMode) {
+      return const MobileStatusPill(
+        label: 'Graduating',
+        variant: MobileStatusVariant.warning,
+      );
+    }
+    final tgtClass = state.classes.firstWhere(
+      (cls) => cls['ClassID'] == state.targetClassId,
+      orElse: () => {'CName': 'Next'},
+    )['CName'];
+    final tgtSec = state.targetSections.firstWhere(
+      (sec) => sec['ClassSecID'] == state.targetClassSecId,
+      orElse: () => {'SecName': ''},
+    )['SecName'];
+
+    return MobileStatusPill(
+      label: 'To $tgtClass${tgtSec.isNotEmpty ? '-$tgtSec' : ''}',
+      variant: MobileStatusVariant.success,
+    );
+  }
+
+  Widget _buildMobileCandidateList(BatchPromotionState state) {
+    if (!state.loadedRoster) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.group_outlined,
+              size: 40,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Select source cohort and click Load Candidates',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (state.candidates.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.person_off_outlined,
+              size: 40,
+              color: AppColors.textMuted,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No Student to Promote',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: state.candidates.length,
+      itemBuilder: (context, index) {
+        final c = state.candidates[index];
+        final bool disabled = c.isFailed;
+        final Color stripColor =
+            c.isFailed ? AppColors.statusErrorText : AppColors.accentStudents;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3.5, color: stripColor),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: c.isSelected,
+                              onChanged: disabled
+                                  ? null
+                                  : (_) {
+                                      ref
+                                          .read(
+                                            batchPromotionProvider.notifier,
+                                          )
+                                          .toggleRowSelected(c.stuRegId);
+                                    },
+                              activeColor: AppColors.accentStudents,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            Text(
+                              '#${c.stuRegId}',
+                              style: AppTypography.monospace.copyWith(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: stripColor,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                c.studentName,
+                                style: AppTypography.label.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            MobileStatusPill(
+                              label: 'Roll #${c.rollNo}',
+                              variant: MobileStatusVariant.neutral,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 36),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Father: ${c.fatherName ?? '-'}',
+                                  style: AppTypography.bodySmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: _buildMobileTargetStatusBadge(state, c),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileStickyPromoteBar(BatchPromotionState state) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: SizedBox(
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: state.selectedCount == 0 ? null : _handlePromote,
+          icon: const Icon(Icons.arrow_forward, size: 18),
+          label: Text(
+            state.isGraduationMode
+                ? 'Graduate ${state.selectedCount} Students'
+                : 'Promote ${state.selectedCount} Students',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: state.isGraduationMode
+                ? AppColors.statusErrorText
+                : AppColors.brandPrimary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        ),
       ),
     );
   }
