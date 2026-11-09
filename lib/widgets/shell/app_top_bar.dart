@@ -286,29 +286,24 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
   }
 
   Widget _buildMobileSessionChip(String sessionYear) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 86.0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 8.0,
-          vertical: 4.0,
-        ),
-        decoration: BoxDecoration(
-          color: AppColors.statusInfoBg,
-          border: Border.all(color: AppColors.statusInfoBorder),
-          borderRadius: BorderRadius.circular(AppRadius.full),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          sessionYear,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.monospace.copyWith(
-            color: AppColors.statusInfoText,
-            fontSize: 11.0,
-            fontWeight: FontWeight.w600,
-          ),
+    return Container(
+      height: 26,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.statusInfoBg,
+        border: Border.all(color: AppColors.statusInfoBorder),
+        borderRadius: BorderRadius.circular(AppRadius.full),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        sessionYear,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: AppTypography.monospace.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppColors.statusInfoText,
         ),
       ),
     );

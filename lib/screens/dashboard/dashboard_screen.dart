@@ -465,13 +465,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       return _SurfaceCard(
         padding: const EdgeInsets.all(12),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              flex: 5,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
                     'PRINCIPAL CONSOLE',
@@ -482,31 +480,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       color: AppColors.accentDashboard,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     'Operational Overview — $todayFormatted',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.h2.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
+                    style: AppTypography.h2,
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
             Flexible(
-              flex: 4,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xs,
-                      vertical: 2,
+                      horizontal: 8,
+                      vertical: 4,
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.statusInfoBg,
@@ -519,25 +511,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.monospace.copyWith(
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
                         color: AppColors.statusInfoText,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.refresh,
-                        size: 20,
-                        color: AppColors.textSecondary,
-                      ),
-                      tooltip: 'Refresh Dashboard (Ctrl+R)',
-                      onPressed: _refresh,
-                      padding: EdgeInsets.zero,
-                    ),
+                  const SizedBox(height: 8),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    iconSize: 20,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Refresh Dashboard (Ctrl+R)',
+                    onPressed: _refresh,
                   ),
                 ],
               ),
