@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -65,6 +68,11 @@ class StudentListFilters {
 class StudentListFiltersNotifier extends StateNotifier<StudentListFilters> {
   final Ref? ref;
 
+  /// Set when a session is chosen explicitly (user filter tap or a save from
+  /// SystemSettings). The config bootstrap fallback must never override an
+  /// explicit selection.
+  bool _explicitSessionSelected = false;
+
   StudentListFiltersNotifier([this.ref, String? initialSessionYr])
       : super(
           StudentListFilters(
@@ -76,6 +84,73 @@ class StudentListFiltersNotifier extends StateNotifier<StudentListFilters> {
       if (initialMeta != null && initialMeta.sessionYear.isNotEmpty) {
         syncSession(initialMeta.sessionYear);
       }
+
+      // Phase G-9.7a: authoritative session bootstrap straight from SQLite
+      // (app_config.default_session_yr) with a populated-session fallback,
+      // so the directory never waits on (or races) shellMetadataProvider.
+      unawaited(_bootstrapSessionFromConfig());
+    }
+  }
+
+  /// Reads `default_session_yr` directly from app_config and applies a
+  /// populated-session fallback:
+  ///
+  /// - If `Student_Class` has rows for `default_session_yr`, select it.
+  /// - If it has none (e.g. a freshly bumped default with no enrollments yet),
+  ///   fall back to the latest populated `SessionYr` (Present = 1) so the
+  ///   directory shows students immediately. `default_session_yr` itself and
+  ///   all DB sessions remain available via availableSessionsProvider.
+  ///
+  /// Never overrides an explicit selection (setSessionYr) or a session changed
+  /// by anyone else while the bootstrap was in flight.
+  Future<void> _bootstrapSessionFromConfig() async {
+    try {
+      // Test environments keep the shell-metadata sync path (fixtures assert
+      // against it, and sqflite's async timers leave fake-async test zones
+      // with pending timers). Same guard as SessionNotifier/AppShell.
+      if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+
+      final baseline = state.sessionYr;
+      final db = await DatabaseService.instance.database;
+
+      final configRows = await db.rawQuery(
+        "SELECT config_value FROM app_config "
+        "WHERE config_key = 'default_session_yr' LIMIT 1",
+      );
+      final defaultYr = configRows.isEmpty
+          ? null
+          : (configRows.first['config_value'] as String?)?.trim();
+      // Unconfigured database (fresh test fixtures): keep the shell-metadata
+      // synced session untouched.
+      if (defaultYr == null || defaultYr.isEmpty) return;
+      if (_explicitSessionSelected) return;
+
+      var target = defaultYr;
+      final countRows = await db.rawQuery(
+        'SELECT COUNT(*) as cnt FROM Student_Class WHERE SessionYr = ?',
+        [defaultYr],
+      );
+      final count = (countRows.first['cnt'] as num?)?.toInt() ?? 0;
+      if (count == 0) {
+        final populatedRows = await db.rawQuery(
+          'SELECT SessionYr FROM Student_Class WHERE Present = 1 '
+          'GROUP BY SessionYr ORDER BY SessionYr DESC LIMIT 1',
+        );
+        final latestPopulated = populatedRows.isEmpty
+            ? null
+            : (populatedRows.first['SessionYr'] as String?)?.trim();
+        if (latestPopulated != null && latestPopulated.isNotEmpty) {
+          target = latestPopulated;
+        }
+      }
+
+      // Re-check after the awaits: an explicit selection or another sync that
+      // landed while we were reading always wins.
+      if (_explicitSessionSelected) return;
+      if (state.sessionYr != baseline) return;
+      syncSession(target);
+    } catch (_) {
+      // Database unavailable (e.g. no DB bound yet): keep current session.
     }
   }
 
@@ -110,6 +185,7 @@ class StudentListFiltersNotifier extends StateNotifier<StudentListFilters> {
   /// Syncs the active session year from the app shell (app_config.default_session_yr).
   /// Called by StudentListScreen on mount to avoid filtering on the constructor default.
   void setSessionYr(String sessionYr) {
+    _explicitSessionSelected = true;
     syncSession(sessionYr);
   }
 

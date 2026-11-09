@@ -34,6 +34,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/reference/schema.sql
+    - assets/db/seed_school_database.db
   fonts:
     - family: Inter
       fonts:

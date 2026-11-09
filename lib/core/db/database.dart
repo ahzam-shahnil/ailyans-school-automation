@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:school_automation/core/sync/node_id_allocator.dart';
@@ -47,6 +48,13 @@ class DatabaseService {
 
     final dbPath = await _getDatabasePath();
 
+    // Phase G-9.7a: fresh installs bootstrap from the bundled sanitized
+    // production snapshot (assets/db/seed_school_database.db) instead of the
+    // synthetic 10-student seeder. Only file-based databases that do not
+    // exist yet are bootstrapped; existing installs and :memory: test
+    // databases are untouched.
+    await _bootstrapFromBundledSeed(dbPath);
+
     final db = await databaseFactory.openDatabase(
       dbPath,
       options: OpenDatabaseOptions(
@@ -84,6 +92,39 @@ class DatabaseService {
     debugPrint('Database opened at: $dbPath');
 
     return db;
+  }
+
+  /// Copies the bundled sanitized production snapshot to [dbPath] when the
+  /// on-disk database file does not exist yet (or is 0 bytes), so first launch
+  /// boots with the full production dataset (673 students, schema v10) instead
+  /// of the synthetic seeder fixture.
+  ///
+  /// Never runs for in-memory databases, and never overwrites an existing
+  /// database file. Wrapped in try/catch: if the asset bundle is unavailable
+  /// (e.g. some test environments), we gracefully fall back to the normal
+  /// SchemaMigrations.migrate + DatabaseSeeder.seedIfEmpty path.
+  Future<void> _bootstrapFromBundledSeed(String dbPath) async {
+    try {
+      if (dbPath == inMemoryDatabasePath) return;
+      final file = File(dbPath);
+      if (file.existsSync() && file.lengthSync() > 0) return;
+
+      final ByteData asset = await rootBundle.load(
+        'assets/db/seed_school_database.db',
+      );
+
+      // Remove stale WAL/SHM siblings so the clean snapshot is not
+      // contaminated by leftover journal files from a previous install.
+      for (final suffix in const ['-wal', '-shm']) {
+        final sidecar = File('$dbPath$suffix');
+        if (sidecar.existsSync()) sidecar.deleteSync();
+      }
+
+      await file.writeAsBytes(asset.buffer.asUint8List(), flush: true);
+      debugPrint('Bootstrapped database from bundled seed asset: $dbPath');
+    } catch (e) {
+      debugPrint('Bundled seed bootstrap skipped: $e');
+    }
   }
 
   /// Locates the portable Documents/Ailyans/ directory across platforms.
