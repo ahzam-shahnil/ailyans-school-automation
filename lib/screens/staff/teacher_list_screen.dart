@@ -11,6 +11,8 @@ import '../../core/providers/teacher_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/teacher_row.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -1188,27 +1190,38 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
         child: Focus(
           autofocus: true,
           child: Scaffold(
-            backgroundColor: AppColors.surface,
+            backgroundColor: AppColors.surfaceCanvas,
             body: SafeArea(
-              bottom: true,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildMobileHeader(state),
-                    const SizedBox(height: AppSpacing.sm),
-                    _buildMobileFilterBar(context, state, notifier),
-                    const SizedBox(height: AppSpacing.xs),
-                    if (state.errorMessage != null) ...[
-                      _buildMobileErrorBanner(state, notifier),
-                      const SizedBox(height: AppSpacing.xs),
-                    ],
-                    _buildMobileTeacherList(context, state, notifier),
-                    const SizedBox(height: AppSpacing.sm),
-                    _buildMobileFooter(context),
-                  ],
-                ),
+              top: false,
+              bottom: false,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildMobileHeader(state),
+                          const SizedBox(height: AppSpacing.sm),
+                          _buildMobileKpiStrip(state),
+                          const SizedBox(height: AppSpacing.sm),
+                          _buildMobileFilterBar(context, state, notifier),
+                          const SizedBox(height: AppSpacing.xs),
+                          if (state.errorMessage != null) ...[
+                            _buildMobileErrorBanner(state, notifier),
+                            const SizedBox(height: AppSpacing.xs),
+                          ],
+                          _buildMobileTeacherList(context, state, notifier),
+                          const SizedBox(height: AppSpacing.sm),
+                          _buildMobileFooter(context),
+                        ],
+                      ),
+                    ),
+                  ),
+                  _buildMobileStickyBottomBar(context),
+                ],
               ),
             ),
           ),
@@ -1217,17 +1230,98 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
     );
   }
 
+  Widget _buildMobileStickyBottomBar(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 8,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: () => context.go('/staff/teachers/new'),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text('+ Add Teacher'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accentStaff,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileKpiStrip(TeacherListState state) {
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'TOTAL STAFF',
+            value: '${state.totalStaffCount}',
+            icon: Icons.people_outline,
+            accentColor: AppColors.accentStaff,
+            accentSoftBg: AppColors.accentStaffSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'ACTIVE STAFF',
+            value: '${state.activeStaffCount}',
+            icon: Icons.check_circle_outline,
+            accentColor: AppColors.accentStaff,
+            accentSoftBg: AppColors.accentStaffSoftBg,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildMobileHeader(TeacherListState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Faculty & Staff Directory',
-          style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'Faculty & Staff Directory',
+                style: AppTypography.h2.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            SizedBox(
+              height: 40,
+              child: ElevatedButton.icon(
+                onPressed: () => context.go('/staff/teachers/new'),
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('+ Add Teacher'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentStaff,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Wrap(
           spacing: 8,
           runSpacing: 4,
@@ -1542,113 +1636,136 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
   ) {
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         side: const BorderSide(color: AppColors.borderDefault),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        onTap: () => context.go('/staff/teachers/${teacher.teacherId}'),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: _getAvatarBg(teacher.teacherId),
-                    child: Text(
-                      teacher.initials,
-                      style: AppTypography.monospace.copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+      elevation: 0,
+      color: AppColors.surfaceRaised,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 3.5,
+              color: AppColors.accentStaff,
+            ),
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                onTap: () => context.go('/staff/teachers/${teacher.teacherId}'),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: _getAvatarBg(teacher.teacherId),
+                            child: Text(
+                              teacher.initials,
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: Text(
+                              teacher.tName,
+                              style: AppTypography.body.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          MobileStatusPill(
+                            label: teacher.isActive ? 'Active' : 'Inactive',
+                            variant: teacher.isActive
+                                ? MobileStatusVariant.success
+                                : MobileStatusVariant.neutral,
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      teacher.tName,
-                      style: AppTypography.body.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                      const SizedBox(height: 4),
+                      Text(
+                        teacher.tfName.isEmpty ? '—' : 'S/O ${teacher.tfName}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  _buildStatusBadge(teacher.isActive),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                teacher.tfName.isEmpty ? '—' : 'S/O ${teacher.tfName}',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  _buildCategoryBadge(teacher.tCat),
-                  _buildMobileInfoPill(
-                    teacher.tSubject.isEmpty ? '—' : teacher.tSubject,
-                  ),
-                  _buildMobileInfoPill(teacher.tContactNo1),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                teacher.tCnic,
-                style: AppTypography.monospace.copyWith(
-                  fontSize: 11,
-                  color: AppColors.textMuted,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            context.go('/staff/teachers/${teacher.teacherId}'),
-                        icon: const Icon(Icons.visibility_outlined, size: 16),
-                        label: const Text(
-                          'View',
-                          style: TextStyle(fontSize: 12),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          _buildCategoryBadge(teacher.tCat),
+                          _buildMobileInfoPill(
+                            teacher.tSubject.isEmpty ? '—' : teacher.tSubject,
+                          ),
+                          _buildMobileInfoPill(teacher.tContactNo1),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        teacher.tCnic,
+                        style: AppTypography.monospace.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textMuted,
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _showPhaseEStub(context, 'Print Biodata'),
-                        icon: const Icon(Icons.print_outlined, size: 16),
-                        label: const Text(
-                          'Print',
-                          style: TextStyle(fontSize: 12),
-                        ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () => context
+                                    .go('/staff/teachers/${teacher.teacherId}'),
+                                icon: const Icon(Icons.visibility_outlined,
+                                    size: 16),
+                                label: const Text(
+                                  'View',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    _showPhaseEStub(context, 'Print Biodata'),
+                                icon:
+                                    const Icon(Icons.print_outlined, size: 16),
+                                label: const Text(
+                                  'Print',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

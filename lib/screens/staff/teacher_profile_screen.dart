@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/providers/clock_provider.dart';
 import '../../core/providers/session_provider.dart';
@@ -9,6 +10,8 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/teacher_profile_provider.dart';
 import '../../core/providers/teacher_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -467,6 +470,10 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
         }
       },
     );
+
+    if (ResponsiveBreakpoints.isMobile(context)) {
+      return _buildMobileLayout(context, state, notifier, isReadOnlyUser);
+    }
 
     return CallbackShortcuts(
       bindings: {
@@ -2549,6 +2556,999 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // ===========================================================================
+  // MOBILE STITCH ARCHITECTURE (< 600px)
+  // ===========================================================================
+
+  Widget _buildMobileLayout(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+    bool isReadOnlyUser,
+  ) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeroCard(
+                      context,
+                      state,
+                      notifier,
+                      isReadOnlyUser,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (state.errorMessage != null) ...[
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.statusErrorBg,
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                          border:
+                              Border.all(color: AppColors.statusErrorBorder),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.error_outline,
+                              color: AppColors.statusErrorText,
+                              size: 16,
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Expanded(
+                              child: Text(
+                                state.errorMessage!,
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.statusErrorText,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.close,
+                                size: 14,
+                                color: AppColors.statusErrorText,
+                              ),
+                              splashRadius: 12,
+                              onPressed: notifier.clearErrorMessage,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                    ],
+                    _buildMobileTabBar(context, state, notifier),
+                    const SizedBox(height: AppSpacing.sm),
+                    if (state.isLoading)
+                      const Padding(
+                        padding: EdgeInsets.all(AppSpacing.xl),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else
+                      _buildMobileTabContent(context, state, notifier),
+                  ],
+                ),
+              ),
+            ),
+            _buildMobileStickyActions(
+              context,
+              state,
+              notifier,
+              isReadOnlyUser,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeroCard(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+    bool isReadOnlyUser,
+  ) {
+    final current = state.currentTeacher;
+    final isNew = state.isNew;
+    final teacherName = isNew
+        ? 'New Employee'
+        : (current?.tName.isNotEmpty == true
+            ? current!.tName
+            : 'Teacher Profile');
+    final designation =
+        current?.tCat.isNotEmpty == true ? current!.tCat : 'Teacher';
+    final subject =
+        current?.tSubject?.isNotEmpty == true ? current!.tSubject! : 'General';
+    final isActive = current?.isActive ?? true;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: const BorderSide(color: AppColors.borderDefault),
+      ),
+      elevation: 0,
+      color: AppColors.surfaceRaised,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 3.5,
+              color: AppColors.accentStaff,
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: _getAvatarBg(_resolvedId ?? 1),
+                      child: Text(
+                        isNew ? 'N' : (current?.initials ?? 'T'),
+                        style: AppTypography.monospace.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  teacherName,
+                                  style: AppTypography.h3.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              MobileStatusPill(
+                                label: isActive ? 'Active' : 'Inactive',
+                                variant: isActive
+                                    ? MobileStatusVariant.success
+                                    : MobileStatusVariant.neutral,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$designation • $subject',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (current != null && current.tCnic.isNotEmpty) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              current.tCnic,
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 11,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileTabBar(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+  ) {
+    final subjCount = state.subjectAssignments.length;
+    final salCount = state.salarySlips.length;
+
+    final tabs = [
+      '1. Personal & Biodata',
+      state.isNew ? '2. Class Subjects' : '2. Class Subjects ($subjCount)',
+      state.isNew ? '3. Payroll History' : '3. Payroll History ($salCount)',
+      '4. Qualifications',
+    ];
+
+    return Container(
+      height: 40,
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(bottom: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: List.generate(tabs.length, (idx) {
+            final isSelected = state.activeTab == idx;
+            final isDisabled = state.isNew && (idx == 1 || idx == 2);
+
+            return InkWell(
+              onTap: isDisabled ? null : () => notifier.switchTab(idx),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: isSelected
+                          ? AppColors.accentStaff
+                          : Colors.transparent,
+                      width: 2.5,
+                    ),
+                  ),
+                ),
+                child: Text(
+                  tabs[idx],
+                  style: AppTypography.label.copyWith(
+                    color: isDisabled
+                        ? AppColors.textMuted
+                        : (isSelected
+                            ? AppColors.accentStaff
+                            : AppColors.textSecondary),
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileTabContent(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+  ) {
+    switch (state.activeTab) {
+      case 0:
+        return _buildMobileTab1PersonalBiodata(context, state, notifier);
+      case 1:
+        return _buildMobileTab2ClassSubjects(context, state, notifier);
+      case 2:
+        return _buildMobileTab3PayrollHistory(context, state, notifier);
+      case 3:
+        return _buildMobileTab4Qualifications(context, state, notifier);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildMobileTab1PersonalBiodata(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+  ) {
+    final current = state.currentTeacher;
+    final isEdit = state.isEditMode;
+    final isReadOnlyUser = ref.watch(sessionProvider)?.user.userLevel == 3;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (!state.isNew && current != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: AppSpacing.md),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.borderDefault),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  current.isActive
+                      ? Icons.check_circle_outline
+                      : Icons.pause_circle_outline,
+                  size: 18,
+                  color: current.isActive
+                      ? AppColors.statusSuccessText
+                      : AppColors.statusErrorText,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    'Status: ${current.isActive ? "Active Faculty" : "Relieved"}',
+                    style: AppTypography.bodySmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: current.isActive
+                          ? AppColors.statusSuccessText
+                          : AppColors.statusErrorText,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Switch(
+                  value: current.isActive,
+                  activeThumbColor: AppColors.brandPrimary,
+                  onChanged: isReadOnlyUser
+                      ? null
+                      : (active) async {
+                          final tid = current.teacherId;
+                          if (tid != null) {
+                            await notifier.toggleActiveStatus(tid, active);
+                            ref
+                                .read(teacherListProvider.notifier)
+                                .loadInitialData();
+                          }
+                        },
+                ),
+              ],
+            ),
+          ),
+
+        _buildSectionHeader('PERSONAL & CONTACT INFORMATION'),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Full Name *',
+          fieldKey: 'TName',
+          isEdit: isEdit,
+          focusNode: _nameFocusNode,
+          errorText: state.fieldErrors['TName'],
+          placeholder: 'e.g. Syed Wazahat Raza Zaidi',
+          onChanged: (val) => notifier.updateField('TName', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Father / Spouse Name',
+          fieldKey: 'TFName',
+          isEdit: isEdit,
+          placeholder: 'e.g. Syed Ibn-i-Hassan Zaidi',
+          onChanged: (val) => notifier.updateField('TFName', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildDateField(
+          label: 'Date of Birth',
+          value: current?.dob,
+          isEdit: isEdit,
+          onChanged: (val) => notifier.updateField('DOB', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'CNIC *',
+          fieldKey: 'TCNIC',
+          isEdit: isEdit,
+          focusNode: _cnicFocusNode,
+          errorText: state.fieldErrors['TCNIC'],
+          placeholder: 'e.g. 38302-1111111-1',
+          onChanged: (val) => notifier.updateField('TCNIC', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Primary Mobile *',
+          fieldKey: 'TContactNo1',
+          isEdit: isEdit,
+          focusNode: _contactFocusNode,
+          errorText: state.fieldErrors['TContactNo1'],
+          placeholder: 'e.g. 0333-1111111',
+          onChanged: (val) => notifier.updateField('TContactNo1', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Secondary Mobile',
+          fieldKey: 'TContactNo2',
+          isEdit: isEdit,
+          placeholder: 'e.g. 0321-1234567',
+          onChanged: (val) => notifier.updateField('TContactNo2', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Domicile',
+          fieldKey: 'Domicile',
+          isEdit: isEdit,
+          placeholder: 'e.g. Mianwali',
+          onChanged: (val) => notifier.updateField('Domicile', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Residential Address',
+          fieldKey: 'TAddress',
+          isEdit: isEdit,
+          placeholder: 'e.g. Muslim Bazar Mianwali',
+          onChanged: (val) => notifier.updateField('TAddress', val),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        _buildSectionHeader('EMPLOYMENT & COMPENSATION'),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Office File Number',
+          fieldKey: 'OfficeFile',
+          isEdit: isEdit,
+          placeholder: 'e.g. OF-2018-042',
+          onChanged: (val) => notifier.updateField('OfficeFile', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Biometric Serial',
+          fieldKey: 'TBioSer',
+          isEdit: isEdit,
+          placeholder: 'e.g. BIO-1024',
+          onChanged: (val) => notifier.updateField('TBioSer', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Subject Specialization',
+          fieldKey: 'TSubject',
+          isEdit: isEdit,
+          placeholder: 'e.g. Mathematics, English',
+          onChanged: (val) => notifier.updateField('TSubject', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        isEdit
+            ? _buildDropdownField(
+                label: 'Salary Category',
+                value: state.currentTeacher?.tCat ?? 'Teacher',
+                items: _employmentCategories,
+                onChanged: (val) {
+                  if (val != null) {
+                    notifier.updateField('TCat', val);
+                  }
+                },
+              )
+            : _buildViewField(
+                label: 'Salary Category',
+                value: state.currentTeacher?.tCat ?? 'Teacher',
+              ),
+        const SizedBox(height: AppSpacing.lg),
+
+        _buildSectionHeader('EMERGENCY CONTACT'),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Emergency Contact Name',
+          fieldKey: 'TEmergencyContactName',
+          isEdit: isEdit,
+          placeholder: 'e.g. Dr. Aamir Ali',
+          onChanged: (val) =>
+              notifier.updateField('TEmergencyContactName', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Emergency Contact Phone',
+          fieldKey: 'TEmergencyContactNo',
+          isEdit: isEdit,
+          placeholder: 'e.g. 0300-7654321',
+          onChanged: (val) =>
+              notifier.updateField('TEmergencyContactNo', val),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileTab2ClassSubjects(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+  ) {
+    final assignments = state.subjectAssignments;
+    if (assignments.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.menu_book_outlined,
+                size: 40,
+                color: AppColors.textMuted,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'This teacher is not assigned to any class subjects yet.',
+                textAlign: TextAlign.center,
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: assignments.length,
+      itemBuilder: (ctx, idx) {
+        final a = assignments[idx];
+        return Card(
+          margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            side: const BorderSide(color: AppColors.borderDefault),
+          ),
+          elevation: 0,
+          color: AppColors.surfaceRaised,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 3.5,
+                  color: AppColors.accentStaff,
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                a.className,
+                                style: AppTypography.body.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            Text(
+                              'ID: ${a.subjId}',
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 11,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          a.subjName,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: AppSpacing.sm,
+                          runSpacing: 4,
+                          children: [
+                            Text(
+                              'Theory: ${a.totalMarks.toStringAsFixed(0)}',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              'Practical: ${a.totalPracticalMarks.toStringAsFixed(0)}',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              'Total: ${a.combinedMarks.toStringAsFixed(0)}',
+                              style: AppTypography.label.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.accentStaff,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileTab3PayrollHistory(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+  ) {
+    final slips = state.salarySlips;
+    if (slips.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.receipt_long_outlined,
+                size: 40,
+                color: AppColors.textMuted,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'No salary slips recorded for this employee yet.',
+                textAlign: TextAlign.center,
+                style: AppTypography.body.copyWith(
+                  color: AppColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final currency = NumberFormat('#,##0');
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: slips.length,
+      itemBuilder: (ctx, idx) {
+        final slip = slips[idx];
+        final isPaid = slip.isPaid == 'Y';
+        return Card(
+          margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            side: const BorderSide(color: AppColors.borderDefault),
+          ),
+          elevation: 0,
+          color: AppColors.surfaceRaised,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 3.5,
+                  color: AppColors.accentStaff,
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                slip.salMonth,
+                                style: AppTypography.body.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
+                            MobileStatusPill(
+                              label: isPaid ? 'Paid' : 'Pending',
+                              variant: isPaid
+                                  ? MobileStatusVariant.success
+                                  : MobileStatusVariant.warning,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Slip #${slip.tSalMasId}',
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 11,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: AppSpacing.sm,
+                          runSpacing: 4,
+                          children: [
+                            Text(
+                              'Gross: Rs. ${currency.format(slip.grossAmount)}',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              'Deduct: Rs. ${currency.format(slip.tDeductions)}',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: slip.tDeductions > 0
+                                    ? AppColors.statusErrorText
+                                    : AppColors.textMuted,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              'Net: Rs. ${currency.format(slip.netAmount)}',
+                              style: AppTypography.label.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.accentStaff,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileTab4Qualifications(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+  ) {
+    final isEdit = state.isEditMode;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSectionHeader('QUALIFICATIONS & CREDENTIALS'),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Academic Degrees',
+          fieldKey: 'TQualification',
+          isEdit: isEdit,
+          placeholder: 'e.g. B.Sc, MA',
+          onChanged: (val) => notifier.updateField('TQualification', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Professional Certifications',
+          fieldKey: 'TProfessional',
+          isEdit: isEdit,
+          placeholder: 'e.g. BEd, DIAEd',
+          onChanged: (val) => notifier.updateField('TProfessional', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Teaching Certificates',
+          fieldKey: 'TCertificate',
+          isEdit: isEdit,
+          placeholder: 'e.g. IT, CT, TE',
+          onChanged: (val) => notifier.updateField('TCertificate', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Field of Expertise',
+          fieldKey: 'TFiledOfExperty',
+          isEdit: isEdit,
+          placeholder: 'e.g. Education, Sciences',
+          onChanged: (val) => notifier.updateField('TFiledOfExperty', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Cumulative Experience',
+          fieldKey: 'TExperience',
+          isEdit: isEdit,
+          placeholder: 'e.g. 15 Years',
+          onChanged: (val) => notifier.updateField('TExperience', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Special Skills / Distinctions',
+          fieldKey: 'TAnySpeciality',
+          isEdit: isEdit,
+          placeholder: 'e.g. Science Fair Organizer, IT Incharge',
+          onChanged: (val) => notifier.updateField('TAnySpeciality', val),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        _buildField(
+          label: 'Biographical Narrative',
+          fieldKey: 'Detail',
+          isEdit: isEdit,
+          maxLines: 4,
+          placeholder:
+              'Comprehensive service record and administrative achievements...',
+          onChanged: (val) => notifier.updateField('Detail', val),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileStickyActions(
+    BuildContext context,
+    TeacherProfileState state,
+    TeacherProfileNotifier notifier,
+    bool isReadOnlyUser,
+  ) {
+    final isNew = state.isNew;
+    final isEdit = state.isEditMode;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 8,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: isNew
+          ? Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: state.canSave
+                          ? () => _handleSave(state, notifier)
+                          : null,
+                      icon: const Icon(Icons.check, size: 16),
+                      label: const Text('Create Employee'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accentStaff,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                SizedBox(
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: () => _handleBackToDirectory(state, notifier),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+              ],
+            )
+          : isEdit
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 48,
+                        child: ElevatedButton.icon(
+                          onPressed: state.canSave
+                              ? () => _handleSave(state, notifier)
+                              : null,
+                          icon: const Icon(Icons.save_outlined, size: 16),
+                          label: const Text('Save Teacher'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.accentStaff,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.md),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    SizedBox(
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: () => _handleCancelEdits(state, notifier),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    if (!isReadOnlyUser) ...[
+                      Expanded(
+                        child: SizedBox(
+                          height: 48,
+                          child: ElevatedButton.icon(
+                            onPressed: () => notifier.enterEditMode(
+                              userLvl:
+                                  ref.read(sessionProvider)?.user.userLevel,
+                            ),
+                            icon: const Icon(Icons.edit_outlined, size: 16),
+                            label: const Text('Edit Profile'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.accentStaff,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(AppRadius.md),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                    ],
+                    SizedBox(
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            _handleBackToDirectory(state, notifier),
+                        icon: const Icon(Icons.arrow_back, size: 16),
+                        label: const Text('Directory'),
+                      ),
+                    ),
+                  ],
+                ),
     );
   }
 }

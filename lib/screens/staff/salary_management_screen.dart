@@ -10,6 +10,8 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/salary_slip_row.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -1798,33 +1800,83 @@ class _SalaryManagementScreenState
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.surfaceCanvas,
           body: SafeArea(
-            bottom: true,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildMobileHeader(context, notifier),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (state.errorMessage != null) ...[
-                    _buildMobileErrorBanner(state.errorMessage!, notifier),
-                    const SizedBox(height: AppSpacing.xs),
-                  ],
-                  _buildMobileFilterBar(context, state, notifier),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileKpiGrid(state),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileRosterSection(context, state, notifier),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileSlipSection(context, state, notifier),
-                  if (state.selectedTeacherId != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    _buildMobileFooter(context, state),
-                  ],
-                ],
-              ),
+            top: false,
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildMobileHeader(context, notifier),
+                        const SizedBox(height: AppSpacing.sm),
+                        if (state.errorMessage != null) ...[
+                          _buildMobileErrorBanner(
+                            state.errorMessage!,
+                            notifier,
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                        ],
+                        _buildMobileFilterBar(context, state, notifier),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileKpiGrid(state),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileRosterSection(context, state, notifier),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileSlipSection(context, state, notifier),
+                        if (state.selectedTeacherId != null) ...[
+                          const SizedBox(height: AppSpacing.sm),
+                          _buildMobileFooter(context, state),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                _buildMobileStickyBottomBar(context, state),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileStickyBottomBar(
+    BuildContext context,
+    SalaryManagementState state,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 8,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: (state.isSaving || state.roster.isEmpty)
+              ? null
+              : _handleCommit,
+          icon: const Icon(Icons.payments_outlined, size: 18),
+          label: Text(
+            state.selectedTeacherId != null
+                ? 'Save Salary Disbursement'
+                : 'Generate Payslip',
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accentStaff,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
             ),
           ),
         ),
@@ -2031,106 +2083,54 @@ class _SalaryManagementScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _buildMobileKpiCard(
-          title: 'Total Eligible Staff',
-          value: '${state.totalEligibleStaff}',
-          subtitle: 'Active roster members',
-          icon: Icons.people_outline,
-          accentColor: AppColors.brandPrimary,
+        Row(
+          children: [
+            Expanded(
+              child: MobileKpiCard(
+                label: 'GROSS PAYROLL',
+                value: 'Rs. ${currencyFormat.format(state.grossPayroll)}',
+                icon: Icons.account_balance_wallet_outlined,
+                accentColor: AppColors.accentStaff,
+                accentSoftBg: AppColors.accentStaffSoftBg,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: MobileKpiCard(
+                label: 'NET DISBURSED',
+                value: 'Rs. ${currencyFormat.format(state.netDisbursed)}',
+                icon: Icons.check_circle_outline,
+                accentColor: AppColors.accentStaff,
+                accentSoftBg: AppColors.accentStaffSoftBg,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        _buildMobileKpiCard(
-          title: 'Gross Payroll',
-          value: 'Rs. ${currencyFormat.format(state.grossPayroll)}',
-          subtitle: 'Base + allowances',
-          icon: Icons.account_balance_wallet_outlined,
-          accentColor: AppColors.statusInfoText,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        _buildMobileKpiCard(
-          title: 'Total Deductions',
-          value: 'Rs. ${currencyFormat.format(state.totalDeductions)}',
-          subtitle: 'Fines, leaves, loans',
-          icon: Icons.remove_circle_outline,
-          accentColor: AppColors.statusWarningText,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        _buildMobileKpiCard(
-          title: 'Net Disbursed',
-          value: 'Rs. ${currencyFormat.format(state.netDisbursed)}',
-          subtitle: 'Total settled pay',
-          icon: Icons.check_circle_outline,
-          accentColor: AppColors.statusSuccessText,
+        Row(
+          children: [
+            Expanded(
+              child: MobileKpiCard(
+                label: 'ELIGIBLE STAFF',
+                value: '${state.totalEligibleStaff}',
+                icon: Icons.people_outline,
+                accentColor: AppColors.accentStaff,
+                accentSoftBg: AppColors.accentStaffSoftBg,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: MobileKpiCard(
+                label: 'TOTAL DEDUCTIONS',
+                value: 'Rs. ${currencyFormat.format(state.totalDeductions)}',
+                icon: Icons.remove_circle_outline,
+                accentColor: AppColors.statusErrorText,
+                accentSoftBg: AppColors.statusErrorBg,
+              ),
+            ),
+          ],
         ),
       ],
-    );
-  }
-
-  Widget _buildMobileKpiCard({
-    required String title,
-    required String value,
-    required String subtitle,
-    required IconData icon,
-    required Color accentColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.borderDefault),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-            ),
-            child: Icon(icon, size: 18, color: accentColor),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: AppTypography.bodySmall.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: AppTypography.monospace.copyWith(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodySmall.copyWith(
-                    fontSize: 10,
-                    color: AppColors.textMuted,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -2239,70 +2239,127 @@ class _SalaryManagementScreenState
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         side: BorderSide(
-          color: isSelected ? AppColors.brandPrimary : AppColors.borderDefault,
+          color: isSelected ? AppColors.accentStaff : AppColors.borderDefault,
         ),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        onTap: () => _handleMobileRowTap(row),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      row.teacherName,
-                      style: AppTypography.body.copyWith(
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.w600,
-                        color: isSelected
-                            ? AppColors.brandPrimary
-                            : AppColors.textPrimary,
+      elevation: 0,
+      color: AppColors.surfaceRaised,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 3.5,
+              color: AppColors.accentStaff,
+            ),
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.lg),
+                onTap: () => _handleMobileRowTap(row),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              row.teacherName,
+                              style: AppTypography.body.copyWith(
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w600,
+                                color: isSelected
+                                    ? AppColors.accentStaff
+                                    : AppColors.textPrimary,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          MobileStatusPill(
+                            label: row.isPaid == 'Y' ? 'Paid' : 'Unpaid',
+                            variant: row.isPaid == 'Y'
+                                ? MobileStatusVariant.success
+                                : MobileStatusVariant.warning,
+                          ),
+                        ],
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(
+                            row.tSalMasId ?? '—',
+                            style: AppTypography.monospace.copyWith(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          _buildCategoryBadge(row.teacherCat),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Wrap(
+                        spacing: AppSpacing.xs,
+                        runSpacing: AppSpacing.xs,
+                        children: [
+                          _buildMobileAmountPill(
+                              'Gross', 'Rs. ${currency.format(gross)}'),
+                          _buildMobileAmountPill(
+                            'Deductions',
+                            'Rs. ${currency.format(deductions)}',
+                          ),
+                          _buildMobileAmountPill(
+                              'Net', 'Rs. ${currency.format(net)}'),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _handleMobileRowTap(row),
+                                icon: const Icon(Icons.receipt_outlined,
+                                    size: 16),
+                                label: const Text(
+                                  'View Slip',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: _handlePrint,
+                                icon:
+                                    const Icon(Icons.print_outlined, size: 16),
+                                label: const Text(
+                                  'Print',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppSpacing.xs),
-                  _buildStatusBadge(row.isPaid == 'Y'),
-                ],
+                ),
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(
-                    row.tSalMasId ?? '—',
-                    style: AppTypography.monospace.copyWith(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  _buildCategoryBadge(row.teacherCat),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Wrap(
-                spacing: AppSpacing.xs,
-                runSpacing: AppSpacing.xs,
-                children: [
-                  _buildMobileAmountPill('Gross', 'Rs. ${currency.format(gross)}'),
-                  _buildMobileAmountPill(
-                    'Deductions',
-                    'Rs. ${currency.format(deductions)}',
-                  ),
-                  _buildMobileAmountPill('Net', 'Rs. ${currency.format(net)}'),
-                ],
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
