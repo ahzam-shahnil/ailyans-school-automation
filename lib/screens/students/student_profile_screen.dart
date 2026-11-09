@@ -2479,7 +2479,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 500),
+                // Phase G-9 Shot 3a: was minWidth: 500 — on 360dp screens the
+                // 'Present' badge column (flex 1.5) became narrower than the
+                // 'Active ✓' badge, overflowing 29px. 720dp guarantees every
+                // cell's intrinsic width. Mobile branch only.
+                constraints: const BoxConstraints(minWidth: 720),
                 child: _buildEnrollmentTable(enrollments),
               ),
             )
@@ -3580,13 +3584,24 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             children: [
               Icon(icon, size: 24, color: AppColors.brandPrimary),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: AppTypography.label.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+              if (ResponsiveBreakpoints.isMobile(context))
+                Expanded(
+                  child: Text(
+                    title,
+                    style: AppTypography.label.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  title,
+                  style: AppTypography.label.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),

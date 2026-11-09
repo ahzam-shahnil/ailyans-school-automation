@@ -182,67 +182,180 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           color: AppColors.surface,
           child: Container(
             color: AppColors.surface,
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: ResponsiveBreakpoints.isMobile(context)
+                ? const EdgeInsets.fromLTRB(
+                    AppSpacing.md,
+                    AppSpacing.md,
+                    AppSpacing.md,
+                    0,
+                  )
+                : const EdgeInsets.all(AppSpacing.lg),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // ── 1. PAGE HEADER ──
                 if (ResponsiveBreakpoints.isMobile(context))
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.xs,
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            'Students',
-                            style: AppTypography.h1.copyWith(
-                              color: AppColors.textPrimary,
+                          Expanded(
+                            child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.xs,
+                              children: [
+                                Text(
+                                  'Students',
+                                  style: AppTypography.h1.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8.0,
+                                    vertical: 3.0,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.surfaceSubtle,
+                                    borderRadius:
+                                        BorderRadius.circular(AppRadius.sm),
+                                    border: Border.all(
+                                      color: AppColors.borderDefault,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    switch (filters.status) {
+                                      'Active' => '$totalCount Active Students',
+                                      'Left' => '$totalCount Left Students',
+                                      'All' => '$totalCount Total Students',
+                                      _ => '$totalCount Students',
+                                    },
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8.0,
-                              vertical: 3.0,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.surfaceSubtle,
-                              borderRadius: BorderRadius.circular(AppRadius.sm),
-                              border: Border.all(color: AppColors.borderDefault),
-                            ),
-                            child: Text(
-                              switch (filters.status) {
-                                'Active' => '$totalCount Active Students',
-                                'Left' => '$totalCount Left Students',
-                                'All' => '$totalCount Total Students',
-                                _ => '$totalCount Students',
-                              },
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
+                          if (canNewAdmission) ...[
+                            const SizedBox(width: AppSpacing.xs),
+                            SizedBox(
+                              height: 40,
+                              child: ElevatedButton.icon(
+                                onPressed: () => context.go('/students/new'),
+                                icon: const Icon(
+                                  Icons.person_add_outlined,
+                                  size: 16.0,
+                                ),
+                                label: const Text('+ New Student'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.accentStudents,
+                                  foregroundColor: AppColors.textOnPrimary,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                  ),
+                                  elevation: AppElevation.flat,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        alignment: WrapAlignment.start,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: AppSpacing.xs,
-                        runSpacing: AppSpacing.xs,
-                        children: [
-                          if (canBulkEnrollment)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            if (canBulkEnrollment) ...[
+                              OutlinedButton.icon(
+                                onPressed: () =>
+                                    context.go('/students/enrollment/bulk'),
+                                icon: const Icon(
+                                  Icons.group_add_outlined,
+                                  size: 16.0,
+                                ),
+                                label: const Text('Bulk Enrollment'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.textPrimary,
+                                  side: const BorderSide(
+                                    color: AppColors.borderDefault,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                  ),
+                                  minimumSize: const Size(0, 36),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                            ],
+                            if (canBatchPromotion) ...[
+                              OutlinedButton.icon(
+                                onPressed: () =>
+                                    context.go('/students/promote'),
+                                icon: const Icon(Icons.trending_up, size: 16.0),
+                                label: const Text('Batch Promotion'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.textPrimary,
+                                  side: const BorderSide(
+                                    color: AppColors.borderDefault,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                  ),
+                                  minimumSize: const Size(0, 36),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                            ],
+                            if (canSchoolLeaving) ...[
+                              OutlinedButton.icon(
+                                onPressed: () =>
+                                    context.go('/students/leaving'),
+                                icon: const Icon(Icons.exit_to_app, size: 16.0),
+                                label: const Text('School Leaving'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.textPrimary,
+                                  side: const BorderSide(
+                                    color: AppColors.borderDefault,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                  ),
+                                  minimumSize: const Size(0, 36),
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                            ],
                             OutlinedButton.icon(
-                              onPressed: () =>
-                                  context.go('/students/enrollment/bulk'),
+                              onPressed: () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Export coming in Phase 2'),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              },
                               icon: const Icon(
-                                Icons.group_add_outlined,
+                                Icons.download_outlined,
                                 size: 16.0,
                               ),
-                              label: const Text('Bulk Enrollment'),
+                              label: const Text('Export CSV'),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: AppColors.textPrimary,
                                 side: const BorderSide(
@@ -256,90 +369,8 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 minimumSize: const Size(0, 36),
                               ),
                             ),
-                          if (canBatchPromotion)
-                            OutlinedButton.icon(
-                              onPressed: () => context.go('/students/promote'),
-                              icon: const Icon(Icons.trending_up, size: 16.0),
-                              label: const Text('Batch Promotion'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.textPrimary,
-                                side: const BorderSide(
-                                  color: AppColors.borderDefault,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.md,
-                                  ),
-                                ),
-                                minimumSize: const Size(0, 36),
-                              ),
-                            ),
-                          if (canSchoolLeaving)
-                            OutlinedButton.icon(
-                              onPressed: () => context.go('/students/leaving'),
-                              icon: const Icon(Icons.exit_to_app, size: 16.0),
-                              label: const Text('School Leaving'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.textPrimary,
-                                side: const BorderSide(
-                                  color: AppColors.borderDefault,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.md,
-                                  ),
-                                ),
-                                minimumSize: const Size(0, 36),
-                              ),
-                            ),
-                          OutlinedButton.icon(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Export coming in Phase 2'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
-                            },
-                            icon: const Icon(
-                              Icons.download_outlined,
-                              size: 16.0,
-                            ),
-                            label: const Text('Export CSV'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.textPrimary,
-                              side: const BorderSide(
-                                color: AppColors.borderDefault,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  AppRadius.md,
-                                ),
-                              ),
-                              minimumSize: const Size(0, 36),
-                            ),
-                          ),
-                          if (canNewAdmission)
-                            ElevatedButton.icon(
-                              onPressed: () => context.go('/students/new'),
-                              icon: const Icon(
-                                Icons.person_add_outlined,
-                                size: 16.0,
-                              ),
-                              label: const Text('+ New Student (Ctrl+N)'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.brandPrimary,
-                                foregroundColor: AppColors.textOnPrimary,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.md,
-                                  ),
-                                ),
-                                minimumSize: const Size(0, 36),
-                                elevation: AppElevation.flat,
-                              ),
-                            ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   )
@@ -1344,106 +1375,120 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 const SizedBox(height: AppSpacing.sm),
 
                 // ── 4. PAGINATION ROW ──
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: _mobileBoundedScroll(
-                    context,
-                    width: 820,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                      // Total range label
-                      Text(
-                        totalCount == 0
-                            ? 'Showing 0-0 of 0 students'
-                            : 'Showing ${startIndex + 1}-$endIndex of $totalCount students',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-
-                      // Controls
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+                if (ResponsiveBreakpoints.isMobile(context))
+                  _buildMobilePaginationBar(
+                    totalCount,
+                    startIndex,
+                    endIndex,
+                    currentPage,
+                    totalPages,
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4.0),
+                    child: _mobileBoundedScroll(
+                      context,
+                      width: 820,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          TextButton(
-                            onPressed: currentPage > 1
-                                ? () {
-                                    ref
-                                        .read(
-                                          studentListFiltersProvider.notifier,
-                                        )
-                                        .setPage(currentPage - 1);
-                                  }
-                                : null,
-                            child: const Text('Previous'),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          Container(
-                            width: 32.0,
-                            height: 32.0,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: AppColors.brandPrimary,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                            ),
-                            child: Text(
-                              '$currentPage',
-                              style: AppTypography.label.copyWith(
-                                color: AppColors.textOnPrimary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.xs),
-                          TextButton(
-                            onPressed: currentPage < totalPages
-                                ? () {
-                                    ref
-                                        .read(
-                                          studentListFiltersProvider.notifier,
-                                        )
-                                        .setPage(currentPage + 1);
-                                  }
-                                : null,
-                            child: const Text('Next'),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          DropdownButton<int>(
-                            value: pageSize,
-                            underline: const SizedBox.shrink(),
+                          // Total range label
+                          Text(
+                            totalCount == 0
+                                ? 'Showing 0-0 of 0 students'
+                                : 'Showing ${startIndex + 1}-$endIndex of $totalCount students',
                             style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textPrimary,
+                              color: AppColors.textMuted,
                             ),
-                            items: const [
-                              DropdownMenuItem(
-                                value: 25,
-                                child: Text('25 per page'),
+                          ),
+
+                          // Controls
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton(
+                                onPressed: currentPage > 1
+                                    ? () {
+                                        ref
+                                            .read(
+                                              studentListFiltersProvider
+                                                  .notifier,
+                                            )
+                                            .setPage(currentPage - 1);
+                                      }
+                                    : null,
+                                child: const Text('Previous'),
                               ),
-                              DropdownMenuItem(
-                                value: 50,
-                                child: Text('50 per page'),
+                              const SizedBox(width: AppSpacing.xs),
+                              Container(
+                                width: 32.0,
+                                height: 32.0,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: AppColors.brandPrimary,
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.md),
+                                ),
+                                child: Text(
+                                  '$currentPage',
+                                  style: AppTypography.label.copyWith(
+                                    color: AppColors.textOnPrimary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
-                              DropdownMenuItem(
-                                value: 100,
-                                child: Text('100 per page'),
+                              const SizedBox(width: AppSpacing.xs),
+                              TextButton(
+                                onPressed: currentPage < totalPages
+                                    ? () {
+                                        ref
+                                            .read(
+                                              studentListFiltersProvider
+                                                  .notifier,
+                                            )
+                                            .setPage(currentPage + 1);
+                                      }
+                                    : null,
+                                child: const Text('Next'),
+                              ),
+                              const SizedBox(width: AppSpacing.md),
+                              DropdownButton<int>(
+                                value: pageSize,
+                                underline: const SizedBox.shrink(),
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 25,
+                                    child: Text('25 per page'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 50,
+                                    child: Text('50 per page'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 100,
+                                    child: Text('100 per page'),
+                                  ),
+                                ],
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    ref
+                                        .read(
+                                          studentListFiltersProvider.notifier,
+                                        )
+                                        .setPageSize(val);
+                                  }
+                                },
                               ),
                             ],
-                            onChanged: (val) {
-                              if (val != null) {
-                                ref
-                                    .read(studentListFiltersProvider.notifier)
-                                    .setPageSize(val);
-                              }
-                            },
                           ),
-                          ],
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -1461,6 +1506,67 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: SizedBox(width: width, child: child),
+    );
+  }
+
+  Widget _buildMobilePaginationBar(
+    int totalCount,
+    int startIndex,
+    int endIndex,
+    int currentPage,
+    int totalPages,
+  ) {
+    final start = totalCount == 0 ? 0 : startIndex + 1;
+    final end = endIndex;
+    final canGoPrev = currentPage > 1;
+    final canGoNext = currentPage < totalPages;
+    void onPrev() =>
+        ref.read(studentListFiltersProvider.notifier).setPage(currentPage - 1);
+    void onNext() =>
+        ref.read(studentListFiltersProvider.notifier).setPage(currentPage + 1);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Showing $start-$end of $totalCount',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          IconButton(
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.chevron_left, size: 20),
+            onPressed: canGoPrev ? onPrev : null,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              '$currentPage / $totalPages',
+              style: AppTypography.monospace.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.chevron_right, size: 20),
+            onPressed: canGoNext ? onNext : null,
+          ),
+        ],
+      ),
     );
   }
 

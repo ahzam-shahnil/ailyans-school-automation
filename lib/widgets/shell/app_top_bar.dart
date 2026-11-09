@@ -222,6 +222,31 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
     );
   }
 
+  String _getMobileTitle(BuildContext context) {
+    String path = '';
+    try {
+      path = GoRouterState.of(context).uri.path;
+    } catch (_) {
+      try {
+        path = GoRouterState.of(context).matchedLocation;
+      } catch (_) {
+        path = '';
+      }
+    }
+    if (path.isEmpty || path == '/') return 'Dashboard';
+    if (path.startsWith('/dashboard')) return 'Dashboard';
+    if (path.startsWith('/students')) return 'Students';
+    if (path.startsWith('/fees')) return 'Fees & Billing';
+    if (path.startsWith('/attendance')) return 'Attendance';
+    if (path.startsWith('/exams')) return 'Examinations';
+    if (path.startsWith('/academics')) return 'Academics';
+    if (path.startsWith('/staff')) return 'Staff & Payroll';
+    if (path.startsWith('/library')) return 'Library';
+    if (path.startsWith('/system')) return 'System Settings';
+    if (path.startsWith('/search')) return 'Search';
+    return 'Ailyans HSS';
+  }
+
   /// Compact Phase G-2 top bar used below the 600px breakpoint.
   Widget _buildMobileBar(
     BuildContext context,
@@ -250,15 +275,15 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
           ),
           const SizedBox(width: AppSpacing.xs),
 
-          // Compact title (breadcrumb trail, single line).
+          // Clean mobile header title derived from current route.
           Expanded(
             child: Text(
-              breadcrumb,
+              _getMobileTitle(context),
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
+              style: AppTypography.h3.copyWith(
+                color: AppColors.textPrimary,
               ),
             ),
           ),

@@ -1755,22 +1755,28 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
       body: SafeArea(
         top: false,
         bottom: false,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeader(state),
-              const SizedBox(height: AppSpacing.sm),
-              _buildMobileKpiSummary(state),
-              const SizedBox(height: AppSpacing.sm),
-              _buildFilterBar(state),
-              const SizedBox(height: AppSpacing.xs),
-              _buildMobileLedgerList(state),
-              const SizedBox(height: AppSpacing.sm),
-              _buildMobilePaginationFooter(state),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildHeader(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileKpiSummary(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildFilterBar(state),
+                    const SizedBox(height: AppSpacing.xs),
+                    _buildMobileLedgerList(state),
+                  ],
+                ),
+              ),
+            ),
+            _buildMobilePaginationFooter(state),
+          ],
         ),
       ),
     );
@@ -2093,73 +2099,58 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
       1,
       9999,
     );
+    final start = state.totalRowCount == 0
+        ? 0
+        : ((state.page - 1) * state.pageSize + 1).clamp(0, state.totalRowCount);
+    final end = (state.page * state.pageSize).clamp(0, state.totalRowCount);
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: Row(
         children: [
-          Text(
-            'Showing ${state.rows.length} of ${state.totalRowCount} records '
-            '(Page ${state.page} of $totalPages)',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
+          Expanded(
+            child: Text(
+              'Showing $start-$end of ${state.totalRowCount}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
-            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Rows:', style: TextStyle(fontSize: 12)),
-              const SizedBox(width: 4),
-              DropdownButton<int>(
-                value: state.pageSize,
-                isDense: true,
-                underline: const SizedBox.shrink(),
-                items: const [
-                  DropdownMenuItem(
-                    value: 25,
-                    child: Text('25', style: TextStyle(fontSize: 12)),
-                  ),
-                  DropdownMenuItem(
-                    value: 50,
-                    child: Text('50', style: TextStyle(fontSize: 12)),
-                  ),
-                  DropdownMenuItem(
-                    value: 100,
-                    child: Text('100', style: TextStyle(fontSize: 12)),
-                  ),
-                ],
-                onChanged: (val) {
-                  if (val != null) {
-                    ref.read(feeLedgerProvider.notifier).setPageSize(val);
-                  }
-                },
+          IconButton(
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.chevron_left, size: 20),
+            onPressed: state.page > 1
+                ? () => ref
+                      .read(feeLedgerProvider.notifier)
+                      .setPage(state.page - 1)
+                : null,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Text(
+              '${state.page} / $totalPages',
+              style: AppTypography.monospace.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
-              const SizedBox(width: AppSpacing.md),
-              IconButton(
-                icon: const Icon(Icons.chevron_left, size: 22),
-                onPressed: state.page > 1
-                    ? () => ref
-                          .read(feeLedgerProvider.notifier)
-                          .setPage(state.page - 1)
-                    : null,
-              ),
-              Text(
-                '${state.page} / $totalPages',
-                style: const TextStyle(fontSize: 12),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right, size: 22),
-                onPressed: state.page < totalPages
-                    ? () => ref
-                          .read(feeLedgerProvider.notifier)
-                          .setPage(state.page + 1)
-                    : null,
-              ),
-            ],
+            ),
+          ),
+          IconButton(
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.chevron_right, size: 20),
+            onPressed: state.page < totalPages
+                ? () => ref
+                      .read(feeLedgerProvider.notifier)
+                      .setPage(state.page + 1)
+                : null,
           ),
         ],
       ),
