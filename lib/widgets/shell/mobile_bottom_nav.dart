@@ -75,24 +75,46 @@ class MobileBottomNav extends ConsumerWidget {
       }
     }
 
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: AppColors.surfaceRaised,
-      selectedItemColor: AppColors.brandPrimary,
-      unselectedItemColor: AppColors.textSecondary,
-      selectedFontSize: 11,
-      unselectedFontSize: 11,
-      onTap: (i) {
-        try {
-          context.go(visible[i].route);
-        } catch (_) {}
-      },
-      items: visible
-          .map(
-            (t) => BottomNavigationBarItem(icon: Icon(t.icon), label: t.label),
-          )
-          .toList(),
+    // SafeArea(bottom) lifts the tap targets above the Android gesture pill:
+    // without it the 56dp bar sits flush at the screen bottom and the label
+    // row lands inside the system gesture zone, so taps near the edge are
+    // absorbed by the OS instead of the tab. The Container's top hairline
+    // separates the bar from scrolling content without adding elevation that
+    // could clip or cast over the page above.
+    //
+    // Tap targets: BottomNavigationBar's internal _BottomNavigationTile
+    // already gives every tab an Expanded, full-height (56dp >= 48dp Material
+    // minimum), opaque hit-test area, so no per-tab InkWell wrapping is
+    // needed and no sibling widget can intercept taps.
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: SafeArea(
+        top: false,
+        bottom: true,
+        child: BottomNavigationBar(
+          currentIndex: currentIndex,
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: AppColors.surfaceRaised,
+          selectedItemColor: AppColors.brandPrimary,
+          unselectedItemColor: AppColors.textSecondary,
+          selectedFontSize: 11,
+          unselectedFontSize: 11,
+          onTap: (i) {
+            try {
+              context.go(visible[i].route);
+            } catch (_) {}
+          },
+          items: visible
+              .map(
+                (t) =>
+                    BottomNavigationBarItem(icon: Icon(t.icon), label: t.label),
+              )
+              .toList(),
+        ),
+      ),
     );
   }
 }
