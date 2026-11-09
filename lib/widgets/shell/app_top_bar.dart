@@ -233,18 +233,85 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
         path = '';
       }
     }
-    if (path.isEmpty || path == '/') return 'Dashboard';
-    if (path.startsWith('/dashboard')) return 'Dashboard';
-    if (path.startsWith('/students')) return 'Students';
+    if (path.isEmpty || path == '/' || path == '/dashboard') return 'Dashboard';
+
+    // 1. Students specific sub-routes (checked before '/students' prefix)
+    if (path == '/students/new') return 'New Admission';
+    if (path.startsWith('/students/enrollment')) return 'Bulk Enrollment';
+    if (path.startsWith('/students/promot')) return 'Batch Promotion';
+    if (path.startsWith('/students/leaving')) return 'School Leaving';
+    if (path.startsWith('/students/')) return 'Student Profile';
+    if (path == '/students') return 'Students';
+
+    // 2. Fees specific sub-routes (checked before '/fees' prefix)
+    if (path.startsWith('/fees/receipts')) return 'Collect Fee';
+    if (path.startsWith('/fees/vouchers')) return 'Vouchers';
+    if (path.startsWith('/fees/ledger')) return 'Fee Ledger';
+    if (path.startsWith('/fees/parameters')) return 'Fee Structure';
     if (path.startsWith('/fees')) return 'Fees & Billing';
-    if (path.startsWith('/attendance')) return 'Attendance';
+
+    // 3. Exams specific sub-routes
+    if (path.startsWith('/exams/terms')) return 'Terms & Schedules';
+    if (path.startsWith('/exams/subjects')) return 'Class Subject Mapping';
+    if (path.startsWith('/exams/marks')) return 'Marks Entry';
     if (path.startsWith('/exams')) return 'Examinations';
+
+    // 4. Academics specific sub-routes
+    if (path.startsWith('/academics/classes')) return 'Classes & Sections';
+    if (path.startsWith('/academics/subjects')) return 'Subject Catalog';
     if (path.startsWith('/academics')) return 'Academics';
+
+    // 5. Staff specific sub-routes
+    if (path.startsWith('/staff/salary')) return 'Monthly Payroll';
+    if (path == '/staff/teachers/new') return 'New Faculty';
+    if (path.startsWith('/staff/teachers/')) return 'Faculty Profile';
+    if (path.startsWith('/staff/teachers')) return 'Faculty Directory';
     if (path.startsWith('/staff')) return 'Staff & Payroll';
+
+    // 6. Library specific sub-routes
+    if (path == '/library/new') return 'New Book';
+    if (path.startsWith('/library/') && path != '/library') return 'Book Profile';
     if (path.startsWith('/library')) return 'Library';
+
+    // 7. System specific sub-routes
+    if (path.startsWith('/system/permissions')) return 'Access Control';
+    if (path.startsWith('/system/users')) return 'Operator Accounts';
     if (path.startsWith('/system')) return 'System Settings';
+
+    // 8. Other
+    if (path.startsWith('/attendance')) return 'Attendance';
     if (path.startsWith('/search')) return 'Search';
+
     return 'Ailyans HSS';
+  }
+
+  Widget _buildMobileSessionChip(String sessionYear) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 86.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 8.0,
+          vertical: 4.0,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.statusInfoBg,
+          border: Border.all(color: AppColors.statusInfoBorder),
+          borderRadius: BorderRadius.circular(AppRadius.full),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          sessionYear,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.monospace.copyWith(
+            color: AppColors.statusInfoText,
+            fontSize: 11.0,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
   }
 
   /// Compact Phase G-2 top bar used below the 600px breakpoint.
@@ -266,14 +333,18 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.menu),
-            color: AppColors.textPrimary,
-            tooltip: 'Open navigation menu',
-            visualDensity: VisualDensity.compact,
-            onPressed: () => Scaffold.maybeOf(context)?.openDrawer(),
+          SizedBox(
+            width: 48.0,
+            height: 48.0,
+            child: IconButton(
+              icon: const Icon(Icons.menu),
+              color: AppColors.textPrimary,
+              tooltip: 'Open navigation menu',
+              visualDensity: VisualDensity.compact,
+              onPressed: () => Scaffold.maybeOf(context)?.openDrawer(),
+            ),
           ),
-          const SizedBox(width: AppSpacing.xs),
+          const SizedBox(width: AppSpacing.xxs),
 
           // Clean mobile header title derived from current route.
           Expanded(
@@ -288,44 +359,24 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
             ),
           ),
 
-          IconButton(
-            icon: const Icon(Icons.search),
-            color: AppColors.textSecondary,
-            tooltip: 'Search',
-            visualDensity: VisualDensity.compact,
-            onPressed: () {
-              try {
-                context.push('/search');
-              } catch (_) {}
-            },
+          SizedBox(
+            width: 48.0,
+            height: 48.0,
+            child: IconButton(
+              icon: const Icon(Icons.search),
+              color: AppColors.textSecondary,
+              tooltip: 'Search',
+              visualDensity: VisualDensity.compact,
+              onPressed: () {
+                try {
+                  context.push('/search');
+                } catch (_) {}
+              },
+            ),
           ),
           const SizedBox(width: AppSpacing.xxs),
 
-          // Compact session chip; shrinks with an ellipsis before overflowing.
-          Flexible(
-            flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 6.0,
-                vertical: 4.0,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.statusInfoBg,
-                border: Border.all(color: AppColors.statusInfoBorder),
-                borderRadius: BorderRadius.circular(AppRadius.full),
-              ),
-              child: Text(
-                metadata.sessionYear,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.label.copyWith(
-                  color: AppColors.statusInfoText,
-                  fontSize: 11.0,
-                ),
-              ),
-            ),
-          ),
+          _buildMobileSessionChip(metadata.sessionYear),
           const SizedBox(width: AppSpacing.xxs),
 
           _buildUserMenu(context, ref, session, showUserText: false),
@@ -631,47 +682,64 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
           ),
         ),
       ],
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 16.0,
-            backgroundColor: AppColors.brandPrimary,
-            child: Text(
-              initials,
-              style: AppTypography.label.copyWith(
-                color: AppColors.surfaceRaised,
-                fontSize: 12.0,
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          if (showUserText)
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: showUserText
+          ? Row(
               children: [
-                Text(
-                  userName,
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.textPrimary,
+                CircleAvatar(
+                  radius: 16.0,
+                  backgroundColor: AppColors.brandPrimary,
+                  child: Text(
+                    initials,
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.surfaceRaised,
+                      fontSize: 12.0,
+                    ),
                   ),
                 ),
-                Text(
-                  userDesig,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textMuted,
-                    fontSize: 10.0,
-                  ),
+                const SizedBox(width: AppSpacing.xs),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      userName,
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      userDesig,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 10.0,
+                      ),
+                    ),
+                  ],
+                ),
+                const Icon(
+                  Icons.arrow_drop_down,
+                  size: 18.0,
+                  color: AppColors.textSecondary,
                 ),
               ],
+            )
+          : SizedBox(
+              width: 48.0,
+              height: 48.0,
+              child: Center(
+                child: CircleAvatar(
+                  radius: 16.0,
+                  backgroundColor: AppColors.brandPrimary,
+                  child: Text(
+                    initials,
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.surfaceRaised,
+                      fontSize: 12.0,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          const Icon(
-            Icons.arrow_drop_down,
-            size: 18.0,
-            color: AppColors.textSecondary,
-          ),
-        ],
-      ),
     );
   }
 
