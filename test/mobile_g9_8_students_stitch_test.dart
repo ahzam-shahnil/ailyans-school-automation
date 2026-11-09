@@ -9,12 +9,17 @@ import 'package:school_automation/core/providers/available_sessions_provider.dar
 import 'package:school_automation/core/providers/batch_promotion_provider.dart';
 import 'package:school_automation/core/providers/session_provider.dart';
 import 'package:school_automation/core/providers/shell_metadata_provider.dart';
+import 'package:school_automation/core/providers/sibling_links_provider.dart';
 import 'package:school_automation/core/providers/student_list_provider.dart';
+import 'package:school_automation/core/providers/student_profile_provider.dart';
 import 'package:school_automation/models/school_class.dart';
+import 'package:school_automation/models/student.dart';
+import 'package:school_automation/models/student_enrollment.dart';
 import 'package:school_automation/models/student_list_row.dart';
 import 'package:school_automation/models/user.dart';
 import 'package:school_automation/screens/students/batch_promotion_screen.dart';
 import 'package:school_automation/screens/students/student_list_screen.dart';
+import 'package:school_automation/screens/students/student_profile_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
@@ -310,6 +315,214 @@ void main() {
       // Verify sticky promote cohort bar
       expect(find.text('2 Selected'), findsOneWidget);
       expect(find.textContaining('Promote'), findsWidgets);
+    },
+  );
+
+  final testProfileStudent = Student(
+    stuRegId: 4411,
+    nameFirst: 'Muhammad',
+    nameMiddle: 'Ahsan',
+    nameLast: 'Khan',
+    dob: DateTime(2010, 8, 14),
+    bFormNo: '37405-1294819-1',
+    fName: 'Muhammad Tariq',
+    cnicNo: '37405-8821943-7',
+    pAddress: 'House #14, St 2, Mohallah Khel, Mianwali',
+    mobile1: '+92 300 9481204',
+    religion: 'Islam',
+    sex: 'Male',
+    doAdmission: DateTime(2018, 4, 10),
+    remarls: 'Class Representative. Exemplary laboratory conduct.',
+  );
+
+  final testProfileBundle = StudentProfileBundle(
+    student: testProfileStudent,
+    enrollments: const [
+      StudentEnrollment(
+        stuRegId: 4411,
+        classId: 13,
+        classSecId: 25,
+        classRollNo: 1,
+        sessionYr: '2026-27',
+        present: 1,
+        vGen: 'Y',
+        className: 'Class 10',
+        sectionName: 'A',
+      ),
+    ],
+    vouchers: const [],
+    totalBilled: 0,
+    totalPaid: 0,
+    outstandingArrears: 0,
+    classRollNo: 1,
+    currentClassName: 'Class 10',
+    currentSectionName: 'A',
+    fatherName: 'Muhammad Tariq',
+    mobile1: '+92 300 9481204',
+    feeBalanceSummary: 'Rs. 0 outstanding',
+    advances: const [],
+    exams: const [],
+    attendance: const [
+      {'Present': 1, 'Status': 'P'},
+      {'Present': 1, 'Status': 'P'},
+    ],
+    isEnrolled: true,
+  );
+
+  Widget wrapStudentProfile({
+    required StudentProfileBundle bundle,
+    List<Map<String, dynamic>>? siblings,
+  }) {
+    return ProviderScope(
+      overrides: [
+        sessionProvider.overrideWith((ref) {
+          final sNotifier = SessionNotifier();
+          sNotifier.setSession(testUser, const [8, 12, 13, 20]);
+          return sNotifier;
+        }),
+        studentProfileProvider(bundle.student.stuRegId)
+            .overrideWith((ref) => bundle),
+        if (siblings != null)
+          siblingLinksForStudentProvider(bundle.student.stuRegId)
+              .overrideWith((ref) => Future.value(siblings)),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: StudentProfileScreen(studentId: '${bundle.student.stuRegId}'),
+        ),
+      ),
+    );
+  }
+
+  testWidgets(
+    'StudentProfileScreen at 360x800 renders Stitch mobile hero card, 3-column metrics well, and zero overflow',
+    (tester) async {
+      setViewport(tester, const Size(360, 800));
+
+      final mockSiblings = [
+        {
+          'Stu_RegID': 4412,
+          'NameFirst': 'Zainab',
+          'NameLast': 'Tariq',
+          'CName': 'Class 7',
+          'SecName': 'B',
+          'ClassRollNo': 5,
+        },
+      ];
+
+      await tester.pumpWidget(
+        wrapStudentProfile(
+          bundle: testProfileBundle,
+          siblings: mockSiblings,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+
+      // Verify Top Navigation
+      expect(find.text('Back to Students Directory'), findsOneWidget);
+      expect(find.text('Edit'), findsOneWidget);
+
+      // Verify Hero Identity Card
+      expect(find.text('Muhammad Ahsan Khan'), findsOneWidget);
+      expect(find.text('Active'), findsOneWidget);
+      expect(find.text('F/N: Muhammad Tariq'), findsOneWidget);
+      expect(find.text('Reg #4411'), findsOneWidget);
+      expect(
+        find.textContaining('Class Class 10-A · Roll #01'),
+        findsOneWidget,
+      );
+      expect(find.text('Session 2026-27'), findsOneWidget);
+
+      // Verify 3-Column Metrics Well
+      expect(find.text('FEE DUES'), findsOneWidget);
+      expect(find.text('Rs. 0'), findsOneWidget);
+      expect(find.text('ATTENDANCE'), findsOneWidget);
+      expect(find.text('SIBLINGS'), findsOneWidget);
+      expect(find.text('1 Enrolled'), findsOneWidget);
+
+      // Verify Sticky Bottom Action Bar
+      expect(find.text('Live Record Synced'), findsOneWidget);
+      expect(find.text('Collect Fee'), findsOneWidget);
+      expect(find.text('Edit Dossier'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'StudentProfileScreen at 390x844 renders Stitch bento cards (Personal, Guardian, Academic), sibling network, and zero overflow',
+    (tester) async {
+      setViewport(tester, const Size(390, 844));
+
+      final mockSiblings = [
+        {
+          'Stu_RegID': 4412,
+          'NameFirst': 'Zainab',
+          'NameLast': 'Tariq',
+          'CName': 'Class 7',
+          'SecName': 'B',
+          'ClassRollNo': 5,
+        },
+        {
+          'Stu_RegID': 4413,
+          'NameFirst': 'Bilal',
+          'NameLast': 'Tariq',
+          'CName': 'Class 4',
+          'SecName': 'A',
+          'ClassRollNo': 12,
+        },
+      ];
+
+      await tester.pumpWidget(
+        wrapStudentProfile(
+          bundle: testProfileBundle,
+          siblings: mockSiblings,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+
+      // Verify Card A: Personal & Demographic Record
+      expect(find.text('PERSONAL & DEMOGRAPHIC RECORD'), findsOneWidget);
+      expect(find.text('ID-VERIFIED'), findsOneWidget);
+      expect(find.text('Date of Birth'), findsOneWidget);
+      expect(find.text('14-Aug-2010'), findsOneWidget);
+      expect(find.text('Gender'), findsOneWidget);
+      expect(find.text('Male'), findsOneWidget);
+      expect(find.text('Student B-Form / CNIC'), findsOneWidget);
+      expect(find.text('37405-1294819-1'), findsOneWidget);
+      expect(find.text('Blood Group'), findsOneWidget);
+      expect(find.text('B+ Positive'), findsOneWidget);
+      expect(find.text('Religion'), findsOneWidget);
+      expect(find.text('Islam'), findsOneWidget);
+      expect(find.text('Domicile Territory'), findsOneWidget);
+
+      // Verify Card B: Guardian & Sibling Network
+      expect(find.text('GUARDIAN & SIBLING NETWORK'), findsOneWidget);
+      expect(find.text('Primary Guardian'), findsOneWidget);
+      expect(find.textContaining('Muhammad Tariq (Father)'), findsOneWidget);
+      expect(find.text('37405-8821943-7'), findsOneWidget);
+      expect(find.text('Emergency Contact'), findsOneWidget);
+      expect(find.text('+92 300 9481204'), findsOneWidget);
+      expect(find.text('Permanent Residence'), findsOneWidget);
+      expect(find.text('Registered Siblings in Ailyans'), findsOneWidget);
+      expect(find.text('Kinship Concession Applied'), findsOneWidget);
+      expect(find.text('Zainab Tariq'), findsOneWidget);
+      expect(find.text('Bilal Tariq'), findsOneWidget);
+
+      // Verify Card C: Academic History & Placement
+      expect(find.text('ACADEMIC HISTORY & PLACEMENT'), findsOneWidget);
+      expect(find.text('8th Year'), findsOneWidget);
+      expect(find.text('Initial Admission'), findsOneWidget);
+      expect(find.text('10-Apr-2018'), findsOneWidget);
+      expect(find.text('Admitted In'), findsOneWidget);
+      expect(find.text('Current Placement'), findsOneWidget);
+      expect(find.text('Medium of Instruction'), findsOneWidget);
+
+      // Verify Card D: Assigned Campus
+      expect(find.text('ASSIGNED CAMPUS'), findsOneWidget);
+      expect(find.text('Main Girls & Boys Senior Wing'), findsOneWidget);
     },
   );
 }
