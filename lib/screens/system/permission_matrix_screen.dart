@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/providers/permission_matrix_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/access_object.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 
 /// Screen 4: Permission Matrix Screen (/system/permissions).
 /// Granular role-independent module authorization matrix for operators.
@@ -85,9 +88,11 @@ class _PermissionMatrixScreenState
       },
       child: Focus(
         autofocus: true,
-        child: Scaffold(
-          backgroundColor: AppColors.surface,
-          body: Column(
+        child: ResponsiveBreakpoints.isMobile(context)
+            ? _buildMobileLayout(context, state, notifier)
+            : Scaffold(
+                backgroundColor: AppColors.surface,
+                body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Top Header Bar
@@ -444,6 +449,454 @@ class _PermissionMatrixScreenState
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
+  // MOBILE BRANCH (< 600px)
+  // ===========================================================================
+  Widget _buildMobileLayout(
+    BuildContext context,
+    PermissionMatrixState state,
+    PermissionMatrixNotifier notifier,
+  ) {
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeader(context, state, notifier),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileKpiStrip(state),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileBulkActionCard(context, state, notifier),
+                    if (state.errorMessage != null) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      _buildMobileErrorBanner(state.errorMessage!, notifier),
+                    ],
+                    if (state.selectedObjIds.isEmpty) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      _buildMobileZeroAccessWarning(),
+                    ],
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileModuleChecklist(state, notifier),
+                  ],
+                ),
+              ),
+            ),
+            _buildMobileStickyActions(context, state, notifier),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(
+    BuildContext context,
+    PermissionMatrixState state,
+    PermissionMatrixNotifier notifier,
+  ) {
+    return Row(
+      children: [
+        IconButton(
+          onPressed: () => context.go('/system/users'),
+          icon: const Icon(Icons.arrow_back, size: 20),
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'USER ACCESS CONTROL MATRIX',
+                style: AppTypography.h2.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Operator: ${state.targetUserName}  |  Level ${state.targetUserLevel}',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileKpiStrip(PermissionMatrixState state) {
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'AUTHORIZED',
+            value: '${state.selectedObjIds.length} Modules',
+            icon: Icons.check_circle_outline,
+            accentColor: AppColors.accentDashboard,
+            accentSoftBg: AppColors.accentDashboardSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'TOTAL OBJECTS',
+            value: '${state.allModules.length} Modules',
+            icon: Icons.shield_outlined,
+            accentColor: AppColors.accentDashboard,
+            accentSoftBg: AppColors.accentDashboardSoftBg,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileBulkActionCard(
+    BuildContext context,
+    PermissionMatrixState state,
+    PermissionMatrixNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: OutlinedButton(
+                onPressed: notifier.selectAll,
+                child: const Text('Select All', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: SizedBox(
+              height: 40,
+              child: OutlinedButton(
+                onPressed: notifier.deselectAll,
+                child: const Text('Deselect All', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          SizedBox(
+            height: 40,
+            child: OutlinedButton(
+              onPressed: () => context.go('/system/users'),
+              child: const Text('Back to Users', style: TextStyle(fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileZeroAccessWarning() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.statusWarningBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: AppColors.statusWarningText.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 18,
+            color: AppColors.statusWarningText,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'User will have no access to any module.',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusWarningText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileErrorBanner(
+    String message,
+    PermissionMatrixNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 8.0,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.statusErrorBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: AppColors.statusErrorText.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            size: 16,
+            color: AppColors.statusErrorText,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusErrorText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.close,
+              size: 16,
+              color: AppColors.statusErrorText,
+            ),
+            splashRadius: 12,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: notifier.clearErrorMessage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileModuleChecklist(
+    PermissionMatrixState state,
+    PermissionMatrixNotifier notifier,
+  ) {
+    if (state.isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(AppSpacing.xl),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: moduleCategories.map((category) {
+        final modules = state.allModules
+            .where((m) => category.objIds.contains(m.objId))
+            .toList();
+        if (modules.isEmpty) return const SizedBox.shrink();
+
+        final authorizedCount = modules
+            .where((m) => state.selectedObjIds.contains(m.objId))
+            .length;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      category.title.toUpperCase(),
+                      style: AppTypography.label.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  MobileStatusPill(
+                    label: '$authorizedCount / ${modules.length}',
+                    variant: authorizedCount == modules.length
+                        ? MobileStatusVariant.success
+                        : (authorizedCount > 0
+                            ? MobileStatusVariant.warning
+                            : MobileStatusVariant.neutral),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              const Divider(height: 1, color: AppColors.borderDefault),
+              const SizedBox(height: AppSpacing.xs),
+              ...modules.map((m) {
+                final isChecked = state.selectedObjIds.contains(m.objId);
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    side: BorderSide(
+                      color: isChecked
+                          ? AppColors.accentDashboard.withValues(alpha: 0.4)
+                          : AppColors.borderDefault,
+                    ),
+                  ),
+                  elevation: 0,
+                  color: isChecked
+                      ? AppColors.accentDashboardSoftBg
+                      : AppColors.surfaceCanvas,
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          width: 3.5,
+                          color: isChecked
+                              ? AppColors.accentDashboard
+                              : Colors.transparent,
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => notifier.toggleModule(m.objId),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          m.displayName,
+                                          style: AppTypography.body.copyWith(
+                                            fontWeight: isChecked
+                                                ? FontWeight.w600
+                                                : FontWeight.normal,
+                                            fontSize: 13,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text(
+                                          '#${m.objId} · ${m.objName}',
+                                          style:
+                                              AppTypography.monospace.copyWith(
+                                            fontSize: 10,
+                                            color: AppColors.textMuted,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Checkbox(
+                                    value: isChecked,
+                                    activeColor: AppColors.accentDashboard,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                    onChanged: (_) =>
+                                        notifier.toggleModule(m.objId),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildMobileStickyActions(
+    BuildContext context,
+    PermissionMatrixState state,
+    PermissionMatrixNotifier notifier,
+  ) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        MediaQuery.of(context).padding.bottom + AppSpacing.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: SizedBox(
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: state.isSaving ? null : _saveRights,
+          icon: state.isSaving
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.save, size: 18),
+          label: const Text(
+            'Save Access Rights (Ctrl+S)',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accentDashboard,
+            foregroundColor: AppColors.textOnPrimary,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
           ),
         ),
       ),

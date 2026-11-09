@@ -8,7 +8,10 @@ import '../../core/providers/session_provider.dart';
 import '../../core/providers/user_management_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/input_formatters.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/user.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 
 /// Screen 3: User Management Screen (/system/users).
 /// Master-detail administrative control over all school software operators.
@@ -224,28 +227,30 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       },
       child: Focus(
         autofocus: true,
-        child: Scaffold(
-          backgroundColor: AppColors.surface,
-          body: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Left Pane (Master, 55% width)
-              Expanded(
-                flex: 55,
-                child: _buildMasterPane(context, state, notifier),
-              ),
+        child: ResponsiveBreakpoints.isMobile(context)
+            ? _buildMobileLayout(context, state, notifier)
+            : Scaffold(
+                backgroundColor: AppColors.surface,
+                body: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Left Pane (Master, 55% width)
+                    Expanded(
+                      flex: 55,
+                      child: _buildMasterPane(context, state, notifier),
+                    ),
 
-              // Pane Divider
-              Container(width: 1.0, color: AppColors.borderDefault),
+                    // Pane Divider
+                    Container(width: 1.0, color: AppColors.borderDefault),
 
-              // Right Pane (Detail, 45% width)
-              Expanded(
-                flex: 45,
-                child: _buildDetailPane(context, state, notifier),
+                    // Right Pane (Detail, 45% width)
+                    Expanded(
+                      flex: 45,
+                      child: _buildDetailPane(context, state, notifier),
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1185,6 +1190,791 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // ===========================================================================
+  // MOBILE BRANCH (< 600px)
+  // ===========================================================================
+  Widget _buildMobileLayout(
+    BuildContext context,
+    UserManagementState state,
+    UserManagementNotifier notifier,
+  ) {
+    final totalUsers = state.users.length;
+    final adminUsers = state.users.where((u) => u.userLevel == 1).length;
+
+    return Scaffold(
+      backgroundColor: AppColors.surfaceCanvas,
+      body: SafeArea(
+        top: false,
+        bottom: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                controller: _formScrollController,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildMobileHeader(
+                      context,
+                      state,
+                      notifier,
+                      totalUsers,
+                      adminUsers,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileSearchBar(notifier),
+                    if (state.errorMessage != null) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      _buildMobileErrorBanner(state.errorMessage!, notifier),
+                    ],
+                    const SizedBox(height: AppSpacing.sm),
+                    _buildMobileOperatorList(context, state, notifier),
+                    const SizedBox(height: AppSpacing.md),
+                    _buildMobileDetailForm(context, state, notifier),
+                  ],
+                ),
+              ),
+            ),
+            _buildMobileStickyActions(context, state, notifier),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileHeader(
+    BuildContext context,
+    UserManagementState state,
+    UserManagementNotifier notifier,
+    int totalUsers,
+    int adminUsers,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'OPERATOR DIRECTORY',
+          style: AppTypography.h2.copyWith(
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Expanded(
+              child: MobileKpiCard(
+                label: 'TOTAL OPERATORS',
+                value: '$totalUsers Accounts',
+                icon: Icons.people_outline,
+                accentColor: AppColors.accentDashboard,
+                accentSoftBg: AppColors.accentDashboardSoftBg,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: MobileKpiCard(
+                label: 'SUPERADMINS',
+                value: '$adminUsers Level 1',
+                icon: Icons.admin_panel_settings_outlined,
+                accentColor: AppColors.accentDashboard,
+                accentSoftBg: AppColors.accentDashboardSoftBg,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMobileSearchBar(UserManagementNotifier notifier) {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: TextField(
+        controller: _searchController,
+        style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: 'Search operators by name or designation...',
+          hintStyle: AppTypography.bodySmall.copyWith(
+            color: AppColors.textMuted,
+            fontSize: 12,
+          ),
+          prefixIcon: const Icon(
+            Icons.search,
+            size: 18,
+            color: AppColors.textSecondary,
+          ),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(
+                    Icons.clear,
+                    size: 16,
+                    color: AppColors.textSecondary,
+                  ),
+                  padding: EdgeInsets.zero,
+                  onPressed: () {
+                    _searchController.clear();
+                    notifier.setSearchQuery('');
+                    setState(() {});
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 12,
+          ),
+        ),
+        onChanged: (v) {
+          notifier.setSearchQuery(v);
+          setState(() {});
+        },
+      ),
+    );
+  }
+
+  Widget _buildMobileErrorBanner(
+    String message,
+    UserManagementNotifier notifier,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 8.0,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.statusErrorBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: AppColors.statusErrorText.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            size: 16,
+            color: AppColors.statusErrorText,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Expanded(
+            child: Text(
+              message,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.statusErrorText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.close,
+              size: 16,
+              color: AppColors.statusErrorText,
+            ),
+            splashRadius: 12,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: notifier.clearErrorMessage,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileOperatorList(
+    BuildContext context,
+    UserManagementState state,
+    UserManagementNotifier notifier,
+  ) {
+    final users = state.filteredUsers;
+    if (users.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Text(
+            'No operators match search criteria',
+            style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: users.length,
+      itemBuilder: (ctx, idx) {
+        final u = users[idx];
+        final isSelected =
+            !state.isCreatingNew && state.selectedUser?.id == u.id;
+        final initials = u.name.trim().isNotEmpty
+            ? u.name
+                .trim()
+                .split(' ')
+                .map((s) => s.isNotEmpty ? s[0] : '')
+                .take(2)
+                .join()
+                .toUpperCase()
+            : 'U';
+        final levelLabel = u.userLevel == 1
+            ? 'SuperAdmin'
+            : (u.userLevel == 2 ? 'Operator' : 'Reader');
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            side: BorderSide(
+              color: isSelected
+                  ? AppColors.accentDashboard
+                  : AppColors.borderDefault,
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          elevation: 0,
+          color: isSelected
+              ? AppColors.accentDashboardSoftBg
+              : AppColors.surfaceRaised,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  width: 3.5,
+                  color: isSelected
+                      ? AppColors.accentDashboard
+                      : Colors.transparent,
+                ),
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    onTap: () {
+                      notifier.selectUser(u);
+                      setState(() {});
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 18,
+                            backgroundColor: isSelected
+                                ? AppColors.accentDashboard
+                                : AppColors.accentDashboardSoftBg,
+                            child: Text(
+                              initials,
+                              style: AppTypography.bodySmall.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: isSelected
+                                    ? Colors.white
+                                    : AppColors.accentDashboard,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  u.name,
+                                  style: AppTypography.body.copyWith(
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  u.designation?.isNotEmpty == true
+                                      ? u.designation!
+                                      : '—',
+                                  style: AppTypography.bodySmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          MobileStatusPill(
+                            label: levelLabel,
+                            variant: u.userLevel == 1
+                                ? MobileStatusVariant.info
+                                : (u.userLevel == 2
+                                    ? MobileStatusVariant.success
+                                    : MobileStatusVariant.neutral),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileDetailForm(
+    BuildContext context,
+    UserManagementState state,
+    UserManagementNotifier notifier,
+  ) {
+    final title = state.isCreatingNew
+        ? 'NEW OPERATOR ACCOUNT'
+        : 'OPERATOR DETAILS (#${state.selectedUser?.id ?? ""})';
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: AppTypography.label.copyWith(
+              color: AppColors.textSecondary,
+              letterSpacing: 0.5,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Name
+          _buildMobileFormFieldLabel('Full Name *'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _nameController,
+            focusNode: _nameFocusNode,
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            decoration: _mobileInputDecoration('Operator full name'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Designation
+          _buildMobileFormFieldLabel('Designation / Job Title'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _desigController,
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            decoration: _mobileInputDecoration('e.g. Accounts Officer'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // CNIC
+          _buildMobileFormFieldLabel('National Identity Card (CNIC)'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _cnicController,
+            inputFormatters: const [CnicInputFormatter()],
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            decoration: _mobileInputDecoration('38302-XXXXXXX-X'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Password
+          _buildMobileFormFieldLabel(
+            state.isCreatingNew
+                ? 'Initial Password *'
+                : 'Reset Password (leave empty to retain)',
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _pwdController,
+            obscureText: _obscurePassword,
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            decoration: _mobileInputDecoration('Enter password').copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // User Level Dropdown
+          _buildMobileFormFieldLabel('Access Authorization Level *'),
+          const SizedBox(height: 4),
+          Container(
+            height: 44,
+            alignment: AlignmentDirectional.centerStart,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.borderDefault),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _userLevel,
+                isExpanded: true,
+                isDense: true,
+                dropdownColor: AppColors.surfaceRaised,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                selectedItemBuilder: (ctx) => [
+                  const Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      'Level 1 - Administrator',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      'Level 2 - Operator',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      'Level 3 - Reader',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+                items: const [
+                  DropdownMenuItem(
+                    value: 1,
+                    child: Text('Level 1 - Administrator (Full System Control)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 2,
+                    child: Text('Level 2 - Standard Operator (Access Matrix)'),
+                  ),
+                  DropdownMenuItem(
+                    value: 3,
+                    child: Text('Level 3 - Read-Only Viewer (No Mutations)'),
+                  ),
+                ],
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _userLevel = val;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Phones
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildMobileFormFieldLabel('Primary Mobile'),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _mobile1Controller,
+                      inputFormatters: const [MobileInputFormatter()],
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: _mobileInputDecoration('03XX-XXXXXXX'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildMobileFormFieldLabel('Secondary Mobile'),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _mobile2Controller,
+                      inputFormatters: const [MobileInputFormatter()],
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: _mobileInputDecoration('Optional'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Address
+          _buildMobileFormFieldLabel('Residential Address'),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _addressController,
+            style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+            decoration: _mobileInputDecoration('House / street details'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Branch Dropdown
+          _buildMobileFormFieldLabel('Operational Branch Assignment'),
+          const SizedBox(height: 4),
+          Container(
+            height: 44,
+            alignment: AlignmentDirectional.centerStart,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: AppColors.borderDefault),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: state.branches.contains(_selectedBranch)
+                    ? _selectedBranch
+                    : (state.branches.isNotEmpty ? state.branches.first : null),
+                isExpanded: true,
+                isDense: true,
+                dropdownColor: AppColors.surfaceRaised,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                selectedItemBuilder: (ctx) => state.branches.map((b) {
+                  return Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: Text(
+                      b,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                items: state.branches.map((b) {
+                  return DropdownMenuItem(
+                    value: b,
+                    child: Text(b),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) {
+                    setState(() {
+                      _selectedBranch = val;
+                    });
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Active Status Switch
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Active Status',
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Switch(
+                value: _isActive,
+                activeThumbColor: AppColors.accentDashboard,
+                onChanged: (val) {
+                  setState(() {
+                    _isActive = val;
+                  });
+                },
+              ),
+            ],
+          ),
+
+          if (!state.isCreatingNew && state.selectedUser != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            SizedBox(
+              height: 44,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  ref.read(selectedPermissionUserIdProvider.notifier).state =
+                      state.selectedUser!.id;
+                  context.go('/system/permissions');
+                },
+                icon: const Icon(Icons.security, size: 16),
+                label: const Text('Configure Permissions'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentDashboard,
+                  foregroundColor: AppColors.textOnPrimary,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileFormFieldLabel(String label) {
+    return Text(
+      label,
+      style: AppTypography.bodySmall.copyWith(
+        fontWeight: FontWeight.w600,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
+
+  InputDecoration _mobileInputDecoration(String hint) {
+    return InputDecoration(
+      isDense: true,
+      hintText: hint,
+      hintStyle: AppTypography.bodySmall.copyWith(
+        color: AppColors.textMuted,
+        fontSize: 13,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: const BorderSide(color: AppColors.borderDefault),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        borderSide: const BorderSide(color: AppColors.borderDefault),
+      ),
+    );
+  }
+
+  Widget _buildMobileStickyActions(
+    BuildContext context,
+    UserManagementState state,
+    UserManagementNotifier notifier,
+  ) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        MediaQuery.of(context).padding.bottom + AppSpacing.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: notifier.startNewUser,
+                icon: const Icon(Icons.person_add, size: 16),
+                label: const Text(
+                  'New User (Ctrl+N)',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: state.isSaving ? null : _submitForm,
+                icon: state.isSaving
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.save, size: 18),
+                label: const Text(
+                  'Save User (Ctrl+S)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentDashboard,
+                  foregroundColor: AppColors.textOnPrimary,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

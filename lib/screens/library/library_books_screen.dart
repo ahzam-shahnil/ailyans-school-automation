@@ -9,6 +9,8 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/library_book_row.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -1138,27 +1140,35 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.surfaceCanvas,
           body: SafeArea(
-            bottom: true,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildMobileHeader(state),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileFilterBar(context, state, notifier),
-                  if (state.errorMessage != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    _buildMobileErrorBanner(state.errorMessage!, notifier),
-                  ],
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileBookList(context, state, notifier),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileFooter(context),
-                ],
-              ),
+            top: false,
+            bottom: false,
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildMobileHeader(state),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileFilterBar(context, state, notifier),
+                        if (state.errorMessage != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          _buildMobileErrorBanner(state.errorMessage!, notifier),
+                        ],
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileBookList(context, state, notifier),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileFooter(context),
+                      ],
+                    ),
+                  ),
+                ),
+                _buildMobileStickyBottomBar(context),
+              ],
             ),
           ),
         ),
@@ -1179,15 +1189,27 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
-        const SizedBox(height: 6),
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
+        const SizedBox(height: AppSpacing.sm),
+        Row(
           children: [
-            _buildKpiBadge('${state.totalBooksAvailable} Books Available'),
-            _buildKpiBadge('${state.categoryCount} Subject Categories'),
-            _buildKpiBadge(
-              'Total Valuation Rs. ${_formatCurrency(state.totalValuation)}',
+            Expanded(
+              child: MobileKpiCard(
+                label: 'BOOKS AVAILABLE',
+                value: '${state.totalBooksAvailable} Books Available',
+                icon: Icons.menu_book_outlined,
+                accentColor: AppColors.accentLibrary,
+                accentSoftBg: AppColors.accentLibrarySoftBg,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: MobileKpiCard(
+                label: 'CATEGORIES',
+                value: '${state.categoryCount} Categories',
+                icon: Icons.category_outlined,
+                accentColor: AppColors.accentLibrary,
+                accentSoftBg: AppColors.accentLibrarySoftBg,
+              ),
             ),
           ],
         ),
@@ -1478,144 +1500,151 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
   ) {
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        borderRadius: BorderRadius.circular(AppRadius.md),
         side: const BorderSide(color: AppColors.borderDefault),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        onTap: () => context.push('/library/${row.bookId}'),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSubtle,
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    child: const Icon(
-                      Icons.menu_book_outlined,
-                      size: 20,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          row.bookName,
-                          style: AppTypography.body.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.brandPrimary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${row.accessionDisplay} · ${row.bAuthor ?? '—'}',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.statusInfoBg,
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    child: Text(
-                      row.categoryName ?? 'Unassigned',
-                      style: AppTypography.bodySmall.copyWith(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.statusInfoText,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  _buildMobileInfoPill(row.pulishedBy ?? '—'),
-                  _buildMobileInfoPill(row.publishedYr?.toString() ?? '—'),
-                  _buildMobileInfoPill('${row.pages ?? '—'} pages'),
-                  _buildMobileInfoPill(row.priceDisplay),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            context.push('/library/${row.bookId}'),
-                        icon: const Icon(Icons.open_in_new, size: 16),
-                        label: const Text(
-                          'View',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Spine label coming in Phase E',
-                              ),
-                              duration: Duration(seconds: 2),
+      elevation: 0,
+      color: AppColors.surfaceRaised,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 3.5,
+              color: AppColors.accentLibrary,
+            ),
+            Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                onTap: () => context.push('/library/${row.bookId}'),
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: AppColors.accentLibrarySoftBg,
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
                             ),
-                          );
-                        },
-                        icon: const Icon(Icons.print_outlined, size: 16),
-                        label: const Text(
-                          'Spine',
-                          style: TextStyle(fontSize: 12),
-                        ),
+                            child: const Icon(
+                              Icons.menu_book_outlined,
+                              size: 20,
+                              color: AppColors.accentLibrary,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  row.bookName,
+                                  style: AppTypography.body.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '#${row.bookId} · ${row.bAuthor ?? '—'}',
+                                  style: AppTypography.bodySmall.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          MobileStatusPill(
+                            label: row.categoryName ?? 'Unassigned',
+                            variant: MobileStatusVariant.neutral,
+                          ),
+                        ],
                       ),
-                    ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (row.pulishedBy?.isNotEmpty == true)
+                            _buildMobileInfoPill(row.pulishedBy!),
+                          if (row.publishedYr != null)
+                            _buildMobileInfoPill('${row.publishedYr}'),
+                          if (row.pages != null)
+                            _buildMobileInfoPill('${row.pages} pages'),
+                          _buildMobileInfoPill(
+                            row.priceDisplay,
+                            isMonospace: true,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 40,
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    context.push('/library/${row.bookId}'),
+                                icon: const Icon(Icons.open_in_new, size: 16),
+                                label: const Text(
+                                  'View',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: SizedBox(
+                              height: 40,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Spine label coming in Phase E',
+                                      ),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.print_outlined, size: 16),
+                                label: const Text(
+                                  'Spine',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildMobileInfoPill(String label) {
+  Widget _buildMobileInfoPill(String label, {bool isMonospace = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -1627,7 +1656,8 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
         label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
-        style: AppTypography.bodySmall.copyWith(
+        style: (isMonospace ? AppTypography.monospace : AppTypography.bodySmall)
+            .copyWith(
           fontSize: 11,
           color: AppColors.textSecondary,
         ),
@@ -1734,16 +1764,6 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
         SizedBox(
           width: double.infinity,
           height: 44,
-          child: ElevatedButton.icon(
-            onPressed: _onAddNewBook,
-            icon: const Icon(Icons.add, size: 16),
-            label: const Text('Add New Book (Ctrl+N)'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
           child: OutlinedButton.icon(
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1768,6 +1788,40 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMobileStickyBottomBar(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        MediaQuery.of(context).padding.bottom + AppSpacing.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      child: SizedBox(
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: _onAddNewBook,
+          icon: const Icon(Icons.add, size: 18),
+          label: const Text(
+            '+ Add New Book (Ctrl+N)',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accentLibrary,
+            foregroundColor: AppColors.textOnPrimary,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
