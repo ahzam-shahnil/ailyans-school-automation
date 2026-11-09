@@ -12,6 +12,8 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/exam_session_row.dart';
 import '../../models/exam_term_row.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 
 /// Screen 16 - ExamTermScreen at `/exams/terms`.
 /// Implements §S20 (frmExams at 0x00424dcc, ObjID: 10).
@@ -1774,26 +1776,159 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.surfaceCanvas,
           body: SafeArea(
-            bottom: true,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildMobileHeader(context),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileActionBar(context),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileTermList(context, state, notifier),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileSessionSection(context, state, notifier),
-                ],
-              ),
+            top: false,
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildMobileHeader(context),
+                        const SizedBox(height: AppSpacing.sm),
+                        // Summary strip (Phase G-9 Shot 2a)
+                        _buildMobileSummaryRow(state),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileActionBar(context),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileTermList(context, state, notifier),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileSessionSection(context, state, notifier),
+                      ],
+                    ),
+                  ),
+                ),
+                // Sticky bottom action bar (Phase G-9 Shot 2a)
+                _buildMobileStickyBar(context, state, notifier),
+              ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  /// 2-up MobileKpiCard summary row.
+  Widget _buildMobileSummaryRow(ExamTermState state) {
+    return Row(
+      children: [
+        Expanded(
+          child: MobileKpiCard(
+            label: 'TOTAL EXAM TERMS',
+            value: '${state.terms.length}',
+            icon: Icons.calendar_today_outlined,
+            accentColor: AppColors.accentExams,
+            accentSoftBg: AppColors.accentExamsSoftBg,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.xs),
+        Expanded(
+          child: MobileKpiCard(
+            label: 'TERM SESSIONS',
+            value: '${state.selectedTerm?.sessionCount ?? 0}',
+            icon: Icons.event_note_outlined,
+            accentColor: AppColors.accentExams,
+            accentSoftBg: AppColors.accentExamsSoftBg,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Pinned bottom bar: Clear Form / Delete Session + primary Save button.
+  Widget _buildMobileStickyBar(
+    BuildContext context,
+    ExamTermState state,
+    ExamTermNotifier notifier,
+  ) {
+    final isEditMode = state.isEditMode && state.editingSession != null;
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+        MediaQuery.paddingOf(context).bottom + AppSpacing.xs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    onPressed: notifier.newSession,
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text(
+                      'Clear Form',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+              ),
+              if (isEditMode) ...[
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () =>
+                          _handleDeleteSession(state.editingSession!, notifier),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 16,
+                        color: AppColors.statusErrorText,
+                      ),
+                      label: const Text(
+                        'Delete Session',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.statusErrorText,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.statusErrorText,
+                        side: const BorderSide(
+                          color: AppColors.statusErrorBorder,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _handleSaveSession,
+              icon: const Icon(Icons.save, size: 18),
+              label: Text(
+                isEditMode
+                    ? 'Update Exam Session (Ctrl+S)'
+                    : 'Save Exam Session (Ctrl+S)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentExams,
+                foregroundColor: AppColors.textOnPrimary,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1832,6 +1967,10 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
             onPressed: () => _showMobileAddEditTermDialog(),
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Add Term'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accentExams,
+              foregroundColor: AppColors.textOnPrimary,
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -2001,10 +2140,7 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
               physics: const NeverScrollableScrollPhysics(),
               itemCount: filteredTerms.length,
               itemBuilder: (ctx, index) {
-                return _buildMobileTermCard(
-                  filteredTerms[index],
-                  state,
-                );
+                return _buildMobileTermCard(filteredTerms[index], state);
               },
             ),
         ],
@@ -2014,132 +2150,122 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
 
   Widget _buildMobileTermCard(ExamTermRow term, ExamTermState state) {
     final isSelected = term.exTermId == state.selectedTermId;
+    // Phase G-9 Shot 2a: safe left-strip accent card (no non-uniform Border).
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         side: BorderSide(
-          color: isSelected
-              ? AppColors.brandPrimary
-              : AppColors.borderDefault,
+          color: isSelected ? AppColors.accentExams : AppColors.borderDefault,
+          width: isSelected ? 1.4 : 1.0,
         ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         onTap: () => _handleTermSelection(term.exTermId),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
+        child: IntrinsicHeight(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceSubtle,
-                      borderRadius: BorderRadius.circular(AppRadius.sm),
-                    ),
-                    child: Text(
-                      '#${term.exTermId}',
-                      style: AppTypography.monospace.copyWith(
-                        fontSize: 11,
-                        color: AppColors.textMuted,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      term.termName,
-                      style: AppTypography.body.copyWith(
-                        fontWeight: isSelected
-                            ? FontWeight.w700
-                            : FontWeight.w600,
-                        color: isSelected
-                            ? AppColors.brandPrimary
-                            : AppColors.textPrimary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (term.sessionCount > 0) ...[
-                    const SizedBox(width: AppSpacing.xs),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceSubtle,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
-                      child: Text(
-                        '${term.sessionCount} session(s)',
-                        style: AppTypography.bodySmall.copyWith(
-                          fontSize: 10,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              if (term.termRemarks.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  term.termRemarks,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _showMobileAddEditTermDialog(term: term),
-                        icon: const Icon(Icons.edit_outlined, size: 16),
-                        label: const Text(
-                          'Edit',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: SizedBox(
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _handleMobileDeleteTerm(term),
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          size: 16,
-                          color: AppColors.statusErrorText,
-                        ),
-                        label: const Text(
-                          'Delete',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.statusErrorText,
+              Container(width: 3.5, color: AppColors.accentExams),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            '#${term.exTermId}',
+                            style: AppTypography.monospace.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected
+                                  ? AppColors.accentExams
+                                  : AppColors.textMuted,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: Text(
+                              term.termName,
+                              style: AppTypography.body.copyWith(
+                                fontWeight: isSelected
+                                    ? FontWeight.w700
+                                    : FontWeight.w600,
+                                color: isSelected
+                                    ? AppColors.accentExams
+                                    : AppColors.textPrimary,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (term.sessionCount > 0) ...[
+                            const SizedBox(width: AppSpacing.xs),
+                            MobileStatusPill(
+                              label: '${term.sessionCount} session(s)',
+                              variant: MobileStatusVariant.info,
+                            ),
+                          ],
+                        ],
                       ),
-                    ),
+                      if (term.termRemarks.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          term.termRemarks,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () =>
+                                    _showMobileAddEditTermDialog(term: term),
+                                icon: const Icon(Icons.edit_outlined, size: 16),
+                                label: const Text(
+                                  'Edit',
+                                  style: TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () => _handleMobileDeleteTerm(term),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 16,
+                                  color: AppColors.statusErrorText,
+                                ),
+                                label: const Text(
+                                  'Delete',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.statusErrorText,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ],
           ),
@@ -2502,60 +2628,6 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: OutlinedButton.icon(
-              onPressed: notifier.newSession,
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('Clear Form'),
-            ),
-          ),
-          if (state.isEditMode && state.editingSession != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: OutlinedButton.icon(
-                onPressed: () =>
-                    _handleDeleteSession(state.editingSession!, notifier),
-                icon: const Icon(
-                  Icons.delete_outline,
-                  size: 16,
-                  color: AppColors.statusErrorText,
-                ),
-                label: const Text(
-                  'Delete Session',
-                  style: TextStyle(color: AppColors.statusErrorText),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.statusErrorText,
-                  side: const BorderSide(color: AppColors.statusErrorBorder),
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.xs),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton.icon(
-              onPressed: _handleSaveSession,
-              icon: const Icon(Icons.save, size: 18),
-              label: Text(
-                state.isEditMode
-                    ? 'Update Exam Session (Ctrl+S)'
-                    : 'Save Exam Session (Ctrl+S)',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandPrimary,
-                foregroundColor: AppColors.textOnPrimary,
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -2625,106 +2697,112 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         side: BorderSide(
           color: isCurrentEdit
-              ? AppColors.brandPrimary
+              ? AppColors.accentExams
               : AppColors.borderDefault,
+          width: isCurrentEdit ? 1.4 : 1.0,
         ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.lg),
         onTap: () => notifier.selectSessionForEdit(session.examInfoId),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Column(
+        child: IntrinsicHeight(
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Text(
-                    '#${session.examInfoId}',
-                    style: AppTypography.monospace.copyWith(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isCurrentEdit
-                          ? AppColors.brandPrimary
-                          : AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      session.sessionYr,
-                      style: AppTypography.bodySmall.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+              Container(width: 3.5, color: AppColors.accentExams),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            '#${session.examInfoId}',
+                            style: AppTypography.monospace.copyWith(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isCurrentEdit
+                                  ? AppColors.accentExams
+                                  : AppColors.textMuted,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Expanded(
+                            child: Text(
+                              session.sessionYr,
+                              style: AppTypography.bodySmall.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          if (isCurrentEdit)
+                            const MobileStatusPill(
+                              label: 'Editing',
+                              variant: MobileStatusVariant.info,
+                            )
+                          else
+                            const MobileStatusPill(
+                              label: 'Scheduled',
+                              variant: MobileStatusVariant.neutral,
+                            ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (isCurrentEdit)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.statusInfoBg,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                      ),
-                      child: Text(
-                        'Editing',
-                        style: AppTypography.bodySmall.copyWith(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.statusInfoText,
+                      const SizedBox(height: 4),
+                      Text(
+                        '${formatD(session.startDate)} \u2192 ${formatD(session.endDate)}',
+                        style: AppTypography.monospace.copyWith(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
                         ),
                       ),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${formatD(session.startDate)} \u2192 ${formatD(session.endDate)}',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              Text(
-                'Result: ${formatD(session.resultDate)}',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              Text(
-                'Supervisor: ${session.supervisorName}',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (session.location.isNotEmpty)
-                Text(
-                  'Venue: ${session.location}',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
+                      Text(
+                        'Result: ${formatD(session.resultDate)}',
+                        style: AppTypography.monospace.copyWith(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        'Supervisor: ${session.supervisorName}',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (session.location.isNotEmpty)
+                        Text(
+                          'Venue: ${session.location}',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      if (session.detail.isNotEmpty)
+                        Text(
+                          session.detail,
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
-              if (session.detail.isNotEmpty)
-                Text(
-                  session.detail,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              ),
             ],
           ),
         ),

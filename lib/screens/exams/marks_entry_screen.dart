@@ -9,6 +9,8 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/marks_entry_row.dart';
+import '../../widgets/mobile/mobile_kpi_card.dart';
+import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -1476,319 +1478,356 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-            ),
-            onPressed: () {
-              final meta = ref.read(shellMetadataProvider).value;
-              final curState = ref.read(marksEntryProvider);
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () {
+                        final meta = ref.read(shellMetadataProvider).value;
+                        final curState = ref.read(marksEntryProvider);
 
-              if (curState.roster.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Load students first to generate mark sheets.',
+                        if (curState.roster.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Load students first to generate mark sheets.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
+                        final examDetail =
+                            curState.examInfos.firstWhere(
+                              (info) =>
+                                  info['ExamInfoID'] ==
+                                  curState.selectedExamInfoId,
+                              orElse: () => {'Detail': 'Examination'},
+                            )['Detail'] ??
+                            'Examination';
+
+                        final className =
+                            curState.classes.firstWhere(
+                              (c) => c['ClassID'] == curState.selectedClassId,
+                              orElse: () => {'CName': 'Class'},
+                            )['CName'] ??
+                            'Class';
+
+                        final subjName =
+                            curState.subjects.firstWhere(
+                              (s) => s['SubjID'] == curState.selectedSubjId,
+                              orElse: () => {'SubjName': ''},
+                            )['SubjName'] ??
+                            '';
+
+                        final students = curState.roster
+                            .map(
+                              (row) => {
+                                'rollNo': row.rollNo,
+                                'name': row.studentName,
+                                'subject': subjName,
+                                'obtained': row.totalObtained,
+                                'total': row.totalMax,
+                                'grade': row.computeGrade(curState.exGradeRows),
+                                'isAbsent': row.isAbsent,
+                              },
+                            )
+                            .toList();
+
+                        ReportPreviewModal.show(
+                          context,
+                          request: ReportRequest(
+                            type: ReportType.examMarksheet,
+                            titleOverride: 'Marksheet - $examDetail',
+                            extraParams: {
+                              'examName': examDetail,
+                              'className': className,
+                              'students': students,
+                              'branchName':
+                                  meta?.branchName ??
+                                  "Ailyans's Higher Secondary School",
+                              'branchAddress':
+                                  meta?.branchAddress ??
+                                  'Muslim Bazar Mianwali',
+                            },
+                          ),
+                        );
+                      },
+                      child: const Text('Mark Sheets'),
                     ),
-                  ),
-                );
-                return;
-              }
+                    const SizedBox(width: AppSpacing.xs),
 
-              final examDetail =
-                  curState.examInfos.firstWhere(
-                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                    orElse: () => {'Detail': 'Examination'},
-                  )['Detail'] ??
-                  'Examination';
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () {
+                        final curState = ref.read(marksEntryProvider);
+                        final meta = ref.read(shellMetadataProvider).value;
 
-              final className =
-                  curState.classes.firstWhere(
-                    (c) => c['ClassID'] == curState.selectedClassId,
-                    orElse: () => {'CName': 'Class'},
-                  )['CName'] ??
-                  'Class';
+                        final students = curState.roster.map((row) {
+                          return {
+                            'rollNo': row.rollNo.toString(),
+                            'studentName': row.studentName,
+                            'totalObtained': row.totalObtained,
+                            'totalMax': row.totalMax,
+                            'percentage': row.totalMax > 0
+                                ? (row.totalObtained * 100.0 / row.totalMax)
+                                      .toStringAsFixed(1)
+                                : '0.0',
+                            'grade': row
+                                .computeGrade(curState.exGradeRows)
+                                .toString(),
+                          };
+                        }).toList();
 
-              final subjName =
-                  curState.subjects.firstWhere(
-                    (s) => s['SubjID'] == curState.selectedSubjId,
-                    orElse: () => {'SubjName': ''},
-                  )['SubjName'] ??
-                  '';
+                        students.sort(
+                          (a, b) => (b['totalObtained'] as num).compareTo(
+                            a['totalObtained'] as num,
+                          ),
+                        );
 
-              final students = curState.roster
-                  .map(
-                    (row) => {
-                      'rollNo': row.rollNo,
-                      'name': row.studentName,
-                      'subject': subjName,
-                      'obtained': row.totalObtained,
-                      'total': row.totalMax,
-                      'grade': row.computeGrade(curState.exGradeRows),
-                      'isAbsent': row.isAbsent,
-                    },
-                  )
-                  .toList();
+                        final examDetail =
+                            curState.examInfos.firstWhere(
+                              (info) =>
+                                  info['ExamInfoID'] ==
+                                  curState.selectedExamInfoId,
+                              orElse: () => {'Detail': 'Examination'},
+                            )['Detail'] ??
+                            (curState.selectedExamInfoId?.toString() ??
+                                'Examination');
 
-              ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.examMarksheet,
-                  titleOverride: 'Marksheet - $examDetail',
-                  extraParams: {
-                    'examName': examDetail,
-                    'className': className,
-                    'students': students,
-                    'branchName':
-                        meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress':
-                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  },
-                ),
-              );
-            },
-            child: const Text('Mark Sheets'),
-          ),
-          const SizedBox(width: AppSpacing.xs),
+                        final className =
+                            curState.classes.firstWhere(
+                              (c) => c['ClassID'] == curState.selectedClassId,
+                              orElse: () => {'CName': 'Class'},
+                            )['CName'] ??
+                            (curState.selectedClassId?.toString() ?? 'Class');
 
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-            ),
-            onPressed: () {
-              final curState = ref.read(marksEntryProvider);
-              final meta = ref.read(shellMetadataProvider).value;
-
-              final students = curState.roster.map((row) {
-                return {
-                  'rollNo': row.rollNo.toString(),
-                  'studentName': row.studentName,
-                  'totalObtained': row.totalObtained,
-                  'totalMax': row.totalMax,
-                  'percentage': row.totalMax > 0
-                      ? (row.totalObtained * 100.0 / row.totalMax).toStringAsFixed(1)
-                      : '0.0',
-                  'grade': row.computeGrade(curState.exGradeRows).toString(),
-                };
-              }).toList();
-
-              students.sort((a, b) => (b['totalObtained'] as num).compareTo(a['totalObtained'] as num));
-
-              final examDetail =
-                  curState.examInfos.firstWhere(
-                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                    orElse: () => {'Detail': 'Examination'},
-                  )['Detail'] ??
-                  (curState.selectedExamInfoId?.toString() ?? 'Examination');
-
-              final className =
-                  curState.classes.firstWhere(
-                    (c) => c['ClassID'] == curState.selectedClassId,
-                    orElse: () => {'CName': 'Class'},
-                  )['CName'] ??
-                  (curState.selectedClassId?.toString() ?? 'Class');
-
-              ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.examAwardList,
-                  titleOverride: 'Award List',
-                  extraParams: {
-                    'examName': examDetail,
-                    'className': className,
-                    'students': students,
-                    'branchName':
-                        meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress':
-                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  },
-                ),
-              );
-            },
-            child: const Text('Award List'),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-            ),
-            icon: const Icon(Icons.workspace_premium, size: 16),
-            label: const Text('Award Certificate'),
-            onPressed: () async {
-              final curState = ref.read(marksEntryProvider);
-              if (curState.roster.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Load students first.')),
-                );
-                return;
-              }
-
-              final topStudent = curState.roster.reduce(
-                (a, b) => a.totalObtained > b.totalObtained ? a : b,
-              );
-              final meta = ref.read(shellMetadataProvider).value;
-
-              final examDetail =
-                  curState.examInfos.firstWhere(
-                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                    orElse: () => {'Detail': 'Examination'},
-                  )['Detail'] ??
-                  (curState.selectedExamInfoId?.toString() ?? 'Examination');
-
-              final className =
-                  curState.classes.firstWhere(
-                    (c) => c['ClassID'] == curState.selectedClassId,
-                    orElse: () => {'CName': 'Class'},
-                  )['CName'] ??
-                  (curState.selectedClassId?.toString() ?? 'Class');
-
-              await ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.awardCertificate,
-                  titleOverride: 'Award Certificate',
-                  extraParams: {
-                    'examName': examDetail,
-                    'className': className,
-                    'student': {
-                      'rollNo': topStudent.rollNo.toString(),
-                      'studentName': topStudent.studentName,
-                      'totalObtained': topStudent.totalObtained,
-                      'totalMax': topStudent.totalMax,
-                      'percentage': topStudent.totalMax > 0
-                          ? (topStudent.totalObtained * 100.0 / topStudent.totalMax).toStringAsFixed(1)
-                          : '0.0',
-                      'grade': topStudent.computeGrade(curState.exGradeRows).toString(),
-                    },
-                    'rank': 1,
-                    'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  },
-                ),
-              );
-            },
-          ),
-          const SizedBox(width: AppSpacing.xs),
-
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-            ),
-            onPressed: () {
-              final meta = ref.read(shellMetadataProvider).value;
-              final curState = ref.read(marksEntryProvider);
-
-              if (curState.roster.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Load students first to generate statistics.',
+                        ReportPreviewModal.show(
+                          context,
+                          request: ReportRequest(
+                            type: ReportType.examAwardList,
+                            titleOverride: 'Award List',
+                            extraParams: {
+                              'examName': examDetail,
+                              'className': className,
+                              'students': students,
+                              'branchName':
+                                  meta?.branchName ??
+                                  "Ailyans's Higher Secondary School",
+                              'branchAddress':
+                                  meta?.branchAddress ??
+                                  'Muslim Bazar Mianwali',
+                            },
+                          ),
+                        );
+                      },
+                      child: const Text('Award List'),
                     ),
-                  ),
-                );
-                return;
-              }
+                    const SizedBox(width: AppSpacing.xs),
 
-              final examDetail =
-                  curState.examInfos.firstWhere(
-                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                    orElse: () => {'Detail': 'Examination'},
-                  )['Detail'] ??
-                  'Examination';
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.workspace_premium, size: 16),
+                      label: const Text('Award Certificate'),
+                      onPressed: () async {
+                        final curState = ref.read(marksEntryProvider);
+                        if (curState.roster.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Load students first.'),
+                            ),
+                          );
+                          return;
+                        }
 
-              final subjName =
-                  curState.subjects.firstWhere(
-                    (s) => s['SubjID'] == curState.selectedSubjId,
-                    orElse: () => {'SubjName': 'Current Subject'},
-                  )['SubjName'] ??
-                  'Current Subject';
+                        final topStudent = curState.roster.reduce(
+                          (a, b) => a.totalObtained > b.totalObtained ? a : b,
+                        );
+                        final meta = ref.read(shellMetadataProvider).value;
 
-              int totalStudents = curState.roster.length;
-              int passed = 0;
-              int failed = 0;
-              for (final r in curState.roster) {
-                if (r.isAbsent) {
-                  failed++;
-                } else {
-                  final grade = r.computeGrade(curState.exGradeRows);
-                  if (grade == 'F') {
-                    failed++;
-                  } else {
-                    passed++;
-                  }
-                }
-              }
-              final passPct = totalStudents > 0
-                  ? (passed / totalStudents) * 100.0
-                  : 0.0;
+                        final examDetail =
+                            curState.examInfos.firstWhere(
+                              (info) =>
+                                  info['ExamInfoID'] ==
+                                  curState.selectedExamInfoId,
+                              orElse: () => {'Detail': 'Examination'},
+                            )['Detail'] ??
+                            (curState.selectedExamInfoId?.toString() ??
+                                'Examination');
 
-              final subjects = <Map<String, dynamic>>[
-                {
-                  'subject': subjName,
-                  'totalStudents': totalStudents,
-                  'passed': passed,
-                  'failed': failed,
-                  'passPercentage': passPct,
-                },
-              ];
+                        final className =
+                            curState.classes.firstWhere(
+                              (c) => c['ClassID'] == curState.selectedClassId,
+                              orElse: () => {'CName': 'Class'},
+                            )['CName'] ??
+                            (curState.selectedClassId?.toString() ?? 'Class');
 
-              ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.examSummary,
-                  titleOverride: 'Exam Summary - $examDetail',
-                  extraParams: {
-                    'examName': examDetail,
-                    'subjects': subjects,
-                    'branchName':
-                        meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress':
-                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  },
-                ),
-              );
-            },
-            child: const Text('Statistics'),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-
-          // Primary Save Button
-          ElevatedButton.icon(
-            icon: state.isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.textOnPrimary,
+                        await ReportPreviewModal.show(
+                          context,
+                          request: ReportRequest(
+                            type: ReportType.awardCertificate,
+                            titleOverride: 'Award Certificate',
+                            extraParams: {
+                              'examName': examDetail,
+                              'className': className,
+                              'student': {
+                                'rollNo': topStudent.rollNo.toString(),
+                                'studentName': topStudent.studentName,
+                                'totalObtained': topStudent.totalObtained,
+                                'totalMax': topStudent.totalMax,
+                                'percentage': topStudent.totalMax > 0
+                                    ? (topStudent.totalObtained *
+                                              100.0 /
+                                              topStudent.totalMax)
+                                          .toStringAsFixed(1)
+                                    : '0.0',
+                                'grade': topStudent
+                                    .computeGrade(curState.exGradeRows)
+                                    .toString(),
+                              },
+                              'rank': 1,
+                              'branchName':
+                                  meta?.branchName ??
+                                  "Ailyans's Higher Secondary School",
+                              'branchAddress':
+                                  meta?.branchAddress ??
+                                  'Muslim Bazar Mianwali',
+                            },
+                          ),
+                        );
+                      },
                     ),
-                  )
-                : const Icon(Icons.save_outlined, size: 16),
-            label: const Text(
-              'Save All Marks (Ctrl+S)',
-              maxLines: 1,
-              softWrap: false,
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandPrimary,
-              foregroundColor: AppColors.textOnPrimary,
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-            ),
-            onPressed:
-                (state.isSaving ||
-                    state.roster.isEmpty ||
-                    state.selectedSubjId == null ||
-                    !state.roster.any(
-                      (r) =>
-                          r.theoryObtained != null ||
-                          r.practicalObtained != null ||
-                          r.isAbsent,
-                    ))
-                ? null
-                : _handleSave,
-          ),
+                    const SizedBox(width: AppSpacing.xs),
+
+                    OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: () {
+                        final meta = ref.read(shellMetadataProvider).value;
+                        final curState = ref.read(marksEntryProvider);
+
+                        if (curState.roster.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Load students first to generate statistics.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
+                        final examDetail =
+                            curState.examInfos.firstWhere(
+                              (info) =>
+                                  info['ExamInfoID'] ==
+                                  curState.selectedExamInfoId,
+                              orElse: () => {'Detail': 'Examination'},
+                            )['Detail'] ??
+                            'Examination';
+
+                        final subjName =
+                            curState.subjects.firstWhere(
+                              (s) => s['SubjID'] == curState.selectedSubjId,
+                              orElse: () => {'SubjName': 'Current Subject'},
+                            )['SubjName'] ??
+                            'Current Subject';
+
+                        int totalStudents = curState.roster.length;
+                        int passed = 0;
+                        int failed = 0;
+                        for (final r in curState.roster) {
+                          if (r.isAbsent) {
+                            failed++;
+                          } else {
+                            final grade = r.computeGrade(curState.exGradeRows);
+                            if (grade == 'F') {
+                              failed++;
+                            } else {
+                              passed++;
+                            }
+                          }
+                        }
+                        final passPct = totalStudents > 0
+                            ? (passed / totalStudents) * 100.0
+                            : 0.0;
+
+                        final subjects = <Map<String, dynamic>>[
+                          {
+                            'subject': subjName,
+                            'totalStudents': totalStudents,
+                            'passed': passed,
+                            'failed': failed,
+                            'passPercentage': passPct,
+                          },
+                        ];
+
+                        ReportPreviewModal.show(
+                          context,
+                          request: ReportRequest(
+                            type: ReportType.examSummary,
+                            titleOverride: 'Exam Summary - $examDetail',
+                            extraParams: {
+                              'examName': examDetail,
+                              'subjects': subjects,
+                              'branchName':
+                                  meta?.branchName ??
+                                  "Ailyans's Higher Secondary School",
+                              'branchAddress':
+                                  meta?.branchAddress ??
+                                  'Muslim Bazar Mianwali',
+                            },
+                          ),
+                        );
+                      },
+                      child: const Text('Statistics'),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+
+                    // Primary Save Button
+                    ElevatedButton.icon(
+                      icon: state.isSaving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.textOnPrimary,
+                              ),
+                            )
+                          : const Icon(Icons.save_outlined, size: 16),
+                      label: const Text(
+                        'Save All Marks (Ctrl+S)',
+                        maxLines: 1,
+                        softWrap: false,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandPrimary,
+                        foregroundColor: AppColors.textOnPrimary,
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 0,
+                        ),
+                      ),
+                      onPressed:
+                          (state.isSaving ||
+                              state.roster.isEmpty ||
+                              state.selectedSubjId == null ||
+                              !state.roster.any(
+                                (r) =>
+                                    r.theoryObtained != null ||
+                                    r.practicalObtained != null ||
+                                    r.isAbsent,
+                              ))
+                          ? null
+                          : _handleSave,
+                    ),
                   ],
                 ),
               ),
@@ -1817,33 +1856,43 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
       child: Focus(
         autofocus: true,
         child: Scaffold(
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.surfaceCanvas,
           body: SafeArea(
-            bottom: true,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildMobileHeader(context, state),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileFilterBar(context, state, notifier),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (hasRoster) _buildMobileSummaryStrip(state),
-                  if (hasRoster) const SizedBox(height: AppSpacing.sm),
-                  if (state.errorMessage != null)
-                    _buildMobileErrorBanner(
-                      context,
-                      state.errorMessage!,
-                      notifier,
+            top: false,
+            bottom: false,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildMobileHeader(context, state),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileFilterBar(context, state, notifier),
+                        const SizedBox(height: AppSpacing.sm),
+                        if (hasRoster) _buildMobileSummaryStrip(state),
+                        if (hasRoster) const SizedBox(height: AppSpacing.sm),
+                        if (state.errorMessage != null)
+                          _buildMobileErrorBanner(
+                            context,
+                            state.errorMessage!,
+                            notifier,
+                          ),
+                        if (state.errorMessage != null)
+                          const SizedBox(height: AppSpacing.sm),
+                        _buildMobileRoster(context, state, notifier),
+                        const SizedBox(height: AppSpacing.sm),
+                        _buildMobileCounters(state),
+                      ],
                     ),
-                  if (state.errorMessage != null)
-                    const SizedBox(height: AppSpacing.sm),
-                  _buildMobileRoster(context, state, notifier),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildMobileFooter(context, state, notifier),
-                ],
-              ),
+                  ),
+                ),
+                // Sticky bottom action bar (Phase G-9 Shot 2a)
+                _buildMobileStickyBar(context, state),
+              ],
             ),
           ),
         ),
@@ -1974,38 +2023,48 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
-          _buildMobileDropdownRow(
-            label: 'Class',
-            child: _buildMobileDropdown<int>(
-              value: state.selectedClassId,
-              items: state.classes.map((c) {
-                final cid = (c['ClassID'] as num).toInt();
-                final cname = c['CName'] as String? ?? 'Class $cid';
-                return DropdownMenuItem<int>(
-                  value: cid,
-                  child: _mobileDropdownItemText(cname),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) notifier.setClassId(val);
-              },
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          _buildMobileDropdownRow(
-            label: 'Section',
-            child: _buildMobileDropdown<int>(
-              value: state.selectedClassSecId,
-              items: state.sections.map((s) {
-                final sid = (s['ClassSecID'] as num).toInt();
-                final sname = s['SecName'] as String? ?? 'Sec $sid';
-                return DropdownMenuItem<int>(
-                  value: sid,
-                  child: _mobileDropdownItemText(sname),
-                );
-              }).toList(),
-              onChanged: (val) => notifier.setClassSecId(val),
-            ),
+          // Class | Section 2-up pair
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildMobileDropdownRow(
+                  label: 'Class',
+                  child: _buildMobileDropdown<int>(
+                    value: state.selectedClassId,
+                    items: state.classes.map((c) {
+                      final cid = (c['ClassID'] as num).toInt();
+                      final cname = c['CName'] as String? ?? 'Class $cid';
+                      return DropdownMenuItem<int>(
+                        value: cid,
+                        child: _mobileDropdownItemText(cname),
+                      );
+                    }).toList(),
+                    onChanged: (val) {
+                      if (val != null) notifier.setClassId(val);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: _buildMobileDropdownRow(
+                  label: 'Section',
+                  child: _buildMobileDropdown<int>(
+                    value: state.selectedClassSecId,
+                    items: state.sections.map((s) {
+                      final sid = (s['ClassSecID'] as num).toInt();
+                      final sname = s['SecName'] as String? ?? 'Sec $sid';
+                      return DropdownMenuItem<int>(
+                        value: sid,
+                        child: _mobileDropdownItemText(sname),
+                      );
+                    }).toList(),
+                    onChanged: (val) => notifier.setClassSecId(val),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.xs),
           _buildMobileDropdownRow(
@@ -2086,8 +2145,8 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
               icon: const Icon(Icons.people_outline, size: 18),
               label: const Text('Load Students'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandPrimary,
-                foregroundColor: Colors.white,
+                backgroundColor: AppColors.accentExams,
+                foregroundColor: AppColors.textOnPrimary,
               ),
             ),
           ),
@@ -2267,71 +2326,66 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
     }
     final maxMarks = state.theoryMax + state.practicalMax;
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
-      ),
-      child: Wrap(
-        spacing: AppSpacing.xs,
-        runSpacing: AppSpacing.xs,
-        children: [
-          _buildMobileStatPill('Max Marks', '$maxMarks'),
-          _buildMobileStatPill('Pass Marks', 'N/A'),
-          _buildMobileStatPill('Students', '$totalStudents'),
-          _buildMobileStatPill(
-            'Present',
-            '$presentCount',
-            color: AppColors.statusSuccessText,
-          ),
-          _buildMobileStatPill(
-            'Absent',
-            '$absentCount',
-            color: AppColors.statusWarningText,
-          ),
-          _buildMobileStatPill(
-            'Pass',
-            '$passCount',
-            color: AppColors.statusSuccessText,
-          ),
-          _buildMobileStatPill(
-            'Fail',
-            '$failCount',
-            color: AppColors.statusErrorText,
-          ),
-        ],
-      ),
-    );
-  }
+    // Pass threshold = lowest minimum marks among non-'F' grade bands.
+    final passBoundaries =
+        state.exGradeRows
+            .where((r) => ((r['Grad'] as String?) ?? '').toUpperCase() != 'F')
+            .map((r) => (r['GradMinMarks'] as num).toInt())
+            .toList()
+          ..sort();
+    final passMarks = passBoundaries.isEmpty ? null : passBoundaries.first;
 
-  Widget _buildMobileStatPill(String label, String value, {Color? color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.borderSubtle),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$label: ',
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textSecondary,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: MobileKpiCard(
+                label: 'MAX MARKS',
+                value: '$maxMarks',
+                icon: Icons.functions,
+                accentColor: AppColors.accentExams,
+                accentSoftBg: AppColors.accentExamsSoftBg,
+              ),
             ),
-          ),
-          Text(
-            value,
-            style: AppTypography.bodySmall.copyWith(
-              color: color ?? AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: MobileKpiCard(
+                label: 'PASS MARKS',
+                value: passMarks?.toString() ?? '33%',
+                icon: Icons.fact_check_outlined,
+                accentColor: AppColors.accentExams,
+                accentSoftBg: AppColors.accentExamsSoftBg,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Row(
+          children: [
+            Expanded(
+              child: MobileKpiCard(
+                label: 'PRESENT',
+                value: '$presentCount/$totalStudents',
+                icon: Icons.people_outline,
+                accentColor: AppColors.accentExams,
+                accentSoftBg: AppColors.accentExamsSoftBg,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.xs),
+            Expanded(
+              child: MobileKpiCard(
+                label: 'PASS / FAIL',
+                value: '$passCount / $failCount',
+                icon: Icons.rule,
+                accentColor: AppColors.accentExams,
+                accentSoftBg: AppColors.accentExamsSoftBg,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -2429,229 +2483,274 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
     final pracController = _pracControllers[row.stuRegId];
     final theoryFocusNode = _theoryFocusNodes[row.stuRegId];
     final pracFocusNode = _pracFocusNodes[row.stuRegId];
+    final grade = row.computeGrade(state.exGradeRows);
+    final hasFailed = row.isAbsent || grade == 'F' || grade == 'ABS';
 
+    // Phase G-9 Shot 2a: safe left-strip accent card (no non-uniform Border).
     return Card(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sm),
-        child: Column(
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        side: const BorderSide(color: AppColors.borderDefault),
+      ),
+      child: IntrinsicHeight(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.surfaceSubtle,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                  ),
-                  child: Text(
-                    row.rollNo.toString(),
-                    style: AppTypography.monospace.copyWith(fontSize: 11),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    row.studentName,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.body.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                _buildMobileStatusBadge(row, state),
-              ],
+            Container(
+              width: 3.5,
+              color: hasFailed
+                  ? AppColors.statusErrorText
+                  : AppColors.accentExams,
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 44,
-                    child: TextField(
-                      controller: theoryController,
-                      focusNode: theoryFocusNode,
-                      enabled: !row.isAbsent,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      textInputAction: TextInputAction.next,
-                      style: AppTypography.monospace.copyWith(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 10,
-                        ),
-                        filled: true,
-                        fillColor: row.isAbsent
-                            ? AppColors.surfaceSubtle
-                            : AppColors.surfaceRaised,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: const BorderSide(
-                            color: AppColors.borderDefault,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(AppRadius.sm),
+                          ),
+                          child: Text(
+                            row.rollNo.toString(),
+                            style: AppTypography.monospace.copyWith(
+                              fontSize: 11,
+                            ),
                           ),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.md),
-                          borderSide: const BorderSide(
-                            color: AppColors.brandPrimary,
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            row.studentName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.body.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
-                        hintText: 'Theory',
-                      ),
-                      onChanged: (text) {
-                        final val = double.tryParse(text.trim());
-                        notifier.updateTheory(row.stuRegId, val);
-                      },
-                      onSubmitted: (_) {
-                        _onTheorySubmitted(
-                          index,
-                          state.roster,
-                          state.practicalMax,
-                        );
-                      },
+                        const SizedBox(width: AppSpacing.xs),
+                        _buildMobileStatusPill(row, grade),
+                      ],
                     ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  '/ ${state.theoryMax}',
-                  style: AppTypography.monospace.copyWith(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                SizedBox(
-                  height: 44,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Checkbox(
-                        value: row.isAbsent,
-                        visualDensity: VisualDensity.compact,
-                        onChanged: (_) => notifier.toggleAbsent(row.stuRegId),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 44,
+                            child: TextField(
+                              controller: theoryController,
+                              focusNode: theoryFocusNode,
+                              enabled: !row.isAbsent,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              textInputAction: TextInputAction.next,
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 10,
+                                ),
+                                filled: true,
+                                fillColor: row.isAbsent
+                                    ? AppColors.surfaceSubtle
+                                    : AppColors.surfaceRaised,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.borderDefault,
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    AppRadius.md,
+                                  ),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.brandPrimary,
+                                  ),
+                                ),
+                                hintText: 'Theory',
+                              ),
+                              onChanged: (text) {
+                                final val = double.tryParse(text.trim());
+                                notifier.updateTheory(row.stuRegId, val);
+                              },
+                              onSubmitted: (_) {
+                                _onTheorySubmitted(
+                                  index,
+                                  state.roster,
+                                  state.practicalMax,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Text(
+                          '/ ${state.theoryMax}',
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        SizedBox(
+                          height: 44,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Checkbox(
+                                value: row.isAbsent,
+                                visualDensity: VisualDensity.compact,
+                                onChanged: (_) =>
+                                    notifier.toggleAbsent(row.stuRegId),
+                              ),
+                              const Text(
+                                'Absent',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (state.practicalMax > 0) ...[
+                      const SizedBox(height: AppSpacing.xs),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: TextField(
+                                controller: pracController,
+                                focusNode: pracFocusNode,
+                                enabled:
+                                    !row.isAbsent && state.practicalMax > 0,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                textInputAction: TextInputAction.next,
+                                style: AppTypography.monospace.copyWith(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 10,
+                                  ),
+                                  filled: true,
+                                  fillColor:
+                                      (row.isAbsent || state.practicalMax == 0)
+                                      ? AppColors.surfaceSubtle
+                                      : AppColors.surfaceRaised,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.borderDefault,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(
+                                      AppRadius.md,
+                                    ),
+                                    borderSide: const BorderSide(
+                                      color: AppColors.brandPrimary,
+                                    ),
+                                  ),
+                                  hintText: 'Practical',
+                                ),
+                                onChanged: (text) {
+                                  final val = double.tryParse(text.trim());
+                                  notifier.updatePractical(row.stuRegId, val);
+                                },
+                                onSubmitted: (_) {
+                                  _onPracSubmitted(index, state.roster);
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          Text(
+                            '/ ${state.practicalMax}',
+                            style: AppTypography.monospace.copyWith(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                      const Text('Absent', style: TextStyle(fontSize: 12)),
                     ],
-                  ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Row(
+                      children: [
+                        Text(
+                          'Total: ',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                        Text(
+                          row.isAbsent
+                              ? '0/${row.totalMax}'
+                              : '${row.totalObtained.toInt()}/${row.totalMax}',
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            'Reg ${row.stuRegId}',
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodySmall.copyWith(
+                              fontSize: 11,
+                              color: AppColors.textMuted,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            if (state.practicalMax > 0) ...[
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 44,
-                      child: TextField(
-                        controller: pracController,
-                        focusNode: pracFocusNode,
-                        enabled: !row.isAbsent && state.practicalMax > 0,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        textInputAction: TextInputAction.next,
-                        style: AppTypography.monospace.copyWith(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 10,
-                          ),
-                          filled: true,
-                          fillColor: (row.isAbsent || state.practicalMax == 0)
-                              ? AppColors.surfaceSubtle
-                              : AppColors.surfaceRaised,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                            borderSide: const BorderSide(
-                              color: AppColors.borderDefault,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(AppRadius.md),
-                            borderSide: const BorderSide(
-                              color: AppColors.brandPrimary,
-                            ),
-                          ),
-                          hintText: 'Practical',
-                        ),
-                        onChanged: (text) {
-                          final val = double.tryParse(text.trim());
-                          notifier.updatePractical(row.stuRegId, val);
-                        },
-                        onSubmitted: (_) {
-                          _onPracSubmitted(index, state.roster);
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    '/ ${state.practicalMax}',
-                    style: AppTypography.monospace.copyWith(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
               ),
-            ],
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Text(
-                  'Total: ',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-                Text(
-                  row.isAbsent
-                      ? '0/${row.totalMax}'
-                      : '${row.totalObtained.toInt()}/${row.totalMax}',
-                  style: AppTypography.monospace.copyWith(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    'Reg ${row.stuRegId}',
-                    textAlign: TextAlign.right,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySmall.copyWith(
-                      fontSize: 11,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ],
         ),
@@ -2659,48 +2758,29 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
     );
   }
 
-  Widget _buildMobileStatusBadge(MarksEntryRow row, MarksEntryState state) {
-    final grade = row.computeGrade(state.exGradeRows);
-    Color bg;
-    Color fg;
+  Widget _buildMobileStatusPill(MarksEntryRow row, String grade) {
+    final MobileStatusVariant variant;
+    final String label;
     if (row.isAbsent) {
-      bg = AppColors.statusWarningBg;
-      fg = AppColors.statusWarningText;
+      variant = MobileStatusVariant.warning;
+      label = 'Absent';
     } else if (grade == 'F' || grade == 'ABS') {
-      bg = AppColors.statusErrorBg;
-      fg = AppColors.statusErrorText;
+      variant = MobileStatusVariant.error;
+      label = grade;
     } else if (grade == 'A' ||
         grade == 'A+' ||
         grade == 'PASS' ||
         grade == 'B') {
-      bg = AppColors.statusSuccessBg;
-      fg = AppColors.statusSuccessText;
+      variant = MobileStatusVariant.success;
+      label = grade;
     } else {
-      bg = AppColors.statusInfoBg;
-      fg = AppColors.statusInfoText;
+      variant = MobileStatusVariant.info;
+      label = grade;
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-      ),
-      child: Text(
-        grade,
-        style: AppTypography.bodySmall.copyWith(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: fg,
-        ),
-      ),
-    );
+    return MobileStatusPill(label: label, variant: variant);
   }
 
-  Widget _buildMobileFooter(
-    BuildContext context,
-    MarksEntryState state,
-    MarksEntryNotifier notifier,
-  ) {
+  Widget _buildMobileCounters(MarksEntryState state) {
     int enteredCnt = 0;
     int absentCnt = 0;
     int modifiedCnt = 0;
@@ -2718,344 +2798,355 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
       }
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          '$enteredCnt Entered, $modifiedCnt Changed, $absentCnt Absent',
-          style: AppTypography.bodySmall.copyWith(
-            color: AppColors.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: ElevatedButton.icon(
-            icon: state.isSaving
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.textOnPrimary,
-                    ),
-                  )
-                : const Icon(Icons.save_outlined, size: 18),
-            label: const Text(
-              'Save All Marks (Ctrl+S)',
-              maxLines: 1,
-              softWrap: false,
+    return Text(
+      '$enteredCnt Entered, $modifiedCnt Changed, $absentCnt Absent',
+      style: AppTypography.bodySmall.copyWith(
+        color: AppColors.textSecondary,
+        fontWeight: FontWeight.w500,
+      ),
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildMobileStickyBar(BuildContext context, MarksEntryState state) {
+    final canSave =
+        !state.isSaving &&
+        state.roster.isNotEmpty &&
+        state.selectedSubjId != null &&
+        state.roster.any(
+          (r) =>
+              r.theoryObtained != null ||
+              r.practicalObtained != null ||
+              r.isAbsent,
+        );
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        AppSpacing.xs,
+        AppSpacing.sm,
+        MediaQuery.paddingOf(context).bottom + AppSpacing.xs,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              icon: state.isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.textOnPrimary,
+                      ),
+                    )
+                  : const Icon(Icons.save_outlined, size: 18),
+              label: const Text(
+                'Save All Marks (Ctrl+S)',
+                maxLines: 1,
+                softWrap: false,
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentExams,
+                foregroundColor: AppColors.textOnPrimary,
+              ),
+              onPressed: canSave ? _handleSave : null,
             ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandPrimary,
-              foregroundColor: AppColors.textOnPrimary,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildMobileSecondaryAction(
+                  'Mark Sheets',
+                  Icons.print_outlined,
+                  () => _openMarkSheet(context),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                _buildMobileSecondaryAction(
+                  'Award List',
+                  Icons.format_list_numbered_outlined,
+                  () => _openAwardList(context),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                _buildMobileSecondaryAction(
+                  'Award Certificate',
+                  Icons.workspace_premium,
+                  () => _openAwardCertificate(context),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                _buildMobileSecondaryAction(
+                  'Statistics',
+                  Icons.bar_chart_outlined,
+                  () => _openExamSummary(context),
+                ),
+              ],
             ),
-            onPressed:
-                (state.isSaving ||
-                    state.roster.isEmpty ||
-                    state.selectedSubjId == null ||
-                    !state.roster.any(
-                      (r) =>
-                          r.theoryObtained != null ||
-                          r.practicalObtained != null ||
-                          r.isAbsent,
-                    ))
-                ? null
-                : _handleSave,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMobileSecondaryAction(
+    String label,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    return SizedBox(
+      height: 44,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 16),
+        label: Text(label, style: const TextStyle(fontSize: 12)),
+      ),
+    );
+  }
+
+  void _openMarkSheet(BuildContext context) {
+    final meta = ref.read(shellMetadataProvider).value;
+    final curState = ref.read(marksEntryProvider);
+
+    if (curState.roster.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Load students first to generate mark sheets.'),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: OutlinedButton(
-            onPressed: () {
-              final meta = ref.read(shellMetadataProvider).value;
-              final curState = ref.read(marksEntryProvider);
+      );
+      return;
+    }
 
-              if (curState.roster.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Load students first to generate mark sheets.',
-                    ),
-                  ),
-                );
-                return;
-              }
+    final examDetail =
+        curState.examInfos.firstWhere(
+          (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+          orElse: () => {'Detail': 'Examination'},
+        )['Detail'] ??
+        'Examination';
 
-              final examDetail =
-                  curState.examInfos.firstWhere(
-                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                    orElse: () => {'Detail': 'Examination'},
-                  )['Detail'] ??
-                  'Examination';
+    final className =
+        curState.classes.firstWhere(
+          (c) => c['ClassID'] == curState.selectedClassId,
+          orElse: () => {'CName': 'Class'},
+        )['CName'] ??
+        'Class';
 
-              final className =
-                  curState.classes.firstWhere(
-                    (c) => c['ClassID'] == curState.selectedClassId,
-                    orElse: () => {'CName': 'Class'},
-                  )['CName'] ??
-                  'Class';
+    final subjName =
+        curState.subjects.firstWhere(
+          (s) => s['SubjID'] == curState.selectedSubjId,
+          orElse: () => {'SubjName': ''},
+        )['SubjName'] ??
+        '';
 
-              final subjName =
-                  curState.subjects.firstWhere(
-                    (s) => s['SubjID'] == curState.selectedSubjId,
-                    orElse: () => {'SubjName': ''},
-                  )['SubjName'] ??
-                  '';
+    final students = curState.roster
+        .map(
+          (row) => {
+            'rollNo': row.rollNo,
+            'name': row.studentName,
+            'subject': subjName,
+            'obtained': row.totalObtained,
+            'total': row.totalMax,
+            'grade': row.computeGrade(curState.exGradeRows),
+            'isAbsent': row.isAbsent,
+          },
+        )
+        .toList();
 
-              final students = curState.roster
-                  .map(
-                    (row) => {
-                      'rollNo': row.rollNo,
-                      'name': row.studentName,
-                      'subject': subjName,
-                      'obtained': row.totalObtained,
-                      'total': row.totalMax,
-                      'grade': row.computeGrade(curState.exGradeRows),
-                      'isAbsent': row.isAbsent,
-                    },
-                  )
-                  .toList();
+    ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.examMarksheet,
+        titleOverride: 'Marksheet - $examDetail',
+        extraParams: {
+          'examName': examDetail,
+          'className': className,
+          'students': students,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+        },
+      ),
+    );
+  }
 
-              ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.examMarksheet,
-                  titleOverride: 'Marksheet - $examDetail',
-                  extraParams: {
-                    'examName': examDetail,
-                    'className': className,
-                    'students': students,
-                    'branchName':
-                        meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress':
-                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  },
-                ),
-              );
-            },
-            child: const Text('Mark Sheets'),
-          ),
+  void _openAwardList(BuildContext context) {
+    final curState = ref.read(marksEntryProvider);
+    final meta = ref.read(shellMetadataProvider).value;
+
+    final students = curState.roster.map((row) {
+      return {
+        'rollNo': row.rollNo.toString(),
+        'studentName': row.studentName,
+        'totalObtained': row.totalObtained,
+        'totalMax': row.totalMax,
+        'percentage': row.totalMax > 0
+            ? (row.totalObtained * 100.0 / row.totalMax).toStringAsFixed(1)
+            : '0.0',
+        'grade': row.computeGrade(curState.exGradeRows).toString(),
+      };
+    }).toList();
+
+    students.sort(
+      (a, b) =>
+          (b['totalObtained'] as num).compareTo(a['totalObtained'] as num),
+    );
+
+    final examDetail =
+        curState.examInfos.firstWhere(
+          (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+          orElse: () => {'Detail': 'Examination'},
+        )['Detail'] ??
+        (curState.selectedExamInfoId?.toString() ?? 'Examination');
+
+    final className =
+        curState.classes.firstWhere(
+          (c) => c['ClassID'] == curState.selectedClassId,
+          orElse: () => {'CName': 'Class'},
+        )['CName'] ??
+        (curState.selectedClassId?.toString() ?? 'Class');
+
+    ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.examAwardList,
+        titleOverride: 'Award List',
+        extraParams: {
+          'examName': examDetail,
+          'className': className,
+          'students': students,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+        },
+      ),
+    );
+  }
+
+  Future<void> _openAwardCertificate(BuildContext context) async {
+    final curState = ref.read(marksEntryProvider);
+    if (curState.roster.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Load students first.')));
+      return;
+    }
+
+    final topStudent = curState.roster.reduce(
+      (a, b) => a.totalObtained > b.totalObtained ? a : b,
+    );
+    final meta = ref.read(shellMetadataProvider).value;
+
+    final examDetail =
+        curState.examInfos.firstWhere(
+          (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+          orElse: () => {'Detail': 'Examination'},
+        )['Detail'] ??
+        (curState.selectedExamInfoId?.toString() ?? 'Examination');
+
+    final className =
+        curState.classes.firstWhere(
+          (c) => c['ClassID'] == curState.selectedClassId,
+          orElse: () => {'CName': 'Class'},
+        )['CName'] ??
+        (curState.selectedClassId?.toString() ?? 'Class');
+
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.awardCertificate,
+        titleOverride: 'Award Certificate',
+        extraParams: {
+          'examName': examDetail,
+          'className': className,
+          'student': {
+            'rollNo': topStudent.rollNo.toString(),
+            'studentName': topStudent.studentName,
+            'totalObtained': topStudent.totalObtained,
+            'totalMax': topStudent.totalMax,
+            'percentage': topStudent.totalMax > 0
+                ? (topStudent.totalObtained * 100.0 / topStudent.totalMax)
+                      .toStringAsFixed(1)
+                : '0.0',
+            'grade': topStudent.computeGrade(curState.exGradeRows).toString(),
+          },
+          'rank': 1,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+        },
+      ),
+    );
+  }
+
+  void _openExamSummary(BuildContext context) {
+    final meta = ref.read(shellMetadataProvider).value;
+    final curState = ref.read(marksEntryProvider);
+
+    if (curState.roster.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Load students first to generate statistics.'),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: OutlinedButton(
-            onPressed: () {
-              final curState = ref.read(marksEntryProvider);
-              final meta = ref.read(shellMetadataProvider).value;
+      );
+      return;
+    }
 
-              final students = curState.roster.map((row) {
-                return {
-                  'rollNo': row.rollNo.toString(),
-                  'studentName': row.studentName,
-                  'totalObtained': row.totalObtained,
-                  'totalMax': row.totalMax,
-                  'percentage': row.totalMax > 0
-                      ? (row.totalObtained * 100.0 / row.totalMax)
-                            .toStringAsFixed(1)
-                      : '0.0',
-                  'grade': row.computeGrade(curState.exGradeRows).toString(),
-                };
-              }).toList();
+    final examDetail =
+        curState.examInfos.firstWhere(
+          (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
+          orElse: () => {'Detail': 'Examination'},
+        )['Detail'] ??
+        'Examination';
 
-              students.sort(
-                (a, b) => (b['totalObtained'] as num).compareTo(
-                  a['totalObtained'] as num,
-                ),
-              );
+    final subjName =
+        curState.subjects.firstWhere(
+          (s) => s['SubjID'] == curState.selectedSubjId,
+          orElse: () => {'SubjName': 'Current Subject'},
+        )['SubjName'] ??
+        'Current Subject';
 
-              final examDetail =
-                  curState.examInfos.firstWhere(
-                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                    orElse: () => {'Detail': 'Examination'},
-                  )['Detail'] ??
-                  (curState.selectedExamInfoId?.toString() ?? 'Examination');
+    final totalStudents = curState.roster.length;
+    int passed = 0;
+    int failed = 0;
+    for (final r in curState.roster) {
+      if (r.isAbsent) {
+        failed++;
+      } else {
+        final grade = r.computeGrade(curState.exGradeRows);
+        if (grade == 'F') {
+          failed++;
+        } else {
+          passed++;
+        }
+      }
+    }
+    final passPct = totalStudents > 0 ? (passed / totalStudents) * 100.0 : 0.0;
 
-              final className =
-                  curState.classes.firstWhere(
-                    (c) => c['ClassID'] == curState.selectedClassId,
-                    orElse: () => {'CName': 'Class'},
-                  )['CName'] ??
-                  (curState.selectedClassId?.toString() ?? 'Class');
+    final subjects = <Map<String, dynamic>>[
+      {
+        'subject': subjName,
+        'totalStudents': totalStudents,
+        'passed': passed,
+        'failed': failed,
+        'passPercentage': passPct,
+      },
+    ];
 
-              ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.examAwardList,
-                  titleOverride: 'Award List',
-                  extraParams: {
-                    'examName': examDetail,
-                    'className': className,
-                    'students': students,
-                    'branchName':
-                        meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress':
-                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  },
-                ),
-              );
-            },
-            child: const Text('Award List'),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.workspace_premium, size: 16),
-            label: const Text('Award Certificate'),
-            onPressed: () async {
-              final curState = ref.read(marksEntryProvider);
-              if (curState.roster.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Load students first.')),
-                );
-                return;
-              }
-
-              final topStudent = curState.roster.reduce(
-                (a, b) => a.totalObtained > b.totalObtained ? a : b,
-              );
-              final meta = ref.read(shellMetadataProvider).value;
-
-              final examDetail =
-                  curState.examInfos.firstWhere(
-                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                    orElse: () => {'Detail': 'Examination'},
-                  )['Detail'] ??
-                  (curState.selectedExamInfoId?.toString() ?? 'Examination');
-
-              final className =
-                  curState.classes.firstWhere(
-                    (c) => c['ClassID'] == curState.selectedClassId,
-                    orElse: () => {'CName': 'Class'},
-                  )['CName'] ??
-                  (curState.selectedClassId?.toString() ?? 'Class');
-
-              await ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.awardCertificate,
-                  titleOverride: 'Award Certificate',
-                  extraParams: {
-                    'examName': examDetail,
-                    'className': className,
-                    'student': {
-                      'rollNo': topStudent.rollNo.toString(),
-                      'studentName': topStudent.studentName,
-                      'totalObtained': topStudent.totalObtained,
-                      'totalMax': topStudent.totalMax,
-                      'percentage': topStudent.totalMax > 0
-                          ? (topStudent.totalObtained * 100.0 /
-                                    topStudent.totalMax)
-                                .toStringAsFixed(1)
-                          : '0.0',
-                      'grade': topStudent
-                          .computeGrade(curState.exGradeRows)
-                          .toString(),
-                    },
-                    'rank': 1,
-                    'branchName':
-                        meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress':
-                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  },
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: OutlinedButton(
-            onPressed: () {
-              final meta = ref.read(shellMetadataProvider).value;
-              final curState = ref.read(marksEntryProvider);
-
-              if (curState.roster.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Load students first to generate statistics.',
-                    ),
-                  ),
-                );
-                return;
-              }
-
-              final examDetail =
-                  curState.examInfos.firstWhere(
-                    (info) => info['ExamInfoID'] == curState.selectedExamInfoId,
-                    orElse: () => {'Detail': 'Examination'},
-                  )['Detail'] ??
-                  'Examination';
-
-              final subjName =
-                  curState.subjects.firstWhere(
-                    (s) => s['SubjID'] == curState.selectedSubjId,
-                    orElse: () => {'SubjName': 'Current Subject'},
-                  )['SubjName'] ??
-                  'Current Subject';
-
-              int totalStudents = curState.roster.length;
-              int passed = 0;
-              int failed = 0;
-              for (final r in curState.roster) {
-                if (r.isAbsent) {
-                  failed++;
-                } else {
-                  final grade = r.computeGrade(curState.exGradeRows);
-                  if (grade == 'F') {
-                    failed++;
-                  } else {
-                    passed++;
-                  }
-                }
-              }
-              final passPct = totalStudents > 0
-                  ? (passed / totalStudents) * 100.0
-                  : 0.0;
-
-              final subjects = <Map<String, dynamic>>[
-                {
-                  'subject': subjName,
-                  'totalStudents': totalStudents,
-                  'passed': passed,
-                  'failed': failed,
-                  'passPercentage': passPct,
-                },
-              ];
-
-              ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.examSummary,
-                  titleOverride: 'Exam Summary - $examDetail',
-                  extraParams: {
-                    'examName': examDetail,
-                    'subjects': subjects,
-                    'branchName':
-                        meta?.branchName ?? "Ailyans's Higher Secondary School",
-                    'branchAddress':
-                        meta?.branchAddress ?? 'Muslim Bazar Mianwali',
-                  },
-                ),
-              );
-            },
-            child: const Text('Statistics'),
-          ),
-        ),
-      ],
+    ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.examSummary,
+        titleOverride: 'Exam Summary - $examDetail',
+        extraParams: {
+          'examName': examDetail,
+          'subjects': subjects,
+          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+        },
+      ),
     );
   }
 }
