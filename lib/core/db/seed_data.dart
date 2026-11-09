@@ -1,8 +1,18 @@
 // DEV SEED CREDENTIALS: Wazahat Raza Zaidi / wr
 // (legacy password; below 8-char min; warning fires on login)
 
+import 'dart:io';
+
 import 'package:bcrypt/bcrypt.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+/// Computes the current academic session year (April-March fiscal year).
+/// April 2026 onwards -> '2026-27'; January-March 2026 -> '2025-26'.
+String getCurrentSessionYr() {
+  final now = DateTime.now();
+  final startYear = now.month >= 4 ? now.year : now.year - 1;
+  return '$startYear-${((startYear + 1) % 100).toString().padLeft(2, '0')}';
+}
 
 /// Database seeder to populate minimal initial development and dashboard data.
 class DatabaseSeeder {
@@ -12,7 +22,8 @@ class DatabaseSeeder {
     // 1. Guard for Authentication & Access Rights
     final countResult = await db.rawQuery('SELECT COUNT(*) as cnt FROM Users');
     final userCount = (countResult.first['cnt'] as int?) ?? 0;
-    if (userCount == 0) {
+    final isFreshInstall = userCount == 0;
+    if (isFreshInstall) {
       await _seedUsersAndRights(db);
     }
 
@@ -39,6 +50,18 @@ class DatabaseSeeder {
     final attMasCount = (attMasResult.first['cnt'] as int?) ?? 0;
     if (attMasCount == 0) {
       await _seedAttendanceData(db);
+    }
+
+    // 5. Fresh installs: anchor the active session on the current academic
+    //    year instead of the legacy '2017-2018' fallback. Gated to real
+    //    (non-test) launches so test fixtures keep asserting the legacy
+    //    fallback, and INSERT OR IGNORE so an existing installation's chosen
+    //    session in app_config is never overwritten.
+    if (isFreshInstall && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      await db.insert('app_config', {
+        'config_key': 'default_session_yr',
+        'config_value': getCurrentSessionYr(),
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }
   }
 
