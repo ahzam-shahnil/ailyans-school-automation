@@ -124,10 +124,18 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final shellMeta = ref.watch(shellMetadataProvider);
     final filters = ref.watch(studentListFiltersProvider);
     final studentsAsync = ref.watch(studentListProvider);
     final classesAsync = ref.watch(classesProvider);
     final sectionsAsync = ref.watch(sectionsProvider);
+
+    if (shellMeta.isLoading && !studentsAsync.hasValue && !shellMeta.hasValue) {
+      return const Scaffold(
+        backgroundColor: AppColors.surface,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
     ref.listen<AsyncValue<ShellMetadata>>(shellMetadataProvider, (previous, next) {
       final nextYear = next.valueOrNull?.sessionYear;

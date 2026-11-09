@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/school_class.dart';
 import '../../models/student_list_row.dart';
 import '../db/database.dart';
+import 'shell_metadata_provider.dart';
 
 /// Available sortable columns in the Student Directory table.
 enum StudentSortColumn { defaultOrder, regId, studentName, rollNo }
@@ -61,7 +63,28 @@ class StudentListFilters {
 
 /// StateNotifier managing student directory filters, search, and pagination.
 class StudentListFiltersNotifier extends StateNotifier<StudentListFilters> {
-  StudentListFiltersNotifier() : super(const StudentListFilters());
+  final Ref? ref;
+
+  StudentListFiltersNotifier([this.ref, String? initialSessionYr])
+      : super(
+          StudentListFilters(
+            sessionYr: initialSessionYr ?? '2017-2018',
+          ),
+        ) {
+    if (ref != null) {
+      final initialMeta = ref!.read(shellMetadataProvider).valueOrNull;
+      if (initialMeta != null && initialMeta.sessionYear.isNotEmpty) {
+        syncSession(initialMeta.sessionYear);
+      }
+    }
+  }
+
+  // On first read or init, sync sessionYr from shell metadata
+  void syncSession(String sessionYr) {
+    if (sessionYr.isNotEmpty && state.sessionYr != sessionYr) {
+      state = state.copyWith(sessionYr: sessionYr, page: 1);
+    }
+  }
 
   void setSearch(String query) {
     state = state.copyWith(search: query.trim(), page: 1);
@@ -87,8 +110,7 @@ class StudentListFiltersNotifier extends StateNotifier<StudentListFilters> {
   /// Syncs the active session year from the app shell (app_config.default_session_yr).
   /// Called by StudentListScreen on mount to avoid filtering on the constructor default.
   void setSessionYr(String sessionYr) {
-    if (state.sessionYr == sessionYr) return;
-    state = state.copyWith(sessionYr: sessionYr, page: 1);
+    syncSession(sessionYr);
   }
 
   void toggleSort(StudentSortColumn column) {
@@ -128,7 +150,19 @@ final studentListFiltersProvider =
     StateNotifierProvider<StudentListFiltersNotifier, StudentListFilters>((
       ref,
     ) {
-      return StudentListFiltersNotifier();
+      final initialMeta = ref.read(shellMetadataProvider).valueOrNull;
+      final initialSession =
+          (initialMeta != null && initialMeta.sessionYear.isNotEmpty)
+              ? initialMeta.sessionYear
+              : '2017-2018';
+      final notifier = StudentListFiltersNotifier(ref, initialSession);
+
+      // Sync when shell metadata resolves
+      ref.listen<AsyncValue<ShellMetadata>>(shellMetadataProvider, (prev, next) {
+        next.whenData((meta) => notifier.syncSession(meta.sessionYear));
+      });
+
+      return notifier;
     });
 
 /// Fetches all academic grades / classes for filtering.
@@ -153,6 +187,14 @@ final sectionsProvider = FutureProvider<List<ClassSec>>((ref) async {
 final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
   final filters = ref.watch(studentListFiltersProvider);
   final db = await DatabaseService.instance.database;
+
+  var sessionYr = filters.sessionYr.trim();
+  if (sessionYr.isEmpty) {
+    final meta = ref.read(shellMetadataProvider).valueOrNull;
+    sessionYr = (meta != null && meta.sessionYear.isNotEmpty)
+        ? meta.sessionYear
+        : '2017-2018';
+  }
 
   // Build sorting clause
   String orderClause;
@@ -210,7 +252,7 @@ final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
   ''';
 
   final params = [
-    filters.sessionYr,
+    sessionYr,
     filters.classId,
     filters.classId,
     filters.classSecId,
@@ -225,5 +267,6 @@ final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
   ];
 
   final rows = await db.rawQuery(query, params);
+  debugPrint('[studentList] sessionYr=$sessionYr, rows=${rows.length}');
   return rows.map(StudentListRow.fromMap).toList();
 });
