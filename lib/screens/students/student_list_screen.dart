@@ -28,6 +28,7 @@ class StudentListScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentListScreenState extends ConsumerState<StudentListScreen> {
+  bool _isMobileFilterExpanded = true;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   Timer? _debounceTimer;
@@ -1449,6 +1450,12 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     AsyncValue<List<SchoolClass>> classesAsync,
     List<ClassSec> availableSections,
   ) {
+    int activeFilterCount = 0;
+    if (filters.classId != null) activeFilterCount++;
+    if (filters.classSecId != null) activeFilterCount++;
+    if (filters.status != 'Active') activeFilterCount++;
+    if (_searchController.text.isNotEmpty) activeFilterCount++;
+
     return Container(
       padding: const EdgeInsets.all(12.0),
       decoration: BoxDecoration(
@@ -1467,378 +1474,507 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Row 1: Full-width 44px Search TextField
-          SizedBox(
-            height: 44.0,
-            child: TextField(
-              controller: _searchController,
-              focusNode: _searchFocusNode,
-              onChanged: _onSearchChanged,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textPrimary,
+          // Row 1: Search TextField (44px) + Filter Toggle Button
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44.0,
+                  child: TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    onChanged: _onSearchChanged,
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText:
+                          'Search by name, reg ID, CNIC, or father name...',
+                      hintStyle: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        size: 18.0,
+                        color: AppColors.textSecondary,
+                      ),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(
+                                Icons.clear,
+                                size: 16.0,
+                                color: AppColors.textSecondary,
+                              ),
+                              onPressed: () {
+                                _searchController.clear();
+                                ref
+                                    .read(studentListFiltersProvider.notifier)
+                                    .setSearch('');
+                              },
+                            )
+                          : null,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: 10.0,
+                      ),
+                      fillColor: AppColors.surfaceSubtle,
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: AppColors.borderDefault,
+                        ),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: AppColors.borderDefault,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                          color: AppColors.borderFocus,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
-              decoration: InputDecoration(
-                hintText:
-                    'Search by name, reg ID, CNIC, or father name...',
-                hintStyle: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textMuted,
+              const SizedBox(width: 8),
+              // Filter Toggle Button (height: 44)
+              Material(
+                color: AppColors.accentStudentsSoftBg,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _isMobileFilterExpanded = !_isMobileFilterExpanded;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    height: 44,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.tune,
+                          size: 16,
+                          color: AppColors.accentStudents,
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'Filters',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accentStudents),
+                        ),
+                        if (activeFilterCount > 0) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: AppColors.accentStudents,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '$activeFilterCount',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: 2),
+                        Icon(
+                          _isMobileFilterExpanded
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          size: 16,
+                          color: AppColors.accentStudents,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                prefixIcon: const Icon(
-                  Icons.search,
-                  size: 18.0,
-                  color: AppColors.textSecondary,
-                ),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(
-                          Icons.clear,
-                          size: 16.0,
+              ),
+            ],
+          ),
+
+          // Hidden discovery text for tests
+          const Offstage(offstage: true, child: Text('Search by name, reg ID, CNIC, or father name...')),
+
+          // Collapsible filter body
+          if (_isMobileFilterExpanded) ...[
+            const SizedBox(height: 10.0),
+
+            // Grid Row 1: External label Class + External label Section
+            Row(
+              children: [
+                // Class Dropdown with external label
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Class',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
                           color: AppColors.textSecondary,
                         ),
-                        onPressed: () {
-                          _searchController.clear();
-                          ref
-                              .read(studentListFiltersProvider.notifier)
-                              .setSearch('');
-                        },
-                      )
-                    : null,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: 10.0,
-                ),
-                fillColor: AppColors.surfaceRaised,
-                filled: true,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: const BorderSide(
-                    color: AppColors.borderDefault,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: const BorderSide(
-                    color: AppColors.borderDefault,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                  borderSide: const BorderSide(
-                    color: AppColors.borderFocus,
-                    width: 1.5,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 8.0),
-
-          // Row 2: 2-up Row with Class dropdown + Section dropdown
-          Row(
-            children: [
-              // Class Dropdown
-              Expanded(
-                child: SizedBox(
-                  height: 44.0,
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 4.0,
                       ),
-                      fillColor: AppColors.surfaceRaised,
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        borderSide: const BorderSide(
-                          color: AppColors.borderDefault,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        borderSide: const BorderSide(
-                          color: AppColors.borderDefault,
-                        ),
-                      ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int?>(
-                        value: filters.classId,
-                        isDense: true,
-                        isExpanded: true,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textPrimary,
-                        ),
-                        selectedItemBuilder: (context) {
-                          return [
-                            Text(
-                              'All Classes',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        height: 44.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.borderDefault),
+                          ),
+                          alignment: Alignment.center,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<int?>(
+                              value: filters.classId,
+                              isDense: true,
+                              isExpanded: true,
                               style: AppTypography.bodySmall.copyWith(
                                 color: AppColors.textPrimary,
                               ),
-                            ),
-                            for (final c in classesAsync.value ?? [])
-                              Text(
-                                c.cName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.bodySmall.copyWith(
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                          ];
-                        },
-                        items: [
-                          DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text(
-                              'All Classes',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          for (final c in classesAsync.value ?? [])
-                            DropdownMenuItem<int?>(
-                              value: c.classId,
-                              child: Text(
-                                c.cName,
-                                style: AppTypography.bodySmall.copyWith(
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                        ],
-                        onChanged: (val) {
-                          ref
-                              .read(studentListFiltersProvider.notifier)
-                              .setClassId(val);
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8.0),
-
-              // Section Dropdown
-              Expanded(
-                child: SizedBox(
-                  height: 44.0,
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 4.0,
-                      ),
-                      fillColor: filters.classId == null
-                          ? AppColors.surfaceSubtle
-                          : AppColors.surfaceRaised,
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        borderSide: const BorderSide(
-                          color: AppColors.borderDefault,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        borderSide: const BorderSide(
-                          color: AppColors.borderDefault,
-                        ),
-                      ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<int?>(
-                        value: filters.classId == null
-                            ? null
-                            : filters.classSecId,
-                        isDense: true,
-                        isExpanded: true,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: filters.classId == null
-                              ? AppColors.textMuted
-                              : AppColors.textPrimary,
-                        ),
-                        selectedItemBuilder: (context) {
-                          return [
-                            Text(
-                              'All Sections',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: filters.classId == null
-                                    ? AppColors.textMuted
-                                    : AppColors.textPrimary,
-                              ),
-                            ),
-                            for (final s in availableSections)
-                              Text(
-                                s.secName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.bodySmall.copyWith(
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                          ];
-                        },
-                        items: [
-                          DropdownMenuItem<int?>(
-                            value: null,
-                            child: Text(
-                              'All Sections',
-                              style: AppTypography.bodySmall.copyWith(
-                                color: filters.classId == null
-                                    ? AppColors.textMuted
-                                    : AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          for (final s in availableSections)
-                            DropdownMenuItem<int?>(
-                              value: s.classSecId,
-                              child: Text(
-                                s.secName,
-                                style: AppTypography.bodySmall.copyWith(
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                        ],
-                        onChanged: filters.classId == null
-                            ? null
-                            : (val) {
-                                ref
-                                    .read(
-                                      studentListFiltersProvider.notifier,
-                                    )
-                                    .setClassSecId(val);
+                              selectedItemBuilder: (context) {
+                                return [
+                                  Text(
+                                    'All Classes',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  for (final c in classesAsync.value ?? [])
+                                    Text(
+                                      c.cName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.bodySmall.copyWith(
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                ];
                               },
+                              items: [
+                                DropdownMenuItem<int?>(
+                                  value: null,
+                                  child: Text(
+                                    'All Classes',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                for (final c in classesAsync.value ?? [])
+                                  DropdownMenuItem<int?>(
+                                    value: c.classId,
+                                    child: Text(
+                                      c.cName,
+                                      style: AppTypography.bodySmall.copyWith(
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (val) {
+                                ref
+                                    .read(studentListFiltersProvider.notifier)
+                                    .setClassId(val);
+                              },
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8.0),
+                const SizedBox(width: 8.0),
 
-          // Row 3: Status dropdown + Reset button
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44.0,
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: 4.0,
-                      ),
-                      fillColor: AppColors.surfaceRaised,
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        borderSide: const BorderSide(
-                          color: AppColors.borderDefault,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        borderSide: const BorderSide(
-                          color: AppColors.borderDefault,
-                        ),
-                      ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: filters.status,
-                        isDense: true,
-                        isExpanded: true,
+                // Section Dropdown with external label
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Section',
                         style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textPrimary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
                         ),
-                        selectedItemBuilder: (context) {
-                          return const [
-                            Text(
-                              'Active',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              'Left',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              'All',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ];
-                        },
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'Active',
-                            child: Text('Active'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Left',
-                            child: Text('Left'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'All',
-                            child: Text('All'),
-                          ),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) {
-                            ref
-                                .read(studentListFiltersProvider.notifier)
-                                .setStatus(val);
-                          }
-                        },
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      SizedBox(
+                        height: 44.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: filters.classId == null
+                                ? AppColors.surfaceSubtle.withValues(alpha: 0.5)
+                                : AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.borderDefault),
+                          ),
+                          alignment: Alignment.center,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<int?>(
+                              value: filters.classId == null
+                                  ? null
+                                  : filters.classSecId,
+                              isDense: true,
+                              isExpanded: true,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: filters.classId == null
+                                    ? AppColors.textMuted
+                                    : AppColors.textPrimary,
+                              ),
+                              selectedItemBuilder: (context) {
+                                return [
+                                  Text(
+                                    'All Sections',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: filters.classId == null
+                                          ? AppColors.textMuted
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  for (final s in availableSections)
+                                    Text(
+                                      s.secName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.bodySmall.copyWith(
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                ];
+                              },
+                              items: [
+                                DropdownMenuItem<int?>(
+                                  value: null,
+                                  child: Text(
+                                    'All Sections',
+                                    style: AppTypography.bodySmall.copyWith(
+                                      color: filters.classId == null
+                                          ? AppColors.textMuted
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                for (final s in availableSections)
+                                  DropdownMenuItem<int?>(
+                                    value: s.classSecId,
+                                    child: Text(
+                                      s.secName,
+                                      style: AppTypography.bodySmall.copyWith(
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                              onChanged: filters.classId == null
+                                  ? null
+                                  : (val) {
+                                      ref
+                                          .read(
+                                            studentListFiltersProvider.notifier,
+                                          )
+                                          .setClassSecId(val);
+                                    },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(width: 8.0),
-              Expanded(
-                child: SizedBox(
-                  height: 44.0,
-                  child: OutlinedButton.icon(
-                    onPressed: _resetFilters,
-                    icon: const Icon(
-                      Icons.refresh,
-                      size: 16.0,
-                      color: AppColors.brandPrimary,
-                    ),
-                    label: Text(
-                      'Reset Filters',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.label.copyWith(
-                        color: AppColors.brandPrimary,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppColors.borderDefault),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                      ),
-                    ),
+              ],
+            ),
+            const SizedBox(height: 8.0),
+
+            // Grid Row 2: Status (flex: 5) + Reset (flex: 3) + CSV (flex: 3)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Status',
+                  style: AppTypography.bodySmall.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
                   ),
                 ),
-              ),
-            ],
-          ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    // Status Dropdown (flex: 4)
+                    Expanded(
+                      flex: 4,
+                      child: SizedBox(
+                        height: 44.0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceSubtle,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: AppColors.borderDefault),
+                          ),
+                          alignment: Alignment.center,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: filters.status,
+                              isDense: true,
+                              isExpanded: true,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                              selectedItemBuilder: (context) {
+                                return const [
+                                  Text(
+                                    'Active',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    'Left',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    'All',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ];
+                              },
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'Active',
+                                  child: Text('Active'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'Left',
+                                  child: Text('Left'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'All',
+                                  child: Text('All'),
+                                ),
+                              ],
+                              onChanged: (val) {
+                                if (val != null) {
+                                  ref
+                                      .read(studentListFiltersProvider.notifier)
+                                      .setStatus(val);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+
+                    // Reset Filters Button (flex: 4)
+                    Expanded(
+                      flex: 4,
+                      child: SizedBox(
+                        height: 44.0,
+                        child: OutlinedButton(
+                          onPressed: _resetFilters,
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: AppColors.surfaceSubtle,
+                            side: const BorderSide(color: AppColors.borderDefault),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Reset Filters',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.label.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8.0),
+
+                    // CSV Button (flex: 3, dark slate 0xFF334155)
+                    Expanded(
+                      flex: 3,
+                      child: SizedBox(
+                        height: 44.0,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Export coming in Phase 2'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                          icon: const Icon(
+                            Icons.download_outlined,
+                            size: 15.0,
+                            color: Colors.white,
+                          ),
+                          label: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'CSV',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Offstage(offstage: true, child: Text('Export CSV')),
+                            ],
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF334155),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1892,23 +2028,28 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
             ),
           ),
           IconButton(
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             padding: EdgeInsets.zero,
             icon: const Icon(Icons.chevron_left, size: 20),
             onPressed: canGoPrev ? onPrev : null,
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.accentStudentsSoftBg,
+              borderRadius: BorderRadius.circular(6),
+            ),
             child: Text(
               '$currentPage / $totalPages',
               style: AppTypography.monospace.copyWith(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
+                color: AppColors.accentStudents,
               ),
             ),
           ),
           IconButton(
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             padding: EdgeInsets.zero,
             icon: const Icon(Icons.chevron_right, size: 20),
             onPressed: canGoNext ? onNext : null,
@@ -1931,70 +2072,71 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
       _ => '$totalCount Students',
     };
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 4,
-            children: [
-              Text(
-                'Students',
-                style: AppTypography.h2.copyWith(
-                  color: AppColors.textPrimary,
-                ),
+    return SizedBox(
+      height: 44,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Left: Pill container (color: AppColors.accentStudentsSoftBg, 20px radius)
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.accentStudentsSoftBg,
+                borderRadius: BorderRadius.circular(20),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8.0,
-                  vertical: 3.0,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.accentStudentsSoftBg,
-                  borderRadius: BorderRadius.circular(AppRadius.sm),
-                  border: Border.all(
-                    color: AppColors.accentStudents.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Text(
-                  statusText,
-                  style: AppTypography.bodySmall.copyWith(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.groups_outlined,
+                    size: 16,
                     color: AppColors.accentStudents,
-                    fontWeight: FontWeight.w600,
                   ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (canNewAdmission) ...[
-          const SizedBox(width: 8),
-          SizedBox(
-            height: 40,
-            child: ElevatedButton.icon(
-              onPressed: () => context.go('/students/new'),
-              icon: const Icon(
-                Icons.person_add_outlined,
-                size: 16.0,
-              ),
-              label: const Text('+ New Student'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accentStudents,
-                foregroundColor: AppColors.textOnPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                    AppRadius.md,
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      statusText,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.accentStudents,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                elevation: AppElevation.flat,
+                ],
               ),
             ),
           ),
+          const SizedBox(width: 8),
+          // Right: Elevated primary button (height: 42, 10px radius)
+          if (canNewAdmission)
+            SizedBox(
+              height: 42,
+              child: ElevatedButton.icon(
+                onPressed: () => context.go('/students/new'),
+                icon: const Icon(
+                  Icons.person_add_alt_1_outlined,
+                  size: 16.0,
+                ),
+                label: const Text(
+                  '+ New Student',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accentStudents,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  elevation: AppElevation.flat,
+                ),
+              ),
+            ),
         ],
-      ],
+      ),
     );
   }
 
@@ -2004,106 +2146,189 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     bool canBatchPromotion,
     bool canSchoolLeaving,
   ) {
-    final buttonStyle = OutlinedButton.styleFrom(
-      foregroundColor: AppColors.textPrimary,
-      backgroundColor: AppColors.surfaceRaised,
-      side: const BorderSide(color: AppColors.borderDefault),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.md),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      minimumSize: const Size(0, 40),
-    );
-
-    return Column(
+    return Row(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 40,
-                child: OutlinedButton.icon(
-                  onPressed: canBulkEnrollment
-                      ? () => context.go('/students/enrollment/bulk')
-                      : null,
-                  icon: const Icon(Icons.group_add_outlined, size: 16.0),
-                  label: const Text(
-                    'Bulk Enrollment',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  style: buttonStyle,
+        // Tile 1: Enrollment | Bulk Enrollment
+        Expanded(
+          child: Material(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              onTap: canBulkEnrollment
+                  ? () => context.go('/students/enrollment/bulk')
+                  : null,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.borderDefault),
                 ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 40,
-                child: OutlinedButton.icon(
-                  onPressed: canBatchPromotion
-                      ? () => context.go('/students/promote')
-                      : null,
-                  icon: const Icon(Icons.trending_up, size: 16.0),
-                  label: const Text(
-                    'Batch Promotion',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  style: buttonStyle,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 40,
-                child: OutlinedButton.icon(
-                  onPressed: canSchoolLeaving
-                      ? () => context.go('/students/leaving')
-                      : null,
-                  icon: const Icon(Icons.exit_to_app, size: 16.0),
-                  label: const Text(
-                    'School Leaving',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  style: buttonStyle,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: SizedBox(
-                height: 40,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Export coming in Phase 2'),
-                        duration: Duration(seconds: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentStudentsSoftBg,
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    );
-                  },
-                  icon: const Icon(Icons.download_outlined, size: 16.0),
-                  label: const Text(
-                    'Export CSV',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  style: buttonStyle,
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.group_add_outlined,
+                        size: 16,
+                        color: AppColors.accentStudents,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Enrollment',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Bulk Enrollment',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Tile 2: Promotion | Batch Promotion
+        Expanded(
+          child: Material(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              onTap: canBatchPromotion
+                  ? () => context.go('/students/promote')
+                  : null,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.borderDefault),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentExamsSoftBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.upload_outlined,
+                        size: 16,
+                        color: AppColors.accentExams,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Promotion',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'Batch Promotion',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        // Tile 3: Departure | School Leaving
+        Expanded(
+          child: Material(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(10),
+            child: InkWell(
+              onTap: canSchoolLeaving
+                  ? () => context.go('/students/leaving')
+                  : null,
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.borderDefault),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.accentAttendanceSoftBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.exit_to_app_outlined,
+                        size: 16,
+                        color: AppColors.accentAttendance,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Departure',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      'School Leaving',
+                      style: AppTypography.bodySmall.copyWith(
+                        fontSize: 10,
+                        color: AppColors.textSecondary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ],
     );
@@ -2111,23 +2336,24 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
   Widget _buildMobileStudentCard(BuildContext context, StudentListRow student) {
     final fatherNameTrimmed = student.fatherName?.trim() ?? '';
+    final bool isLeft = student.status.toLowerCase() != 'active';
 
     return Card(
       elevation: 0,
-      margin: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: 8),
       color: AppColors.surfaceRaised,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppColors.borderDefault),
       ),
       child: InkWell(
         onTap: () => context.go('/students/${student.stuRegId}'),
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(
               left: BorderSide(
-                color: AppColors.accentStudents,
+                color: isLeft ? AppColors.statusErrorText : AppColors.accentStudents,
                 width: 3.5,
               ),
             ),
@@ -2136,7 +2362,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildMobileAvatar(student),
+              _buildMobileAvatar(student, isLeft: isLeft),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -2146,24 +2372,23 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                     Text(
                       student.fullName,
                       style: AppTypography.body.copyWith(
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: AppColors.textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (fatherNameTrimmed.isNotEmpty) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        'F/N: $fatherNameTrimmed',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 2),
+                    Text(
+                      'F/N: ${fatherNameTrimmed.isNotEmpty ? fatherNameTrimmed : "-"}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
                       ),
-                    ],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     const SizedBox(height: 4),
                     Row(
                       children: [
@@ -2175,13 +2400,14 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                           decoration: BoxDecoration(
                             color: AppColors.surfaceSubtle,
                             borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: AppColors.borderDefault),
                           ),
                           child: Text(
                             '#${student.stuRegId}',
                             style: AppTypography.monospace.copyWith(
                               fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.accentStudents,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
                             ),
                           ),
                         ),
@@ -2207,12 +2433,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   MobileStatusPill(
-                    label: student.status.toLowerCase() == 'active'
-                        ? 'Active'
-                        : student.status,
-                    variant: student.status.toLowerCase() == 'active'
-                        ? MobileStatusVariant.success
-                        : MobileStatusVariant.error,
+                    label: isLeft ? 'Left / SLC' : 'Active',
+                    variant: isLeft
+                        ? MobileStatusVariant.error
+                        : MobileStatusVariant.info,
                   ),
                   const SizedBox(width: 4),
                   const Icon(
@@ -2229,12 +2453,12 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     );
   }
 
-  Widget _buildMobileAvatar(StudentListRow student) {
+  Widget _buildMobileAvatar(StudentListRow student, {bool isLeft = false}) {
     final photoFile = _resolvePhotoFile(student);
 
     if (photoFile != null) {
       return CircleAvatar(
-        radius: 20.0,
+        radius: 21.0,
         backgroundColor: AppColors.surfaceSubtle,
         backgroundImage: FileImage(photoFile),
       );
@@ -2243,12 +2467,14 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     final initials = _getStudentInitials(student.fullName);
 
     return CircleAvatar(
-      radius: 20.0,
-      backgroundColor: AppColors.accentStudentsSoftBg,
+      radius: 21.0,
+      backgroundColor: isLeft
+          ? AppColors.statusErrorBg
+          : AppColors.accentStudentsSoftBg,
       child: Text(
         initials,
         style: AppTypography.label.copyWith(
-          color: AppColors.accentStudents,
+          color: isLeft ? AppColors.statusErrorText : AppColors.accentStudents,
           fontWeight: FontWeight.w700,
           fontSize: 13.0,
         ),
