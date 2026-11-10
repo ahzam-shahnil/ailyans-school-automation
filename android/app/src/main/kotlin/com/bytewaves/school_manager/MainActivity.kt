@@ -1,4 +1,4 @@
-package com.example.school_automation
+package com.bytewaves.school_manager
 
 import io.flutter.embedding.android.FlutterActivity
 
