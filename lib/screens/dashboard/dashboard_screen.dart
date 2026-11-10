@@ -1044,8 +1044,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
-                      child: Text(
+                      child: AutoSizeText(
                         value,
+                        maxLines: 1,
                         style:
                             (monospace
                                     ? AppTypography.monospace
@@ -1061,7 +1062,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   if (suffix != null) ...[
                     const SizedBox(width: 4),
                     Flexible(
-                      child: Text(
+                      child: AutoSizeText(
                         suffix,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -1136,7 +1137,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
+                child: AutoSizeText(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1170,8 +1171,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
-                    child: Text(
+                    child: AutoSizeText(
                       value,
+                      maxLines: 1,
                       style:
                           (monospace
                                   ? AppTypography.monospace
@@ -1186,7 +1188,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
                 if (suffix != null) ...[
                   const SizedBox(width: 6),
-                  Text(
+                  AutoSizeText(
                     suffix,
                     style: AppTypography.bodySmall.copyWith(
                       color: AppColors.textSecondary,
