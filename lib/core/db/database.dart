@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:school_automation/core/sync/node_id_allocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart' as mobile; // native Android/iOS
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -13,6 +15,10 @@ import 'seed_data.dart';
 
 /// Singleton DatabaseService providing access to the application's SQLite database.
 class DatabaseService {
+  /// SharedPreferences key holding the active tenant JSON blob. Shared with
+  /// `TenantNotifier` (core/providers/tenant_provider.dart) — G-10 Shot 2.
+  static const String tenantKey = 'bytewave_tenant';
+
   DatabaseService._internal();
 
   static final DatabaseService instance = DatabaseService._internal();
@@ -127,44 +133,104 @@ class DatabaseService {
     }
   }
 
-  /// Locates the portable Documents/Ailyans/ directory across platforms.
-  /// - Android & iOS: <app documents>/Ailyans/school_database.db
-  /// - macOS & Linux: ~/Documents/Ailyans/school_database.db
-  /// - Windows: %USERPROFILE%\Documents\Ailyans\school_database.db
-  Future<String> _getDatabasePath() async {
+  /// Locates the portable Documents/ directory across platforms.
+  /// - Android & iOS: <app documents>
+  /// - macOS & Linux: ~/Documents
+  /// - Windows: %USERPROFILE%\Documents
+  Future<String> _getDocumentsPath() async {
     if (Platform.isAndroid || Platform.isIOS) {
       final docsDir = await getApplicationDocumentsDirectory();
-      final dir = Directory(p.join(docsDir.path, 'Ailyans'));
-      if (!await dir.exists()) await dir.create(recursive: true);
-      return p.join(dir.path, 'school_database.db');
+      return docsDir.path;
     }
-
-    String documentsPath;
 
     if (Platform.isWindows) {
       final userProfile = Platform.environment['USERPROFILE'];
       if (userProfile != null && userProfile.isNotEmpty) {
-        documentsPath = p.join(userProfile, 'Documents');
-      } else {
-        final docsDir = await getApplicationDocumentsDirectory();
-        documentsPath = docsDir.path;
+        return p.join(userProfile, 'Documents');
       }
     } else {
       // macOS, Linux, and POSIX
       final home = Platform.environment['HOME'];
       if (home != null && home.isNotEmpty) {
-        documentsPath = p.join(home, 'Documents');
-      } else {
-        final docsDir = await getApplicationDocumentsDirectory();
-        documentsPath = docsDir.path;
+        return p.join(home, 'Documents');
       }
     }
 
-    final ailyansDir = Directory(p.join(documentsPath, 'Ailyans'));
-    if (!await ailyansDir.exists()) {
-      await ailyansDir.create(recursive: true);
+    final docsDir = await getApplicationDocumentsDirectory();
+    return docsDir.path;
+  }
+
+  /// Resolves the active tenant id used for the tenant-aware database file.
+  ///
+  /// G-10 Shot 2: reads the tenant persisted by `TenantNotifier` (key
+  /// [tenantKey]). Legacy single-tenant installs (Documents/Ailyans/
+  /// school_database.db with no tenant configured) are migrated once to
+  /// ByteWave/school_default.db and the tenant is pinned to 'default', so
+  /// existing installs keep their data without ever seeing the setup wizard.
+  Future<String> _resolveTenantId() async {
+    const fallback = 'default';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(tenantKey);
+      if (raw != null) {
+        final json = jsonDecode(raw);
+        final id = json is Map<String, dynamic> ? json['id'] : null;
+        if (id is String && id.isNotEmpty) return id;
+      }
+
+      // No tenant configured: check for a legacy Ailyans install to migrate.
+      final documentsPath = await _getDocumentsPath();
+      final legacyDb = File(
+        p.join(documentsPath, 'Ailyans', 'school_database.db'),
+      );
+      if (!await legacyDb.exists()) return fallback;
+
+      // Legacy install: copy the database (and WAL sidecars, if any) into
+      // the tenant-aware ByteWave directory as school_default.db, then pin
+      // the tenant so the first-launch gate skips the setup wizard.
+      final byteWaveDir = Directory(p.join(documentsPath, 'ByteWave'));
+      if (!await byteWaveDir.exists()) {
+        await byteWaveDir.create(recursive: true);
+      }
+      final migratedDb = File(p.join(byteWaveDir.path, 'school_default.db'));
+      if (!await migratedDb.exists()) {
+        await legacyDb.copy(migratedDb.path);
+        for (final suffix in ['-wal', '-shm']) {
+          final sidecar = File('${legacyDb.path}$suffix');
+          if (await sidecar.exists()) {
+            await sidecar.copy('${migratedDb.path}$suffix');
+          }
+        }
+        debugPrint('Migrated legacy Ailyans database to ${migratedDb.path}');
+      }
+      await prefs.setString(
+        tenantKey,
+        jsonEncode({
+          'id': 'default',
+          'schoolName': '',
+          'adminName': '',
+          'adminContact': '',
+          'createdAt': DateTime.now().toIso8601String(),
+        }),
+      );
+      return 'default';
+    } catch (_) {
+      // SharedPreferences unavailable (tests) or migration failure: fall
+      // back to the single-tenant default database.
+      return fallback;
     }
-    return p.join(ailyansDir.path, 'school_database.db');
+  }
+
+  /// G-10 Shot 2: tenant-aware database path resolution.
+  /// - Tenant configured: <Documents>/ByteWave/school_<tenantId>.db
+  /// - Legacy install: migrated to <Documents>/ByteWave/school_default.db
+  /// - Fresh install: <Documents>/ByteWave/school_default.db
+  Future<String> _getDatabasePath() async {
+    final documentsPath = await _getDocumentsPath();
+    final dir = Directory(p.join(documentsPath, 'ByteWave'));
+    if (!await dir.exists()) await dir.create(recursive: true);
+    final tenantId = await _resolveTenantId();
+    return p.join(dir.path, 'school_$tenantId.db');
   }
 
   /// Public accessor for the resolved on-disk DB path.

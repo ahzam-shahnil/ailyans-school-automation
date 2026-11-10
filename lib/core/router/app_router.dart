@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -17,6 +19,7 @@ import '../../screens/library/book_profile_screen.dart';
 import '../../screens/library/library_books_screen.dart';
 import '../../screens/login/login_screen.dart';
 import '../../screens/search/global_search_screen.dart';
+import '../../screens/setup/school_setup_screen.dart';
 import '../../screens/staff/salary_management_screen.dart';
 import '../../screens/staff/teacher_list_screen.dart';
 import '../../screens/staff/teacher_profile_screen.dart';
@@ -31,6 +34,7 @@ import '../../screens/system/system_settings_screen.dart';
 import '../../screens/system/user_management_screen.dart';
 import '../../widgets/shell/app_shell.dart';
 import '../providers/session_provider.dart';
+import '../providers/tenant_provider.dart';
 import '../theme/app_theme_tokens.dart';
 
 /// Helper checking whether a route is permitted for the given authenticated [session].
@@ -204,7 +208,8 @@ String _firstAllowedRoute(UserSession session) {
   return '/dashboard';
 }
 
-/// Notifier that triggers GoRouter refresh when authentication session changes.
+/// Notifier that triggers GoRouter refresh when authentication session or
+/// active tenant (G-10 Shot 2) changes.
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
 
@@ -212,7 +217,13 @@ class RouterNotifier extends ChangeNotifier {
     _ref.listen<UserSession?>(sessionProvider, (_, __) {
       notifyListeners();
     });
+    _ref.listen<Tenant?>(tenantProvider, (_, __) {
+      notifyListeners();
+    });
   }
+
+  /// Public refresh hook for async bootstraps (e.g. tenant load).
+  void refresh() => notifyListeners();
 }
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>(
@@ -226,6 +237,11 @@ final GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>(
 final routerProvider = Provider<GoRouter>((ref) {
   final notifier = RouterNotifier(ref);
 
+  // G-10 Shot 2: resolve the persisted tenant (if any) once at startup, then
+  // refresh the router so the first-launch gate can route to /setup.
+  final tenantNotifier = ref.read(tenantProvider.notifier);
+  unawaited(tenantNotifier.loadTenant().then((_) => notifier.refresh()));
+
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
@@ -235,11 +251,27 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = session != null;
       final location = state.matchedLocation;
 
+      // G-10 Shot 2: first-launch tenant gate. Only evaluated once the
+      // tenant provider has actually consulted SharedPreferences (inert in
+      // widget tests, where the platform channel is unavailable).
+      final tenant = ref.read(tenantProvider);
+      final tenantNotifier = ref.read(tenantProvider.notifier);
+      final tenantLoaded = tenantNotifier.loaded;
+      final isSetup = location == '/setup';
+      if (tenantLoaded && tenant == null && !isSetup) {
+        return '/setup';
+      }
+      if (tenantLoaded && tenant != null && isSetup) {
+        return '/dashboard';
+      }
+
       final isSplash = location == '/';
       final isLogin = location == '/login';
 
-      // Redirect unauthenticated users to /login (unless on / or /login)
-      if (!isAuthenticated && !isLogin && !isSplash) {
+      // Redirect unauthenticated users to /login (unless on / or /login).
+      // /setup is also exempt: the first-launch wizard must be reachable
+      // before any operator has signed in (G-10 Shot 2).
+      if (!isAuthenticated && !isLogin && !isSplash && !isSetup) {
         return '/login';
       }
 
@@ -308,6 +340,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+
+      // G-10 Shot 2: first-launch school setup wizard (root navigator, no shell)
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/setup',
+        builder: (context, state) => const SchoolSetupScreen(),
       ),
 
       // 2. Authenticated Routes Wrapped in Persistent Desktop AppShell

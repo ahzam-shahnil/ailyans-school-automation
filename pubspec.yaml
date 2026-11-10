@@ -24,6 +24,7 @@ dependencies:
   supabase_flutter: ^2.5.0
   connectivity_plus: ^7.3.2
   sqflite: ^2.4.5
+  shared_preferences: ^2.2.3
   auto_size_text: ^3.0.0
 
 dev_dependencies:
