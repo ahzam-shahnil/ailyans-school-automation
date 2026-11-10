@@ -17,13 +17,26 @@ class _NavItemData {
   final List<int> requiredObjIds;
   final int Function(ShellMetadata)? getBadgeCount;
 
+  /// Drawer-only sub-screen entries. Desktop sidebar never renders them, so
+  /// the desktop 8-item rail layout stays byte-identical.
+  final List<_NavSubItemData>? subItems;
+
   const _NavItemData({
     required this.label,
     required this.route,
     required this.icon,
     this.requiredObjIds = const [],
     this.getBadgeCount,
+    this.subItems,
   });
+}
+
+class _NavSubItemData {
+  final String label;
+  final String route;
+  final IconData icon;
+
+  const _NavSubItemData(this.label, this.route, this.icon);
 }
 
 /// Persistent left navigation sidebar / rail.
@@ -47,6 +60,33 @@ class AppSidebar extends ConsumerWidget {
       icon: Icons.people_outline,
       requiredObjIds: [8, 9, 11, 12, 13, 20, 26],
       getBadgeCount: _getStudentCount,
+      subItems: [
+        _NavSubItemData(
+          'Students Directory',
+          '/students',
+          Icons.people_alt_outlined,
+        ),
+        _NavSubItemData(
+          'New Admission',
+          '/students/new',
+          Icons.person_add_alt_1_outlined,
+        ),
+        _NavSubItemData(
+          'Bulk Enrollment',
+          '/students/enrollment/bulk',
+          Icons.how_to_reg_outlined,
+        ),
+        _NavSubItemData(
+          'Batch Promotion',
+          '/students/promote',
+          Icons.north_east_outlined,
+        ),
+        _NavSubItemData(
+          'School Leaving',
+          '/students/leaving',
+          Icons.exit_to_app_outlined,
+        ),
+      ],
     ),
     _NavItemData(
       label: 'Academics',
@@ -54,6 +94,18 @@ class AppSidebar extends ConsumerWidget {
       icon: Icons.menu_book_outlined,
       requiredObjIds: [4],
       getBadgeCount: _getClassCount,
+      subItems: [
+        _NavSubItemData(
+          'Classes & Sections',
+          '/academics/classes',
+          Icons.class_outlined,
+        ),
+        _NavSubItemData(
+          'Subject Catalog',
+          '/academics/subjects',
+          Icons.topic_outlined,
+        ),
+      ],
     ),
     _NavItemData(
       label: 'Fees & Billing',
@@ -61,12 +113,51 @@ class AppSidebar extends ConsumerWidget {
       icon: Icons.payments_outlined,
       requiredObjIds: [16, 17, 18, 19, 21],
       getBadgeCount: _getPendingVoucherCount,
+      subItems: [
+        _NavSubItemData(
+          'Collect Fee',
+          '/fees/receipts',
+          Icons.point_of_sale_outlined,
+        ),
+        _NavSubItemData(
+          'Voucher Generation',
+          '/fees/vouchers',
+          Icons.receipt_long_outlined,
+        ),
+        _NavSubItemData(
+          'Fee Ledger',
+          '/fees/ledger',
+          Icons.assessment_outlined,
+        ),
+        _NavSubItemData(
+          'Fee Structure & Banks',
+          '/fees/parameters',
+          Icons.tune_outlined,
+        ),
+      ],
     ),
     _NavItemData(
       label: 'Examinations',
       route: '/exams',
       icon: Icons.assignment_outlined,
       requiredObjIds: [10, 23, 24],
+      subItems: [
+        _NavSubItemData(
+          'Marks Entry',
+          '/exams/marks',
+          Icons.edit_note_outlined,
+        ),
+        _NavSubItemData(
+          'Exam Terms',
+          '/exams/terms',
+          Icons.event_note_outlined,
+        ),
+        _NavSubItemData(
+          'Class-Subject Mapping',
+          '/exams/subjects',
+          Icons.rule_outlined,
+        ),
+      ],
     ),
     _NavItemData(
       label: 'Attendance',
@@ -80,6 +171,18 @@ class AppSidebar extends ConsumerWidget {
       icon: Icons.badge_outlined,
       requiredObjIds: [14, 22, 29],
       getBadgeCount: _getStaffCount,
+      subItems: [
+        _NavSubItemData(
+          'Staff Directory',
+          '/staff/teachers',
+          Icons.badge_outlined,
+        ),
+        _NavSubItemData(
+          'Salary Management',
+          '/staff/salary',
+          Icons.payments_outlined,
+        ),
+      ],
     ),
     _NavItemData(
       label: 'Library',
@@ -133,13 +236,21 @@ class AppSidebar extends ConsumerWidget {
               children: [
                 for (final item in _navItems)
                   if (_isAllowed(session, item.requiredObjIds))
-                    _buildNavItem(
-                      context: context,
-                      item: item,
-                      isExpanded: isExpanded,
-                      isActive: _isRouteActive(currentPath, item.route),
-                      badgeCount: item.getBadgeCount?.call(metadata) ?? 0,
-                    ),
+                    if (asDrawer && item.subItems != null)
+                      _buildDrawerModuleGroup(
+                        context: context,
+                        item: item,
+                        metadata: metadata,
+                        currentPath: currentPath,
+                      )
+                    else
+                      _buildNavItem(
+                        context: context,
+                        item: item,
+                        isExpanded: isExpanded,
+                        isActive: _isRouteActive(currentPath, item.route),
+                        badgeCount: item.getBadgeCount?.call(metadata) ?? 0,
+                      ),
               ],
             ),
           ),
@@ -148,7 +259,37 @@ class AppSidebar extends ConsumerWidget {
 
           // 3. Footer: System Settings & Rail Collapse Toggle
           if (session == null || session.user.userLevel == 1)
-            _buildNavItem(
+            if (asDrawer)
+              _buildDrawerModuleGroup(
+                context: context,
+                item: const _NavItemData(
+                  label: 'System Settings',
+                  route: '/system/settings',
+                  icon: Icons.settings_outlined,
+                  requiredObjIds: [],
+                  subItems: [
+                    _NavSubItemData(
+                      'System Settings',
+                      '/system/settings',
+                      Icons.settings_outlined,
+                    ),
+                    _NavSubItemData(
+                      'User Management',
+                      '/system/users',
+                      Icons.people_outline,
+                    ),
+                    _NavSubItemData(
+                      'Permission Matrix',
+                      '/system/permissions',
+                      Icons.rule_rounded,
+                    ),
+                  ],
+                ),
+                metadata: metadata,
+                currentPath: currentPath,
+              )
+            else
+              _buildNavItem(
               context: context,
               item: const _NavItemData(
                 label: 'System Settings',
@@ -241,9 +382,10 @@ class AppSidebar extends ConsumerWidget {
     final itemWidget = InkWell(
       onTap: () {
         if (asDrawer) {
-          Navigator.of(context).maybePop();
+          _navigateToRoute(context, item.route);
+        } else {
+          context.go(item.route);
         }
-        context.go(item.route);
       },
       child: Container(
         height: 44.0,
@@ -348,6 +490,138 @@ class AppSidebar extends ConsumerWidget {
     }
 
     return itemWidget;
+  }
+
+  /// G-9.10 hotfix: bulletproof mobile-drawer navigation.
+  ///
+  /// The old handler called `Navigator.of(context).maybePop()` — but the whole
+  /// `AppShell` (and therefore the `Drawer`) lives inside the `ShellRoute`'s
+  /// NESTED navigator, so `maybePop()` popped the currently displayed screen
+  /// out of the branch navigator. On the Android release build the shell
+  /// page was removed from the stack and the follow-up `context.go(...)`
+  /// could no longer rebuild — the drawer simply closed without navigating.
+  ///
+  /// The handler below closes ONLY the `Scaffold` drawer (via
+  /// `ScaffoldState.closeDrawer()`), captures the `GoRouter` reference up
+  /// front, and navigates with the router object — no pop-before-go, no dead
+  /// `BuildContext`.
+  void _navigateToRoute(BuildContext context, String route) {
+    final router = GoRouter.maybeOf(context);
+    final scaffold = Scaffold.maybeOf(context);
+    if (scaffold != null && scaffold.isDrawerOpen) {
+      scaffold.closeDrawer();
+    }
+    if (router != null) {
+      router.go(route);
+    } else {
+      // Absolute fallback (should never happen inside the shell).
+      context.go(route);
+    }
+  }
+
+  /// Drawer-mode expandable module group: the header ONLY expands/collapses
+  /// its sub-items (never closes the drawer); every leaf sub-item closes the
+  /// drawer and routes via [_navigateToRoute].
+  Widget _buildDrawerModuleGroup({
+    required BuildContext context,
+    required _NavItemData item,
+    required ShellMetadata metadata,
+    required String currentPath,
+  }) {
+    final isActive = _isRouteActive(currentPath, item.route);
+    final badgeCount = item.getBadgeCount?.call(metadata) ?? 0;
+    final themeData = Theme.of(context);
+    return Theme(
+      data: themeData.copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        iconColor: AppColors.textSecondary,
+        collapsedIconColor: AppColors.textSecondary,
+        collapsedShape: const RoundedRectangleBorder(),
+        shape: const RoundedRectangleBorder(),
+        leading: Icon(
+          item.icon,
+          size: 20.0,
+          color: isActive ? AppColors.brandPrimary : AppColors.textSecondary,
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                item.label,
+                style: AppTypography.label.copyWith(
+                  color: isActive
+                      ? AppColors.brandPrimary
+                      : AppColors.textPrimary,
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+              ),
+            ),
+            if (badgeCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 7.0,
+                  vertical: 2.0,
+                ),
+                margin: const EdgeInsets.only(right: AppSpacing.xs),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? AppColors.brandPrimary
+                      : AppColors.surfaceSubtle,
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                ),
+                child: Text(
+                  badgeCount.toString(),
+                  style: AppTypography.bodySmall.copyWith(
+                    color: isActive
+                        ? AppColors.surfaceRaised
+                        : AppColors.textSecondary,
+                    fontSize: 11.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        children: [
+          for (final sub in item.subItems ?? const <_NavSubItemData>[])
+            ListTile(
+              dense: true,
+              horizontalTitleGap: 8.0,
+              contentPadding: const EdgeInsets.only(
+                left: AppSpacing.sm + 28.0,
+                right: AppSpacing.sm,
+              ),
+              selected:
+                  currentPath == sub.route || currentPath.startsWith('${sub.route}/'),
+              selectedColor: AppColors.brandPrimary,
+              selectedTileColor: AppColors.brandPrimary.withValues(alpha: 0.08),
+              onTap: () => _navigateToRoute(context, sub.route),
+              leading: Icon(
+                sub.icon,
+                size: 18.0,
+                color: currentPath == sub.route
+                    ? AppColors.brandPrimary
+                    : AppColors.textSecondary,
+              ),
+              title: Text(
+                sub.label,
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: currentPath == sub.route
+                      ? AppColors.brandPrimary
+                      : AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCollapseToggle(WidgetRef ref, bool isExpanded) {

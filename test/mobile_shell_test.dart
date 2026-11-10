@@ -101,6 +101,37 @@ void main() {
     );
   }
 
+  /// G-9.10: router with real shell sub-routes for drawer navigation
+  /// regression tests (marker screens assert actual navigation happened).
+  GoRouter shellDrawerRouter() {
+    return GoRouter(
+      initialLocation: '/dashboard',
+      routes: [
+        ShellRoute(
+          builder: (context, state, child) => AppShell(child: child),
+          routes: [
+            GoRoute(
+              path: '/dashboard',
+              builder: (context, state) => const SizedBox.expand(),
+            ),
+            GoRoute(
+              path: '/attendance',
+              builder: (context, state) => const SizedBox.expand(
+                child: Text('ATTENDANCE_SCREEN_MARKER'),
+              ),
+            ),
+            GoRoute(
+              path: '/fees/ledger',
+              builder: (context, state) => const SizedBox.expand(
+                child: Text('LEDGER_SCREEN_MARKER'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Future<void> pumpShell(WidgetTester tester, Size size) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -109,6 +140,18 @@ void main() {
 
     await tester.pumpWidget(
       withProviders(MaterialApp.router(routerConfig: shellRouter())),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpShellWith(WidgetTester tester, Size size, GoRouter router) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      withProviders(MaterialApp.router(routerConfig: router)),
     );
     await tester.pumpAndSettle();
   }
@@ -181,6 +224,87 @@ void main() {
           findsOneWidget,
         );
       }
+    },
+  );
+
+  testWidgets(
+    'G-9.10 Mobile 390x844 tapping single-screen drawer item (Attendance) closes drawer and navigates to target screen',
+    (tester) async {
+      await pumpShellWith(tester, const Size(390, 844), shellDrawerRouter());
+
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MobileDrawer), findsOneWidget);
+
+      // 'Attendance' also exists in the MobileBottomNav, so scope the finder
+      // to the drawer's AppSidebar instance.
+      final attendanceItem = find.descendant(
+        of: find.byType(AppSidebar),
+        matching: find.text('Attendance'),
+      );
+      expect(attendanceItem, findsOneWidget);
+      await tester.tap(attendanceItem);
+      await tester.pumpAndSettle();
+
+      // Drawer is closed.
+      final scaffoldState = tester.state<ScaffoldState>(
+        find.byType(Scaffold).first,
+      );
+      expect(scaffoldState.isDrawerOpen, isFalse);
+
+      // Router actually navigated to and rendered /attendance.
+      expect(find.text('ATTENDANCE_SCREEN_MARKER'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'G-9.10 Mobile 390x844 expanding Fees module group and tapping Fee Ledger sub-item closes drawer and navigates',
+    (tester) async {
+      await pumpShellWith(tester, const Size(390, 844), shellDrawerRouter());
+
+      await tester.tap(find.byTooltip('Open navigation menu'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MobileDrawer), findsOneWidget);
+
+      // Group header only expands the sub-items (does NOT navigate/close).
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppSidebar),
+          matching: find.text('Fees & Billing'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // Drawer stayed open and no navigation happened — the header only
+      // expanded its sub-items.
+      final scaffoldAfterExpand = tester.state<ScaffoldState>(
+        find.byType(Scaffold).first,
+      );
+      expect(scaffoldAfterExpand.isDrawerOpen, isTrue);
+      expect(find.text('LEDGER_SCREEN_MARKER'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(MobileDrawer),
+          matching: find.text('Fee Ledger'),
+        ),
+        findsOneWidget,
+      );
+
+      // Leaf sub-item navigates.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileDrawer),
+          matching: find.text('Fee Ledger'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final scaffoldState = tester.state<ScaffoldState>(
+        find.byType(Scaffold).first,
+      );
+      expect(scaffoldState.isDrawerOpen, isFalse);
+      expect(find.text('LEDGER_SCREEN_MARKER'), findsOneWidget);
     },
   );
 }
