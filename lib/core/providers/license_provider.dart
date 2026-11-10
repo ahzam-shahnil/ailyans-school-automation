@@ -1,8 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../config/build_config.dart';
+import '../db/database.dart';
+import '../sync/supabase_client.dart';
 
 /// G-10 Shot 4: activation state for a ByteWave SaaS installation.
 ///
@@ -70,6 +75,10 @@ class LicenseNotifier extends StateNotifier<License?> {
 
   bool _loaded = false;
 
+  /// G-10 Shot 5: last rejection reason, for the license screen's error
+  /// banner. Null after a successful activation.
+  String? lastErrorMessage;
+
   /// True once SharedPreferences has been consulted (or skipped in tests).
   bool get loaded => _loaded;
 
@@ -96,19 +105,29 @@ class LicenseNotifier extends StateNotifier<License?> {
 
   /// Validates [licenseKey] and persists the resulting [License].
   ///
-  /// Launch behaviour is trial-key-only (offline). TODO: wire the Supabase
-  /// RPC once the `licenses` table + `validate_license` function are live:
+  /// G-10 Shot 5 validation rules:
+  /// - `TRIAL-BYTE-2026-LAUNCH` activates offline (bundled 30-day launch
+  ///   trial) — no network call, safe for unit/widget tests.
+  /// - Any other key is verified online against the Supabase
+  ///   `public.validate_license` RPC (10s timeout). [rpcValidator] injects a
+  ///   fake for unit testing; production passes null to use the real client.
+  /// - 0 rows or `valid != true` → rejects with 'Invalid or expired license
+  ///   key.'
+  /// - Unconfigured/unreachable Supabase → rejects with the connectivity
+  ///   message; arbitrary keys are NEVER silently accepted offline.
   ///
-  /// ```dart
-  /// final supabase = SupabaseClientWrapper.instance;
-  /// final response = await supabase.rpc(
-  ///   'validate_license',
-  ///   params: {'p_license_key': licenseKey},
-  /// );
-  /// ```
-  Future<bool> validateAndStore(String licenseKey) async {
-    // Trial key bypass (offline).
-    if (licenseKey.trim().toUpperCase() == trialKey) {
+  /// On success the license is stored and the cloud-sync configuration
+  /// (school id, bundled Supabase credentials, RPC-returned sync account) is
+  /// seeded into SQLite `app_config` so Cloud Sync works immediately.
+  Future<bool> validateAndStore(
+    String licenseKey, {
+    Future<Map<String, dynamic>?> Function(String licenseKey)? rpcValidator,
+  }) async {
+    lastErrorMessage = null;
+    final normalizedKey = licenseKey.trim().toUpperCase();
+
+    // (a) Offline fallback launch key.
+    if (normalizedKey == trialKey) {
       final license = License(
         licenseKey: trialKey,
         tier: 'trial',
@@ -120,8 +139,90 @@ class LicenseNotifier extends StateNotifier<License?> {
       await _store(license);
       return true;
     }
-    // TODO(Supabase): rpc('validate_license', params: {'p_license_key': ...})
-    return false;
+
+    // (b) Online keys: verify via Supabase RPC.
+    final validator = rpcValidator ?? SupabaseClientWrapper.validateLicenseRpc;
+    final Map<String, dynamic>? row;
+    try {
+      row = await validator(normalizedKey);
+    } catch (e) {
+      // (e) Network / unconfigured Supabase: never accept the key offline.
+      debugPrint('[LicenseNotifier] online validation failed: $e');
+      lastErrorMessage =
+          'Unable to verify license key online. '
+          'Please check your internet connection.';
+      return false;
+    }
+
+    // (d) Unknown or expired key.
+    if (row == null || row['valid'] != true) {
+      lastErrorMessage = 'Invalid or expired license key.';
+      return false;
+    }
+
+    // (c) Valid row: persist the license and auto-configure Cloud Sync.
+    final validUntilRaw = row['valid_until'];
+    final DateTime validUntil;
+    if (validUntilRaw is DateTime) {
+      validUntil = validUntilRaw;
+    } else if (validUntilRaw is String) {
+      validUntil = DateTime.parse(validUntilRaw);
+    } else {
+      lastErrorMessage = 'Invalid or expired license key.';
+      return false;
+    }
+
+    final schoolId = (row['school_id'] as String?) ??
+        (normalizedKey == 'TRIAL-BYTE-2026-AILYANS' ? 'ailyans' : null);
+
+    final license = License(
+      licenseKey: normalizedKey,
+      tier: (row['tier'] as String?) ?? 'trial',
+      maxStudents: (row['max_students'] as num?)?.toInt() ?? 100,
+      validUntil: validUntil,
+      cachedAt: DateTime.now(),
+      lastValid: true,
+    );
+    await _store(license);
+    await _seedAppConfig(
+      schoolId: schoolId,
+      syncEmail: row['sync_email'] as String?,
+      syncPassword: row['sync_password'] as String?,
+    );
+    return true;
+  }
+
+  /// G-10 Shot 5: seeds the SQLite `app_config` table so Cloud Sync is
+  /// configured immediately after activation. Best-effort: silently skipped
+  /// when the database is unavailable (unit tests, pre-provisioning).
+  Future<void> _seedAppConfig({
+    required String? schoolId,
+    required String? syncEmail,
+    required String? syncPassword,
+  }) async {
+    try {
+      final db = await DatabaseService.instance.database;
+      final entries = <String, String>{
+        if (schoolId != null && schoolId.isNotEmpty) 'school_id': schoolId,
+        if (BuildConfig.supabaseUrl.isNotEmpty)
+          'supabase_url': BuildConfig.supabaseUrl,
+        if (BuildConfig.supabaseAnonKey.isNotEmpty)
+          'supabase_anon_key': BuildConfig.supabaseAnonKey,
+        if (syncEmail != null && syncEmail.isNotEmpty)
+          'supabase_sync_email': syncEmail,
+        if (syncPassword != null && syncPassword.isNotEmpty)
+          'supabase_sync_password': syncPassword,
+      };
+      for (final entry in entries.entries) {
+        await db.execute(
+          'INSERT OR REPLACE INTO app_config (config_key, config_value) '
+          'VALUES (?, ?)',
+          [entry.key, entry.value],
+        );
+      }
+    } catch (e) {
+      debugPrint('[LicenseNotifier] app_config seeding skipped: $e');
+    }
   }
 
   Future<void> _store(License license) async {

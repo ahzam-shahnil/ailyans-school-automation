@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../config/build_config.dart';
 import '../db/database.dart';
 
 /// Phase F-4a-1: Supabase client init + sync service account sign-in.
@@ -106,6 +107,80 @@ class SupabaseClientWrapper {
     _authReady = false;
     _currentUrl = null;
     return await init();
+  }
+
+  /// G-10 Shot 5: initializes Supabase for license validation only — no sync
+  /// service-account sign-in is required (`validate_license` is callable
+  /// anonymously with the project's anon key).
+  ///
+  /// Credentials: BuildConfig dart-defines first, falling back to the runtime
+  /// `app_config` SQLite values (`supabase_url` / `supabase_anon_key`).
+  /// Returns false when unconfigured or the client cannot be created.
+  static Future<bool> initForLicenseValidation() async {
+    if (_initialized) return true;
+
+    var url = BuildConfig.supabaseUrl;
+    var anonKey = BuildConfig.supabaseAnonKey;
+
+    // Runtime app_config ALWAYS overrides compile-time dart-define when
+    // non-empty (same precedence as init()).
+    try {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.query(
+        'app_config',
+        columns: ['config_key', 'config_value'],
+        where: "config_key IN ('supabase_url', 'supabase_anon_key')",
+      );
+      final cfg = <String, String>{
+        for (final r in rows)
+          if (r['config_key'] is String && r['config_value'] is String)
+            r['config_key'] as String: (r['config_value'] as String).trim(),
+      };
+      if ((cfg['supabase_url'] ?? '').isNotEmpty) {
+        url = cfg['supabase_url']!;
+      }
+      if ((cfg['supabase_anon_key'] ?? '').isNotEmpty) {
+        anonKey = cfg['supabase_anon_key']!;
+      }
+    } catch (_) {
+      // DB unavailable (isolated tests / pre-provisioning): use dart-defines.
+    }
+
+    if (url.isEmpty || anonKey.isEmpty) return false;
+
+    _currentUrl = url;
+    try {
+      // ignore: deprecated_member_use
+      await Supabase.initialize(url: url, anonKey: anonKey);
+      _initialized = true;
+      return true;
+    } catch (e) {
+      debugPrint(
+        '[SupabaseClientWrapper] license-validation init failed for $url: $e',
+      );
+      return false;
+    }
+  }
+
+  /// G-10 Shot 5: calls the `public.validate_license` Postgres RPC and
+  /// returns the first result row, or null when the RPC returns 0 rows
+  /// (unknown/expired key).
+  ///
+  /// Throws when Supabase is unconfigured or unreachable — callers must
+  /// distinguish "invalid key" (null) from "cannot verify online" (throw).
+  static Future<Map<String, dynamic>?> validateLicenseRpc(
+    String licenseKey,
+  ) async {
+    if (!await initForLicenseValidation()) {
+      throw StateError('Supabase is not configured for license validation');
+    }
+    final client = Supabase.instance.client;
+    final rows = await client
+        .rpc('validate_license', params: {'p_license_key': licenseKey})
+        .timeout(const Duration(seconds: 10));
+    if (rows is! List || rows.isEmpty) return null;
+    final row = rows.first;
+    return row is Map<String, dynamic> ? row : Map<String, dynamic>.from(row);
   }
 
   /// Test-only: reset the singleton state. Do not call from production code.

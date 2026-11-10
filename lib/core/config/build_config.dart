@@ -20,4 +20,23 @@ class BuildConfig {
 
   /// True when this build uses the clean SaaS onboarding profile.
   static bool get isSaasEdition => seedProfile == 'clean';
+
+  /// G-10 Shot 5: Supabase project credentials bundled at build time.
+  ///
+  ///   flutter build apk --release \
+  ///     --dart-define=SUPABASE_URL=https://<project>.supabase.co \
+  ///     --dart-define=SUPABASE_ANON_KEY=<anon-key>
+  ///
+  /// Empty by default so open-source builds ship without credentials; the
+  /// runtime `app_config` SQLite values (set via Cloud Sync settings or
+  /// license activation) always take precedence when non-empty.
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: '',
+  );
+
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: '',
+  );
 }

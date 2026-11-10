@@ -52,14 +52,18 @@ class _LicenseEntryScreenState extends ConsumerState<LicenseEntryScreen> {
       _isValidating = true;
       _error = null;
     });
-    final ok = await ref
-        .read(licenseProvider.notifier)
-        .validateAndStore(key);
+    final notifier = ref.read(licenseProvider.notifier);
+    final ok = await notifier.validateAndStore(key);
     if (!mounted) return;
     if (!ok) {
       setState(() {
         _isValidating = false;
-        _error = 'Invalid or expired license key. Please try again.';
+        // G-10 Shot 5: surface the provider's specific rejection reason
+        // (invalid key vs. unreachable Supabase), falling back to the
+        // generic message for empty input edge cases.
+        _error =
+            notifier.lastErrorMessage ??
+            'Invalid or expired license key. Please try again.';
       });
       return;
     }
