@@ -1112,7 +1112,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         : null;
     final siblingCount = siblingsAsync?.value?.length ?? 0;
 
-    String attendanceText = '94.2%';
+    String attendanceText = '—';
     if (bundle.attendance.isNotEmpty) {
       int present = 0;
       for (final a in bundle.attendance) {
@@ -1445,9 +1445,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   }
 
   Widget _buildMobileCampusHighlight(Student student) {
-    final remarks = student.remarls != null && student.remarls!.isNotEmpty
-        ? student.remarls!
-        : 'Recognized for exemplary laboratory conduct and inter-school biology Olympiad...';
+    // G-9 Shot 9: only display the student's REAL remarks field — no Stitch
+    // mockup copy when the SQLite `Remarls` column is empty.
+    final remarks = student.remarls?.trim() ?? '';
+    if (remarks.isEmpty) return const SizedBox.shrink();
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
@@ -1480,18 +1481,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   spacing: 4,
                   children: [
                     Text(
-                      'CAMPUS PROFILE',
+                      'REMARKS',
                       style: AppTypography.label.copyWith(
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: AppColors.accentStudents,
-                      ),
-                    ),
-                    Text(
-                      '• Class Representative',
-                      style: AppTypography.bodySmall.copyWith(
-                        fontSize: 10,
-                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -1610,7 +1604,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           const SizedBox(height: AppSpacing.sm),
           _buildBentoWell(
             label: 'Student B-Form / CNIC',
-            value: student.bFormNo ?? student.cnicNo ?? '37405-1294819-1',
+            value: student.bFormNo ?? student.cnicNo ?? '—',
             monospace: true,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1622,7 +1616,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   value: (student.docsDetail != null &&
                           student.docsDetail!.isNotEmpty)
                       ? student.docsDetail!
-                      : 'B+ Positive',
+                      : '—',
                   valueColor: const Color(0xFFC2410C),
                 ),
               ),

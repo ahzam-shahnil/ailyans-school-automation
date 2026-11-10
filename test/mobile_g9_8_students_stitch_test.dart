@@ -325,6 +325,7 @@ void main() {
     nameLast: 'Khan',
     dob: DateTime(2010, 8, 14),
     bFormNo: '37405-1294819-1',
+    docsDetail: 'B+ Positive',
     fName: 'Muhammad Tariq',
     cnicNo: '37405-8821943-7',
     pAddress: 'House #14, St 2, Mohallah Khel, Mianwali',

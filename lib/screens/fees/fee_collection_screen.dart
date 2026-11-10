@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -53,6 +54,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
 
   String? _originScreen; // valid key from _originConfig | null
   String? _customBackRoute;
+
+  /// G-9 Shot 9: collapses the mobile lookup card into a compact bar while a
+  /// voucher is loaded for settlement (auto-collapsed when a voucher loads).
+  bool _isMobileSearchExpanded = true;
 
   String _formatInstallmentDate(String rawDate) {
     final trimmed = rawDate.trim();
@@ -338,6 +343,14 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         if (next != null) {
           final amt = ref.read(feeCollectionProvider).amountTendered;
           _amountController.text = amt.toString();
+          // G-9 Shot 9: auto-collapse the lookup card once a voucher loads so
+          // the receipt dossier gets the whole viewport.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _isMobileSearchExpanded = false);
+          });
+        } else if (prev != null) {
+          // Back to directory mode: restore the full lookup card.
+          _isMobileSearchExpanded = true;
         }
       },
     );
@@ -650,10 +663,6 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     FeeReceiptView? receipt,
     FeeCollectionState state,
   ) {
-    final notifier = ref.read(feeCollectionProvider.notifier);
-    if (receipt == null && state.directoryRows.isNotEmpty) {
-      return _buildMobileDirectoryList(state, notifier);
-    }
     if (receipt != null) {
       return Container(
         padding: const EdgeInsets.all(AppSpacing.md),
@@ -697,6 +706,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     AsyncValue<List<BankRow>> bankListAsync,
     FeeReceiptView? receipt,
   ) {
+    final notifier = ref.read(feeCollectionProvider.notifier);
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
@@ -724,66 +734,204 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_originScreen != null &&
-                    _originConfig.containsKey(_originScreen!))
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.md,
-                      AppSpacing.md,
-                      AppSpacing.md,
-                      0,
-                    ),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 44,
-                      child: OutlinedButton.icon(
-                        onPressed: () => context.go(
-                          _customBackRoute ??
-                              _originConfig[_originScreen!]!.route,
-                        ),
-                        icon: const Icon(Icons.arrow_back, size: 16),
-                        label: Text(_originConfig[_originScreen!]!.label),
-                      ),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  child: _buildMobileSearchBar(state),
-                ),
-                if (state.lookupError != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                    ),
-                    child: Text(
-                      state.lookupError!,
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.statusErrorText,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: AppSpacing.sm),
+                // G-9 Shot 9: one unified whole-page scroll — no fixed top
+                // chrome and no inner scroll trap. Every section scrolls away.
+                // A generous scroll cache pre-builds slivers beyond the fold
+                // so the settlement form is hot the moment a voucher loads.
                 Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.md,
-                      0,
-                      AppSpacing.md,
-                      AppSpacing.md,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildMobileLeftPane(receipt, state),
-                        const SizedBox(height: AppSpacing.md),
-                        _buildMobileRightPane(receipt, state, bankListAsync),
+                  child: CustomScrollView(
+                    scrollCacheExtent: const ScrollCacheExtent.pixels(2048),
+                    slivers: [
+                      if (_originScreen != null &&
+                          _originConfig.containsKey(_originScreen!))
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md,
+                              AppSpacing.md,
+                              AppSpacing.md,
+                              0,
+                            ),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 44,
+                              child: OutlinedButton.icon(
+                                onPressed: () => context.go(
+                                  _customBackRoute ??
+                                      _originConfig[_originScreen!]!.route,
+                                ),
+                                icon: const Icon(Icons.arrow_back, size: 16),
+                                label: Text(
+                                  _originConfig[_originScreen!]!.label,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.md),
+                          child: _buildMobileSearchBar(state, receipt),
+                        ),
+                      ),
+                      if (state.lookupError != null)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                            ),
+                            child: Text(
+                              state.lookupError!,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.statusErrorText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                      // Directory mode: header + lazily virtualized voucher
+                      // cards directly inside the page scroll view.
+                      if (receipt == null && state.directoryRows.isNotEmpty) ...[
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md,
+                              0,
+                              AppSpacing.md,
+                              AppSpacing.xs,
+                            ),
+                            child: _buildMobileDirectoryHeader(state, notifier),
+                          ),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                          ),
+                          sliver: SliverList.builder(
+                            itemCount: _filteredMobileDirectoryRows(state).length,
+                            itemBuilder: (context, index) =>
+                                _buildMobileDirectoryCard(
+                                  _filteredMobileDirectoryRows(state)[index],
+                                  notifier,
+                                ),
+                          ),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md,
+                              AppSpacing.md,
+                              AppSpacing.md,
+                              AppSpacing.md,
+                            ),
+                            child: _buildMobileRightPane(
+                              receipt,
+                              state,
+                              bankListAsync,
+                            ),
+                          ),
+                        ),
                       ],
-                    ),
+                      // Loaded voucher mode: dossier + settlement form in a
+                      // single adapter so both build while the section is in
+                      // view; they scroll away together as one whole page.
+                      if (receipt != null)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md,
+                              0,
+                              AppSpacing.md,
+                              AppSpacing.md,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildMobileLeftPane(receipt, state),
+                                const SizedBox(height: AppSpacing.md),
+                                _buildMobileRightPane(
+                                  receipt,
+                                  state,
+                                  bankListAsync,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      // Idle mode: scan prompt + waiting card.
+                      if (receipt == null && state.directoryRows.isEmpty)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.md,
+                              0,
+                              AppSpacing.md,
+                              AppSpacing.md,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildMobileLeftPane(receipt, state),
+                                const SizedBox(height: AppSpacing.md),
+                                _buildMobileRightPane(
+                                  receipt,
+                                  state,
+                                  bankListAsync,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
+                // Pinned bottom teller action bar while a voucher is open.
+                if (receipt != null && !receipt.isFullyPaid)
+                  _buildMobileTellerBar(state),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// G-9 Shot 9: pinned settlement action bar so the post-payment CTA never
+  /// requires scrolling to reach, even at the bottom of the dossier.
+  Widget _buildMobileTellerBar(FeeCollectionState state) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(top: BorderSide(color: AppColors.borderDefault)),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
+      child: ElevatedButton.icon(
+        onPressed: state.isPosting ? null : _onPostPayment,
+        icon: state.isPosting
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.textOnPrimary,
+                ),
+              )
+            : const Icon(Icons.receipt_long, size: 18),
+        label: Text(
+          state.isPosting ? 'Posting...' : 'Post Payment (Ctrl+Enter)',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.accentFees,
+          foregroundColor: AppColors.textOnPrimary,
+          minimumSize: const Size.fromHeight(48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.md),
           ),
         ),
       ),
@@ -835,7 +983,15 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     );
   }
 
-  Widget _buildMobileSearchBar(FeeCollectionState state) {
+  Widget _buildMobileSearchBar(
+    FeeCollectionState state,
+    FeeReceiptView? receipt,
+  ) {
+    // G-9 Shot 9: while a voucher is loaded, collapse the lookup card into a
+    // compact bar so the receipt owns the screen; `[Search / Switch]` expands.
+    if (receipt != null && !_isMobileSearchExpanded) {
+      return _buildMobileCollapsedLookupBar(receipt);
+    }
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
@@ -946,17 +1102,68 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     );
   }
 
-  Widget _buildMobileDirectoryList(
+  /// G-9 Shot 9: compact 48px collapsed lookup bar shown while a voucher is
+  /// open for settlement; tapping [Search / Switch] re-expands the full card.
+  Widget _buildMobileCollapsedLookupBar(FeeReceiptView receipt) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.qr_code_scanner, size: 18, color: AppColors.accentFees),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Voucher #${receipt.voucherMasId}',
+              style: AppTypography.monospace.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => setState(() => _isMobileSearchExpanded = true),
+            icon: const Icon(Icons.search, size: 16),
+            label: const Text(
+              'Search / Switch',
+              style: TextStyle(fontSize: 12),
+            ),
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              minimumSize: const Size(0, 34),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<FeeReceiptSummaryRow> _filteredMobileDirectoryRows(
     FeeCollectionState state,
-    FeeCollectionNotifier notifier,
   ) {
     final q = state.directorySearch.toLowerCase();
-    final filtered = state.directoryRows.where((r) {
-      if (q.isEmpty) return true;
+    if (q.isEmpty) return state.directoryRows;
+    return state.directoryRows.where((r) {
       return r.studentName.toLowerCase().contains(q) ||
           r.stuRegId.toString().contains(q) ||
           r.voucherMasId.toLowerCase().contains(q);
     }).toList();
+  }
+
+  /// G-9 Shot 9: directory header (count + full-width filter field). The
+  /// voucher cards render in a `SliverList.builder` directly in the page.
+  Widget _buildMobileDirectoryHeader(
+    FeeCollectionState state,
+    FeeCollectionNotifier notifier,
+  ) {
+    final filtered = _filteredMobileDirectoryRows(state);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -973,7 +1180,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         const SizedBox(height: AppSpacing.xs),
         SizedBox(
           width: double.infinity,
-          height: 40,
+          height: 44,
           child: TextField(
             decoration: const InputDecoration(
               isDense: true,
@@ -994,17 +1201,6 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                   : 'No unpaid vouchers found',
               textAlign: TextAlign.center,
               style: AppTypography.body.copyWith(color: AppColors.textMuted),
-            ),
-          )
-        else
-          SizedBox(
-            height: 440,
-            child: Scrollbar(
-              child: ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (context, i) =>
-                    _buildMobileDirectoryCard(filtered[i], notifier),
-              ),
             ),
           ),
       ],
@@ -1129,29 +1325,37 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (state.directoryRows.isNotEmpty) ...[
-          SizedBox(
-            width: double.infinity,
-            height: 40,
-            child: OutlinedButton.icon(
-              onPressed: notifier.clearCurrentReceiptOnly,
-              icon: const Icon(Icons.arrow_back, size: 14),
-              label: Text(
-                'All ${state.activeDirectoryFilter == 'paid' ? 'Paid' : 'Unpaid'} '
-                'Vouchers (${state.directoryRows.length})',
+        // G-9 Shot 9: compact 1-row action strip (back to list + print).
+        Row(
+          children: [
+            if (state.directoryRows.isNotEmpty) ...[
+              Expanded(
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 40,
+                  child: OutlinedButton.icon(
+                    onPressed: notifier.clearCurrentReceiptOnly,
+                    icon: const Icon(Icons.arrow_back, size: 16),
+                    label: Text(
+                      'All ${state.activeDirectoryFilter == 'paid' ? 'Paid' : 'Unpaid'} '
+                      'Vouchers (${state.directoryRows.length})',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            SizedBox(
+              height: 40,
+              child: OutlinedButton.icon(
+                onPressed: _openReceiptPrint,
+                icon: const Icon(Icons.print_outlined, size: 16),
+                label: const Text('Print', style: TextStyle(fontSize: 13)),
               ),
             ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-        ],
-        SizedBox(
-          width: double.infinity,
-          height: 40,
-          child: OutlinedButton.icon(
-            onPressed: _openReceiptPrint,
-            icon: const Icon(Icons.print_outlined, size: 14),
-            label: const Text('Print'),
-          ),
+          ],
         ),
         const SizedBox(height: AppSpacing.sm),
         // Header strip
@@ -1300,84 +1504,97 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
 
         const SizedBox(height: AppSpacing.sm),
 
-        // Voucher metadata bar
+        // Voucher metadata well (G-9 Shot 9: 2-row layout, zero truncation)
         Container(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm,
-            vertical: 8,
+            vertical: 6,
           ),
           decoration: BoxDecoration(
             color: AppColors.surfaceSubtle,
             borderRadius: BorderRadius.circular(AppRadius.md),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Flexible(
-                child: Text.rich(
-                  TextSpan(
-                    text: 'Voucher ID: ',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                    children: [
-                      TextSpan(
-                        text: receipt.voucherMasId,
-                        style: AppTypography.monospace.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Voucher #${receipt.voucherMasId}',
+                      style: AppTypography.monospace.copyWith(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.accentFees,
                       ),
-                    ],
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'Issue Date: ${receipt.issueDate != null ? _dateFormat.format(receipt.issueDate!) : "N/A"}',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text.rich(
-                  TextSpan(
-                    text: 'Due Date: ',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    children: [
-                      TextSpan(
-                        text: receipt.dueDate != null
-                            ? _dateFormat.format(receipt.dueDate!)
-                            : "N/A",
-                        style: TextStyle(
-                          color: receipt.isOverdue
-                              ? AppColors.statusErrorText
-                              : AppColors.textPrimary,
-                          fontWeight: receipt.isOverdue
-                              ? FontWeight.w700
-                              : FontWeight.normal,
-                        ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Flexible(
+                    child: Text(
+                      'For Month: ${receipt.forMonth}',
+                      maxLines: 1,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
                       ),
-                      if (receipt.isOverdue)
-                        const TextSpan(
-                          text: ' (Overdue)',
-                          style: TextStyle(
-                            color: AppColors.statusErrorText,
-                            fontWeight: FontWeight.w700,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Issue: ${receipt.issueDate != null ? _dateFormat.format(receipt.issueDate!) : "N/A"}',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'Due: ',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        children: [
+                          TextSpan(
+                            text: receipt.dueDate != null
+                                ? _dateFormat.format(receipt.dueDate!)
+                                : "N/A",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: receipt.isOverdue
+                                  ? AppColors.statusErrorText
+                                  : AppColors.textPrimary,
+                              fontWeight: receipt.isOverdue
+                                  ? FontWeight.w700
+                                  : FontWeight.normal,
+                            ),
                           ),
-                        ),
-                    ],
+                          if (receipt.isOverdue)
+                            const TextSpan(
+                              text: ' (Overdue)',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.statusErrorText,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.right,
-                ),
+                ],
               ),
             ],
           ),
@@ -2090,34 +2307,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
-
-        // 7. Post Payment Button (Ctrl+Enter)
-        ElevatedButton.icon(
-          onPressed: state.isPosting ? null : _onPostPayment,
-          icon: state.isPosting
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.textOnPrimary,
-                  ),
-                )
-              : const Icon(Icons.receipt_long, size: 18),
-          label: Text(
-            state.isPosting ? 'Posting...' : 'Post Payment (Ctrl+Enter)',
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accentFees,
-            foregroundColor: AppColors.textOnPrimary,
-            minimumSize: const Size.fromHeight(48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-          ),
-        ),
+        // G-9 Shot 9: Post Payment CTA moved to the pinned bottom teller bar.
       ],
     );
   }
