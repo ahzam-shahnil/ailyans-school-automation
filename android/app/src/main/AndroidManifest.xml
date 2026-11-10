@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <application
-        android:label="school_automation"
+        android:label="ByteWave School Automation"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

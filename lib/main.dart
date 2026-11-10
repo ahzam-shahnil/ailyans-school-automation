@@ -26,7 +26,7 @@ void main() async {
       size: Size(1024, 680),
       minimumSize: Size(1024, 680),
       center: true,
-      title: "ByteWave School Manager",
+      title: "ByteWave School Automation",
       titleBarStyle: TitleBarStyle.normal,
     );
 

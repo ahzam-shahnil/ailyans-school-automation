@@ -13,7 +13,7 @@ class AilyansApp extends ConsumerWidget {
     final router = ref.watch(routerProvider);
 
     return MaterialApp.router(
-      title: "Ailyans School Automation System",
+      title: "ByteWave School Automation",
       debugShowCheckedModeBanner: false,
       theme: appTheme,
       darkTheme: appDarkTheme,

@@ -1,0 +1,86 @@
+name: Build All
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Windows (${{ matrix.seed_profile }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        seed_profile: [ailyans, clean]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter clean
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test --reporter compact
+      - name: Build Windows release
+        shell: pwsh
+        env:
+          SEED_PROFILE: ${{ matrix.seed_profile }}
+        run: |
+          flutter build windows --release `
+            --dart-define=SEED_PROFILE=$env:SEED_PROFILE `
+            --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" `
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+      - name: Zip Windows bundle
+        shell: pwsh
+        env:
+          SEED_PROFILE: ${{ matrix.seed_profile }}
+        run: |
+          $name = if ($env:SEED_PROFILE -eq 'ailyans') { 'ailyans-school-manager-windows' } else { 'bytewave-school-manager-windows' }
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "build/windows/$name.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.seed_profile }}
+          path: build/windows/*.zip
+
+  build-android:
+    name: Android (${{ matrix.seed_profile }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        seed_profile: [ailyans, clean]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter clean
+      - run: flutter pub get
+      - name: Build APK
+        env:
+          SEED_PROFILE: ${{ matrix.seed_profile }}
+        run: |
+          flutter build apk --release \
+            --dart-define=SEED_PROFILE=$SEED_PROFILE \
+            --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" \
+            --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+      - name: Rename APK
+        env:
+          SEED_PROFILE: ${{ matrix.seed_profile }}
+        run: |
+          if [ "$SEED_PROFILE" = "ailyans" ]; then
+            cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/ailyans-school-manager.apk
+          else
+            cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/bytewave-school-manager.apk
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.seed_profile }}
+          path: build/app/outputs/flutter-apk/*.apk

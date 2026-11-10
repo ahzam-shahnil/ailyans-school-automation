@@ -1,0 +1,14 @@
+# G-10 Shot 7: generates the Android + Windows launcher icons from the
+# ByteWave logo. Run with:  dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/logo_bytewave.png"
+  min_sdk_android: 24
+  adaptive_icon_background: "#0F172A"
+  adaptive_icon_foreground: "assets/images/logo_bytewave.png"
+  windows:
+    generate: true
+    image_path: "assets/images/logo_bytewave.png"
+    icon_size: 256
+  remove_alpha_ios: true
