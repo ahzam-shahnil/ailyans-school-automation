@@ -26,9 +26,10 @@ class SupabaseClientWrapper {
   static Future<bool> init() async {
     if (_initialized && _authReady) return true;
 
-    String url = const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
-    String anonKey =
-        const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+    // G-10 Shot 6b: unified credential resolution — bundled dart-defines
+    // (BuildConfig) first, runtime app_config ALWAYS overriding when non-empty.
+    String url = BuildConfig.supabaseUrl;
+    String anonKey = BuildConfig.supabaseAnonKey;
     String email =
         const String.fromEnvironment('SUPABASE_SYNC_EMAIL', defaultValue: '');
     String password = const String.fromEnvironment(

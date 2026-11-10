@@ -1,13 +1,13 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../db/database.dart';
 import 'node_id_allocator.dart';
 import 'supabase_client.dart';
-
 // ============================================================================
 // Remote adapter — injectable for tests (Supabase.instance crashes in tests)
 // ============================================================================
@@ -18,6 +18,7 @@ abstract class SyncRemoteAdapter {
   Future<List<Map<String, dynamic>>> fetchDelta(
     String tableName, {
     String? sinceIso,
+    String? schoolId,
     int offset = 0,
     int limit = 500,
   });
@@ -46,12 +47,19 @@ class SupabaseSyncRemoteAdapter implements SyncRemoteAdapter {
   Future<List<Map<String, dynamic>>> fetchDelta(
     String tableName, {
     String? sinceIso,
+    String? schoolId,
     int offset = 0,
     int limit = 500,
   }) async {
     var query = Supabase.instance.client.from(tableName).select();
     if (sinceIso != null) {
       query = query.gt('updated_at', sinceIso);
+    }
+    // G-10 Shot 6b: multi-tenant isolation — only pull rows belonging to the
+    // active school. The service resolves the id from app_config and strips
+    // it from each row before the local SQLite write.
+    if (schoolId != null) {
+      query = query.eq('school_id', schoolId);
     }
     final rows = await query
         .order('updated_at', ascending: true)
@@ -71,6 +79,11 @@ class FakeSyncRemoteAdapter implements SyncRemoteAdapter {
   List<Map<String, dynamic>> Function(
           String table, String? sinceIso, int offset, int limit)?
       fakeFetchDelta;
+
+  /// G-10 Shot 6b: the school_id passed to the most recent fetchDelta call,
+  /// so tests can assert the service resolves and forwards it (the .eq
+  /// filter itself lives in [SupabaseSyncRemoteAdapter]).
+  String? lastFetchSchoolId;
 
   @override
   Future<void> upsertRow(String tableName, Map<String, dynamic> payload) async {
@@ -92,9 +105,11 @@ class FakeSyncRemoteAdapter implements SyncRemoteAdapter {
   Future<List<Map<String, dynamic>>> fetchDelta(
     String tableName, {
     String? sinceIso,
+    String? schoolId,
     int offset = 0,
     int limit = 500,
   }) async {
+    lastFetchSchoolId = schoolId;
     if (fakeFetchDelta == null) return const [];
     if (failTables.contains(tableName)) {
       throw Exception('Simulated fetchDelta failure for $tableName');
@@ -157,6 +172,18 @@ const Set<String> kDeviceLocalConfigKeys = {
   'supabase_anon_key',
   'supabase_sync_email',
   'supabase_sync_password',
+};
+
+/// G-10 Shot 6b: tenant-identity app_config key. Like the device-local keys,
+/// it must never be pushed or overwritten by pull — the active school is
+/// resolved on this device (license activation / tenant provisioning), never
+/// synced from a remote.
+const Set<String> kTenantLocalConfigKeys = {'school_id'};
+
+/// All app_config keys protected from sync (device-local + tenant identity).
+const Set<String> kProtectedConfigKeys = {
+  ...kDeviceLocalConfigKeys,
+  ...kTenantLocalConfigKeys,
 };
 
 // ============================================================================
@@ -361,8 +388,47 @@ class SyncService {
     return await svc.pullDelta();
   }
 
+  /// G-10 Shot 6b: resolves the active school id for multi-tenant isolation.
+  ///
+  /// Precedence:
+  /// 1. SQLite `app_config` (`config_key = 'school_id'`, seeded on license
+  ///    activation),
+  /// 2. the SharedPreferences `bytewave_tenant` id (tenant JSON `id` field),
+  /// 3. `'ailyans'` — the default school on the Supabase backend.
+  Future<String> _resolveSchoolId(Database db) async {
+    try {
+      final rows = await db.query(
+        'app_config',
+        columns: ['config_value'],
+        where: "config_key = 'school_id'",
+        limit: 1,
+      );
+      final value =
+          rows.isEmpty ? null : rows.first['config_value'] as String?;
+      if (value != null && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    } catch (_) {
+      // Fall through to the SharedPreferences tenant id.
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(DatabaseService.tenantKey);
+      if (raw != null) {
+        final json = jsonDecode(raw);
+        final id = json is Map<String, dynamic> ? json['id'] : null;
+        if (id is String && id.trim().isNotEmpty) return id.trim();
+      }
+    } catch (_) {
+      // Plugin unavailable (unit/widget tests) or no tenant configured.
+    }
+    return 'ailyans';
+  }
+
   Future<SyncPushResult> pushOutbox() async {
     final db = await _openDb();
+    // G-10 Shot 6b: resolve the tenant once per push batch.
+    final schoolId = await _resolveSchoolId(db);
 
     // 1. Fetch up to _batchSize oldest rows.
     final rawRows = await db.query(
@@ -397,10 +463,10 @@ class SyncService {
       final operation = row['operation'] as String;
       final rowId = row['id'] as int;
 
-      // Device-local app_config keys never leave this device. Drop the
-      // coalesced outbox rows without contacting the remote.
+      // Device-local and tenant-identity app_config keys never leave this
+      // device. Drop the coalesced outbox rows without contacting the remote.
       if (tableName == 'app_config' &&
-          kDeviceLocalConfigKeys.contains(recordPk)) {
+          kProtectedConfigKeys.contains(recordPk)) {
         await db.delete(
           '_sync_outbox',
           where: 'id IN (${ids.join(",")})',
@@ -422,6 +488,11 @@ class SyncService {
             );
             continue;
           }
+          // G-10 Shot 6b: tag every outgoing row with the active school id.
+          // Local SQLite has no school_id column, so it is injected here
+          // rather than stored on the row; the upsert_<table> RPCs conflict
+          // on (school_id, <pk>).
+          payload['school_id'] = schoolId;
           await _adapter.upsertRow(tableName, payload);
         }
         // Success: delete ALL group IDs covered by this coalesced operation.
@@ -473,6 +544,8 @@ class SyncService {
   /// Uses per-page transactions with re-entrancy guard and LedgerReconciler.
   Future<SyncPullResult> pullDelta() async {
     final db = await _openDb();
+    // G-10 Shot 6b: resolve the tenant once per pull run.
+    final schoolId = await _resolveSchoolId(db);
     int totalPulled = 0;
     int totalFailed = 0;
     final errors = <String>[];
@@ -506,6 +579,7 @@ class SyncService {
           remoteRows = await _adapter.fetchDelta(
             tableName,
             sinceIso: initialSinceIso,
+            schoolId: schoolId,
             offset: offset,
             limit: 500,
           );
@@ -533,6 +607,13 @@ class SyncService {
               // (local schema has no updated_at column).
               row.remove('updated_at');
 
+              // G-10 Shot 6b: strip school_id before writing to local SQLite
+              // (local schema has no school_id column). The fetchDelta
+              // .eq('school_id', …) filter already scoped this page to the
+              // active school; this keeps db.insert from failing with
+              // "table has no column named school_id".
+              row.remove('school_id');
+
               // Rule 3: skip dirty rows (pending local edits win), except for
               // append-only tables where both local and remote rows are valid.
               if (tableName != 'FeeTransaction' && tableName != 'StuAdv') {
@@ -542,10 +623,11 @@ class SyncService {
                 }
               }
 
-              // Device-local app_config keys are never overwritten by remote
-              // values; each device keeps its own node block/credentials.
+              // Device-local and tenant-identity app_config keys are never
+              // overwritten by remote values; each device keeps its own node
+              // block/credentials/school identity.
               if (tableName == 'app_config' &&
-                  kDeviceLocalConfigKeys.contains(row['config_key'])) {
+                  kProtectedConfigKeys.contains(row['config_key'])) {
                 continue;
               }
 
