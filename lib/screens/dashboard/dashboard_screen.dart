@@ -1,3 +1,4 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -471,8 +472,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  const AutoSizeText(
                     'PRINCIPAL CONSOLE',
+                    maxLines: 1,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -481,9 +483,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
+                  AutoSizeText(
                     'Operational Overview — $todayFormatted',
-                    maxLines: 2,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.h2,
                   ),
@@ -505,9 +507,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       borderRadius: BorderRadius.circular(AppRadius.full),
                       border: Border.all(color: AppColors.statusInfoBorder),
                     ),
-                    child: Text(
+                    child: AutoSizeText(
                       '[ Academic Session: $sessionYr ]',
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.monospace.copyWith(
                         fontSize: 11,
@@ -544,7 +546,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         ),
         const SizedBox(width: AppSpacing.sm),
         Flexible(
-          child: Text(
+          child: AutoSizeText(
             'Operational Overview — $todayFormatted',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -571,9 +573,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               borderRadius: BorderRadius.circular(AppRadius.full),
               border: Border.all(color: AppColors.borderDefault),
             ),
-            child: Text(
+            child: AutoSizeText(
               '[ Academic Session: ${shellMeta?.sessionYear ?? '2017-2018'} ]',
-              maxLines: 1,
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.monospace.copyWith(
                 fontSize: 11,
@@ -598,15 +600,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
 
     return _SurfaceCard(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 10,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: isStacked
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                AutoSizeText(
                   'PRINCIPAL CONSOLE',
                   style: AppTypography.label.copyWith(
                     fontSize: 10,
@@ -662,8 +661,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       tooltip: 'View student directory',
     );
 
-    final todayIso =
-        ref.watch(clockProvider)().toIso8601String().substring(0, 10);
+    final todayIso = ref
+        .watch(clockProvider)()
+        .toIso8601String()
+        .substring(0, 10);
     final payments = metrics?.recentPayments ?? [];
     final todayCollected = payments
         .where((p) => p.submissionDate.startsWith(todayIso))
@@ -694,7 +695,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       badgeText: '${metrics?.collectionPace ?? 0}% Pace',
       value: 'Rs. ${currencyFormatter.format(metrics?.monthlyCollected ?? 0)}',
       monospace: true,
-      subtitle: (metrics?.latestBilledMonthLabel != null &&
+      subtitle:
+          (metrics?.latestBilledMonthLabel != null &&
               metrics!.latestBilledMonthLabel.isNotEmpty)
           ? '${metrics.latestBilledMonthLabel} • Exp: Rs. ${currencyFormatter.format(metrics.monthlyExpected)}'
           : 'Exp: Rs. ${currencyFormatter.format(metrics?.monthlyExpected ?? 0)}',
@@ -731,11 +733,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         .read(feeCollectionProvider.notifier)
                         .buildDefaulterList(sessionYr: sy);
                     if (!mounted) return;
-                    final safeBranchName = (meta?.branchName != null &&
+                    final safeBranchName =
+                        (meta?.branchName != null &&
                             meta!.branchName.trim().isNotEmpty)
                         ? meta.branchName.trim()
                         : "Ailyans's Higher Secondary School Mianwali";
-                    final safeBranchAddress = (meta?.branchAddress != null &&
+                    final safeBranchAddress =
+                        (meta?.branchAddress != null &&
                             meta!.branchAddress.trim().isNotEmpty)
                         ? meta.branchAddress.trim()
                         : 'Muslim Bazar Mianwali';
@@ -757,7 +761,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   },
                   borderRadius: BorderRadius.circular(4),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -1039,14 +1046,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       alignment: Alignment.centerLeft,
                       child: Text(
                         value,
-                        style: (monospace
-                                ? AppTypography.monospace
-                                : AppTypography.display)
-                            .copyWith(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: valueColor ?? AppColors.textPrimary,
-                        ),
+                        style:
+                            (monospace
+                                    ? AppTypography.monospace
+                                    : AppTypography.display)
+                                .copyWith(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: valueColor ?? AppColors.textPrimary,
+                                ),
                       ),
                     ),
                   ),
@@ -1071,7 +1079,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
+                AutoSizeText(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1084,7 +1092,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
                 if (subtitle.isNotEmpty) ...[
                   const SizedBox(height: 2),
-                  Text(
+                  AutoSizeText(
                     subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1164,14 +1172,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     alignment: Alignment.centerLeft,
                     child: Text(
                       value,
-                      style: (monospace
-                              ? AppTypography.monospace
-                              : AppTypography.display)
-                          .copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: valueColor ?? AppColors.textPrimary,
-                      ),
+                      style:
+                          (monospace
+                                  ? AppTypography.monospace
+                                  : AppTypography.display)
+                              .copyWith(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w700,
+                                color: valueColor ?? AppColors.textPrimary,
+                              ),
                     ),
                   ),
                 ),
@@ -1194,7 +1203,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               if (isLoading)
                 _buildSkeletonBox(width: 140, height: 12)
               else ...[
-                Text(
+                AutoSizeText(
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -1755,11 +1764,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       // Tablet & Mobile: Stack vertically
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          recentPayments,
-          const SizedBox(height: 12),
-          classStrength,
-        ],
+        children: [recentPayments, const SizedBox(height: 12), classStrength],
       );
     }
 
@@ -2030,7 +2035,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                     onTap: item.unpaid > 0
                         ? () => context.go(
-                            '/fees/ledger?status=Unpaid&from=/dashboard')
+                            '/fees/ledger?status=Unpaid&from=/dashboard',
+                          )
                         : null,
                     tooltip: item.unpaid > 0
                         ? 'View ${item.unpaid} unpaid vouchers'
@@ -2045,7 +2051,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                     onTap: item.outstanding > 0
                         ? () => context.go(
-                            '/fees/ledger?status=Unpaid&from=/dashboard')
+                            '/fees/ledger?status=Unpaid&from=/dashboard',
+                          )
                         : null,
                     tooltip: item.outstanding > 0
                         ? 'View overdue balance'
@@ -2389,10 +2396,7 @@ class _StitchCardState extends State<_StitchCard> {
     final innerRow = Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: 3.5,
-          color: widget.accentColor,
-        ),
+        Container(width: 3.5, color: widget.accentColor),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(12),
@@ -2496,9 +2500,7 @@ class _SurfaceCardState extends State<_SurfaceCard> {
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(
-          color: lifted
-              ? AppColors.borderHover
-              : AppColors.borderDefault,
+          color: lifted ? AppColors.borderHover : AppColors.borderDefault,
         ),
         boxShadow: [
           BoxShadow(
@@ -2539,11 +2541,7 @@ class _SurfaceCardState extends State<_SurfaceCard> {
 }
 
 class _SplitHandle extends StatefulWidget {
-  const _SplitHandle({
-    super.key,
-    required this.onDrag,
-    required this.onReset,
-  });
+  const _SplitHandle({super.key, required this.onDrag, required this.onReset});
 
   final ValueChanged<double> onDrag;
   final VoidCallback onReset;
