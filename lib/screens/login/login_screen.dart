@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 import '../../core/providers/backup_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/providers/tenant_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../repositories/auth_repository.dart';
 import '../../widgets/shell/app_status_bar.dart';
@@ -68,11 +69,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return false;
   }
 
-  Future<void> _loadInitialData() async {
+  /// G-10 Shot 4: right after the setup wizard completes, the tenant
+  /// database is re-provisioned asynchronously (tenant-scoped file created
+  /// and the wizard's admin user inserted on the next open, raced with this
+  /// screen's first query). When the first load observes an empty Users
+  /// table while a tenant is configured, retry briefly before settling.
+  /// Gated on a tenant actually existing so widget tests (no tenant plugin)
+  /// are unaffected.
+  Future<void> _loadInitialData({int attempt = 0}) async {
     try {
       final authRepo = ref.read(authRepositoryProvider);
       final users = await authRepo.getAllUsernames();
       final remembered = await authRepo.getRememberedUsername();
+
+      if (users.isEmpty && attempt < 3) {
+        final tenant = ref.read(tenantProvider);
+        if (tenant != null) {
+          await Future<void>.delayed(const Duration(milliseconds: 600));
+          if (!mounted) return;
+          await _loadInitialData(attempt: attempt + 1);
+          return;
+        }
+      }
 
       if (mounted) {
         setState(() {

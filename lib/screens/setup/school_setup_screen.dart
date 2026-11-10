@@ -114,7 +114,8 @@ class _SchoolSetupScreenState extends ConsumerState<SchoolSetupScreen> {
           adminPin: _pinCtrl.text.trim(),
         );
     if (!mounted) return;
-    context.go('/login');
+    // G-10 Shot 4: route through the license activation gate before login.
+    context.go('/license');
   }
 
   void _onNext() {

@@ -19,6 +19,7 @@ import '../../screens/library/book_profile_screen.dart';
 import '../../screens/library/library_books_screen.dart';
 import '../../screens/login/login_screen.dart';
 import '../../screens/search/global_search_screen.dart';
+import '../../screens/setup/license_entry_screen.dart';
 import '../../screens/setup/school_setup_screen.dart';
 import '../../screens/staff/salary_management_screen.dart';
 import '../../screens/staff/teacher_list_screen.dart';
@@ -33,6 +34,7 @@ import '../../screens/system/permission_matrix_screen.dart';
 import '../../screens/system/system_settings_screen.dart';
 import '../../screens/system/user_management_screen.dart';
 import '../../widgets/shell/app_shell.dart';
+import '../providers/license_provider.dart';
 import '../providers/session_provider.dart';
 import '../providers/tenant_provider.dart';
 import '../theme/app_theme_tokens.dart';
@@ -208,8 +210,8 @@ String _firstAllowedRoute(UserSession session) {
   return '/dashboard';
 }
 
-/// Notifier that triggers GoRouter refresh when authentication session or
-/// active tenant (G-10 Shot 2) changes.
+/// Notifier that triggers GoRouter refresh when authentication session,
+/// active tenant (G-10 Shot 2), or license activation (G-10 Shot 4) changes.
 class RouterNotifier extends ChangeNotifier {
   final Ref _ref;
 
@@ -218,6 +220,9 @@ class RouterNotifier extends ChangeNotifier {
       notifyListeners();
     });
     _ref.listen<Tenant?>(tenantProvider, (_, __) {
+      notifyListeners();
+    });
+    _ref.listen<License?>(licenseProvider, (_, __) {
       notifyListeners();
     });
   }
@@ -242,6 +247,11 @@ final routerProvider = Provider<GoRouter>((ref) {
   final tenantNotifier = ref.read(tenantProvider.notifier);
   unawaited(tenantNotifier.loadTenant().then((_) => notifier.refresh()));
 
+  // G-10 Shot 4: resolve the persisted license (if any) once at startup,
+  // then refresh so the license gate routes activated installs onward.
+  final licenseNotifier = ref.read(licenseProvider.notifier);
+  unawaited(licenseNotifier.loadLicense().then((_) => notifier.refresh()));
+
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
@@ -257,21 +267,46 @@ final routerProvider = Provider<GoRouter>((ref) {
       final tenant = ref.read(tenantProvider);
       final tenantNotifier = ref.read(tenantProvider.notifier);
       final tenantLoaded = tenantNotifier.loaded;
+
+      // G-10 Shot 4: license activation gate. Only evaluated once the
+      // license provider has consulted SharedPreferences (inert in widget
+      // tests, where the platform channel is unavailable).
+      final license = ref.read(licenseProvider);
+      final licenseLoaded = ref.read(licenseProvider.notifier).loaded;
+      final hasValidLicense = license != null && license.isCurrentlyValid;
+
       final isSetup = location == '/setup';
+      final isLicense = location == '/license';
       if (tenantLoaded && tenant == null && !isSetup) {
         return '/setup';
       }
-      if (tenantLoaded && tenant != null && isSetup) {
-        return '/dashboard';
+      if (tenantLoaded && tenant != null) {
+        // License gate: tenant provisioned but no valid activation yet —
+        // every route except the license screen is blocked.
+        if (licenseLoaded && !hasValidLicense && !isLicense) {
+          return '/license';
+        }
+        // Activated installs skip the setup wizard and license screen.
+        if (hasValidLicense && (isLicense || isSetup)) {
+          return isAuthenticated ? _firstAllowedRoute(session) : '/login';
+        }
+        if (isSetup) {
+          return '/dashboard';
+        }
       }
 
       final isSplash = location == '/';
       final isLogin = location == '/login';
 
       // Redirect unauthenticated users to /login (unless on / or /login).
-      // /setup is also exempt: the first-launch wizard must be reachable
-      // before any operator has signed in (G-10 Shot 2).
-      if (!isAuthenticated && !isLogin && !isSplash && !isSetup) {
+      // /setup and /license are also exempt: the first-launch wizard and
+      // license activation must be reachable before any operator has signed
+      // in (G-10 Shot 2 / Shot 4).
+      if (!isAuthenticated &&
+          !isLogin &&
+          !isSplash &&
+          !isSetup &&
+          !(isLicense && !hasValidLicense)) {
         return '/login';
       }
 
@@ -347,6 +382,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         parentNavigatorKey: _rootNavigatorKey,
         path: '/setup',
         builder: (context, state) => const SchoolSetupScreen(),
+      ),
+
+      // G-10 Shot 4: SaaS license activation gate (root navigator, no shell)
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/license',
+        builder: (context, state) => const LicenseEntryScreen(),
       ),
 
       // 2. Authenticated Routes Wrapped in Persistent Desktop AppShell
