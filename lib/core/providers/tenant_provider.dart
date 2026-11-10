@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bcrypt/bcrypt.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,12 +20,26 @@ class Tenant {
   final String adminContact;
   final String createdAt;
 
+  // G-10 Shot 3: onboarding contact + admin credentials. The password is
+  // persisted as a BCrypt hash (matching the `Users.Pwd` storage format);
+  // the PIN is 4-6 digits and has no Users-table column, so it is kept in
+  // the tenant record only. All default to '' for backward compatibility
+  // with tenants created before Shot 3.
+  final String contactPhone;
+  final String adminUsername;
+  final String adminPassword;
+  final String adminPin;
+
   const Tenant({
     required this.id,
     required this.schoolName,
     required this.adminName,
     required this.adminContact,
     required this.createdAt,
+    this.contactPhone = '',
+    this.adminUsername = '',
+    this.adminPassword = '',
+    this.adminPin = '',
   });
 
   Map<String, dynamic> toJson() => {
@@ -33,6 +48,10 @@ class Tenant {
     'adminName': adminName,
     'adminContact': adminContact,
     'createdAt': createdAt,
+    'contactPhone': contactPhone,
+    'adminUsername': adminUsername,
+    'adminPassword': adminPassword,
+    'adminPin': adminPin,
   };
 
   factory Tenant.fromJson(Map<String, dynamic> json) => Tenant(
@@ -41,6 +60,10 @@ class Tenant {
     adminName: json['adminName'] as String,
     adminContact: json['adminContact'] as String,
     createdAt: json['createdAt'] as String,
+    contactPhone: json['contactPhone'] as String? ?? '',
+    adminUsername: json['adminUsername'] as String? ?? '',
+    adminPassword: json['adminPassword'] as String? ?? '',
+    adminPin: json['adminPin'] as String? ?? '',
   );
 }
 
@@ -90,10 +113,20 @@ class TenantNotifier extends StateNotifier<Tenant?> {
   }
 
   /// Creates and persists a new tenant for a first-launch school setup.
+  ///
+  /// [adminPassword] is hashed with BCrypt before persistence (matching the
+  /// `Users.Pwd` format consumed by `AuthRepositoryImpl.authenticate`).
+  /// After persisting, the cached database connection is closed so the next
+  /// access provisions the tenant-scoped database (seed profile + admin
+  /// user) — G-10 Shot 3.
   Future<void> createTenant({
     required String schoolName,
     required String adminName,
     required String adminContact,
+    required String adminUsername,
+    required String adminPassword,
+    required String adminPin,
+    String contactPhone = '',
   }) async {
     final id = 'school_${DateTime.now().millisecondsSinceEpoch}';
     final tenant = Tenant(
@@ -102,10 +135,21 @@ class TenantNotifier extends StateNotifier<Tenant?> {
       adminName: adminName,
       adminContact: adminContact,
       createdAt: DateTime.now().toIso8601String(),
+      contactPhone: contactPhone,
+      adminUsername: adminUsername,
+      adminPassword: BCrypt.hashpw(adminPassword, BCrypt.gensalt()),
+      adminPin: adminPin,
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(tenantKey, jsonEncode(tenant.toJson()));
     state = tenant;
+    try {
+      // Force the next database access to re-resolve the tenant-scoped path
+      // and run first-open provisioning (seed profile + admin insertion).
+      await DatabaseService.instance.close();
+    } catch (_) {
+      // Database never opened (e.g. tests): nothing to close.
+    }
   }
 
   /// Clears the active tenant (returns the app to first-launch state).

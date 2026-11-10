@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:school_automation/core/config/build_config.dart';
 import 'package:school_automation/core/sync/node_id_allocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart' as mobile; // native Android/iOS
@@ -54,12 +55,24 @@ class DatabaseService {
 
     final dbPath = await _getDatabasePath();
 
+    // G-10 Shot 3: detect whether this is the first open of the tenant
+    // database, before any bootstrap asset is copied to the path.
+    final dbFile = File(dbPath);
+    final databaseWasNew =
+        !await dbFile.exists() || await dbFile.length() == 0;
+
     // Phase G-9.7a: fresh installs bootstrap from the bundled sanitized
     // production snapshot (assets/db/seed_school_database.db) instead of the
     // synthetic 10-student seeder. Only file-based databases that do not
     // exist yet are bootstrapped; existing installs and :memory: test
     // databases are untouched.
-    await _bootstrapFromBundledSeed(dbPath);
+    //
+    // G-10 Shot 3: the Ailyans production seed is only bundled in the
+    // Ailyans Edition (--dart-define=SEED_PROFILE=ailyans). The clean SaaS
+    // edition never copies it.
+    if (BuildConfig.isAilyansEdition) {
+      await _bootstrapFromBundledSeed(dbPath);
+    }
 
     final db = await databaseFactory.openDatabase(
       dbPath,
@@ -78,6 +91,26 @@ class DatabaseService {
     // Run initial schema load (if PRAGMA user_version == 0) and any pending migrations
     await SchemaMigrations.migrate(db);
 
+    // G-10 Shot 3: edition-aware first-open provisioning.
+    if (databaseWasNew) {
+      if (BuildConfig.isAilyansEdition) {
+        // Ailyans Edition: the bundled production snapshot carries the full
+        // dataset; seedIfEmpty only fills gaps if the asset bootstrap failed.
+        await DatabaseSeeder.seedIfEmpty(db);
+      } else {
+        // Clean SaaS edition: default fee tariffs only — no synthetic
+        // students, no legacy users. The onboarding wizard's admin account
+        // is the sole operator.
+        await DatabaseSeeder.seedFeeTariffsIfEmpty(db);
+      }
+    }
+
+    // Provision the setup-wizard admin account. Idempotent and re-checked on
+    // every open: `main.dart` opens the database before the wizard runs, so
+    // the credentials only appear in SharedPreferences afterwards — the
+    // next open (post-setup) completes the insertion. See _insertAdminUser.
+    await _insertAdminUser(db);
+
     // Phase F-3a: ensure per-device block allocator state.
     // node_id comes from app_config; default 'windows'. Idempotent.
     final cfg = await db.query(
@@ -89,10 +122,6 @@ class DatabaseService {
         ? 'windows'
         : (cfg.first['config_value'] as String);
     await NodeIdAllocator(openDb: () async => db).configureNodeBlock(nodeId);
-
-    // Seed initial development data if Users table is empty
-    await DatabaseSeeder.seedIfEmpty(db);
-    await DatabaseSeeder.seedFeeTariffsIfEmpty(db);
 
     // Startup log message
     debugPrint('Database opened at: $dbPath');
@@ -231,6 +260,50 @@ class DatabaseService {
     if (!await dir.exists()) await dir.create(recursive: true);
     final tenantId = await _resolveTenantId();
     return p.join(dir.path, 'school_$tenantId.db');
+  }
+
+  /// G-10 Shot 3: provisions the setup-wizard admin account into the open
+  /// tenant database.
+  ///
+  /// Reads the active tenant from SharedPreferences (key [tenantKey]) and
+  /// inserts a UserLvl=1 (SuperAdmin), IsActive=1 row whose `Pwd` is the
+  /// BCrypt hash produced by `TenantNotifier.createTenant`. Idempotent:
+  /// skipped when no tenant credentials exist yet (pre-wizard open) or when
+  /// a user with the same Name is already present.
+  Future<void> _insertAdminUser(Database db) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(tenantKey);
+      if (raw == null) return;
+      final json = jsonDecode(raw);
+      if (json is! Map<String, dynamic>) return;
+      final username = json['adminUsername'] as String?;
+      final pwdHash = json['adminPassword'] as String?;
+      if (username == null || username.isEmpty) return;
+      if (pwdHash == null || pwdHash.isEmpty) return;
+
+      final existing = await db.query(
+        'Users',
+        columns: ['ID'],
+        where: 'Name = ?',
+        whereArgs: [username],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) return;
+
+      await db.insert('Users', {
+        'Name': username,
+        'Desig': 'Principal',
+        'Pwd': pwdHash,
+        'Br': 'Management',
+        'Mobile1': (json['adminContact'] as String?) ?? '',
+        'UserLvl': 1,
+        'IsActive': 1,
+      });
+      debugPrint('Provisioned setup admin user: $username');
+    } catch (e) {
+      debugPrint('Admin user provisioning skipped: $e');
+    }
   }
 
   /// Public accessor for the resolved on-disk DB path.
