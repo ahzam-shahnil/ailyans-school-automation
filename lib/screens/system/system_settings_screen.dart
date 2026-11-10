@@ -1402,13 +1402,15 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
       children: [
         _buildSectionTitle(
           'APPLICATION IDENTIFICATION',
-          'Desktop runtime environment and architectural specifications.',
+          'Cross-platform runtime environment and architectural specifications.',
         ),
         const SizedBox(height: AppSpacing.sm),
         _buildInfoCard([
-          ('Product Edition', 'School Management System — Ailyans Edition'),
-          ('Target Win32 Binary', 'school.exe (VB6 / MS Access / SQLite)'),
-          ('Rebuild Runtime', 'Flutter Desktop (macOS / Windows / Linux)'),
+          (
+            'Product Edition',
+            'ByteWave School Manager — Enterprise Edition',
+          ),
+          ('Rebuild Runtime', 'Flutter (Android / iOS / Desktop)'),
           (
             'Architecture Pattern',
             'Clean Architecture / Riverpod 2.x / SQLite',
@@ -1439,9 +1441,13 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
           ('Original Win32 Author', 'Nasir Ali (Ailyans Software, Mianwali)'),
           (
             'Modernization Engineering',
-            'Antigravity Rebuild Architecture Team',
+            'ByteWave Engineering Team',
           ),
-          ('Copyright', '© 2017-2026 Ailyans & Modernization Rebuild Project'),
+          (
+            'SaaS Managed By',
+            'ByteWave (www.linkedin.com/company/bytewaves)',
+          ),
+          ('Copyright', '© 2017-2026 ByteWave & Modernization Rebuild Project'),
         ], stacked: stacked),
       ],
     );
