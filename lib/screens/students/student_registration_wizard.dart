@@ -487,11 +487,82 @@ class _StudentRegistrationWizardState
     final draft = ref.watch(wizardDraftProvider);
     final isMobile = ResponsiveBreakpoints.isMobile(context);
 
+    // G-10 Shot 11b-2: mobile (< 600px) uses a whole-page Stitch scroll —
+    // breadcrumb, step indicator, and step form all move together inside one
+    // vertical scroll view while the action bar stays pinned. The desktop
+    // (>= 600px) layout below is frozen.
+    if (isMobile) {
+      return Scaffold(
+        backgroundColor: AppColors.surfaceCanvas,
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: CallbackShortcuts(
+            bindings: {
+              const SingleActivator(LogicalKeyboardKey.escape): _onCancel,
+              const SingleActivator(LogicalKeyboardKey.enter):
+                  _advanceOrSubmit,
+              const SingleActivator(LogicalKeyboardKey.enter, control: true):
+                  _advanceOrSubmit,
+            },
+            child: Focus(
+              autofocus: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // 1. Breadcrumb row (scrolls with the page).
+                          _buildBreadcrumbRow(),
+                          const SizedBox(height: AppSpacing.md),
+
+                          // 2. Step Indicator (Component #40).
+                          _buildStepIndicator(currentStep),
+                          const SizedBox(height: AppSpacing.md),
+
+                          // 3. Step form card (scrolls with the page).
+                          Card(
+                            color: AppColors.surfaceRaised,
+                            elevation: AppElevation.raised,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppRadius.lg,
+                              ),
+                              side: const BorderSide(
+                                color: AppColors.borderDefault,
+                                width: 1.0,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              child: _buildStepCard(currentStep, draft),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // 4. Pinned bottom action bar.
+                  _buildBottomActionBar(currentStep, draft),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Desktop branch: unchanged (frozen).
     return SafeArea(
-      bottom: isMobile,
       top: false,
       left: false,
       right: false,
+      bottom: false,
       child: CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): _onCancel,
@@ -505,7 +576,7 @@ class _StudentRegistrationWizardState
           color: AppColors.surface,
           child: Container(
             color: AppColors.surface,
-            padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
+            padding: const EdgeInsets.all(AppSpacing.lg),
             child: Center(
               child: Container(
                 constraints: const BoxConstraints(maxWidth: 900),
@@ -533,9 +604,7 @@ class _StudentRegistrationWizardState
                           ),
                         ),
                         child: SingleChildScrollView(
-                          padding: EdgeInsets.all(
-                            isMobile ? AppSpacing.md : AppSpacing.xl,
-                          ),
+                          padding: const EdgeInsets.all(AppSpacing.xl),
                           child: _buildStepCard(currentStep, draft),
                         ),
                       ),
@@ -544,12 +613,10 @@ class _StudentRegistrationWizardState
 
                     // 4. Bottom Action Bar
                     _buildBottomActionBar(currentStep, draft),
-                    if (!isMobile) ...[
-                      const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: AppSpacing.md),
 
-                      // 5. Keyboard hints bar
-                      _buildKeyboardHintsBar(),
-                    ],
+                    // 5. Keyboard hints bar
+                    _buildKeyboardHintsBar(),
                   ],
                 ),
               ),
@@ -2025,57 +2092,75 @@ class _StudentRegistrationWizardState
             onPressed: _isSubmitting ? null : _advanceOrSubmit,
           );
 
-    return Container(
-      padding: const EdgeInsets.only(top: AppSpacing.sm),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.borderSubtle)),
+    final Widget actions = isMobile
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: 48, child: primaryButton),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: _onCancel,
+                    child: const Text('Cancel'),
+                  ),
+                  if (currentStep > 0)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.arrow_back, size: 16),
+                      label: const Text('Back'),
+                      onPressed: _goBack,
+                    )
+                  else
+                    const SizedBox.shrink(),
+                ],
+              ),
+            ],
+          )
+        : Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: _onCancel,
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  if (currentStep > 0)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.arrow_back, size: 16),
+                      label: const Text('Back'),
+                      onPressed: _goBack,
+                    ),
+                ],
+              ),
+              Row(children: [primaryButton]),
+            ],
+          );
+
+    if (!isMobile) {
+      // Desktop: unchanged (frozen).
+      return Container(
+        padding: const EdgeInsets.only(top: AppSpacing.sm),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: AppColors.borderSubtle)),
+        ),
+        child: actions,
+      );
+    }
+
+    // G-10 Shot 11b-2: pinned, raised bottom action bar on mobile.
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: const BoxDecoration(
+          color: AppColors.surfaceRaised,
+          border: Border(top: BorderSide(color: AppColors.borderDefault)),
+        ),
+        child: actions,
       ),
-      child: isMobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: 48, child: primaryButton),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed: _onCancel,
-                      child: const Text('Cancel'),
-                    ),
-                    if (currentStep > 0)
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.arrow_back, size: 16),
-                        label: const Text('Back'),
-                        onPressed: _goBack,
-                      )
-                    else
-                      const SizedBox.shrink(),
-                  ],
-                ),
-              ],
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: _onCancel,
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 8),
-                    if (currentStep > 0)
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.arrow_back, size: 16),
-                        label: const Text('Back'),
-                        onPressed: _goBack,
-                      ),
-                  ],
-                ),
-                Row(children: [primaryButton]),
-              ],
-            ),
     );
   }
 
