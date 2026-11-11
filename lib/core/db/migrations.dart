@@ -6,6 +6,17 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 /// Single source of truth for Phase F-1 trigger creation and the trigger
 /// inventory test.
 const List<String> kSyncedTables = <String>[
+  // G-10 Shot 12a: master/reference tables — pushed first so transactional
+  // children land after their parents.
+  'Users',
+  'Class',
+  'ClassSec',
+  'Subject',
+  'Subj_Class',
+  'FeeParameters',
+  'Cls_Param_Fee',
+  'BankInfo',
+  'ExamTerm',
   'Stu_Reg',
   'Student_Class',
   'Sibling_Links',
@@ -139,6 +150,12 @@ class SchemaMigrations {
     // databases that predate next_allocated_id. user_version stays at its
     // current value; F-3c-1 bumps it to 10 above.
     await ensureSyncStateColumns(db);
+
+    // G-10 Shot 12a: install sync capture triggers on every boot (not only
+    // inside the version-gated migration 009), so existing v10 databases
+    // gain the triggers for newly registered sync tables (master tables).
+    // Idempotent via CREATE TRIGGER IF NOT EXISTS.
+    await ensureSyncTriggers(db);
   }
 
   /// Loads and executes the initial schema from assets/reference/schema.sql.
@@ -358,6 +375,16 @@ class SchemaMigrations {
   /// table. Composite keys are serialized with JSON, never hyphen-delimited.
   static const Map<String, List<String>> _syncPkColumns =
       <String, List<String>>{
+        // G-10 Shot 12a: master/reference tables.
+        'Users': <String>['ID'],
+        'Class': <String>['ClassID'],
+        'ClassSec': <String>['ClassSecID'],
+        'Subject': <String>['SubjID'],
+        'Subj_Class': <String>['SubjID', 'ClassID'],
+        'FeeParameters': <String>['FeeParamID'],
+        'Cls_Param_Fee': <String>['ClassID', 'FeeParamID', 'FeeYr'],
+        'BankInfo': <String>['BankInfoID'],
+        'ExamTerm': <String>['ExTermID'],
         'Stu_Reg': <String>['Stu_RegID'],
         'Student_Class': <String>['Stu_RegID', 'ClassID', 'SessionYr'],
         'Sibling_Links': <String>['LinkID'],
@@ -378,6 +405,14 @@ class SchemaMigrations {
         'Books': <String>['BookID'],
         'app_config': <String>['config_key'],
       };
+
+  /// Public record_pk expression builder — the exact same function the
+  /// capture-trigger DDL uses (via [_syncPkExpression]), exposed so
+  /// `SyncService.enqueueInitialMasterTablesIfNeeded` can SELECT record_pk
+  /// values from existing rows without re-deriving the serialization
+  /// (G-10 Shot 12a).
+  static String buildRecordPkExpr(String table, String rowAlias) =>
+      _syncPkExpression(table, rowAlias);
 
   /// Builds the `record_pk` SQL expression for [table] using [rowAlias].
   static String _syncPkExpression(String table, String rowAlias) {
@@ -455,7 +490,33 @@ class SchemaMigrations {
       "VALUES ('__node__', 0, 100000, 199999, 100000)",
     );
 
+    await ensureSyncTriggers(db);
+  }
+
+  /// G-10 Shot 12a: idempotently installs the `trg_sync_<table>_<ai/au/ad>`
+  /// capture triggers for every [kSyncedTables] table. Extracted from
+  /// [applyMigration009] and additionally invoked from [migrate] on EVERY
+  /// boot, so existing v10 databases (which skip the version-gated migration)
+  /// gain the capture triggers for newly registered tables (e.g. the 9
+  /// master tables). `CREATE TRIGGER IF NOT EXISTS` makes re-runs a no-op.
+  ///
+  /// Deliberately triggers-only: per-table `_sync_state` rows are managed by
+  /// the push/pull watermarks (`pushOutbox` upserts last_pushed_at), NOT
+  /// seeded here — the migration tests assert `_sync_state` holds exactly
+  /// `__global__` and `__node__` after migration.
+  static Future<void> ensureSyncTriggers(Database db) async {
+    // G-10 Shot 12a: skip tables that do not exist in this database (partial
+    // migration-test fixtures can legitimately contain only _sync_state and
+    // one or two tables). CREATE TRIGGER on a missing table would abort
+    // migrate() with "no such table". Real installs always carry all 28
+    // tables, so every trigger is installed there.
+    final existing = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type = 'table'",
+    );
+    final existingNames = existing.map((r) => r['name'] as String).toSet();
+
     for (final table in kSyncedTables) {
+      if (!existingNames.contains(table)) continue;
       await db.execute(
         _syncTriggerSql(
           table: table,

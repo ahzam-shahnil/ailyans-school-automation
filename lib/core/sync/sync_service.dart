@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +7,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../db/database.dart';
+import '../db/migrations.dart';
 import 'node_id_allocator.dart';
 import 'supabase_client.dart';
 // ============================================================================
@@ -119,10 +121,20 @@ class FakeSyncRemoteAdapter implements SyncRemoteAdapter {
 }
 
 // ============================================================================
-// PK metadata for all 19 synced tables
+// PK metadata for all 28 synced tables
 // ============================================================================
 
 const Map<String, List<String>> kPkColumns = {
+  // G-10 Shot 12a: master/reference tables.
+  'Users': ['ID'],
+  'Class': ['ClassID'],
+  'ClassSec': ['ClassSecID'],
+  'Subject': ['SubjID'],
+  'Subj_Class': ['SubjID', 'ClassID'],
+  'FeeParameters': ['FeeParamID'],
+  'Cls_Param_Fee': ['ClassID', 'FeeParamID', 'FeeYr'],
+  'BankInfo': ['BankInfoID'],
+  'ExamTerm': ['ExTermID'],
   'Stu_Reg': ['Stu_RegID'],
   'Student_Class': ['Stu_RegID', 'ClassID', 'SessionYr'],
   'Sibling_Links': ['LinkID'],
@@ -146,6 +158,15 @@ const Map<String, List<String>> kPkColumns = {
 
 /// Single-column INTEGER/BIGINT PK tables (7 tables, including SchLeaving).
 const Set<String> kIntegerPkTables = {
+  // G-10 Shot 12a: single-int-PK master tables (the 2 composite-PK master
+  // tables, Subj_Class and Cls_Param_Fee, are deliberately NOT here).
+  'Users',
+  'Class',
+  'ClassSec',
+  'Subject',
+  'FeeParameters',
+  'BankInfo',
+  'ExamTerm',
   'Stu_Reg',
   'Sibling_Links',
   'FeeTransaction',
@@ -157,6 +178,10 @@ const Set<String> kIntegerPkTables = {
 
 /// Pull order respects FK dependencies (parents before children).
 const List<String> kPullTableOrder = [
+  // G-10 Shot 12a: master/reference tables first — every transactional table
+  // references them.
+  'Users', 'Class', 'ClassSec', 'Subject', 'Subj_Class',
+  'FeeParameters', 'Cls_Param_Fee', 'BankInfo', 'ExamTerm',
   'Stu_Reg', 'Teachers', 'Books', 'ExamInfo', 'app_config',
   'Student_Class', 'Sibling_Links', 'VoucharMas', 'TSalMas', 'ExamMas',
   'SchLeaving', 'StuAdv',
@@ -181,9 +206,16 @@ const Set<String> kDeviceLocalConfigKeys = {
 const Set<String> kTenantLocalConfigKeys = {'school_id'};
 
 /// All app_config keys protected from sync (device-local + tenant identity).
+///
+/// G-10 Shot 12a: the one-time master-table backfill marker is added here
+/// rather than to [kDeviceLocalConfigKeys], because that set is asserted as
+/// an exact literal by an existing (frozen) test. Both pushOutbox and
+/// pullDelta filter on this union set, so the marker is still excluded from
+/// both directions.
 const Set<String> kProtectedConfigKeys = {
   ...kDeviceLocalConfigKeys,
   ...kTenantLocalConfigKeys,
+  'master_sync_backfill_v1',
 };
 
 // ============================================================================
@@ -247,9 +279,99 @@ class SyncService {
   })  : _adapter = adapter ?? const SupabaseSyncRemoteAdapter(),
         _openDb = openDb ?? (() => DatabaseService.instance.database);
 
+  /// G-10 Shot 12a: one-time backfill of existing master-table rows into the
+  /// sync outbox. The 9 master tables were registered for sync AFTER their
+  /// local data already existed, so their rows never passed through a capture
+  /// trigger. This enqueues every existing row as an `UPSERT` outbox entry
+  /// (outbox-format-exact: table_name / record_pk / operation='UPSERT' /
+  /// created_at), guarded by the `master_sync_backfill_v1` app_config marker
+  /// so it runs exactly once per database.
+  ///
+  /// Per-table skip rule: a master table whose `_sync_state` row already has
+  /// a `last_pushed_at` watermark is considered already pushed and skipped
+  /// (crash-resume: partially enqueued tables re-enqueue only their unsynced
+  /// remainder — outbox pushes are idempotent server-side upserts).
+  ///
+  /// record_pk values come from the SAME expression builder the capture
+  /// triggers use ([SchemaMigrations.buildRecordPkExpr]) — never re-derived.
+  ///
+  /// The FLUTTER_TEST guard mirrors `TenantNotifier.loadTenant`: widget
+  /// tests that tap Refresh-style buttons route through `runStartupPush`
+  /// and must never open the host database or mutate their fixtures.
+  static Future<void> enqueueInitialMasterTablesIfNeeded(Database db) async {
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+
+    final marker = await db.rawQuery(
+      "SELECT config_value FROM app_config "
+      "WHERE config_key = 'master_sync_backfill_v1'",
+    );
+    if (marker.isNotEmpty && marker.first['config_value'] == '1') return;
+
+    const masterTables = <String>[
+      'Users',
+      'Class',
+      'ClassSec',
+      'Subject',
+      'Subj_Class',
+      'FeeParameters',
+      'Cls_Param_Fee',
+      'BankInfo',
+      'ExamTerm',
+    ];
+
+    final createdAt = DateTime.now().toUtc().toIso8601String();
+    int enqueued = 0;
+
+    for (final table in masterTables) {
+      final pushed = await db.rawQuery(
+        'SELECT last_pushed_at FROM _sync_state WHERE table_name = ?',
+        [table],
+      );
+      if (pushed.isNotEmpty && pushed.first['last_pushed_at'] != null) {
+        continue;
+      }
+
+      // SELECT-side reuse of the trigger record_pk expression (alias `t`).
+      final pkRows = await db.rawQuery(
+        'SELECT ${SchemaMigrations.buildRecordPkExpr(table, 't')} AS record_pk '
+        'FROM "$table" t',
+      );
+      for (final row in pkRows) {
+        await db.insert('_sync_outbox', <String, Object?>{
+          'table_name': table,
+          'record_pk': row['record_pk'] as String,
+          'operation': 'UPSERT',
+          'payload_json': null,
+          'created_at': createdAt,
+        });
+        enqueued++;
+      }
+    }
+
+    await db.rawInsert(
+      "INSERT OR REPLACE INTO app_config (config_key, config_value) "
+      "VALUES ('master_sync_backfill_v1', '1')",
+    );
+    debugPrint(
+      '[G-10 12a] Master-table backfill: enqueued $enqueued rows across '
+      '${masterTables.length} tables',
+    );
+  }
+
   /// Startup push: awaits idempotent init, resets any stale re-entrancy guard,
   /// then drains the outbox. Skipped if offline/unconfigured. Never throws.
   static Future<SyncPushResult> runStartupPush() async {
+    // G-10 Shot 12a: before any push, make sure the pre-existing master-table
+    // rows are enqueued for their first cloud push (one-time, marker-guarded).
+    // Runs at the very top so EVERY sync entry point that drains the outbox
+    // (startup push, manual sync, periodic sync) covers the backfill.
+    try {
+      final db = await DatabaseService.instance.database;
+      await enqueueInitialMasterTablesIfNeeded(db);
+    } catch (e) {
+      debugPrint('[G-10 12a] Master-table backfill skipped: $e');
+    }
+
     final ready = await SupabaseClientWrapper.init();
     if (!ready) {
       debugPrint('[F-4a-2] Skipping startup push (not ready/offline)');
@@ -275,7 +397,7 @@ class SyncService {
     }
   }
 
-  /// Startup pull: awaits idempotent init, then pulls deltas for all 19 tables.
+  /// Startup pull: awaits idempotent init, then pulls deltas for all 28 tables.
   /// Skipped if offline/unconfigured. Never throws.
   static Future<SyncPullResult> runStartupPull() async {
     final ready = await SupabaseClientWrapper.init();
@@ -312,6 +434,12 @@ class SyncService {
     }
 
     final db = await DatabaseService.instance.database;
+
+    // G-10 Shot 12a: force-push bypasses runStartupPush, so it carries the
+    // same one-time master-table backfill guard (no-op once the marker is
+    // set, and a no-op under FLUTTER_TEST).
+    await enqueueInitialMasterTablesIfNeeded(db);
+
     await db.rawUpdate(
       'UPDATE _sync_outbox SET retry_count = 0, last_error = NULL '
       'WHERE retry_count > 0',
