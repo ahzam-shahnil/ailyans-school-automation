@@ -96,6 +96,16 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         ref.read(selectedStudentTabProvider.notifier).state = 0;
       }
     });
+    // G-10 Shot 10a: force a fresh SQLite read on every mount. A profile
+    // re-opened after a cloud sync pull must show the latest local rows,
+    // never a bundle cached by an earlier visit.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final stuRegId = int.tryParse(widget.studentId) ?? -1;
+      if (stuRegId > 0) {
+        ref.invalidate(studentProfileProvider(stuRegId));
+      }
+    });
     _firstNameController = TextEditingController();
     _middleNameController = TextEditingController();
     _lastNameController = TextEditingController();

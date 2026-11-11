@@ -53,7 +53,14 @@ final selectedStudentTabProvider = StateProvider<int>((ref) => 0);
 final studentEditModeProvider = StateProvider<bool>((ref) => false);
 
 /// Riverpod FutureProvider.family fetching all student profile data by registration ID.
-final studentProfileProvider = FutureProvider.family<StudentProfileBundle, int>(
+///
+/// G-10 Shot 10a: `.autoDispose` so the cached `StudentProfileBundle` is
+/// dropped as soon as the profile screen unmounts. Re-opening a profile
+/// therefore always re-queries local SQLite instead of serving the previous
+/// visit's bundle (which could pre-date a pulled cloud delta, e.g. an edited
+/// student name synced from another device).
+final studentProfileProvider =
+    FutureProvider.autoDispose.family<StudentProfileBundle, int>(
   (ref, stuRegId) async {
     final db = await DatabaseService.instance.database;
 
