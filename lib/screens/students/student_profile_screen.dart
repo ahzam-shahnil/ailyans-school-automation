@@ -781,67 +781,85 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceSubtle,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        border: Border.all(color: AppColors.borderDefault),
-                      ),
-                      child: Text(
-                        '#${student.stuRegId}',
-                        style: AppTypography.monospace
-                            .copyWith(fontSize: 11)
-                            .copyWith(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    // G-10 Shot 10c: Flexible(loose) so the Reg pill can
+                    // shrink (ellipsis) at narrow desktop widths instead of
+                    // overflowing the hero row.
+                    Flexible(
+                      fit: FlexFit.loose,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.surfaceSubtle,
+                          borderRadius: BorderRadius.circular(AppRadius.sm),
+                          border: Border.all(color: AppColors.borderDefault),
+                        ),
+                        child: Text(
+                          '#${student.stuRegId}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.monospace
+                              .copyWith(fontSize: 11)
+                              .copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isEnrolled
-                            ? AppColors.statusSuccessBg
-                            : AppColors.surfaceSubtle,
-                        borderRadius: BorderRadius.circular(AppRadius.full),
-                        border: Border.all(
-                          color: isEnrolled
-                              ? AppColors.statusSuccessBorder
-                              : AppColors.borderDefault,
+                    // G-10 Shot 10c: Flexible(loose) so the Status pill can
+                    // shrink at narrow desktop widths.
+                    Flexible(
+                      fit: FlexFit.loose,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 6,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isEnrolled
-                                  ? AppColors.statusSuccessText
-                                  : AppColors.textDisabled,
-                            ),
+                        decoration: BoxDecoration(
+                          color: isEnrolled
+                              ? AppColors.statusSuccessBg
+                              : AppColors.surfaceSubtle,
+                          borderRadius: BorderRadius.circular(AppRadius.full),
+                          border: Border.all(
+                            color: isEnrolled
+                                ? AppColors.statusSuccessBorder
+                                : AppColors.borderDefault,
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            isEnrolled ? 'Active' : 'Alumni',
-                            style: AppTypography.label.copyWith(
-                              color: isEnrolled
-                                  ? AppColors.statusSuccessText
-                                  : AppColors.textSecondary,
-                              fontSize: 12,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isEnrolled
+                                    ? AppColors.statusSuccessText
+                                    : AppColors.textDisabled,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 6),
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: Text(
+                                isEnrolled ? 'Active' : 'Alumni',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.label.copyWith(
+                                  color: isEnrolled
+                                      ? AppColors.statusSuccessText
+                                      : AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
