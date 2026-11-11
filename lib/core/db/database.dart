@@ -268,8 +268,9 @@ class DatabaseService {
   /// Reads the active tenant from SharedPreferences (key [tenantKey]) and
   /// inserts a UserLvl=1 (SuperAdmin), IsActive=1 row whose `Pwd` is the
   /// BCrypt hash produced by `TenantNotifier.createTenant`. Idempotent:
-  /// skipped when no tenant credentials exist yet (pre-wizard open) or when
-  /// a user with the same Name is already present.
+  /// skipped when no tenant credentials exist yet (pre-wizard open); when a
+  /// user with the same Name already exists, that row's credentials are
+  /// updated in place instead of inserting a duplicate (G-10 Shot 11a-2).
   Future<void> _insertAdminUser(Database db) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -282,14 +283,30 @@ class DatabaseService {
       if (username == null || username.isEmpty) return;
       if (pwdHash == null || pwdHash.isEmpty) return;
 
-      final existing = await db.query(
-        'Users',
-        columns: ['ID'],
-        where: 'Name = ?',
-        whereArgs: [username],
-        limit: 1,
+      // G-10 Shot 11a-2: upsert by login Name so re-running the wizard with
+      // the same admin account updates credentials instead of inserting a
+      // duplicate Users row. Case/whitespace-insensitive match.
+      final existing = await db.rawQuery(
+        'SELECT ID FROM Users WHERE LOWER(TRIM(Name)) = LOWER(TRIM(?)) LIMIT 1',
+        [username],
       );
-      if (existing.isNotEmpty) return;
+
+      if (existing.isNotEmpty) {
+        final existingId = (existing.first['ID'] as num).toInt();
+        await db.update(
+          'Users',
+          {
+            'Pwd': pwdHash,
+            'Desig': 'Principal',
+            'UserLvl': 1,
+            'IsActive': 1,
+          },
+          where: 'ID = ?',
+          whereArgs: [existingId],
+        );
+        debugPrint('Updated existing setup admin user: $username (ID $existingId)');
+        return;
+      }
 
       await db.insert('Users', {
         'Name': username,

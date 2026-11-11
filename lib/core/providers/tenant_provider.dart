@@ -119,7 +119,16 @@ class TenantNotifier extends StateNotifier<Tenant?> {
   /// After persisting, the cached database connection is closed so the next
   /// access provisions the tenant-scoped database (seed profile + admin
   /// user) — G-10 Shot 3.
+  ///
+  /// G-10 Shot 11a-2: [id] pins an explicit tenant id (the "Use Existing
+  /// Account" skip flow passes `ailyans` so the renamed database file and
+  /// the Supabase `school_id` stay aligned). [skipUserInsertion] stores
+  /// `adminPassword` as '' WITHOUT hashing, which makes
+  /// `DatabaseService._insertAdminUser` skip the Users insert entirely —
+  /// the seed's existing `Users` row (with its authoritative BCrypt hash)
+  /// is reused and no duplicate admin is created.
   Future<void> createTenant({
+    String? id,
     required String schoolName,
     required String adminName,
     required String adminContact,
@@ -127,17 +136,20 @@ class TenantNotifier extends StateNotifier<Tenant?> {
     required String adminPassword,
     required String adminPin,
     String contactPhone = '',
+    bool skipUserInsertion = false,
   }) async {
-    final id = 'school_${DateTime.now().millisecondsSinceEpoch}';
+    final tenantId = id ?? 'school_${DateTime.now().millisecondsSinceEpoch}';
     final tenant = Tenant(
-      id: id,
+      id: tenantId,
       schoolName: schoolName,
       adminName: adminName,
       adminContact: adminContact,
       createdAt: DateTime.now().toIso8601String(),
       contactPhone: contactPhone,
       adminUsername: adminUsername,
-      adminPassword: BCrypt.hashpw(adminPassword, BCrypt.gensalt()),
+      adminPassword: skipUserInsertion
+          ? ''
+          : BCrypt.hashpw(adminPassword, BCrypt.gensalt()),
       adminPin: adminPin,
     );
     final prefs = await SharedPreferences.getInstance();

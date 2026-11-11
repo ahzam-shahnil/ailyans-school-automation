@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/config/build_config.dart';
+import '../../core/db/database.dart';
 import '../../core/providers/tenant_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
@@ -36,7 +40,156 @@ class _SchoolSetupScreenState extends ConsumerState<SchoolSetupScreen> {
   bool _obscurePin = true;
   String? _error;
 
+  // G-10 Shot 11a-2: seed databases (e.g. the Ailyans production snapshot)
+  // may already carry UserLvl=1 admin accounts. When detected, the wizard
+  // offers a "Use Existing Account" skip so reinstalling never forces a
+  // duplicate admin creation.
+  List<({int id, String name})> _existingAdmins = [];
+  bool _adminCheckComplete = false;
+
   static final RegExp _pinPattern = RegExp(r'^\d{4,6}$');
+
+  @override
+  void initState() {
+    super.initState();
+    // Ailyans Edition: pre-fill the school name so the skip flow persists a
+    // meaningful tenant record without the user typing it.
+    if (BuildConfig.isAilyansEdition && _schoolCtrl.text.isEmpty) {
+      _schoolCtrl.text = 'Ailyans Higher Secondary School';
+    }
+    _checkExistingAdmins();
+  }
+
+  /// Detects active SuperAdmin (UserLvl=1, IsActive=1) accounts in the
+  /// tenant database. Failures (no DB, plugin unavailable) leave the banner
+  /// hidden and the normal wizard flow untouched.
+  Future<void> _checkExistingAdmins() async {
+    // Widget tests never register the SharedPreferences/sqlite platform
+    // stack; skip so no host filesystem is touched and the gate stays inert
+    // (same guard as TenantNotifier.loadTenant).
+    if (Platform.environment.containsKey('FLUTTER_TEST')) {
+      if (!mounted) return;
+      setState(() {
+        _existingAdmins = [];
+        _adminCheckComplete = true;
+      });
+      return;
+    }
+    try {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.rawQuery(
+        'SELECT ID, Name FROM Users WHERE UserLvl = 1 AND IsActive = 1 ORDER BY ID ASC',
+      );
+      if (!mounted) return;
+      setState(() {
+        _existingAdmins = rows
+            .map(
+              (r) => (
+                id: (r['ID'] as num).toInt(),
+                name: (r['Name'] as String? ?? '').trim(),
+              ),
+            )
+            .where((a) => a.name.isNotEmpty)
+            .toList();
+        _adminCheckComplete = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _existingAdmins = [];
+        _adminCheckComplete = true;
+      });
+    }
+  }
+
+  /// "Use Existing Account (Skip Setup)": reuses the seed's SuperAdmin
+  /// account instead of creating a duplicate one.
+  ///
+  /// Critical DB file-rename guard (G-10 Shot 11a-2): before any tenant is
+  /// saved, `DatabaseService` resolves `school_default.db` (the seed
+  /// bootstrap target). Saving a tenant of `ailyans` without renaming would
+  /// split the data — the seeded database stays in `school_default.db`
+  /// while subsequent opens resolve an empty `school_ailyans.db`. The
+  /// current database file (and its WAL/SHM sidecars) is therefore renamed
+  /// to `school_<targetTenantId>.db` before the tenant is persisted, so the
+  /// next open finds the seeded data under the new tenant path.
+  Future<void> _handleSkipWithExistingAccount() async {
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    final isAilyans = BuildConfig.isAilyansEdition;
+    final schoolName = _schoolCtrl.text.trim().isNotEmpty
+        ? _schoolCtrl.text.trim()
+        : 'School';
+    final targetTenantId = isAilyans
+        ? 'ailyans'
+        : 'school_${DateTime.now().millisecondsSinceEpoch}';
+    final firstAdmin = _existingAdmins.first;
+
+    try {
+      // STEP 1: current DB path (before any tenant is persisted).
+      final currentDbPath = await DatabaseService.instance.getDatabasePath();
+
+      // STEP 2: target DB path for the tenant we are about to save. Uses
+      // the same parent directory as DatabaseService's path resolution.
+      final currentDir = File(currentDbPath).parent;
+      final targetDbPath =
+          '${currentDir.path}${Platform.pathSeparator}school_$targetTenantId.db';
+
+      // STEP 3: rename the seeded database (with sidecars) when the paths
+      // differ. Skipped when the current tenant id already matches.
+      if (currentDbPath != targetDbPath) {
+        await DatabaseService.instance.close();
+
+        final currentFile = File(currentDbPath);
+        if (await currentFile.exists()) {
+          await currentFile.rename(targetDbPath);
+
+          final walFile = File('$currentDbPath-wal');
+          if (await walFile.exists()) {
+            await walFile.rename('$targetDbPath-wal');
+          }
+          final shmFile = File('$currentDbPath-shm');
+          if (await shmFile.exists()) {
+            await shmFile.rename('$targetDbPath-shm');
+          }
+        }
+        // DatabaseService stays closed; the next `instance.database` access
+        // opens the renamed file with all seeded data under the new path.
+      }
+
+      // STEP 4: persist the tenant WITHOUT hashing or inserting credentials
+      // — the existing Users row's BCrypt hash stays authoritative.
+      await ref
+          .read(tenantProvider.notifier)
+          .createTenant(
+            id: targetTenantId,
+            schoolName: schoolName,
+            adminName: firstAdmin.name,
+            adminContact: '',
+            adminUsername: firstAdmin.name,
+            adminPassword: '', // Not hashed/inserted: existing Pwd wins.
+            adminPin: '',
+            skipUserInsertion: true,
+          );
+
+      if (!mounted) return;
+      // G-10 Shot 4: route through the license activation gate before login.
+      context.go('/license');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = 'Failed to use existing account: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to use existing account: $e')),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -197,6 +350,77 @@ class _SchoolSetupScreenState extends ConsumerState<SchoolSetupScreen> {
     );
   }
 
+  /// G-10 Shot 11a-2: info card shown on both wizard steps when the seed
+  /// database already contains active SuperAdmin accounts. Offers the skip
+  /// flow so reinstalling never accumulates duplicate admins.
+  Widget _buildExistingAdminBanner() {
+    if (!_adminCheckComplete || _existingAdmins.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final names = _existingAdmins
+        .take(3)
+        .map((a) => a.name)
+        .join(', ');
+    final message =
+        'Existing admin account${_existingAdmins.length > 1 ? 's' : ''} '
+        'detected: $names'
+        '${_existingAdmins.length > 3 ? ' (+${_existingAdmins.length - 3} more)' : ''}';
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.statusInfoBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.statusInfoBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.info_outline,
+                size: 18,
+                color: AppColors.statusInfoText,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  message,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.statusInfoText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: ElevatedButton(
+              key: const Key('skip_admin_creation_btn'),
+              onPressed: _submitting ? null : _handleSkipWithExistingAccount,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.statusInfoBg,
+                foregroundColor: AppColors.statusInfoText,
+                side: const BorderSide(color: AppColors.statusInfoBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+              child: const Text(
+                'Use Existing Account (Skip Setup)',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStep0School() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -217,6 +441,8 @@ class _SchoolSetupScreenState extends ConsumerState<SchoolSetupScreen> {
           ),
         ),
         const SizedBox(height: 24),
+        _buildExistingAdminBanner(),
+        const SizedBox(height: 12),
         _buildFieldCard(label: 'School Name', controller: _schoolCtrl),
         const SizedBox(height: 12),
         _buildFieldCard(
@@ -272,6 +498,8 @@ class _SchoolSetupScreenState extends ConsumerState<SchoolSetupScreen> {
           ),
         ),
         const SizedBox(height: 24),
+        _buildExistingAdminBanner(),
+        const SizedBox(height: 12),
         _buildFieldCard(
           label: 'Admin Username',
           controller: _usernameCtrl,
