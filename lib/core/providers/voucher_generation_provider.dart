@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -679,13 +680,41 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
   }
 
   /// Executes batch cohort voucher generation.
+  ///
+  /// G-10 Shot 11a-1: the pipeline is wrapped in try/catch/finally so that
+  /// `isGenerating` is guaranteed to reset. Previously, any exception raised
+  /// inside the per-row sqflite transaction (Android-specific failures that
+  /// do not occur on desktop FFI, where the lock model differs) escaped this
+  /// method and left the UI spinning on "Generating..." forever.
   Future<BatchGenerationSummary?> generateVouchers() async {
-    final filters = ref.read(voucherGenFiltersProvider);
-    final previewAsync = ref.read(voucherGenPreviewProvider);
-
-    final previewRows = previewAsync.valueOrNull;
+    final previewRows = ref.read(voucherGenPreviewProvider).valueOrNull;
     if (previewRows == null || previewRows.isEmpty) {
       state = state.copyWith(error: 'No eligible students for this cohort');
+      return null;
+    }
+
+    try {
+      return await _generateVouchersBatch();
+    } catch (e, st) {
+      debugPrint('generateVouchers error: $e\n$st');
+      state = state.copyWith(error: 'Voucher generation failed: $e');
+      return null;
+    } finally {
+      // Guarantee the "Generating..." state exits even on failure.
+      if (state.isGenerating) {
+        state = state.copyWith(isGenerating: false);
+      }
+    }
+  }
+
+  /// Generation pipeline proper. Every SQL call inside the per-row
+  /// `db.transaction` block MUST go through `txn` — using the outer `db`
+  /// handle while a transaction is open deadlocks sqflite on Android
+  /// (the operation queues behind the transaction that is waiting on it).
+  Future<BatchGenerationSummary?> _generateVouchersBatch() async {
+    final filters = ref.read(voucherGenFiltersProvider);
+    final previewRows = ref.read(voucherGenPreviewProvider).valueOrNull;
+    if (previewRows == null || previewRows.isEmpty) {
       return null;
     }
 
