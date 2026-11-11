@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/voucher_preview_row.dart';
 import '../db/database.dart';
+import '../sync/sync_provider.dart';
 
 /// Default offset between issue date and due date, in days.
 /// Preserves the pre-G-7 behavior of issueDate=day 1 -> dueDate=day 10.
@@ -1196,9 +1197,34 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     // 4. Regenerate with current config through the SAME generation method
     return generateVouchers();
   }
+
+  /// G-10 Shot 12b: silent, non-destructive preview refresh, triggered from
+  /// the provider factory on [dbDataVersionProvider] changes (a cloud pull
+  /// completed). Invalidates the preview-side FutureProviders so they re-query
+  /// SQLite: a watched FutureProvider keeps showing its previous data while
+  /// rebuilding, so there is no spinner flicker. The filter state
+  /// ([voucherGenFiltersProvider]) is untouched, so the preview rebuilds with
+  /// exactly the currently selected cohort filters.
+  Future<void> reloadPreviewPreservingFilters() async {
+    if (state.isGenerating) return;
+    try {
+      ref.invalidate(voucherGenPreviewProvider);
+      ref.invalidate(voucherCohortStudentsProvider);
+      ref.invalidate(voucherClassTariffsProvider);
+      ref.invalidate(voucherBankListProvider);
+    } catch (_) {
+      // Silent reload must never surface an error into the UI.
+    }
+  }
 }
 
 final voucherGenExecutionProvider =
     StateNotifierProvider<VoucherGenExecutionNotifier, VoucherGenState>((ref) {
-      return VoucherGenExecutionNotifier(ref);
+      final notifier = VoucherGenExecutionNotifier(ref);
+      // G-10 Shot 12b: silent non-destructive preview reload after every
+      // cloud pull (dbDataVersionProvider is bumped in onPullComplete).
+      ref.listen<int>(dbDataVersionProvider, (prev, next) {
+        if (prev != next) notifier.reloadPreviewPreservingFilters();
+      });
+      return notifier;
     });

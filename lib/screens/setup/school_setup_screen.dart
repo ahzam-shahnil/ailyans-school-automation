@@ -145,7 +145,19 @@ class _SchoolSetupScreenState extends ConsumerState<SchoolSetupScreen> {
         await DatabaseService.instance.close();
 
         final currentFile = File(currentDbPath);
-        if (await currentFile.exists()) {
+        // G-10 Shot 12b: target-exists guard — if the target DB already
+        // exists on disk (the tenant's real database is already in place,
+        // e.g. the tenant was restored/registered earlier), it must NOT be
+        // overwritten. Drop only the temporary current file and its
+        // WAL/SHM sidecars and keep the existing target untouched.
+        final targetFile = File(targetDbPath);
+        if (await targetFile.exists() && await targetFile.length() > 0) {
+          if (await currentFile.exists()) await currentFile.delete();
+          final walFile = File('$currentDbPath-wal');
+          if (await walFile.exists()) await walFile.delete();
+          final shmFile = File('$currentDbPath-shm');
+          if (await shmFile.exists()) await shmFile.delete();
+        } else if (await currentFile.exists()) {
           await currentFile.rename(targetDbPath);
 
           final walFile = File('$currentDbPath-wal');
@@ -187,6 +199,58 @@ class _SchoolSetupScreenState extends ConsumerState<SchoolSetupScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to use existing account: $e')),
+      );
+    }
+  }
+
+  /// G-10 Shot 12b: recovery path for a school whose data already lives in
+  /// the cloud (Supabase) but whose local database has no admin accounts
+  /// (fresh reinstall / lost local DB). Persists a placeholder tenant — no
+  /// user insertion, no local admin creation — then routes to the license
+  /// screen, where activation triggers the post-activation pull (G-10.11)
+  /// that restores every synced table into the freshly provisioned DB.
+  Future<void> _handleRestoreFromCloud() async {
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+
+    final enteredName = _schoolCtrl.text.trim();
+    final schoolName = enteredName.isNotEmpty ? enteredName : 'Restored School';
+    // Placeholder tenant id derived from the entered school name; the unique
+    // millisecond suffix keeps repeated restores from colliding on prefs.
+    final slug = enteredName.isEmpty
+        ? 'restored_school'
+        : enteredName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    final placeholderTenantId =
+        'school_${slug}_${DateTime.now().millisecondsSinceEpoch}';
+
+    try {
+      await ref
+          .read(tenantProvider.notifier)
+          .createTenant(
+            id: placeholderTenantId,
+            schoolName: schoolName,
+            adminName: 'Administrator',
+            adminContact: '',
+            adminUsername: 'admin',
+            adminPassword: '',
+            adminPin: '',
+            skipUserInsertion: true,
+          );
+
+      if (!mounted) return;
+      // The /license screen handles the post-activation cloud pull.
+      context.go('/license');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _submitting = false;
+        _error = 'Failed to prepare cloud restore: $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to prepare cloud restore: $e')),
       );
     }
   }
@@ -474,6 +538,30 @@ class _SchoolSetupScreenState extends ConsumerState<SchoolSetupScreen> {
         ],
         const SizedBox(height: 24),
         _buildPrimaryButton(label: 'Next: Admin Setup', onPressed: _onNext),
+        // G-10 Shot 12b: recovery link for a school whose data lives in the
+        // cloud but whose local seed has no admin accounts — shown only after
+        // the admin check completed and confirmed none exist.
+        if (_adminCheckComplete && _existingAdmins.isEmpty) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: TextButton(
+              key: const Key('restore_school_from_cloud_btn'),
+              onPressed: _submitting ? null : _handleRestoreFromCloud,
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.statusInfoText,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.md),
+                ),
+              ),
+              child: const Text(
+                'Already have a License Key? Restore Existing School →',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

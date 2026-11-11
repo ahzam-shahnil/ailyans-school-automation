@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/fee_receipt_view.dart';
 import '../db/database.dart';
+import '../sync/sync_provider.dart';
 import 'package:school_automation/core/sync/node_id_allocator.dart';
 import 'clock_provider.dart';
 import 'shell_metadata_provider.dart';
@@ -215,15 +216,23 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
   }
 
   /// Lookup voucher by VoucherMasID or numeric Stu_RegID.
-  Future<void> lookupVoucher(String query) async {
+  ///
+  /// [silent] (G-10 Shot 12b): skips the `isLoadingLookup` busy toggle so a
+  /// background dbDataVersion reload never flashes a spinner. Behavior is
+  /// otherwise identical.
+  Future<void> lookupVoucher(String query, {bool silent = false}) async {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return;
 
-    state = state.copyWith(
-      isLoadingLookup: true,
-      lookupError: () => null,
-      postError: () => null,
-    );
+    if (!silent) {
+      state = state.copyWith(
+        isLoadingLookup: true,
+        lookupError: () => null,
+        postError: () => null,
+      );
+    } else {
+      state = state.copyWith(lookupError: () => null, postError: () => null);
+    }
 
     try {
       final db = await DatabaseService.instance.database;
@@ -482,6 +491,57 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       );
     } catch (e) {
       // Swallow silently on mount — DB may not be ready yet
+    }
+  }
+
+  /// G-10 Shot 12b: silent, non-destructive in-place reload, triggered from
+  /// the provider factory on [dbDataVersionProvider] changes (a cloud pull
+  /// completed). Re-queries SQLite for the active directory filter and the
+  /// currently loaded receipt without flashing a spinner or wiping state:
+  /// - `isLoadingLookup`/`isPosting` busy states are guarded (return early).
+  /// - The directory filter/search text is preserved.
+  /// - Operator payment inputs (`paymentDate`, `selectedBankId`,
+  ///   `amountTendered`, `paymentMode`, `remarks`, `useAdvanceCredit`,
+  ///   `sendSms`) are snapshotted and restored, because `lookupVoucher`
+  ///   re-derives them from the freshly loaded receipt.
+  Future<void> reloadPreservingState() async {
+    if (state.isLoadingLookup || state.isPosting) return;
+    try {
+      final receiptId = state.currentReceipt?.voucherMasId;
+      final directoryFilter = state.activeDirectoryFilter;
+
+      // Snapshot operator payment inputs before any lookup resets them.
+      final prevDate = state.paymentDate;
+      final prevBankId = state.selectedBankId;
+      final prevTendered = state.amountTendered;
+      final prevMode = state.paymentMode;
+      final prevRemarks = state.remarks;
+      final prevUseAdvance = state.useAdvanceCredit;
+      final prevSendSms = state.sendSms;
+
+      if (directoryFilter != null) {
+        // Repopulates directoryRows; preserves directorySearch; clears the
+        // loaded receipt, which is restored below when one was open.
+        await lookupVoucherByFilter(directoryFilter);
+      }
+
+      if (receiptId != null) {
+        await lookupVoucher(receiptId, silent: true);
+        // Restore operator-entered payment inputs over the lookup defaults.
+        if (state.currentReceipt != null) {
+          state = state.copyWith(
+            paymentDate: prevDate,
+            selectedBankId: prevBankId,
+            amountTendered: prevTendered,
+            paymentMode: prevMode,
+            remarks: prevRemarks,
+            useAdvanceCredit: prevUseAdvance,
+            sendSms: prevSendSms,
+          );
+        }
+      }
+    } catch (_) {
+      // Silent reload must never surface an error into the UI.
     }
   }
 
@@ -1041,5 +1101,12 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
 
 final feeCollectionProvider =
     StateNotifierProvider<FeeCollectionNotifier, FeeCollectionState>((ref) {
-      return FeeCollectionNotifier(null, ref);
+      final notifier = FeeCollectionNotifier(null, ref);
+      // G-10 Shot 12b: silent non-destructive reload after every cloud pull
+      // (dbDataVersionProvider is bumped in onPullComplete). The notifier
+      // method itself guards busy states and preserves UI state.
+      ref.listen<int>(dbDataVersionProvider, (prev, next) {
+        if (prev != next) notifier.reloadPreservingState();
+      });
+      return notifier;
     });

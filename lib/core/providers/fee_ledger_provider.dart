@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/fee_ledger_row.dart';
 import '../db/database.dart';
+import '../sync/sync_provider.dart';
 import '../utils/fee_head_display.dart';
 import 'clock_provider.dart';
 
@@ -475,6 +476,19 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
 
   Future<void> refresh() => _fetchData();
 
+  /// G-10 Shot 12b: silent, non-destructive reload, triggered from the
+  /// provider factory on [dbDataVersionProvider] changes (a cloud pull
+  /// completed). Re-queries the ledger rows/KPIs for the currently selected
+  /// filters without flashing a spinner; guarded against busy states.
+  Future<void> reloadPreservingState() async {
+    if (state.isLoading) return;
+    try {
+      await _fetchData(silent: true);
+    } catch (_) {
+      // Silent reload must never surface an error into the UI.
+    }
+  }
+
   /// Query line items from VoucharDet joined to FeeParameters for a specific voucher.
   Future<List<FeeLedgerDetailItem>> loadVoucherDetails(
     String voucherMasId,
@@ -583,8 +597,12 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
   }
 
   /// Internal data fetching executing synchronized KPI aggregate & row queries.
-  Future<void> _fetchData() async {
-    state = state.copyWith(isLoading: true, clearError: true);
+  ///
+  /// [silent] (G-10 Shot 12b): skips the `isLoading` busy toggle so a
+  /// background dbDataVersion reload never flashes a spinner. All filter
+  /// fields are read from current state, so active filters are preserved.
+  Future<void> _fetchData({bool silent = false}) async {
+    state = state.copyWith(isLoading: silent ? null : true, clearError: true);
     try {
       final db = await DatabaseService.instance.database;
 
@@ -758,5 +776,12 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
 /// Global provider for the FeeLedger state notifier.
 final feeLedgerProvider =
     StateNotifierProvider<FeeLedgerNotifier, FeeLedgerState>((ref) {
-      return FeeLedgerNotifier(ref);
+      final notifier = FeeLedgerNotifier(ref);
+      // G-10 Shot 12b: silent non-destructive reload after every cloud pull
+      // (dbDataVersionProvider is bumped in onPullComplete). The busy-state
+      // guard (`state.isLoading`) lives inside reloadPreservingState().
+      ref.listen<int>(dbDataVersionProvider, (prev, next) {
+        if (prev != next) notifier.reloadPreservingState();
+      });
+      return notifier;
     });

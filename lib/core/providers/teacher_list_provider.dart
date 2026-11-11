@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../models/teacher_row.dart';
 import '../db/database.dart';
+import '../sync/sync_provider.dart';
 
 /// State representation for Screen 20 - TeacherListScreen (`/staff/teachers`).
 /// Implements §S25 (`frmTeachers` at `0x00431fec`, `ObjID: 14`).
@@ -272,10 +273,55 @@ class TeacherListNotifier extends StateNotifier<TeacherListState> {
       state = state.copyWith(errorMessage: 'Search query error: $e');
     }
   }
+
+  /// G-10 Shot 12b: silent, non-destructive reload, triggered from the
+  /// provider factory on [dbDataVersionProvider] changes (a cloud pull
+  /// completed). Re-fetches the distinct employment categories and re-runs
+  /// the filtered query for the current `searchQuery` / `categoryFilter` /
+  /// `onlyActive` / `page` state without flashing a spinner
+  /// (`_executeFilteredQuery` never toggles `isLoading`); guarded against
+  /// busy states.
+  Future<void> reloadPreservingState() async {
+    if (state.isLoading) return;
+    try {
+      final db = await _getDb();
+
+      // 1. Refresh distinct TCat categories (new values may have synced in).
+      final catRows = await db.rawQuery('''
+        SELECT DISTINCT TCat
+        FROM Teachers
+        WHERE TCat IS NOT NULL AND TRIM(TCat) != ''
+        ORDER BY TCat ASC
+      ''');
+      final distinctCats = <String>['All Categories'];
+      for (final r in catRows) {
+        final c = (r['TCat'] as String?)?.trim();
+        if (c != null && c.isNotEmpty && !distinctCats.contains(c)) {
+          distinctCats.add(c);
+        }
+      }
+      if (!mounted) return;
+      state = state.copyWith(categories: distinctCats);
+
+      // 2. Re-run the filtered query — silent and filter-preserving.
+      await _executeFilteredQuery();
+    } catch (_) {
+      // Silent reload must never surface an error into the UI.
+    }
+  }
 }
 
 /// Global Riverpod provider for Faculty & Staff Directory per §S25.
 final teacherListProvider =
     StateNotifierProvider<TeacherListNotifier, TeacherListState>(
-      (ref) => TeacherListNotifier(),
+      (ref) {
+        final notifier = TeacherListNotifier();
+        // G-10 Shot 12b: silent non-destructive reload after every cloud pull
+        // (dbDataVersionProvider is bumped in onPullComplete). The busy-state
+        // guard (`state.isLoading`) lives inside reloadPreservingState().
+        ref.listen<int>(dbDataVersionProvider, (prev, next) {
+          if (prev != next) notifier.reloadPreservingState();
+        });
+        return notifier;
+      },
     );
