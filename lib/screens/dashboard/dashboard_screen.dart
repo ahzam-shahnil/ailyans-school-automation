@@ -10,6 +10,8 @@ import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/providers/student_list_provider.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../widgets/reports/report_definition.dart';
@@ -128,7 +130,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     super.dispose();
   }
 
-  void _refresh() {
+  /// G-10 Shot 9: two-phase offline-first refresh (Ctrl+R / Refresh button).
+  ///
+  /// Step A (0ms): instantly re-query local SQLite so local edits render
+  /// first, preserving all active filters.
+  /// Step B: run the cloud sync (push outbox + pull delta). When the pull
+  /// completes, re-query local SQLite again so freshly pulled remote rows
+  /// from Supabase render immediately without an app restart.
+  Future<void> _refresh() async {
+    // Step A: instant local DB read.
+    ref.invalidate(dashboardMetricsProvider);
+    ref.invalidate(shellMetadataProvider);
+    ref.invalidate(studentListProvider);
+
+    // Step B: cloud sync, then re-read the local DB.
+    try {
+      await ref.read(syncPushProvider.notifier).triggerManualSync();
+    } catch (e) {
+      debugPrint('[G-10] Dashboard cloud sync failed: $e');
+    }
+    if (!mounted) return;
     ref.invalidate(dashboardMetricsProvider);
     ref.invalidate(shellMetadataProvider);
   }

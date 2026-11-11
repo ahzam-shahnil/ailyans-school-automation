@@ -2,7 +2,9 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/providers/student_list_provider.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
@@ -19,8 +21,16 @@ class AppStatusBar extends ConsumerWidget {
     final metadataAsync = ref.watch(shellMetadataProvider);
     final metadata = metadataAsync.valueOrNull ?? ShellMetadata.empty();
     final syncState = showSyncStatus ? ref.watch(syncPushProvider) : null;
+    // G-10 Shot 9: user-initiated sync — refresh local providers first
+    // (Step A: instant local SQLite read), then run push + pull; the
+    // post-pull hook re-reads local SQLite again upon completion (Step B).
     final VoidCallback? onSyncNow = showSyncStatus
-        ? () => ref.read(syncPushProvider.notifier).triggerSync()
+        ? () async {
+            ref.invalidate(studentListProvider);
+            ref.invalidate(dashboardMetricsProvider);
+            ref.invalidate(shellMetadataProvider);
+            await ref.read(syncPushProvider.notifier).triggerManualSync();
+          }
         : null;
 
     return Container(

@@ -10,6 +10,8 @@ import 'package:path/path.dart' as p;
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/providers/dashboard_metrics_provider.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/school_class.dart';
@@ -82,6 +84,31 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     _selectedStuRegIds.clear();
     ref.read(studentListFiltersProvider.notifier).reset();
     ref.invalidate(studentListProvider);
+  }
+
+  /// G-10 Shot 9: two-phase offline-first refresh for the Student Directory
+  /// (Refresh button on mobile & desktop + pull-to-refresh on mobile).
+  ///
+  /// Step A (0ms): instantly re-query local SQLite. `studentListProvider`
+  /// watches `studentListFiltersProvider` (a separate notifier), so the
+  /// user's session/class/section/search/sort/page state is preserved.
+  /// Step B: run the cloud sync (push outbox + pull delta). When the pull
+  /// completes, re-query local SQLite again so pulled remote rows render
+  /// immediately without an app restart.
+  Future<void> _handleRefreshAndSync() async {
+    // Step A: instant local DB read.
+    ref.invalidate(studentListProvider);
+
+    // Step B: cloud sync, then re-read the local DB.
+    try {
+      await ref.read(syncPushProvider.notifier).triggerManualSync();
+    } catch (e) {
+      debugPrint('[G-10] Student list cloud sync failed: $e');
+    }
+    if (!mounted) return;
+
+    ref.invalidate(studentListProvider);
+    ref.invalidate(dashboardMetricsProvider);
   }
 
   String _getStudentInitials(String fullName) {
@@ -222,8 +249,14 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
-                  child: CustomScrollView(
-                    slivers: [
+                  // G-10 Shot 9: pull-to-refresh on mobile syncs (push + pull)
+                  // and re-reads local SQLite without destroying filters.
+                  child: RefreshIndicator(
+                    color: AppColors.accentStudents,
+                    onRefresh: _handleRefreshAndSync,
+                    child: CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      slivers: [
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                         sliver: SliverToBoxAdapter(
@@ -287,6 +320,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                           ),
                         ),
                     ],
+                    ),
                   ),
                 ),
                 _buildMobilePaginationBar(
@@ -456,6 +490,18 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                               ),
                               minimumSize: const Size(0, 40),
                             ),
+                          ),
+                          // G-10 Shot 9: Sync & Refresh (two-phase local read
+                          // + cloud sync + post-pull re-read).
+                          IconButton(
+                            onPressed: _handleRefreshAndSync,
+                            tooltip: 'Sync & Refresh',
+                            icon: const Icon(
+                              Icons.refresh,
+                              size: 20,
+                              color: AppColors.textSecondary,
+                            ),
+                            visualDensity: VisualDensity.compact,
                           ),
                           if (canNewAdmission)
                             ElevatedButton.icon(
@@ -2135,6 +2181,30 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 ),
               ),
             ),
+          // G-10 Shot 9: tactile 40x40 Sync & Refresh button (two-phase
+          // local read + cloud sync + post-pull re-read).
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: IconButton(
+              onPressed: _handleRefreshAndSync,
+              tooltip: 'Sync & Refresh',
+              padding: EdgeInsets.zero,
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.surfaceRaised,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  side: const BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+              icon: const Icon(
+                Icons.refresh,
+                size: 20,
+                color: AppColors.accentStudents,
+              ),
+            ),
+          ),
         ],
       ),
     );
