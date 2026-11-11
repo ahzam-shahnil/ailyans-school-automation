@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/config/build_config.dart';
 import '../../core/providers/license_provider.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 
 /// G-10 Shot 4: SaaS license activation gate, shown between the setup wizard
@@ -67,6 +70,28 @@ class _LicenseEntryScreenState extends ConsumerState<LicenseEntryScreen> {
       });
       return;
     }
+
+    // G-10 Shot 11b-1: license validated — pull the latest cloud delta
+    // BEFORE navigating to login, so the dashboard shows fresh Supabase
+    // data instead of the seed snapshot. The offline launch trial key has
+    // no cloud data behind it, and tests must not touch the network.
+    // Timeout-guarded and non-blocking: if the device is offline or the
+    // sync is slow, catch silently and proceed — the periodic 10s timer
+    // will pull the delta later.
+    final isOfflineKey = key.toUpperCase() == LicenseNotifier.trialKey;
+    if (!isOfflineKey && !Platform.environment.containsKey('FLUTTER_TEST')) {
+      try {
+        await ref
+            .read(syncPushProvider.notifier)
+            .triggerManualSync()
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {
+        // Offline or slow — proceed with local data.
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isValidating = false);
     context.go('/login');
   }
 
