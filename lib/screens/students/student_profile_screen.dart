@@ -13,6 +13,7 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/sibling_links_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_profile_provider.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/photo_picker.dart';
@@ -402,6 +403,18 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
     final profileAsync = ref.watch(studentProfileProvider(stuRegId));
     final isEditMode = ref.watch(studentEditModeProvider);
+    // G-10 Shot 10b: reload this profile in place when new data lands from a
+    // remote pull (dbDataVersionProvider bumps after every pulled delta or
+    // manual sync). Skipped in edit mode so an in-progress form is never
+    // clobbered by a background refresh.
+    ref.listen<int>(dbDataVersionProvider, (previous, next) {
+      if (previous != next && mounted) {
+        final editing = ref.read(studentEditModeProvider);
+        if (!editing) {
+          ref.invalidate(studentProfileProvider(stuRegId));
+        }
+      }
+    });
     final activeTab = ref.watch(selectedStudentTabProvider);
     final session = ref.watch(sessionProvider);
     final canEditBiodata =

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/providers/session_provider.dart';
+import '../../core/db/database.dart';
 import '../../core/sync/connectivity_service.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -28,15 +29,25 @@ class AppShell extends ConsumerStatefulWidget {
   ConsumerState<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends ConsumerState<AppShell> {
+class _AppShellState extends ConsumerState<AppShell>
+    with WidgetsBindingObserver {
   final FocusNode _searchFocusNode = FocusNode();
 
   StreamSubscription<ConnectivityResult>? _connectivitySub;
   Timer? _periodicSyncTimer;
 
+  // G-10 Shot 10b: polls _sync_outbox every 2s so any local SQLite write is
+  // auto-pushed to Supabase within ~1-3s without the user tapping Sync Now
+  // (the in-runSync isPushing/isPulling guard acts as the debounce).
+  Timer? _outboxWatcherTimer;
+
   @override
   void initState() {
     super.initState();
+    // G-10 Shot 10b: immediate pull from Supabase when the app returns to
+    // the foreground, so remote changes made on other devices are visible
+    // within seconds of resuming.
+    WidgetsBinding.instance.addObserver(this);
     // F-5: bootstrap after the first frame so provider state is never mutated
     // during widget-tree build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -44,7 +55,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     });
   }
 
-  /// Attaches the connectivity listener and 30s periodic sync timer.
+  /// Attaches the connectivity listener, the 10s periodic sync timer, and the
+  /// 2s outbox auto-push watcher.
   /// All platform calls are guarded so widget tests never fail on
   /// MissingPluginException or pending timers.
   void _bootstrapSync() {
@@ -83,17 +95,47 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
 
     if (!Platform.environment.containsKey('FLUTTER_TEST')) {
-      _periodicSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      // G-10 Shot 10b: 30s -> 10s polling fallback (when Realtime is quiet).
+      _periodicSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
         if (!mounted) return;
         ref.read(syncPushProvider.notifier).triggerSync();
+      });
+
+      // G-10 Shot 10b: outbox auto-push watcher — local writes land in
+      // _sync_outbox via triggers; the moment a row appears, push it.
+      _outboxWatcherTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+        if (!mounted) return;
+        try {
+          final db = await DatabaseService.instance.database;
+          final result = await db.rawQuery(
+            'SELECT COUNT(*) AS c FROM _sync_outbox',
+          );
+          final count = (result.first['c'] as int?) ?? 0;
+          if (count > 0 && mounted) {
+            ref.read(syncPushProvider.notifier).triggerSync();
+          }
+        } catch (_) {
+          // DB not ready yet, skip.
+        }
       });
     }
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // G-10 Shot 10b: immediate pull when the app comes back to the
+    // foreground (pull-only would miss local pushes, so full sync).
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref.read(syncPushProvider.notifier).triggerSync();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _connectivitySub?.cancel();
     _periodicSyncTimer?.cancel();
+    _outboxWatcherTimer?.cancel();
     _searchFocusNode.dispose();
     super.dispose();
   }

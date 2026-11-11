@@ -75,6 +75,12 @@ class SyncPushState {
       );
 }
 
+/// G-10 Shot 10b: global data-version signal. Bumped every time a pull lands
+/// new rows in local SQLite or a manual sync completes. Open screens can
+/// `ref.listen<int>(dbDataVersionProvider, ...)` to reload in place (without
+/// losing filters) while new remote data arrives.
+final dbDataVersionProvider = StateProvider<int>((ref) => 0);
+
 /// G-10 Shot 9: re-queries local SQLite through the active UI providers after
 /// a cloud pull (or a manual refresh request) so open screens render freshly
 /// pulled remote rows without an app restart.
@@ -198,9 +204,20 @@ final syncPushProvider =
     StateNotifierProvider<SyncPushNotifier, SyncPushState>(
   (ref) => SyncPushNotifier(
     // G-10 Shot 9: wire the post-pull UI refresh into the real provider.
-    // Periodic background sync (AppShell 30s timer) lands here with the
+    // Periodic background sync (AppShell timer) lands here with the
     // pulled > 0 guard enforced inside triggerSync; manual callers use
     // triggerManualSync() which refreshes unconditionally.
-    onPullComplete: (_) => refreshLocalDataProviders(ref),
+    onPullComplete: (pulledCount) {
+      refreshLocalDataProviders(ref);
+      // G-10 Shot 10b: bump the global data version so open screens
+      // (Student Profile for 10b; Fee Ledger / Teacher List later) can
+      // reload in place. Guarded: the notifier has no Ref, so bumping
+      // here is the single choke point after a pull completes.
+      try {
+        ref.read(dbDataVersionProvider.notifier).state++;
+      } catch (_) {
+        // Provider container shutting down during a late sync — ignore.
+      }
+    },
   ),
 );
