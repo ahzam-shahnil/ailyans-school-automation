@@ -1,0 +1,9 @@
+ByteWave School Automation
+Copyright (c) 2023-2026 ByteWave
+
+Licensed to: Ailyans Higher Secondary School, Mianwali
+
+This software is provided under the ByteWave SaaS license agreement.
+Redistribution, resale, or reverse engineering is prohibited.
+
+See: www.linkedin.com/company/bytewaves
