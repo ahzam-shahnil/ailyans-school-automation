@@ -76,9 +76,9 @@ jobs:
           SEED_PROFILE: ${{ matrix.seed_profile }}
         run: |
           if [ "$SEED_PROFILE" = "ailyans" ]; then
-            cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/ailyans-school-manager.apk
+            mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/ailyans-school-manager.apk
           else
-            cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/bytewave-school-manager.apk
+            mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/bytewave-school-manager.apk
           fi
       - uses: actions/upload-artifact@v4
         with:
