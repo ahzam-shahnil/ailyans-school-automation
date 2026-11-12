@@ -1545,10 +1545,10 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                               'students': students,
                               'branchName':
                                   meta?.branchName ??
-                                  "Ailyans's Higher Secondary School",
+                                  '-',
                               'branchAddress':
                                   meta?.branchAddress ??
-                                  'Muslim Bazar Mianwali',
+                                  '-',
                             },
                           ),
                         );
@@ -1615,10 +1615,10 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                               'students': students,
                               'branchName':
                                   meta?.branchName ??
-                                  "Ailyans's Higher Secondary School",
+                                  '-',
                               'branchAddress':
                                   meta?.branchAddress ??
-                                  'Muslim Bazar Mianwali',
+                                  '-',
                             },
                           ),
                         );
@@ -1692,10 +1692,10 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                               'rank': 1,
                               'branchName':
                                   meta?.branchName ??
-                                  "Ailyans's Higher Secondary School",
+                                  '-',
                               'branchAddress':
                                   meta?.branchAddress ??
-                                  'Muslim Bazar Mianwali',
+                                  '-',
                             },
                           ),
                         );
@@ -1777,10 +1777,10 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
                               'subjects': subjects,
                               'branchName':
                                   meta?.branchName ??
-                                  "Ailyans's Higher Secondary School",
+                                  '-',
                               'branchAddress':
                                   meta?.branchAddress ??
-                                  'Muslim Bazar Mianwali',
+                                  '-',
                             },
                           ),
                         );
@@ -2968,8 +2968,8 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
           'examName': examDetail,
           'className': className,
           'students': students,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+          'branchName': meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );
@@ -3020,8 +3020,8 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
           'examName': examDetail,
           'className': className,
           'students': students,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+          'branchName': meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );
@@ -3074,8 +3074,8 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
             'grade': topStudent.computeGrade(curState.exGradeRows).toString(),
           },
           'rank': 1,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+          'branchName': meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );
@@ -3143,8 +3143,8 @@ class _MarksEntryScreenState extends ConsumerState<MarksEntryScreen> {
         extraParams: {
           'examName': examDetail,
           'subjects': subjects,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+          'branchName': meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );

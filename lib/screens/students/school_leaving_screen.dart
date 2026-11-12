@@ -253,8 +253,8 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
         extraParams: {
           'sessionYear': meta?.sessionYear ?? '2026-27',
           'leavers': leavers,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+          'branchName': meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );

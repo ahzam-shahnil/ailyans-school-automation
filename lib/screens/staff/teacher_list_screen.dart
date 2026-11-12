@@ -186,8 +186,8 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
           'month': picked,
           'staffAttendance': staffAttendance,
           'branchName':
-              meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Mianwali',
+              meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );
@@ -2136,8 +2136,8 @@ class _TeacherListScreenState extends ConsumerState<TeacherListScreen> {
           'month': picked,
           'staffAttendance': staffAttendance,
           'branchName':
-              meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Mianwali',
+              meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );

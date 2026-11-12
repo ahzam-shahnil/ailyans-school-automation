@@ -124,7 +124,7 @@ class AwardCertificatePdfGenerator {
                           pw.Text(
                             branchAddress.isNotEmpty
                                 ? branchAddress
-                                : 'Muslim Bazar Mianwali',
+                                : '-',
                             style: pw.TextStyle(
                               font: sansRegular,
                               fontSize: 9,
@@ -351,7 +351,7 @@ class AwardCertificatePdfGenerator {
   }
 
   static String _getPlace(String address) {
-    if (address.isEmpty) return 'Mianwali';
+    if (address.isEmpty) return '-';
     final parts = address.split(',');
     return parts.last.trim();
   }

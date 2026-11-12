@@ -934,9 +934,9 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                   'teacherData': teacherData,
                   'branchName':
                       meta?.branchName ??
-                      "Ailyans's Higher Secondary School Mianwali",
+                      '-',
                   'branchAddress':
-                      meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+                      meta?.branchAddress ?? '-',
                 },
               ),
             );
@@ -1320,7 +1320,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
               label: 'Residential Address',
               fieldKey: 'TAddress',
               isEdit: isEdit,
-              placeholder: 'e.g. Muslim Bazar Mianwali',
+              placeholder: 'e.g. Branch Address',
               onChanged: (val) => notifier.updateField('TAddress', val),
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -2998,7 +2998,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
           label: 'Residential Address',
           fieldKey: 'TAddress',
           isEdit: isEdit,
-          placeholder: 'e.g. Muslim Bazar Mianwali',
+          placeholder: 'e.g. Branch Address',
           onChanged: (val) => notifier.updateField('TAddress', val),
         ),
         const SizedBox(height: AppSpacing.lg),

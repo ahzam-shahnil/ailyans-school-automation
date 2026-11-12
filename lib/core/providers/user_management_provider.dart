@@ -110,7 +110,7 @@ class UserManagementNotifier extends StateNotifier<UserManagementState> {
           .toList();
 
       const defaultBranches = [
-        "Ailyans's Higher Secondary School Mianwali",
+        '-',
         'Management',
         'Main Campus',
       ];

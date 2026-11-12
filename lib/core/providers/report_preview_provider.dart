@@ -165,7 +165,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     if (raw != null && raw.trim().isNotEmpty) {
       return raw.trim();
     }
-    return "Ailyans's Higher Secondary School Mianwali";
+    return '-';
   }
 
   String _safeBranchAddress() {
@@ -173,7 +173,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     if (raw != null && raw.trim().isNotEmpty) {
       return raw.trim();
     }
-    return 'Muslim Bazar Mianwali';
+    return '-';
   }
 
   Future<Uint8List> _generateFeeVoucher(int mode) async {

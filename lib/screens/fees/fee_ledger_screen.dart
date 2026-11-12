@@ -141,11 +141,11 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     final safeBranchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : "Ailyans's Higher Secondary School Mianwali";
+        : '-';
     final safeBranchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
-        : 'Muslim Bazar Mianwali';
+        : '-';
     final request = ReportRequest(
       type: ReportType.defaulterList,
       vouchers: defaulterData.groups,
@@ -218,7 +218,7 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
           'className': state.selectedClassId?.toString() ?? 'All Classes',
           'month': state.selectedMonth ?? '',
           'rows': summaryRows,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchName': meta?.branchName ?? '-',
           'branchAddress': meta?.branchAddress ?? '',
         },
       ),
@@ -257,7 +257,7 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
         extraParams: {
           'date': state.selectedMonth ?? '',
           'collections': collections,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
+          'branchName': meta?.branchName ?? '-',
           'branchAddress': meta?.branchAddress ?? '',
         },
       ),
@@ -334,11 +334,11 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     final safeBranchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : "Ailyans's Higher Secondary School Mianwali";
+        : '-';
     final safeBranchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
-        : 'Muslim Bazar Mianwali';
+        : '-';
     await ReportPreviewModal.show(
       context,
       request: ReportRequest(
@@ -3333,12 +3333,12 @@ class _DailyLedgerDialog extends ConsumerWidget {
                                   (meta?.branchName != null &&
                                       meta!.branchName.trim().isNotEmpty)
                                   ? meta.branchName.trim()
-                                  : "Ailyans's Higher Secondary School Mianwali";
+                                  : '-';
                               final safeBranchAddress =
                                   (meta?.branchAddress != null &&
                                       meta!.branchAddress.trim().isNotEmpty)
                                   ? meta.branchAddress.trim()
-                                  : 'Muslim Bazar Mianwali';
+                                  : '-';
 
                               ReportPreviewModal.show(
                                 context,
@@ -3559,12 +3559,12 @@ class _DailyLedgerDialog extends ConsumerWidget {
                               (meta?.branchName != null &&
                                   meta!.branchName.trim().isNotEmpty)
                               ? meta.branchName.trim()
-                              : "Ailyans's Higher Secondary School Mianwali";
+                              : '-';
                           final safeBranchAddress =
                               (meta?.branchAddress != null &&
                                   meta!.branchAddress.trim().isNotEmpty)
                               ? meta.branchAddress.trim()
-                              : 'Muslim Bazar Mianwali';
+                              : '-';
 
                           ReportPreviewModal.show(
                             context,

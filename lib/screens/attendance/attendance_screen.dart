@@ -803,12 +803,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             final safeBranchName =
                 (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
                 ? meta.branchName.trim()
-                : "Ailyans's Higher Secondary School Mianwali";
+                : '-';
             final safeBranchAddress =
                 (meta?.branchAddress != null &&
                     meta!.branchAddress.trim().isNotEmpty)
                 ? meta.branchAddress.trim()
-                : 'Muslim Bazar Mianwali';
+                : '-';
             final sectionName =
                 state.sections.firstWhere(
                       (s) => s['ClassSecID'] == state.selectedClassSecId,

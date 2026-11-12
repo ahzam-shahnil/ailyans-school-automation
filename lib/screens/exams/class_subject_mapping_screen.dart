@@ -177,8 +177,8 @@ class _ClassSubjectMappingScreenState
           'className': state.selectedClassName,
           'sessionYear': meta?.sessionYear ?? '2026-27',
           'subjects': subjects,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+          'branchName': meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );

@@ -172,7 +172,7 @@ class DefaulterListPdfGenerator {
     final principal =
         (branchPrincipal != null && branchPrincipal.trim().isNotEmpty)
         ? branchPrincipal.trim()
-        : 'Ahzam Shahnil';
+        : '-';
 
     return pw.Container(
       decoration: const pw.BoxDecoration(

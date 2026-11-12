@@ -960,7 +960,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
           label: 'Branch Address',
           maxLines: 2,
           onChanged: notifier.setBranchAddress,
-          hint: 'e.g. Muslim Bazar Mianwali',
+          hint: 'e.g. Branch Address',
           dense: stacked,
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -969,7 +969,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             controller: _principalCtrl,
             label: 'Principal / Head of Institution',
             onChanged: notifier.setPrincipal,
-            hint: 'e.g. Ahzam Shahnil',
+            hint: 'e.g. Full Name',
             dense: stacked,
           ),
           _buildTextField(

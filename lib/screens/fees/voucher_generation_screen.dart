@@ -289,7 +289,7 @@ class _VoucherGenerationScreenState
         vouchers: receipts,
         extraParams: const {
           'branchName': 'Ailyans Higher Secondary School',
-          'branchAddress': 'Muslim Bazar Mianwali',
+          'branchAddress': '-',
           'bankName': 'Askari Bank Limited',
           'bankBranch': 'Ballo Khel Road',
           'bankAcctNo': '4528',
@@ -321,7 +321,7 @@ class _VoucherGenerationScreenState
       final bytes = await ThreeCopyVouchersPdf.generate(
         vouchers: receipts,
         branchName: 'Ailyans Higher Secondary School',
-        branchAddress: 'Muslim Bazar Mianwali',
+        branchAddress: '-',
         bankName: 'Askari Bank Limited',
         bankBranch: 'Ballo Khel Road',
         bankAcctNo: '4528',

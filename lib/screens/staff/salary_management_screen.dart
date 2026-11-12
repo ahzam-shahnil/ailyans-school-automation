@@ -147,8 +147,8 @@ class _SalaryManagementScreenState
         titleOverride: 'Salary Slip - ${row.teacherName}',
         extraParams: {
           'salaryData': salaryData,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+          'branchName': meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );
@@ -193,8 +193,8 @@ class _SalaryManagementScreenState
         extraParams: {
           'salaries': salaries,
           'month': state.selectedMonth,
-          'branchName': meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Muslim Bazar Mianwali',
+          'branchName': meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );

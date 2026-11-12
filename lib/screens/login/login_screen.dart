@@ -274,7 +274,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                             const SizedBox(height: AppSpacing.xs),
                             Text(
-                              'Muslim Bazar Mianwali • School Automation System',
+                              'ByteWave School Automation',
                               style: AppTypography.bodySmall.copyWith(
                                 color: AppColors.textMuted,
                               ),

@@ -87,8 +87,8 @@ class _LibraryBooksScreenState extends ConsumerState<LibraryBooksScreen> {
         extraParams: {
           'books': books,
           'branchName':
-              meta?.branchName ?? "Ailyans's Higher Secondary School",
-          'branchAddress': meta?.branchAddress ?? 'Mianwali',
+              meta?.branchName ?? '-',
+          'branchAddress': meta?.branchAddress ?? '-',
         },
       ),
     );

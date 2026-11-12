@@ -227,11 +227,11 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     final branchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : "Ailyans's Higher Secondary School Mianwali";
+        : '-';
     final branchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
-        : 'Muslim Bazar Mianwali';
+        : '-';
 
     final paymentMode = ref.read(feeCollectionProvider).paymentMode;
     final printData = await ref
@@ -558,14 +558,14 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                   (meta?.branchName != null &&
                       meta!.branchName.trim().isNotEmpty)
                   ? meta.branchName.trim()
-                  : "Ailyans's Higher Secondary School Mianwali";
+                  : '-';
               final branchAddress =
                   (meta?.branchAddress != null &&
                       meta!.branchAddress.trim().isNotEmpty)
                   ? meta.branchAddress.trim()
-                  : 'Muslim Bazar Mianwali';
+                  : '-';
               final branchPhone = meta?.branchPhone ?? '03334449993';
-              final branchPrincipal = meta?.branchPrincipal ?? 'Ahzam Shahnil';
+              final branchPrincipal = meta?.branchPrincipal ?? '-';
 
               if (!mounted) return;
               await ReportPreviewModal.show(
@@ -945,13 +945,13 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     final branchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : "Ailyans's Higher Secondary School Mianwali";
+        : '-';
     final branchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
-        : 'Muslim Bazar Mianwali';
+        : '-';
     final branchPhone = meta?.branchPhone ?? '03334449993';
-    final branchPrincipal = meta?.branchPrincipal ?? 'Ahzam Shahnil';
+    final branchPrincipal = meta?.branchPrincipal ?? '-';
 
     if (!mounted) return;
     await ReportPreviewModal.show(

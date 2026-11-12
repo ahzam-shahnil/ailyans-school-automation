@@ -238,11 +238,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final safeBranchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : "Ailyans's Higher Secondary School Mianwali";
+        : '-';
     final safeBranchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
-        : 'Muslim Bazar Mianwali';
+        : '-';
 
     await ReportPreviewModal.show(
       context,
@@ -1071,11 +1071,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final safeBranchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : "Ailyans's Higher Secondary School Mianwali";
+        : '-';
     final safeBranchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
-        : 'Muslim Bazar Mianwali';
+        : '-';
     await ReportPreviewModal.show(
       context,
       request: ReportRequest(

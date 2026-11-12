@@ -89,7 +89,7 @@ void main() {
 
     const testMetadata = ShellMetadata(
       branchName: "Ailyans's Higher Secondary School Mianwali",
-      branchAddress: 'Muslim Bazar Mianwali',
+      branchAddress: 'Branch Address',
       branchPhone: null,
       branchPrincipal: null,
       sessionYear: '2017-2018',
@@ -126,7 +126,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Muslim Bazar Mianwali • School Automation System'),
+        find.text('ByteWave School Automation'),
         findsOneWidget,
       );
 
