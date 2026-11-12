@@ -342,7 +342,7 @@ void main() {
       final state = container.read(classSubjectMappingProvider);
       expect(state.mappings.isNotEmpty, isTrue);
 
-      // Select the first mapping (Islamiat in Class 10, taught by Nasir Ali, Principal)
+      // Select the first mapping (Islamiat in Class 10, taught by Ahzam Shahnil, Principal)
       final firstMapping = state.mappings.first;
       notifier.selectMappingForEdit(firstMapping.subjClsId);
 
@@ -359,7 +359,7 @@ void main() {
 
       // Principal teacher check
       expect(editState.nonTeacherCurrent, isNotNull);
-      expect(editState.nonTeacherCurrent!['TName'], 'Nasir Ali');
+      expect(editState.nonTeacherCurrent!['TName'], 'Ahzam Shahnil');
       expect(editState.nonTeacherCurrent!['TCat'], 'Principal');
     });
 
@@ -437,7 +437,7 @@ void main() {
         // Edit mode button and warning banner
         expect(find.text('Update Mapping (Ctrl+S)'), findsOneWidget);
 
-        // Warning banner for Principal Nasir Ali
+        // Warning banner for Principal Ahzam Shahnil
         expect(
           find.textContaining('is registered as Principal, not Teacher'),
           findsOneWidget,

@@ -349,7 +349,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Screen title and subtitle metadata
-      expect(find.text('Nasir Ali'), findsWidgets);
+      expect(find.text('Ahzam Shahnil'), findsWidgets);
       expect(find.text('Principal'), findsWidgets);
       expect(find.text('Edit Profile'), findsOneWidget);
 
@@ -385,7 +385,7 @@ void main() {
         expect(find.byType(TextFormField), findsNothing);
 
         // Verify read-only text values are displayed in the view containers
-        expect(find.text('Nasir Ali'), findsWidgets);
+        expect(find.text('Ahzam Shahnil'), findsWidgets);
         expect(find.text('Muhammad Ali'), findsOneWidget);
         expect(find.text('38302-1111111-1'), findsWidgets);
         expect(find.text('03331111111'), findsWidgets);
@@ -659,7 +659,7 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(find.byType(TeacherProfileScreen), findsOneWidget);
-      expect(find.text('Nasir Ali'), findsWidgets);
+      expect(find.text('Ahzam Shahnil'), findsWidgets);
 
       // 2. 1440x780 Viewport
       await tester.binding.setSurfaceSize(const Size(1440, 780));
@@ -695,16 +695,16 @@ void main() {
         await tester.pumpAndSettle();
 
         // Find Full Name field
-        final nameField = find.widgetWithText(TextFormField, 'Nasir Ali');
+        final nameField = find.widgetWithText(TextFormField, 'Ahzam Shahnil');
         expect(nameField, findsOneWidget);
 
-        // Continuous typing test: enter 'Nasir Ali Test'
-        await tester.enterText(nameField, 'Nasir Ali Test');
+        // Continuous typing test: enter 'Ahzam Shahnil Test'
+        await tester.enterText(nameField, 'Ahzam Shahnil Test');
         await tester.pumpAndSettle();
 
         // Field retains full typed text
         expect(
-          find.widgetWithText(TextFormField, 'Nasir Ali Test'),
+          find.widgetWithText(TextFormField, 'Ahzam Shahnil Test'),
           findsOneWidget,
         );
 
@@ -721,11 +721,11 @@ void main() {
           findsOneWidget,
         );
 
-        // Switch back to Tab 1 and verify 'Nasir Ali Test' persists
+        // Switch back to Tab 1 and verify 'Ahzam Shahnil Test' persists
         await tester.tap(find.text('1. Personal & Biodata'));
         await tester.pumpAndSettle();
         expect(
-          find.widgetWithText(TextFormField, 'Nasir Ali Test'),
+          find.widgetWithText(TextFormField, 'Ahzam Shahnil Test'),
           findsOneWidget,
         );
       },
@@ -846,7 +846,7 @@ void main() {
         await tester.pumpAndSettle();
 
         // Focus the root tree
-        await tester.tap(find.text('Nasir Ali').first);
+        await tester.tap(find.text('Ahzam Shahnil').first);
         await tester.pumpAndSettle();
 
         // In View mode, trigger Ctrl+E

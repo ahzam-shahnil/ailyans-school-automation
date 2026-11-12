@@ -295,7 +295,7 @@ void main() {
 
         // Seeded payroll data must be visible (not clipped).
         expect(
-          find.textContaining('Nasir Ali').evaluate().length,
+          find.textContaining('Ahzam Shahnil').evaluate().length,
           greaterThan(0),
           reason: 'seeded employee visible at $size',
         );

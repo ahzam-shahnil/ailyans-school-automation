@@ -166,7 +166,7 @@ void main() {
 
         // Known seeded staff names must be visible (not clipped).
         expect(
-          find.textContaining('Nasir Ali').evaluate().length,
+          find.textContaining('Ahzam Shahnil').evaluate().length,
           greaterThan(0),
           reason: 'seeded teacher name visible at $size',
         );

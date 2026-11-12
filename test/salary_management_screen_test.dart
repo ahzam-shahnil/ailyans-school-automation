@@ -265,7 +265,7 @@ void main() {
       final state = container.read(salaryManagementProvider);
       expect(state.roster.length, 6);
       expect(state.totalEligibleStaff, 6);
-      expect(state.roster[0].teacherName, 'Nasir Ali');
+      expect(state.roster[0].teacherName, 'Ahzam Shahnil');
       expect(state.roster[0].isPending, isTrue);
     });
 
@@ -488,9 +488,9 @@ void main() {
 
       expect(find.text('Staff Payroll & Salary Disbursement'), findsOneWidget);
       expect(find.text('Total Eligible Staff'), findsOneWidget);
-      expect(find.text('Nasir Ali'), findsOneWidget);
+      expect(find.text('Ahzam Shahnil'), findsOneWidget);
 
-      // Select Nasir Ali
+      // Select Ahzam Shahnil
       await tester.runAsync(() async {
         await notifier.selectEmployee(1);
       });

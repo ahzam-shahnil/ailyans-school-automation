@@ -26,7 +26,7 @@ class TeacherRow {
   });
 
   /// Computes a 1- or 2-letter uppercase initials avatar string from [tName].
-  /// Example: "Nasir Ali" -> "NA", "Rehana" -> "R", "Syed Wazahat Raza Zaidi" -> "SZ".
+  /// Example: "Ahzam Shahnil" -> "NA", "Rehana" -> "R", "Syed Wazahat Raza Zaidi" -> "SZ".
   String get initials {
     final trimmed = tName.trim();
     if (trimmed.isEmpty) return '?';

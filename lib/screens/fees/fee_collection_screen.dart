@@ -565,7 +565,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                   ? meta.branchAddress.trim()
                   : 'Muslim Bazar Mianwali';
               final branchPhone = meta?.branchPhone ?? '03334449993';
-              final branchPrincipal = meta?.branchPrincipal ?? 'Nasir ali';
+              final branchPrincipal = meta?.branchPrincipal ?? 'Ahzam Shahnil';
 
               if (!mounted) return;
               await ReportPreviewModal.show(
@@ -951,7 +951,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         ? meta.branchAddress.trim()
         : 'Muslim Bazar Mianwali';
     final branchPhone = meta?.branchPhone ?? '03334449993';
-    final branchPrincipal = meta?.branchPrincipal ?? 'Nasir ali';
+    final branchPrincipal = meta?.branchPrincipal ?? 'Ahzam Shahnil';
 
     if (!mounted) return;
     await ReportPreviewModal.show(

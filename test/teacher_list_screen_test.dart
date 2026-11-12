@@ -312,7 +312,7 @@ void main() {
         expect(find.text('5 Active'), findsOneWidget);
 
         // Initial 5 active staff members in the table
-        expect(find.text('Nasir Ali'), findsOneWidget);
+        expect(find.text('Ahzam Shahnil'), findsOneWidget);
         expect(find.text('Rehana Shaheen'), findsOneWidget);
         expect(find.text('Saima Naz'), findsOneWidget);
         expect(find.text('Yasmeen Akhtar'), findsOneWidget);

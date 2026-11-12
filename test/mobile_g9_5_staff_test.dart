@@ -297,7 +297,7 @@ void main() {
       // Verify teacher cards with MobileStatusPill
       expect(find.byType(Card), findsWidgets);
       expect(find.byType(MobileStatusPill), findsWidgets);
-      expect(find.text('Nasir Ali'), findsWidgets);
+      expect(find.text('Ahzam Shahnil'), findsWidgets);
       expect(find.text('Rehana Shaheen'), findsWidgets);
 
       // Verify sticky bottom bar
@@ -330,7 +330,7 @@ void main() {
       expect(tester.takeException(), isNull);
 
       // Verify hero card and MobileStatusPill
-      expect(find.text('Nasir Ali'), findsWidgets);
+      expect(find.text('Ahzam Shahnil'), findsWidgets);
       expect(find.byType(MobileStatusPill), findsWidgets);
       expect(find.text('Active'), findsWidgets);
 
@@ -443,7 +443,7 @@ void main() {
       // Verify payroll cards and status pills
       expect(find.byType(Card), findsWidgets);
       expect(find.byType(MobileStatusPill), findsWidgets);
-      expect(find.text('Nasir Ali'), findsWidgets);
+      expect(find.text('Ahzam Shahnil'), findsWidgets);
 
       // Verify sticky bottom action
       expect(find.text('Save Salary Disbursement'), findsOneWidget);

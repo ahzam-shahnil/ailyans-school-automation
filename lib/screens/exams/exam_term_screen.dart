@@ -956,7 +956,7 @@ class _ExamTermScreenState extends ConsumerState<ExamTermScreen> {
     // Build list of supervisor dropdown items
     final supervisorItems = <DropdownMenuItem<int>>[];
 
-    // If supervisor is non-Teacher (e.g. Nasir Ali Principal), prepend him ONLY in edit mode
+    // If supervisor is non-Teacher (e.g. Ahzam Shahnil Principal), prepend him ONLY in edit mode
     if (state.editingSession != null && state.nonTeacherSupervisor != null) {
       final supId = (state.nonTeacherSupervisor!['TeacherID'] as num).toInt();
       final supName = state.nonTeacherSupervisor!['TName'] as String;

@@ -136,7 +136,7 @@ void main() {
         availNames,
         containsAll(['Rehana Shaheen', 'Saima Naz', 'Yasmeen Akhtar']),
       );
-      expect(availNames.contains('Nasir Ali'), isFalse);
+      expect(availNames.contains('Ahzam Shahnil'), isFalse);
 
       // Auto-loads session #1
       expect(state.isEditMode, isTrue);
@@ -149,7 +149,7 @@ void main() {
       expect(state.formDetail, '1st Term Examination 2017');
     });
 
-    test('2. Supervisor mismatch detected on session #1 (Nasir Ali is Principal) and kept until user changes', () async {
+    test('2. Supervisor mismatch detected on session #1 (Ahzam Shahnil is Principal) and kept until user changes', () async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
@@ -158,7 +158,7 @@ void main() {
 
       final state = container.read(examTermProvider);
       expect(state.nonTeacherSupervisor, isNotNull);
-      expect(state.nonTeacherSupervisor!['TName'], 'Nasir Ali');
+      expect(state.nonTeacherSupervisor!['TName'], 'Ahzam Shahnil');
       expect(state.nonTeacherSupervisor!['TCat'], 'Principal');
 
       // Selecting a valid teacher clears nonTeacherSupervisor
@@ -462,7 +462,7 @@ void main() {
         // Supervisor warning banner
         expect(
           find.text(
-            'Nasir Ali is registered as Principal, not Teacher. The current assignment is kept until you choose a different supervisor.',
+            'Ahzam Shahnil is registered as Principal, not Teacher. The current assignment is kept until you choose a different supervisor.',
           ),
           findsOneWidget,
         );

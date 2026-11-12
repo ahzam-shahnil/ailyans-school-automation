@@ -23,7 +23,7 @@ void main() {
     branchName: "Ailyans's Higher Secondary School Mianwali",
     branchAddress: 'Muslim Bazar Mianwali',
     branchPhone: '03334449993',
-    branchPrincipal: 'Nasir ali',
+    branchPrincipal: 'Ahzam Shahnil',
     sessionYear: '2017-2018',
     studentCount: 10,
     classCount: 13,

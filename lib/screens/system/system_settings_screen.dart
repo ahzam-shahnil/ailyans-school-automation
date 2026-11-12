@@ -969,7 +969,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             controller: _principalCtrl,
             label: 'Principal / Head of Institution',
             onChanged: notifier.setPrincipal,
-            hint: 'e.g. Nasir ali',
+            hint: 'e.g. Ahzam Shahnil',
             dense: stacked,
           ),
           _buildTextField(
@@ -1015,14 +1015,14 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             controller: _emailCtrl,
             label: 'Email Address',
             onChanged: notifier.setEmail,
-            hint: 'info@ailyans.edu.pk',
+            hint: 'atbytewave@gmail.com',
             dense: stacked,
           ),
           _buildTextField(
             controller: _websiteCtrl,
             label: 'Official Website',
             onChanged: notifier.setWebsite,
-            hint: 'www.ailyans.edu.pk',
+            hint: 'www.linkedin.com/company/bytewaves',
             dense: stacked,
           ),
         ]),
@@ -1406,10 +1406,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         _buildInfoCard([
-          (
-            'Product Edition',
-            'ByteWave School Manager — Enterprise Edition',
-          ),
+          ('Product Edition', 'ByteWave School Manager — Enterprise Edition'),
           ('Rebuild Runtime', 'Flutter (Android / iOS / Desktop)'),
           (
             'Architecture Pattern',
@@ -1438,16 +1435,10 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
         ),
         const SizedBox(height: AppSpacing.sm),
         _buildInfoCard([
-          ('Original Win32 Author', 'Nasir Ali (Ailyans Software, Mianwali)'),
-          (
-            'Modernization Engineering',
-            'ByteWave Engineering Team',
-          ),
-          (
-            'SaaS Managed By',
-            'ByteWave (www.linkedin.com/company/bytewaves)',
-          ),
-          ('Copyright', '© 2017-2026 ByteWave & Modernization Rebuild Project'),
+          ('Original Win32 Author', 'Ahzam Shahnil (ByteWave)'),
+          ('Modernization Engineering', 'ByteWave Engineering Team'),
+          ('SaaS Managed By', 'ByteWave (www.linkedin.com/company/bytewaves)'),
+          ('Copyright', '© 2023-2026 ByteWave'),
         ], stacked: stacked),
       ],
     );

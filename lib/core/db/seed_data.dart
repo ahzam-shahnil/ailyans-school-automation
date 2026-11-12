@@ -77,7 +77,7 @@ class DatabaseSeeder {
         'BranchAddress': 'Muslim Bazar Mianwali',
         'BrPhone': '03334449993',
         'Mobile': '03453333224',
-        'BrPrincipal': 'Nasir ali',
+        'BrPrincipal': 'Ahzam Shahnil',
         'SecPd': 'zaidi110',
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
 
@@ -329,7 +329,7 @@ class DatabaseSeeder {
       const teachers = [
         {
           'TeacherID': 1,
-          'TName': 'Nasir Ali',
+          'TName': 'Ahzam Shahnil',
           'TFName': 'Muhammad Ali',
           'TCNIC': '38302-1111111-1',
           'TContactNo1': '03331111111',

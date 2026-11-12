@@ -395,7 +395,7 @@ class _ClassSubjectMappingScreenState
     // Build list of teacher dropdown items
     final teacherItems = <DropdownMenuItem<int>>[];
 
-    // If editing a row whose teacher is non-Teacher (e.g. Nasir Ali Principal), prepend
+    // If editing a row whose teacher is non-Teacher (e.g. Ahzam Shahnil Principal), prepend
     if (state.isEditMode && state.nonTeacherCurrent != null) {
       final tid = (state.nonTeacherCurrent!['TeacherID'] as num).toInt();
       final tname = state.nonTeacherCurrent!['TName'] as String;
