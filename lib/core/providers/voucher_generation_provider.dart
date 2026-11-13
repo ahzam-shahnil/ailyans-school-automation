@@ -1611,8 +1611,10 @@ class FeeParamOption {
   const FeeParamOption({required this.feeParamId, required this.description});
 }
 
-/// Fee heads that are actually CONFIGURED for billing: only FeeParameters
-/// rows that have a `Cls_Param_Fee` row with `Fee > 0` (for any class).
+/// Fee heads that are actually CONFIGURED for billing in the CURRENT
+/// SESSION: only FeeParameters rows that have a `Cls_Param_Fee` row with
+/// `Fee > 0` and `FeeYr = <selected session>` (across all classes — the
+/// per-class intersection happens in [voucherFeeStructureProvider]).
 /// Powers the unified fee-head checklist, the whole-school/single-voucher
 /// exclusion math, and the single-voucher dialog's checked-heads summary.
 /// Watches [dbDataVersionProvider] so edits made in Fee Structure & Bank
@@ -1620,6 +1622,9 @@ class FeeParamOption {
 final allFeeParametersProvider =
     FutureProvider<List<FeeParamOption>>((ref) async {
       ref.watch(dbDataVersionProvider);
+      final sessionYr = ref.watch(
+        voucherGenFiltersProvider.select((f) => f.sessionYr),
+      );
       final db = await DatabaseService.instance.database;
       final rows = await db.rawQuery(
         '''
@@ -1627,10 +1632,11 @@ final allFeeParametersProvider =
       FROM FeeParameters fp
       WHERE EXISTS (
         SELECT 1 FROM Cls_Param_Fee cpf
-        WHERE cpf.FeeParamID = fp.FeeParamID AND cpf.Fee > 0
+        WHERE cpf.FeeParamID = fp.FeeParamID AND cpf.Fee > 0 AND cpf.FeeYr = ?
       )
       ORDER BY fp.FeeParamID ASC
     ''',
+        [sessionYr],
       );
       return rows
           .map(
