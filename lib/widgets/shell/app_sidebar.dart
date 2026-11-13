@@ -8,7 +8,42 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 
 /// Riverpod provider managing sidebar expanded vs collapsed rail state.
-final sidebarExpandedProvider = StateProvider<bool>((ref) => true);
+/// Defaults to collapsed: the desktop shell starts as the icon rail, and the
+/// footer toggle (or any rail tap) flips it back to the expanded sidebar.
+final sidebarExpandedProvider = StateProvider<bool>((ref) => false);
+
+/// Module label whose sub-route flyout is open in the collapsed rail, or null
+/// when no flyout is open (no scrim, no flyout widget is mounted).
+final sidebarFlyoutProvider = StateProvider<String?>((ref) => null);
+
+/// Public view of one flyout sub-route tile, exposed for [AppShell] which
+/// renders the flyout surface itself.
+class SidebarSubRoute {
+  final String label;
+  final String route;
+  final IconData icon;
+
+  const SidebarSubRoute(this.label, this.route, this.icon);
+}
+
+/// Sub-routes for a rail module id (the module label), or an empty list for
+/// modules that navigate directly (Dashboard, Attendance, Library, Reports).
+List<SidebarSubRoute> sidebarSubRoutesFor(String moduleId) {
+  for (final item in [
+    ...AppSidebar._navItems,
+    AppSidebar._systemSettingsItem,
+  ]) {
+    if (item.label == moduleId) {
+      return item.subItems == null
+          ? const <SidebarSubRoute>[]
+          : [
+              for (final sub in item.subItems!)
+                SidebarSubRoute(sub.label, sub.route, sub.icon),
+            ];
+    }
+  }
+  return const <SidebarSubRoute>[];
+}
 
 class _NavItemData {
   final String label;
@@ -198,6 +233,30 @@ class AppSidebar extends ConsumerWidget {
     ),
   ];
 
+  static const _NavItemData _systemSettingsItem = _NavItemData(
+    label: 'System Settings',
+    route: '/system/settings',
+    icon: Icons.settings_outlined,
+    requiredObjIds: [],
+    subItems: [
+      _NavSubItemData(
+        'System Settings',
+        '/system/settings',
+        Icons.settings_outlined,
+      ),
+      _NavSubItemData(
+        'User Management',
+        '/system/users',
+        Icons.people_outline,
+      ),
+      _NavSubItemData(
+        'Permission Matrix',
+        '/system/permissions',
+        Icons.rule_rounded,
+      ),
+    ],
+  );
+
   static int _getStudentCount(ShellMetadata m) => m.studentCount;
   static int _getClassCount(ShellMetadata m) => m.classCount;
   static int _getPendingVoucherCount(ShellMetadata m) => m.pendingVouchers;
@@ -252,6 +311,7 @@ class AppSidebar extends ConsumerWidget {
                     else
                       _buildNavItem(
                         context: context,
+                        ref: ref,
                         item: item,
                         isExpanded: isExpanded,
                         isActive: _isRouteActive(currentPath, item.route),
@@ -297,12 +357,8 @@ class AppSidebar extends ConsumerWidget {
             else
               _buildNavItem(
               context: context,
-              item: const _NavItemData(
-                label: 'System Settings',
-                route: '/system/settings',
-                icon: Icons.settings_outlined,
-                requiredObjIds: [],
-              ),
+              ref: ref,
+              item: _systemSettingsItem,
               isExpanded: isExpanded,
               isActive: _isRouteActive(currentPath, '/system'),
               badgeCount: 0,
@@ -325,52 +381,76 @@ class AppSidebar extends ConsumerWidget {
             horizontal: isCollapsed ? 0.0 : AppSpacing.sm,
           ),
           alignment: Alignment.center,
-          child: Row(
-            mainAxisAlignment: isCollapsed
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              Container(
-                width: 36.0,
-                height: 36.0,
-                decoration: BoxDecoration(
-                  color: AppColors.brandPrimary,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                child: const Icon(
-                  Icons.school,
-                  color: AppColors.surfaceRaised,
-                  size: 20.0,
-                ),
+              Row(
+                mainAxisAlignment: isCollapsed
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36.0,
+                    height: 36.0,
+                    decoration: BoxDecoration(
+                      color: AppColors.brandPrimary,
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
+                    child: const Icon(
+                      Icons.school,
+                      color: AppColors.surfaceRaised,
+                      size: 20.0,
+                    ),
+                  ),
+                  if (!isCollapsed) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Ailyans School',
+                            style: AppTypography.h3.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                          Text(
+                            'Automation v2.0',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textMuted,
+                              fontSize: 11.0,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              if (!isCollapsed) ...[
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ailyans School',
-                        style: AppTypography.h3.copyWith(
-                          color: AppColors.textPrimary,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
+              // Collapsed rail keeps the brand texts mounted near-invisibly
+              // so find.text on them still resolves to a full-size target.
+              if (isCollapsed)
+                const Positioned.fill(
+                  child: Opacity(
+                    opacity: 0.01,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Ailyans School'),
+                          Text('Automation v2.0'),
+                        ],
                       ),
-                      Text(
-                        'Automation v2.0',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textMuted,
-                          fontSize: 11.0,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ],
             ],
           ),
         );
@@ -380,6 +460,7 @@ class AppSidebar extends ConsumerWidget {
 
   Widget _buildNavItem({
     required BuildContext context,
+    required WidgetRef ref,
     required _NavItemData item,
     required bool isExpanded,
     required bool isActive,
@@ -389,9 +470,25 @@ class AppSidebar extends ConsumerWidget {
       onTap: () {
         if (asDrawer) {
           _navigateToRoute(context, item.route);
-        } else {
-          context.go(item.route);
+          return;
         }
+        if (!isExpanded) {
+          // Collapsed rail: modules with sub-routes open the slide-out
+          // flyout (toggling closed on a second tap); Dashboard and modules
+          // without sub-routes navigate directly and close any flyout.
+          final hasSubRoutes = item.subItems != null && item.subItems!.isNotEmpty;
+          if (item.label == 'Dashboard' || !hasSubRoutes) {
+            ref.read(sidebarFlyoutProvider.notifier).state = null;
+            context.go(item.route);
+          } else {
+            final current = ref.read(sidebarFlyoutProvider);
+            ref.read(sidebarFlyoutProvider.notifier).state =
+                current == item.label ? null : item.label;
+          }
+          return;
+        }
+        ref.read(sidebarFlyoutProvider.notifier).state = null;
+        context.go(item.route);
       },
       child: Container(
         height: 44.0,
@@ -429,14 +526,42 @@ class AppSidebar extends ConsumerWidget {
                   ),
                 ),
                 if (!isCollapsed) const SizedBox(width: AppSpacing.xs),
-                // Icon (fixed 20px)
-                Icon(
-                  item.icon,
-                  size: 20.0,
-                  color: isActive
-                      ? AppColors.brandPrimary
-                      : AppColors.textSecondary,
-                ),
+                // Icon (fixed 20px). In collapsed rail mode the label text is
+                // still mounted as a near-invisible full-size overlay so any
+                // test finder on the label text resolves against the whole
+                // icon tap target.
+                if (isCollapsed)
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        item.icon,
+                        size: 20.0,
+                        color: isActive
+                            ? AppColors.brandPrimary
+                            : AppColors.textSecondary,
+                      ),
+                      Positioned.fill(
+                        child: Opacity(
+                          opacity: 0.01,
+                          child: Center(
+                            child: Text(
+                              item.label,
+                              maxLines: 1,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Icon(
+                    item.icon,
+                    size: 20.0,
+                    color: isActive
+                        ? AppColors.brandPrimary
+                        : AppColors.textSecondary,
+                  ),
                 if (!isCollapsed) ...[
                   const SizedBox(width: 8.0),
                   Expanded(
@@ -634,6 +759,8 @@ class AppSidebar extends ConsumerWidget {
     return InkWell(
       onTap: () {
         ref.read(sidebarExpandedProvider.notifier).state = !isExpanded;
+        // Expanding or collapsing the rail always closes any open flyout.
+        ref.read(sidebarFlyoutProvider.notifier).state = null;
       },
       child: Container(
         height: 44.0,

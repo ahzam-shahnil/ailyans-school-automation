@@ -33,6 +33,11 @@ class _AppShellState extends ConsumerState<AppShell>
     with WidgetsBindingObserver {
   final FocusNode _searchFocusNode = FocusNode();
 
+  /// Collapsed rail width (matches AppSidebar's collapsed AnimatedContainer
+  /// width) and the flyout panel width.
+  static const double _railWidth = 68.0;
+  static const double _flyoutWidth = 250.0;
+
   StreamSubscription<ConnectivityResult>? _connectivitySub;
   Timer? _periodicSyncTimer;
 
@@ -143,6 +148,7 @@ class _AppShellState extends ConsumerState<AppShell>
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
+    final activeFlyoutModule = ref.watch(sidebarFlyoutProvider);
 
     return CallbackShortcuts(
       bindings: {
@@ -174,23 +180,57 @@ class _AppShellState extends ConsumerState<AppShell>
               body: Column(
                 children: [
                   Expanded(
-                    child: Row(
+                    child: Stack(
                       children: [
-                        const AppSidebar(),
-                        Expanded(
-                          child: Column(
-                            children: [
-                              AppTopBar(searchFocusNode: _searchFocusNode),
-                              if (session?.hasWeakPasswordWarning == true)
-                                _buildWeakPasswordBanner(
-                                  context,
-                                  ref,
-                                  session!,
-                                ),
-                              Expanded(child: widget.child),
-                            ],
-                          ),
+                        Row(
+                          children: [
+                            const AppSidebar(),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  AppTopBar(searchFocusNode: _searchFocusNode),
+                                  if (session?.hasWeakPasswordWarning == true)
+                                    _buildWeakPasswordBanner(
+                                      context,
+                                      ref,
+                                      session!,
+                                    ),
+                                  Expanded(child: widget.child),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
+                        // Collapsed-rail flyout: scrim and slide-out sub-menu
+                        // are mounted ONLY while a module flyout is open, so
+                        // closed-state taps elsewhere are never intercepted.
+                        if (activeFlyoutModule != null) ...[
+                          Positioned(
+                            left: _railWidth + _flyoutWidth,
+                            top: 0.0,
+                            right: 0.0,
+                            bottom: 0.0,
+                            child: GestureDetector(
+                              onTap: () => ref
+                                  .read(sidebarFlyoutProvider.notifier)
+                                  .state = null,
+                              child: Container(
+                                color: Colors.black.withValues(alpha: 0.12),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: _railWidth,
+                            top: 0.0,
+                            bottom: 0.0,
+                            width: _flyoutWidth,
+                            child: _buildModuleFlyout(
+                              context,
+                              ref,
+                              activeFlyoutModule,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -200,6 +240,107 @@ class _AppShellState extends ConsumerState<AppShell>
             );
           },
         ),
+      ),
+    );
+  }
+
+  /// Slide-out sub-menu flyout for a collapsed-rail module: elevated surface
+  /// anchored to the rail's right edge, with an UPPERCASE '<MODULE> MODULE'
+  /// header (so find.text on the bare module label never matches twice) and
+  /// one tile per sub-route.
+  Widget _buildModuleFlyout(
+    BuildContext context,
+    WidgetRef ref,
+    String moduleId,
+  ) {
+    final subRoutes = sidebarSubRoutesFor(moduleId);
+    final currentPath = _safeCurrentLocation(context);
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(
+          right: BorderSide(color: AppColors.borderDefault, width: 1.0),
+          left: BorderSide(color: AppColors.borderDefault, width: 1.0),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 12.0,
+            offset: Offset(2.0, 0.0),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 56.0,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '${moduleId.toUpperCase()} MODULE',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.label.copyWith(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ),
+          const Divider(height: 1.0, color: AppColors.borderDefault),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              children: [
+                for (final sub in subRoutes)
+                  InkWell(
+                    onTap: () {
+                      ref.read(sidebarFlyoutProvider.notifier).state = null;
+                      context.go(sub.route);
+                    },
+                    child: Container(
+                      height: 44.0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.md,
+                      ),
+                      color: currentPath == sub.route
+                          ? AppColors.brandPrimary.withValues(alpha: 0.10)
+                          : Colors.transparent,
+                      child: Row(
+                        children: [
+                          Icon(
+                            sub.icon,
+                            size: 18.0,
+                            color: currentPath == sub.route
+                                ? AppColors.brandPrimary
+                                : AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child: Text(
+                              sub.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.label.copyWith(
+                                color: currentPath == sub.route
+                                    ? AppColors.brandPrimary
+                                    : AppColors.textPrimary,
+                                fontWeight: currentPath == sub.route
+                                    ? FontWeight.w600
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
