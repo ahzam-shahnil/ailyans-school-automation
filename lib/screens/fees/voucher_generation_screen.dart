@@ -334,6 +334,45 @@ class _VoucherGenerationScreenState
     );
   }
 
+  /// Shot 6d: opens the print preview for the given students' generated
+  /// vouchers (per-row print icon, Print Selected, post-generation dialog).
+  Future<void> _printVouchersForStudents(Set<int> stuRegIds) async {
+    if (stuRegIds.isEmpty) return;
+    List<FeeReceiptView> receipts;
+    try {
+      receipts = await _loadGeneratedVouchers(stuRegIds: stuRegIds);
+    } catch (e, st) {
+      debugPrint('Print voucher load failed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load vouchers: $e')),
+      );
+      return;
+    }
+    if (receipts.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No generated vouchers to print')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.feeVoucher,
+        vouchers: receipts,
+        extraParams: const {
+          'branchName': 'Ailyans Higher Secondary School',
+          'branchAddress': '-',
+          'bankName': 'Askari Bank Limited',
+          'bankBranch': 'Ballo Khel Road',
+          'bankAcctNo': '4528',
+        },
+      ),
+    );
+  }
+
   Future<void> _sharePdf() async {
     List<FeeReceiptView> receipts;
     try {
@@ -381,6 +420,7 @@ class _VoucherGenerationScreenState
 
   Future<List<FeeReceiptView>> _loadGeneratedVouchers({
     bool wholeSchool = false,
+    Set<int>? stuRegIds,
   }) async {
     final filters = ref.read(voucherGenFiltersProvider);
     final db = await DatabaseService.instance.database;
@@ -389,6 +429,9 @@ class _VoucherGenerationScreenState
         !wholeSchool && filters.mode == 'single' && filters.selectedStuRegId != null;
     final stuRegIdParam = isSingle ? filters.selectedStuRegId : null;
     final classIdParam = isSingle ? null : filters.classId;
+    final stuInFilter = (stuRegIds == null || stuRegIds.isEmpty)
+        ? ''
+        : 'AND vm.Student_Class_StuRegID IN (${stuRegIds.join(',')})';
 
     final rows = await db.rawQuery(
       '''
@@ -405,6 +448,7 @@ class _VoucherGenerationScreenState
         AND SUBSTR(vm.VoucherMasID, 1, 4) = ?
         AND (? IS NULL OR vm.ClassID = ?)
         AND (? IS NULL OR vm.Student_Class_StuRegID = ?)
+        $stuInFilter
       ORDER BY sc.ClassRollNo ASC
     ''',
       [
@@ -556,6 +600,8 @@ class _VoucherGenerationScreenState
           classes: classList
               .map((c) => (id: c.classId, label: c.cName))
               .toList(),
+          initialStuRegId: filters.selectedStuRegId,
+          onPrintVouchers: _printVouchersForStudents,
           initialSelected:
               preSelected != null ? <int>{preSelected} : const <int>{},
           onBack: () {
@@ -3537,12 +3583,23 @@ class _SingleVoucherWorkspace extends ConsumerStatefulWidget {
   /// Student Profile's '+ Generate Single Voucher'.
   final Set<int> initialSelected;
 
+  /// Shot 6d: the deep-linked student (from
+  /// [VoucherGenFilters.selectedStuRegId]). Drives the synchronous
+  /// search-filter + check seeding in [initState].
+  final int? initialStuRegId;
+
+  /// Shot 6d: opens the print preview for the given students' generated
+  /// vouchers (per-row print icon, Print Selected, post-generation dialog).
+  final void Function(Set<int> stuRegIds) onPrintVouchers;
+
   const _SingleVoucherWorkspace({
     required this.sessionYr,
     required this.billingMonth,
     required this.classes,
     required this.onBack,
+    required this.onPrintVouchers,
     this.initialSelected = const <int>{},
+    this.initialStuRegId,
   });
 
   @override
@@ -3560,12 +3617,35 @@ class _SingleVoucherWorkspaceState
   List<SingleVoucherStudentRow> _rows = const [];
   bool _loading = true;
 
+  /// Shot 6d: class tariffs for the whole session (`classId ->
+  /// {feeParamId -> amount}`), used for the live Gross/Discount/Net preview.
+  Map<int, Map<int, double>> _tariffs = const {};
+
   @override
   void initState() {
     super.initState();
-    // Shot 6c deep-link: pre-check the student passed from Student Profile.
-    _selected.addAll(widget.initialSelected);
+    _seedDeepLinkedStudent(widget.initialStuRegId);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(_SingleVoucherWorkspace oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = widget.initialStuRegId;
+    if (next != null && next != oldWidget.initialStuRegId) {
+      _seedDeepLinkedStudent(next);
+      _load();
+    }
+  }
+
+  /// Shot 6d: synchronously (BEFORE the first load) force All Classes,
+  /// pre-fill the search filter with the Reg ID and pre-check the student.
+  void _seedDeepLinkedStudent(int? stuRegId) {
+    if (stuRegId == null) return;
+    _classFilter = null;
+    _query = stuRegId.toString();
+    _searchCtrl.text = _query;
+    _selected.add(stuRegId);
   }
 
   @override
@@ -3578,26 +3658,27 @@ class _SingleVoucherWorkspaceState
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final rows = await searchStudentsForSingleVoucher(
-        sessionYr: widget.sessionYr,
-        billingMonth: widget.billingMonth,
-        classId: _classFilter,
-        query: _query,
-      );
+      final results = await Future.wait([
+        searchStudentsForSingleVoucher(
+          sessionYr: widget.sessionYr,
+          billingMonth: widget.billingMonth,
+          classId: _classFilter,
+          query: _query,
+        ),
+        loadClassTariffMapForSession(sessionYr: widget.sessionYr),
+      ]);
+      final rows = results[0] as List<SingleVoucherStudentRow>;
+      final tariffs = results[1] as Map<int, Map<int, double>>;
       if (!mounted) return;
       setState(() {
         _rows = rows;
+        _tariffs = tariffs;
         _loading = false;
-        _selected.removeWhere(
-          (id) => !rows.any((r) => r.stuRegId == id),
-        );
-        // Shot 6c: pre-fill the search field with the deep-linked student's
-        // name so the clerk can find them at a glance (no re-query).
-        if (_searchCtrl.text.isEmpty && widget.initialSelected.isNotEmpty) {
-          final pre = rows.where(
-            (r) => widget.initialSelected.contains(r.stuRegId),
-          ).firstOrNull;
-          if (pre != null) _searchCtrl.text = pre.fullName;
+        _selected.removeWhere((id) => !rows.any((r) => r.stuRegId == id));
+        // Shot 6d: never drop the deep-linked student, even if the search
+        // filter is cleared before the reload lands.
+        if (widget.initialStuRegId != null) {
+          _selected.add(widget.initialStuRegId!);
         }
       });
     } catch (_) {
@@ -3611,8 +3692,15 @@ class _SingleVoucherWorkspaceState
 
   void _onSearchChanged(String value) {
     _query = value;
+    setState(() {});
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), _load);
+  }
+
+  void _clearSearch() {
+    _searchCtrl.clear();
+    _query = '';
+    _load();
   }
 
   bool get _allSelectableSelected {
@@ -3680,14 +3768,16 @@ class _SingleVoucherWorkspaceState
     });
   }
 
-  /// Shot 6c: generates vouchers for the checked students from the inline
-  /// workspace bottom bar, then refreshes the table in place.
+  /// Shot 6d: generates vouchers for the checked students from the inline
+  /// workspace bottom bar, then shows the post-generation summary dialog
+  /// with an immediate print action.
   Future<void> _generateSelected() async {
     if (_selected.isEmpty) return;
     if (ref.read(voucherGenExecutionProvider).isGenerating) return;
+    final generated = Set<int>.from(_selected);
     final summary = await ref
         .read(voucherGenExecutionProvider.notifier)
-        .generateForSelectedStudents(Set<int>.from(_selected));
+        .generateForSelectedStudents(generated);
     if (!mounted) return;
     if (summary == null) {
       final err =
@@ -3701,17 +3791,65 @@ class _SingleVoucherWorkspaceState
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    unawaited(_load());
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Vouchers Generated'),
         content: Text(
-          'Generated ${summary.generatedCount} voucher(s) with the checked '
-          'fee heads.',
+          'Successfully generated ${summary.generatedCount} voucher(s) '
+          'with the checked fee heads.',
         ),
-        backgroundColor: AppColors.statusSuccessText,
+        actions: [
+          ElevatedButton.icon(
+            key: const Key('print_generated_single_vouchers_btn'),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              widget.onPrintVouchers(generated);
+            },
+            icon: const Icon(Icons.print_outlined, size: 16),
+            label: const Text('Print Generated Voucher(s)'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Done'),
+          ),
+        ],
       ),
     );
-    _load();
   }
+
+  // ---------------------------------------------------------------------
+  // Shot 6d: live fee preview (Gross / Discount / Net Payable).
+  // ---------------------------------------------------------------------
+
+  final NumberFormat _currencyFormat = NumberFormat('#,##0');
+
+  /// Sum of the CHECKED fee heads for this student's class tariff.
+  double _grossFeeFor(SingleVoucherStudentRow row, Set<int> checkedHeads) {
+    final classTariffs = _tariffs[row.classId];
+    if (classTariffs == null) return 0;
+    var sum = 0.0;
+    for (final head in checkedHeads) {
+      sum += classTariffs[head] ?? 0;
+    }
+    return sum;
+  }
+
+  /// (gross, discount, net): full waiver wipes the whole gross, otherwise
+  /// the student's concession + monthly special discount, clamped to gross.
+  (double, double, double) _feeBreakdownFor(
+    SingleVoucherStudentRow row,
+    Set<int> checkedHeads,
+  ) {
+    final gross = _grossFeeFor(row, checkedHeads);
+    final discount = row.fullDiscount
+        ? gross
+        : (row.discount + row.vmDiscount).clamp(0.0, gross);
+    return (gross, discount, gross - discount);
+  }
+
+  String _rs(num amount) => 'Rs. ${_currencyFormat.format(amount.round())}';
 
   Widget _buildWorkspaceInfoRow(String label, String value) {
     return Row(
@@ -3741,6 +3879,7 @@ class _SingleVoucherWorkspaceState
   @override
   Widget build(BuildContext context) {
     final filters = ref.watch(voucherGenFiltersProvider);
+    final checkedHeads = ref.watch(globalSelectedFeeParamIdsProvider);
     final selectableCount = _rows.length;
     final headStyle = AppTypography.label.copyWith(
       fontWeight: FontWeight.w600,
@@ -3777,11 +3916,18 @@ class _SingleVoucherWorkspaceState
     final searchField = TextField(
       key: const Key('single_voucher_reg_search'),
       controller: _searchCtrl,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Reg Code / Student Name',
-        prefixIcon: Icon(Icons.search, size: 18),
-        border: OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.search, size: 18),
+        border: const OutlineInputBorder(),
         isDense: true,
+        suffixIcon: _searchCtrl.text.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.clear, size: 16),
+                tooltip: 'Clear filter',
+                onPressed: _clearSearch,
+              ),
       ),
       onChanged: _onSearchChanged,
     );
@@ -3894,27 +4040,39 @@ class _SingleVoucherWorkspaceState
             ),
           ),
           const SizedBox(
-            width: 64,
+            width: 56,
             child: Text('Reg ID', style: AppTypography.label),
           ),
           Expanded(
             child: Text('Student Name', style: headStyle),
           ),
-          const SizedBox(width: AppSpacing.sm),
+          const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text('Father Name', style: headStyle),
           ),
-          const SizedBox(width: AppSpacing.sm),
+          const SizedBox(width: AppSpacing.xs),
           const SizedBox(
-            width: 96,
+            width: 84,
             child: Text('Class', style: AppTypography.label),
           ),
-          const SizedBox(width: AppSpacing.sm),
           const SizedBox(
-            width: 110,
+            width: 72,
+            child: Text('Gross Fee', style: AppTypography.label),
+          ),
+          const SizedBox(
+            width: 64,
+            child: Text('Discount', style: AppTypography.label),
+          ),
+          const SizedBox(
+            width: 80,
+            child: Text('Net Payable', style: AppTypography.label),
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          const SizedBox(
+            width: 100,
             child: Text('Status', style: AppTypography.label),
           ),
-          const SizedBox(width: 36),
+          const SizedBox(width: 76),
         ],
       ),
     );
@@ -3942,6 +4100,10 @@ class _SingleVoucherWorkspaceState
                   final row = _rows[index];
                   final hasVoucher = row.hasVoucherThisMonth;
                   final checked = _selected.contains(row.stuRegId);
+                  final (gross, discount, net) = _feeBreakdownFor(
+                    row,
+                    checkedHeads,
+                  );
                   return InkWell(
                     onTap: () => _toggleRow(row.stuRegId),
                     child: Padding(
@@ -3969,7 +4131,7 @@ class _SingleVoucherWorkspaceState
                             ),
                           ),
                           SizedBox(
-                            width: 64,
+                            width: 56,
                             child: Text(
                               '${row.stuRegId}',
                               style: AppTypography.monospace,
@@ -3997,9 +4159,9 @@ class _SingleVoucherWorkspaceState
                               ),
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
+                          const SizedBox(width: AppSpacing.xs),
                           SizedBox(
-                            width: 96,
+                            width: 84,
                             child: Text(
                               row.className ?? 'Class ${row.classId}',
                               maxLines: 1,
@@ -4009,9 +4171,43 @@ class _SingleVoucherWorkspaceState
                               ),
                             ),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
                           SizedBox(
-                            width: 110,
+                            width: 72,
+                            child: Text(
+                              _rs(gross),
+                              textAlign: TextAlign.right,
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 64,
+                            child: Text(
+                              discount > 0 ? _rs(discount) : '\u2014',
+                              textAlign: TextAlign.right,
+                              style: AppTypography.monospace.copyWith(
+                                fontSize: 11,
+                                color: discount > 0
+                                    ? AppColors.statusWarningText
+                                    : AppColors.textMuted,
+                              ),
+                            ),
+                          ),
+                          SizedBox(
+                            width: 80,
+                            child: Text(
+                              _rs(net),
+                              textAlign: TextAlign.right,
+                              style: AppTypography.bodySmall.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.statusSuccessText,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.xs),
+                          SizedBox(
+                            width: 100,
                             child: Text(
                               hasVoucher
                                   ? 'Already Generated'
@@ -4026,19 +4222,35 @@ class _SingleVoucherWorkspaceState
                             ),
                           ),
                           SizedBox(
-                            width: 36,
-                            child: hasVoucher
-                                ? IconButton(
+                            width: 76,
+                            child: Row(
+                              children: [
+                                if (hasVoucher)
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.print_outlined,
+                                      size: 15,
+                                    ),
+                                    color: AppColors.brandPrimary,
+                                    tooltip: 'Print Voucher',
+                                    padding: EdgeInsets.zero,
+                                    onPressed: () => widget.onPrintVouchers(
+                                      {row.stuRegId},
+                                    ),
+                                  ),
+                                if (hasVoucher)
+                                  IconButton(
                                     icon: const Icon(
                                       Icons.delete_outline,
-                                      size: 16,
+                                      size: 15,
                                     ),
                                     color: AppColors.statusErrorText,
                                     tooltip: 'Delete Voucher',
                                     padding: EdgeInsets.zero,
                                     onPressed: () => _deleteRow(row.stuRegId),
-                                  )
-                                : const SizedBox.shrink(),
+                                  ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -4046,6 +4258,18 @@ class _SingleVoucherWorkspaceState
                   );
                 },
               );
+
+    final printableSelected = _rows
+        .where(
+          (r) => _selected.contains(r.stuRegId) && r.hasVoucherThisMonth,
+        )
+        .map((r) => r.stuRegId)
+        .toSet();
+    var totalNetPayable = 0.0;
+    for (final row in _rows) {
+      if (!_selected.contains(row.stuRegId)) continue;
+      totalNetPayable += _feeBreakdownFor(row, checkedHeads).$3;
+    }
 
     final selectionSummary = Consumer(
       builder: (context, ref, _) {
@@ -4060,8 +4284,9 @@ class _SingleVoucherWorkspaceState
         ];
         return Expanded(
           child: Text(
-            '${_selected.length} Student(s) Selected \u00b7 Checked Fee '
-            'Heads: ${checkedNames.isEmpty ? '\u2014' : checkedNames.join(', ')}',
+            '${_selected.length} Student(s) Selected \u00b7 Checked Heads: '
+            '${checkedNames.isEmpty ? '\u2014' : checkedNames.join(', ')} '
+            '\u00b7 Total Net Payable: ${_rs(totalNetPayable)}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: AppTypography.bodySmall.copyWith(
@@ -4080,6 +4305,19 @@ class _SingleVoucherWorkspaceState
       label: const Text('Delete Selected Vouchers'),
       style: TextButton.styleFrom(
         foregroundColor: AppColors.statusErrorText,
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+
+    final printSelectedBtn = TextButton.icon(
+      key: const Key('print_selected_single_vouchers_btn'),
+      onPressed: printableSelected.isEmpty
+          ? null
+          : () => widget.onPrintVouchers(printableSelected),
+      icon: const Icon(Icons.print_outlined, size: 16),
+      label: Text('Print Selected Vouchers (${printableSelected.length})'),
+      style: TextButton.styleFrom(
+        foregroundColor: AppColors.brandPrimary,
         visualDensity: VisualDensity.compact,
       ),
     );
@@ -4179,7 +4417,7 @@ class _SingleVoucherWorkspaceState
                       spacing: AppSpacing.sm,
                       runSpacing: AppSpacing.xs,
                       alignment: WrapAlignment.end,
-                      children: [deleteBtn, generateBtn],
+                      children: [deleteBtn, printSelectedBtn, generateBtn],
                     ),
                   ],
                 )
@@ -4188,6 +4426,7 @@ class _SingleVoucherWorkspaceState
                     selectionSummary,
                     const SizedBox(width: AppSpacing.sm),
                     deleteBtn,
+                    printSelectedBtn,
                     const SizedBox(width: AppSpacing.sm),
                     generateBtn,
                   ],

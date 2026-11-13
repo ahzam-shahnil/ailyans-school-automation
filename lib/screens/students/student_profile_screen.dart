@@ -3740,15 +3740,19 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 textStyle: AppTypography.label.copyWith(fontSize: 12),
               ),
               onPressed: () {
-                // Shot 6c: deep-link into the voucher screen's full-screen
-                // single-student workspace with this student pre-selected.
+                // Shot 6c/6d: deep-link into the voucher screen's full-screen
+                // single-student workspace with this student pre-selected
+                // (provider state carries the payload; the query params
+                // keep the URI self-describing).
                 ref
                     .read(voucherGenFiltersProvider.notifier)
                     .setMode('single');
                 ref
                     .read(voucherGenFiltersProvider.notifier)
                     .setSelectedStuRegId(bundle.student.stuRegId);
-                context.go('/fees/vouchers');
+                context.go(
+                  '/fees/vouchers?mode=single&stuRegId=${bundle.student.stuRegId}',
+                );
               },
             ),
           ],

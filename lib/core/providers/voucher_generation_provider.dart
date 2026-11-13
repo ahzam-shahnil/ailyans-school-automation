@@ -454,11 +454,13 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
   final filters = ref.watch(voucherGenFiltersProvider);
   final db = await DatabaseService.instance.database;
 
-  // 1. Candidate selection: Present=1, SessionYr=?, VGen='Y'
+  // 1. Candidate selection: active students for the session — same criteria
+  // as the Student Directory (Present=1/NULL, no SchLeaving record).
+  // Shot 6d: VGen no longer gates voucher eligibility.
   final whereClauses = <String>[
-    'sc.Present = 1',
+    'COALESCE(sc.Present, 1) = 1',
     'sc.SessionYr = ?',
-    "sc.VGen = 'Y'",
+    'NOT EXISTS (SELECT 1 FROM SchLeaving sl WHERE sl.StuRegID = sc.Stu_RegID)',
   ];
   final whereArgs = <dynamic>[filters.sessionYr];
 
@@ -1778,7 +1780,8 @@ final voucherFeeStructureProvider =
       ];
     });
 
-/// A row in the "Generate Single Voucher" modal's checkable student table.
+/// A row in the full-screen Single/Selected Student Voucher workspace's
+/// checkable student table.
 class SingleVoucherStudentRow {
   final int stuRegId;
   final String fullName;
@@ -1787,6 +1790,15 @@ class SingleVoucherStudentRow {
   final String? className;
   final bool hasVoucherThisMonth;
 
+  /// Shot 6d: live fee-preview inputs — student concession
+  /// (Stu_Reg.Discount), monthly special discount (Stu_Reg.VMDiscount),
+  /// full-waiver flag (Stu_Reg.FullDiscount) and the already-generated
+  /// voucher master ID for the target month (null when none).
+  final double discount;
+  final double vmDiscount;
+  final bool fullDiscount;
+  final String? voucherMasId;
+
   const SingleVoucherStudentRow({
     required this.stuRegId,
     required this.fullName,
@@ -1794,70 +1806,62 @@ class SingleVoucherStudentRow {
     required this.classId,
     this.className,
     required this.hasVoucherThisMonth,
+    this.discount = 0,
+    this.vmDiscount = 0,
+    this.fullDiscount = false,
+    this.voucherMasId,
   });
 }
 
-/// Counts whole-school candidates: active, enrolled in [sessionYr], flagged
-/// VGen='Y', not school-left, and without a voucher for the target month.
-/// The duplicate guard uses NOT EXISTS (never NOT IN) because
-/// Student_Class_StuRegID is nullable.
+/// Counts whole-school candidates: ACTIVE students enrolled in [sessionYr]
+/// (Present=1/NULL, no SchLeaving — the same set the Student Directory
+/// shows). Shot 6d: the VGen flag no longer gates eligibility and students
+/// with existing PAID vouchers stay in the count — the pipeline skips paid
+/// vouchers untouched while regenerating unpaid ones.
 Future<int> countSchoolVoucherCandidates({
   required String sessionYr,
   required String billingMonth,
 }) async {
   final db = await DatabaseService.instance.database;
-  final forMonth = normalizeBillingMonthForStorage(billingMonth);
   final rows = await db.rawQuery('''
     SELECT COUNT(*) AS cnt
     FROM Student_Class sc
     JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
-    WHERE sc.Present = 1
+    WHERE COALESCE(sc.Present, 1) = 1
       AND sc.SessionYr = ?
-      AND sc.VGen = 'Y'
       AND NOT EXISTS (SELECT 1 FROM SchLeaving sl WHERE sl.StuRegID = sc.Stu_RegID)
-      AND NOT EXISTS (
-        SELECT 1 FROM VoucharMas vm
-        WHERE vm.Student_Class_StuRegID = sc.Stu_RegID
-          AND vm.ForMonth = ? AND vm.SessionYr = ?
-          AND COALESCE(vm.IsPaid, 'N') = 'Y'
-      )
-  ''', [sessionYr, forMonth, sessionYr]);
+  ''', [sessionYr]);
   return (rows.first['cnt'] as num?)?.toInt() ?? 0;
 }
 
-/// Distinct classes that still have whole-school candidates (same filters as
-/// [countSchoolVoucherCandidates]). Drives the per-class reuse loop so the
-/// existing [_generateVouchersBatch] pipeline can be reused verbatim.
+/// Distinct classes that still have whole-school candidates (same active
+/// filters as [countSchoolVoucherCandidates]). Drives the per-class reuse
+/// loop so the existing [_generateVouchersBatch] pipeline can be reused
+/// verbatim.
 Future<List<int>> listSchoolVoucherCandidateClasses({
   required String sessionYr,
   required String billingMonth,
 }) async {
   final db = await DatabaseService.instance.database;
-  final forMonth = normalizeBillingMonthForStorage(billingMonth);
   final rows = await db.rawQuery('''
     SELECT DISTINCT sc.ClassID
     FROM Student_Class sc
     JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
-    WHERE sc.Present = 1
+    WHERE COALESCE(sc.Present, 1) = 1
       AND sc.SessionYr = ?
-      AND sc.VGen = 'Y'
       AND NOT EXISTS (SELECT 1 FROM SchLeaving sl WHERE sl.StuRegID = sc.Stu_RegID)
-      AND NOT EXISTS (
-        SELECT 1 FROM VoucharMas vm
-        WHERE vm.Student_Class_StuRegID = sc.Stu_RegID
-          AND vm.ForMonth = ? AND vm.SessionYr = ?
-          AND COALESCE(vm.IsPaid, 'N') = 'Y'
-      )
     ORDER BY sc.ClassID ASC
-  ''', [sessionYr, forMonth, sessionYr]);
+  ''', [sessionYr]);
   return rows.map((r) => r['ClassID'] as int).toList();
 }
 
-/// Student search for the Generate Single Voucher modal: active students in
-/// [sessionYr] flagged VGen='Y', not school-left, optionally filtered by
-/// class, with an EXISTS flag for vouchers already generated for the target
-/// month. Name filtering happens Dart-side via [formatStudentFullName] so a
-/// missing NameMiddle never produces double spaces in the match string.
+/// Student search for the full-screen Single/Selected Student workspace:
+/// ACTIVE students in [sessionYr] (Present=1/NULL, no SchLeaving — VGen no
+/// longer gates eligibility), optionally filtered by class, with the
+/// already-generated voucher master ID for the target month plus the
+/// student's concession inputs for the live fee preview. Name filtering
+/// happens Dart-side via [formatStudentFullName] so a missing NameMiddle
+/// never produces double spaces in the match string.
 Future<List<SingleVoucherStudentRow>> searchStudentsForSingleVoucher({
   required String sessionYr,
   required String billingMonth,
@@ -1869,17 +1873,17 @@ Future<List<SingleVoucherStudentRow>> searchStudentsForSingleVoucher({
   final rows = await db.rawQuery('''
     SELECT sc.Stu_RegID, sc.ClassID, c.CName AS ClassName,
            sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
-           EXISTS (
-             SELECT 1 FROM VoucharMas vm
-             WHERE vm.Student_Class_StuRegID = sc.Stu_RegID
-               AND vm.ForMonth = ? AND vm.SessionYr = ?
-           ) AS HasVoucher
+           COALESCE(sr.Discount, 0) AS Discount,
+           COALESCE(sr.VMDiscount, 0) AS VMDiscount,
+           COALESCE(sr.FullDiscount, 0) AS FullDiscount,
+           vm.VoucherMasID AS VoucherMasId
     FROM Student_Class sc
     JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
     LEFT JOIN Class c ON c.ClassID = sc.ClassID
-    WHERE sc.Present = 1
+    LEFT JOIN VoucharMas vm ON vm.Student_Class_StuRegID = sc.Stu_RegID
+      AND vm.ForMonth = ? AND vm.SessionYr = ?
+    WHERE COALESCE(sc.Present, 1) = 1
       AND sc.SessionYr = ?
-      AND sc.VGen = 'Y'
       AND NOT EXISTS (SELECT 1 FROM SchLeaving sl WHERE sl.StuRegID = sc.Stu_RegID)
       AND (? IS NULL OR sc.ClassID = ?)
     ORDER BY sc.ClassID ASC, sc.ClassRollNo ASC, sc.Stu_RegID ASC
@@ -1898,7 +1902,11 @@ Future<List<SingleVoucherStudentRow>> searchStudentsForSingleVoucher({
           fatherName: (r['F_Name'] as String?)?.trim(),
           classId: r['ClassID'] as int,
           className: (r['ClassName'] as String?)?.trim(),
-          hasVoucherThisMonth: (r['HasVoucher'] as int? ?? 0) == 1,
+          hasVoucherThisMonth: r['VoucherMasId'] != null,
+          discount: (r['Discount'] as num?)?.toDouble() ?? 0,
+          vmDiscount: (r['VMDiscount'] as num?)?.toDouble() ?? 0,
+          fullDiscount: (r['FullDiscount'] as int? ?? 0) == 1,
+          voucherMasId: r['VoucherMasId'] as String?,
         ),
       )
       .toList();
@@ -1913,4 +1921,27 @@ Future<List<SingleVoucherStudentRow>> searchStudentsForSingleVoucher({
             (s.fatherName?.toLowerCase().contains(q) ?? false),
       )
       .toList(growable: false);
+}
+
+/// Shot 6d: class tariffs for EVERY class in [sessionYr], keyed
+/// `classId -> {feeParamId -> amount}` (only `Fee > 0` rows). Lets the
+/// Single/Selected Student workspace compute a live Gross/Discount/Net
+/// preview for students across all classes from the checked fee heads.
+Future<Map<int, Map<int, double>>> loadClassTariffMapForSession({
+  required String sessionYr,
+}) async {
+  final db = await DatabaseService.instance.database;
+  final rows = await db.rawQuery(
+    'SELECT ClassID, FeeParamID, Fee FROM Cls_Param_Fee '
+    'WHERE FeeYr = ? AND Fee > 0',
+    [sessionYr],
+  );
+  final map = <int, Map<int, double>>{};
+  for (final r in rows) {
+    final classId = r['ClassID'] as int;
+    final feeParamId = r['FeeParamID'] as int;
+    final fee = (r['Fee'] as num?)?.toDouble() ?? 0.0;
+    (map[classId] ??= {})[feeParamId] = fee;
+  }
+  return map;
 }
