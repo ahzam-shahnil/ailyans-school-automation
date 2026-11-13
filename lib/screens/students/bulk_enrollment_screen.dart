@@ -10,6 +10,7 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/enrollment_row.dart';
 import '../../models/school_class.dart';
+import '../../models/student.dart';
 import '../../widgets/mobile/mobile_dropdown_field.dart';
 import '../../widgets/mobile/mobile_kpi_card.dart';
 import '../../widgets/mobile/mobile_status_pill.dart';
@@ -172,8 +173,11 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final row = missing[index];
-                final name =
-                    '${row['NameFirst'] ?? ''} ${row['NameLast'] ?? ''}'.trim();
+                final name = formatStudentFullName(
+                  row['NameFirst'] as String?,
+                  row['NameMiddle'] as String?,
+                  row['NameLast'] as String?,
+                );
                 return ListTile(
                   dense: true,
                   leading: Text(

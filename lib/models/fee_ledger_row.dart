@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import 'student.dart';
+
 /// Data model representing a single master voucher row in the institutional fee ledger.
 @immutable
 class FeeLedgerRow {
@@ -50,8 +52,9 @@ class FeeLedgerRow {
 
   factory FeeLedgerRow.fromMap(Map<String, dynamic> map) {
     final first = (map['NameFirst'] as String?)?.trim() ?? '';
+    final middle = (map['NameMiddle'] as String?)?.trim() ?? '';
     final last = (map['NameLast'] as String?)?.trim() ?? '';
-    final fullName = [first, last].where((s) => s.isNotEmpty).join(' ');
+    final fullName = formatStudentFullName(first, middle, last);
 
     DateTime? due;
     final dueRaw = map['DueDate'];

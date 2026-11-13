@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1204,6 +1206,10 @@ class _VoucherGenerationScreenState
               style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
             ),
             const SizedBox(height: AppSpacing.sm),
+            // VB6-style fast actions: 1-click whole-school batch and the
+            // Single / Selected Student voucher modal.
+            _buildFastActionsRow(context, filters, isGenerating),
+            const SizedBox(height: AppSpacing.sm),
             VoucherParameterCard(
               sessionYear: filters.sessionYr,
               sessionYears: effectiveSessions,
@@ -1285,6 +1291,248 @@ class _VoucherGenerationScreenState
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // VB6 FAST ACTIONS — whole-school batch + single/selected student modal
+  // ---------------------------------------------------------------------------
+
+  /// Two primary VB6 actions: 1-click whole-school batch and the
+  /// Single / Selected Student voucher modal. Disabled while generating.
+  Widget _buildFastActionsRow(
+    BuildContext context,
+    VoucherGenFilters filters,
+    bool isGenerating,
+  ) {
+    final execState = ref.watch(voucherGenExecutionProvider);
+    final busy = isGenerating || execState.isGenerating;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ElevatedButton.icon(
+          key: const Key('generate_all_school_vouchers_btn'),
+          onPressed: busy ? null : () => _confirmGenerateAllSchool(context),
+          icon: const Icon(Icons.school_outlined, size: 16),
+          label: const Text('Generate All School Vouchers (All Students)'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.brandPrimary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(
+              vertical: 10,
+              horizontal: AppSpacing.md,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        OutlinedButton.icon(
+          key: const Key('open_single_voucher_dialog_btn'),
+          onPressed: busy ? null : () => _showSingleVoucherDialog(context),
+          icon: const Icon(Icons.person_add_alt_1_outlined, size: 16),
+          label: const Text('Single / Selected Student Voucher'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.brandPrimary,
+            side: const BorderSide(color: AppColors.brandPrimary),
+            padding: const EdgeInsets.symmetric(
+              vertical: 10,
+              horizontal: AppSpacing.md,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Confirms the 1-click whole-school batch with the live eligible-student
+  /// count, then runs [VoucherGenExecutionNotifier.generateAllSchoolVouchers].
+  Future<void> _confirmGenerateAllSchool(BuildContext context) async {
+    final filters = ref.read(voucherGenFiltersProvider);
+    final execState = ref.read(voucherGenExecutionProvider);
+    if (execState.isGenerating) return;
+
+    int candidates = 0;
+    try {
+      candidates = await countSchoolVoucherCandidates(
+        sessionYr: filters.sessionYr,
+        billingMonth: filters.billingMonth,
+      );
+    } catch (_) {
+      candidates = 0;
+    }
+
+    if (!context.mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Generate All School Vouchers'),
+        content: Text(
+          'Create vouchers for $candidates eligible student(s) across all '
+          'active classes, for ${filters.billingMonth}, using the checked '
+          'fee heads. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final summary = await ref
+        .read(voucherGenExecutionProvider.notifier)
+        .generateAllSchoolVouchers();
+    if (!context.mounted) return;
+    if (summary == null) {
+      final err =
+          ref.read(voucherGenExecutionProvider).error ??
+          'Whole-school generation failed.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  /// Opens the Generate Single Voucher modal, then runs
+  /// [VoucherGenExecutionNotifier.generateForSelectedStudents] for the
+  /// checked students.
+  Future<void> _showSingleVoucherDialog(BuildContext context) async {
+    final filters = ref.read(voucherGenFiltersProvider);
+    final classesAsync = ref.read(classesProvider);
+    final classList = classesAsync.valueOrNull ?? const <SchoolClass>[];
+
+    final selected = await showDialog<Set<int>>(
+      context: context,
+      builder: (ctx) => _SingleVoucherDialog(
+        sessionYr: filters.sessionYr,
+        billingMonth: filters.billingMonth,
+        classes: classList.map((c) => (id: c.classId, label: c.cName)).toList(),
+      ),
+    );
+    if (selected == null || selected.isEmpty || !context.mounted) return;
+
+    final summary = await ref
+        .read(voucherGenExecutionProvider.notifier)
+        .generateForSelectedStudents(selected);
+    if (!context.mounted) return;
+    if (summary == null) {
+      final err =
+          ref.read(voucherGenExecutionProvider).error ??
+          'Voucher generation failed.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
+  /// Always-visible global fee-head checklist (`ID | Fee | Check`), VB6
+  /// style. Applies to the whole-school batch and the single/multi-student
+  /// modal via [globalSelectedFeeParamIdsProvider]; Tuition Fee (head 2) is
+  /// checked by default.
+  Widget _buildGlobalFeeHeadsStrip() {
+    final optionsAsync = ref.watch(allFeeParametersProvider);
+    final selected = ref.watch(globalSelectedFeeParamIdsProvider);
+    final options = optionsAsync.valueOrNull ?? const <FeeParamOption>[];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: options.isEmpty
+          ? Text(
+              'Fee heads load from the FeeParameters table.',
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            )
+          : Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final option in options)
+                  InkWell(
+                    onTap: () => ref
+                        .read(globalSelectedFeeParamIdsProvider.notifier)
+                        .toggle(option.feeParamId),
+                    borderRadius: BorderRadius.circular(AppRadius.sm),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 32,
+                            height: 24,
+                            child: Checkbox(
+                              value: selected.contains(option.feeParamId),
+                              onChanged: (_) => ref
+                                  .read(globalSelectedFeeParamIdsProvider
+                                      .notifier)
+                                  .toggle(option.feeParamId),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${option.feeParamId} · ${option.description}',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+
+  /// Mobile: quick actions + always-visible fee-heads card, placed between
+  /// the parameter summary and the preview pane.
+  Widget _buildMobileFastActionsCard(
+    BuildContext context,
+    VoucherGenFilters filters,
+    VoucherGenState execState,
+  ) {
+    return Container(
+      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Quick Actions',
+            style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _buildFastActionsRow(context, filters, execState.isGenerating),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Fee Heads',
+            style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          _buildGlobalFeeHeadsStrip(),
+        ],
       ),
     );
   }
@@ -1629,6 +1877,11 @@ class _VoucherGenerationScreenState
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Always-visible global fee-head checklist (VB6: `ID | Fee | Check`).
+          _buildGlobalFeeHeadsStrip(),
+
           const SizedBox(height: AppSpacing.sm),
 
           if (hasDrift) ...[
@@ -2292,6 +2545,9 @@ class _VoucherGenerationScreenState
                       execState.isGenerating,
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.md),
+                  // Mobile: VB6 quick actions + always-visible fee heads card.
+                  _buildMobileFastActionsCard(context, filters, execState),
                   const SizedBox(height: AppSpacing.md),
                   _buildCompactPreviewPane(
                     context,
@@ -2988,5 +3244,345 @@ String? _getFromOrigin(BuildContext context) {
     return GoRouterState.of(context).uri.queryParameters['from'];
   } catch (_) {
     return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// GENERATE SINGLE VOUCHER MODAL (VB6: single/selected student voucher)
+// ---------------------------------------------------------------------------
+
+/// Checkable student table modal: `Reg ID | Name | Father | Class | Check`,
+/// with a Class filter (`All Classes` default), a Reg Code / Name search
+/// field, a select-all header checkbox, and an 'Already Generated' badge for
+/// students who already have a voucher for the target month. Pops with the
+/// selected Stu_RegID set; the caller runs the generation.
+class _SingleVoucherDialog extends ConsumerStatefulWidget {
+  final String sessionYr;
+  final String billingMonth;
+  final List<({int id, String label})> classes;
+
+  const _SingleVoucherDialog({
+    required this.sessionYr,
+    required this.billingMonth,
+    required this.classes,
+  });
+
+  @override
+  ConsumerState<_SingleVoucherDialog> createState() =>
+      _SingleVoucherDialogState();
+}
+
+class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
+  int? _classFilter;
+  final String _query = '';
+  final Set<int> _selected = {};
+  final TextEditingController _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  List<SingleVoucherStudentRow> _rows = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final rows = await searchStudentsForSingleVoucher(
+        sessionYr: widget.sessionYr,
+        billingMonth: widget.billingMonth,
+        classId: _classFilter,
+        query: _query,
+      );
+      if (!mounted) return;
+      setState(() {
+        _rows = rows;
+        _loading = false;
+        _selected.removeWhere(
+          (id) => !rows.any(
+            (r) => r.stuRegId == id && !r.hasVoucherThisMonth,
+          ),
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _rows = const [];
+        _loading = false;
+      });
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), _load);
+  }
+
+  bool get _allSelectableSelected {
+    final selectable = _rows
+        .where((r) => !r.hasVoucherThisMonth)
+        .toList(growable: false);
+    return selectable.isNotEmpty &&
+        selectable.every((r) => _selected.contains(r.stuRegId));
+  }
+
+  void _toggleAll(bool? value) {
+    setState(() {
+      if (value == true) {
+        _selected.addAll(
+          _rows
+              .where((r) => !r.hasVoucherThisMonth)
+              .map((r) => r.stuRegId),
+        );
+      } else {
+        _selected.clear();
+      }
+    });
+  }
+
+  void _toggleRow(int stuRegId) {
+    setState(() {
+      if (_selected.contains(stuRegId)) {
+        _selected.remove(stuRegId);
+      } else {
+        _selected.add(stuRegId);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final selectableCount = _rows.where((r) => !r.hasVoucherThisMonth).length;
+    final headStyle = AppTypography.label.copyWith(
+      fontWeight: FontWeight.w600,
+      color: AppColors.textSecondary,
+    );
+
+    return AlertDialog(
+      key: const Key('single_voucher_dialog'),
+      title: const Text('Generate Single Voucher'),
+      content: SizedBox(
+        width: 620,
+        height: 480,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DropdownButtonFormField<int?>(
+              initialValue: _classFilter,
+              isDense: true,
+              decoration: const InputDecoration(
+                labelText: 'Class',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem<int?>(
+                  value: null,
+                  child: Text('All Classes'),
+                ),
+                ...widget.classes.map(
+                  (c) => DropdownMenuItem<int?>(
+                    value: c.id,
+                    child: Text(c.label),
+                  ),
+                ),
+              ],
+              onChanged: (v) {
+                setState(() => _classFilter = v);
+                _load();
+              },
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              key: const Key('single_voucher_reg_search'),
+              controller: _searchCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Reg Code / Student Name',
+                prefixIcon: Icon(Icons.search, size: 18),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              onChanged: _onSearchChanged,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            // Table header: select-all checkbox doubles as the Check column.
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 40,
+                    child: Checkbox(
+                      value: _allSelectableSelected,
+                      onChanged: selectableCount == 0 ? null : _toggleAll,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(
+                    width: 64,
+                    child: Text('Reg ID', style: AppTypography.label),
+                  ),
+                  Expanded(
+                    child: Text('Name', style: headStyle),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text('Father', style: headStyle),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(
+                    width: 96,
+                    child: Text('Class', style: AppTypography.label),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : _rows.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No students found.',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: _rows.length,
+                          itemBuilder: (context, index) {
+                            final row = _rows[index];
+                            final disabled = row.hasVoucherThisMonth;
+                            final checked = _selected.contains(row.stuRegId);
+                            return InkWell(
+                              onTap: disabled ? null : () => _toggleRow(row.stuRegId),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 2,
+                                ),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 40,
+                                      child: Checkbox(
+                                        value: checked,
+                                        onChanged: disabled
+                                            ? null
+                                            : (_) => _toggleRow(row.stuRegId),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                    ),
+                                    SizedBox(
+                                      width: 64,
+                                      child: Text(
+                                        '${row.stuRegId}',
+                                        style: AppTypography.monospace,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        row.fullName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.bodySmall.copyWith(
+                                          color: disabled
+                                              ? AppColors.textSecondary
+                                              : AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    Expanded(
+                                      child: Text(
+                                        row.fatherName ?? '—',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.bodySmall.copyWith(
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    SizedBox(
+                                      width: 96,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            row.className ?? 'Class ${row.classId}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.bodySmall
+                                                .copyWith(
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          if (disabled)
+                                            Text(
+                                              'Already Generated',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: AppTypography.label
+                                                  .copyWith(
+                                                color:
+                                                    AppColors.statusWarningText,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton.icon(
+          key: const Key('confirm_single_voucher_generate_btn'),
+          onPressed:
+              _selected.isEmpty ? null : () => Navigator.of(context).pop(Set<int>.from(_selected)),
+          icon: const Icon(Icons.receipt_long, size: 16),
+          label: Text('Generate Selected (${_selected.length})'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.brandPrimary,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

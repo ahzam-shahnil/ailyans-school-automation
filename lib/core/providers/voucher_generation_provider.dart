@@ -1201,6 +1201,260 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     return generateVouchers();
   }
 
+  /// Loads every FeeParameters ID; degrades to an empty set when the provider
+  /// cannot load (e.g. widget tests without a database), so the fast actions
+  /// simply keep every class tariff head active.
+  Future<Set<int>> _loadAllFeeParamIds() async {
+    try {
+      final all = await ref.read(allFeeParametersProvider.future);
+      return all.map((f) => f.feeParamId).toSet();
+    } catch (_) {
+      return const <int>{};
+    }
+  }
+
+  /// Invalidates and awaits a fresh preview; degrades to an empty list when
+  /// the preview provider cannot load.
+  Future<List<VoucherPreviewRow>> _refreshPreview() async {
+    ref.invalidate(voucherGenPreviewProvider);
+    try {
+      return await ref.read(voucherGenPreviewProvider.future);
+    } catch (_) {
+      return const <VoucherPreviewRow>[];
+    }
+  }
+
+  /// Post-generation refresh: bumps the shared DB data version so every
+  /// listening screen re-queries SQLite immediately (this also triggers the
+  /// silent preview reload wired in [voucherGenExecutionProvider]).
+  void _bumpDataVersion() {
+    try {
+      ref.read(dbDataVersionProvider.notifier).state++;
+    } catch (_) {
+      // Bumping the data version must never fail the flow.
+    }
+  }
+
+  /// 1-click whole-school batch: iterates every class that still has eligible
+  /// candidates and REUSES the existing [_generateVouchersBatch] pipeline via
+  /// the preview provider (filter-mutation loop — no parallel insert path).
+  /// The global fee-head checklist is applied per class as
+  /// excludedFeeParamIds = allFeeParameters - selectedGlobalFeeParameters.
+  Future<BatchGenerationSummary?> generateAllSchoolVouchers() async {
+    if (state.isGenerating) return null;
+    final filters = ref.read(voucherGenFiltersProvider);
+    final selectedGlobal = ref.read(globalSelectedFeeParamIdsProvider);
+    final originalFilters = filters;
+    final filtersNotifier = ref.read(voucherGenFiltersProvider.notifier);
+
+    try {
+      final allFeeIds = await _loadAllFeeParamIds();
+      final exclusions = allFeeIds.difference(selectedGlobal);
+      final classIds = await listSchoolVoucherCandidateClasses(
+        sessionYr: filters.sessionYr,
+        billingMonth: filters.billingMonth,
+      );
+      if (classIds.isEmpty) {
+        state = state.copyWith(
+          error: 'No eligible students for whole-school generation',
+        );
+        return null;
+      }
+
+      state = state.copyWith(
+        isGenerating: true,
+        generatedCount: 0,
+        skippedCount: 0,
+        totalToGenerate: 0,
+        clearError: true,
+        clearSummary: true,
+      );
+
+      int generated = 0;
+      int skipped = 0;
+      int billed = 0;
+      int arrears = 0;
+      int concessions = 0;
+      final reasons = <String>[];
+
+      for (final classId in classIds) {
+        if (_cancelRequested) {
+          _cancelRequested = false;
+          reasons.add('Batch cancelled by user.');
+          break;
+        }
+
+        filtersNotifier.state = originalFilters.copyWith(
+          classId: classId,
+          clearClassSecId: true,
+          excludedFeeParamIds: exclusions,
+          mode: 'batch',
+          clearSelectedStudent: true,
+        );
+
+        final rows = await _refreshPreview();
+        final hasGeneratable = rows.any(
+          (r) => r.status != VoucherPreviewStatus.alreadyGenerated,
+        );
+        if (!hasGeneratable) continue;
+
+        final classSummary = await generateVouchers();
+        if (classSummary != null) {
+          generated += classSummary.generatedCount;
+          skipped += classSummary.skippedCount;
+          billed += classSummary.totalBilled;
+          arrears += classSummary.arrearsRolledOver;
+          concessions += classSummary.concessionsApplied;
+          reasons.addAll(classSummary.skippedReasons);
+          state = state.copyWith(
+            generatedCount: generated,
+            skippedCount: skipped,
+            totalToGenerate: generated + skipped,
+          );
+        }
+      }
+
+      final summary = BatchGenerationSummary(
+        generatedCount: generated,
+        skippedCount: skipped,
+        totalBilled: billed,
+        arrearsRolledOver: arrears,
+        concessionsApplied: concessions,
+        skippedReasons: reasons,
+      );
+
+      state = state.copyWith(isGenerating: false, completionSummary: summary);
+      _bumpDataVersion();
+      return summary;
+    } catch (e, st) {
+      debugPrint('generateAllSchoolVouchers error: $e\n$st');
+      state = state.copyWith(error: 'Whole-school generation failed: $e');
+      return null;
+    } finally {
+      filtersNotifier.state = originalFilters;
+      ref.invalidate(voucherGenPreviewProvider);
+      if (state.isGenerating) {
+        state = state.copyWith(isGenerating: false);
+      }
+    }
+  }
+
+  /// Generates vouchers for the 1..N students checked in the Generate Single
+  /// Voucher modal, reusing the existing single-mode pipeline via the preview
+  /// provider (filter-mutation loop — no parallel insert path). Applies the
+  /// global fee-head checklist the same way as [generateAllSchoolVouchers].
+  Future<BatchGenerationSummary?> generateForSelectedStudents(
+    Set<int> stuRegIds,
+  ) async {
+    if (stuRegIds.isEmpty) return null;
+    if (state.isGenerating) return null;
+    final filters = ref.read(voucherGenFiltersProvider);
+    final selectedGlobal = ref.read(globalSelectedFeeParamIdsProvider);
+    final originalFilters = filters;
+    final filtersNotifier = ref.read(voucherGenFiltersProvider.notifier);
+    final db = await DatabaseService.instance.database;
+
+    try {
+      final allFeeIds = await _loadAllFeeParamIds();
+      final exclusions = allFeeIds.difference(selectedGlobal);
+
+      state = state.copyWith(
+        isGenerating: true,
+        generatedCount: 0,
+        skippedCount: 0,
+        totalToGenerate: stuRegIds.length,
+        clearError: true,
+        clearSummary: true,
+      );
+
+      int generated = 0;
+      int skipped = 0;
+      int billed = 0;
+      int arrears = 0;
+      int concessions = 0;
+      final reasons = <String>[];
+
+      for (final regId in stuRegIds) {
+        if (_cancelRequested) {
+          _cancelRequested = false;
+          reasons.add('Batch cancelled by user.');
+          break;
+        }
+
+        // Resolve the student's class so tariff validation and preview
+        // filtering match the actual cohort row.
+        final classRows = await db.rawQuery(
+          'SELECT ClassID FROM Student_Class WHERE Stu_RegID = ? AND SessionYr = ? LIMIT 1',
+          [regId, filters.sessionYr],
+        );
+        if (classRows.isEmpty) {
+          skipped++;
+          reasons.add('No active enrollment found for Reg ID $regId.');
+          state = state.copyWith(skippedCount: skipped);
+          continue;
+        }
+        final classId = classRows.first['ClassID'] as int;
+
+        filtersNotifier.state = originalFilters.copyWith(
+          classId: classId,
+          clearClassSecId: true,
+          excludedFeeParamIds: exclusions,
+          mode: 'single',
+          selectedStuRegId: regId,
+        );
+
+        final rows = await _refreshPreview();
+        final hasGeneratable = rows.any(
+          (r) => r.status != VoucherPreviewStatus.alreadyGenerated,
+        );
+        if (!hasGeneratable) {
+          skipped++;
+          reasons.add('Voucher already generated this month for Reg ID $regId.');
+          state = state.copyWith(skippedCount: skipped);
+          continue;
+        }
+
+        final studentSummary = await generateVouchers();
+        if (studentSummary != null) {
+          generated += studentSummary.generatedCount;
+          skipped += studentSummary.skippedCount;
+          billed += studentSummary.totalBilled;
+          arrears += studentSummary.arrearsRolledOver;
+          concessions += studentSummary.concessionsApplied;
+          reasons.addAll(studentSummary.skippedReasons);
+          state = state.copyWith(
+            generatedCount: generated,
+            skippedCount: skipped,
+            totalToGenerate: generated + skipped,
+          );
+        }
+      }
+
+      final summary = BatchGenerationSummary(
+        generatedCount: generated,
+        skippedCount: skipped,
+        totalBilled: billed,
+        arrearsRolledOver: arrears,
+        concessionsApplied: concessions,
+        skippedReasons: reasons,
+      );
+
+      state = state.copyWith(isGenerating: false, completionSummary: summary);
+      _bumpDataVersion();
+      return summary;
+    } catch (e, st) {
+      debugPrint('generateForSelectedStudents error: $e\n$st');
+      state = state.copyWith(error: 'Voucher generation failed: $e');
+      return null;
+    } finally {
+      filtersNotifier.state = originalFilters;
+      ref.invalidate(voucherGenPreviewProvider);
+      if (state.isGenerating) {
+        state = state.copyWith(isGenerating: false);
+      }
+    }
+  }
+
   /// G-10 Shot 12b: silent, non-destructive preview refresh, triggered from
   /// the provider factory on [dbDataVersionProvider] changes (a cloud pull
   /// completed). Invalidates the preview-side FutureProviders so they re-query
@@ -1231,3 +1485,194 @@ final voucherGenExecutionProvider =
       });
       return notifier;
     });
+
+// ---------------------------------------------------------------------------
+// H-Shot 3: VB6-style fast actions — global fee-head checklist, 1-click
+// whole-school batch, and the Single / Selected Student voucher modal.
+// ---------------------------------------------------------------------------
+
+/// A school-wide fee head row from the FeeParameters table, shown in the
+/// always-visible checklist (`ID | Fee | Check`).
+class FeeParamOption {
+  final int feeParamId;
+  final String description;
+
+  const FeeParamOption({required this.feeParamId, required this.description});
+}
+
+/// All fee heads defined in the FeeParameters table. Powers the always-visible
+/// global fee-head checklist, available even before any class is selected.
+final allFeeParametersProvider =
+    FutureProvider<List<FeeParamOption>>((ref) async {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.rawQuery(
+        'SELECT FeeParamID, ParamDesciption FROM FeeParameters ORDER BY FeeParamID ASC',
+      );
+      return rows
+          .map(
+            (r) => FeeParamOption(
+              feeParamId: r['FeeParamID'] as int,
+              description: (r['ParamDesciption'] as String? ?? '').trim(),
+            ),
+          )
+          .toList();
+    });
+
+/// Global (school-wide) fee-head selection used by the whole-school batch and
+/// the single/multi-student modal. Defaults to Tuition Fee (head 2), matching
+/// the VB6 reference. Kept separate from
+/// [VoucherGenFilters.excludedFeeParamIds] so the existing per-class
+/// batch/single flow is untouched.
+class GlobalFeeParamSelectionNotifier extends StateNotifier<Set<int>> {
+  GlobalFeeParamSelectionNotifier() : super(const <int>{2});
+
+  void toggle(int feeParamId) {
+    final next = Set<int>.from(state);
+    if (next.contains(feeParamId)) {
+      next.remove(feeParamId);
+    } else {
+      next.add(feeParamId);
+    }
+    state = next;
+  }
+}
+
+final globalSelectedFeeParamIdsProvider =
+    StateNotifierProvider<GlobalFeeParamSelectionNotifier, Set<int>>((ref) {
+      return GlobalFeeParamSelectionNotifier();
+    });
+
+/// A row in the "Generate Single Voucher" modal's checkable student table.
+class SingleVoucherStudentRow {
+  final int stuRegId;
+  final String fullName;
+  final String? fatherName;
+  final int classId;
+  final String? className;
+  final bool hasVoucherThisMonth;
+
+  const SingleVoucherStudentRow({
+    required this.stuRegId,
+    required this.fullName,
+    this.fatherName,
+    required this.classId,
+    this.className,
+    required this.hasVoucherThisMonth,
+  });
+}
+
+/// Counts whole-school candidates: active, enrolled in [sessionYr], flagged
+/// VGen='Y', not school-left, and without a voucher for the target month.
+/// The duplicate guard uses NOT EXISTS (never NOT IN) because
+/// Student_Class_StuRegID is nullable.
+Future<int> countSchoolVoucherCandidates({
+  required String sessionYr,
+  required String billingMonth,
+}) async {
+  final db = await DatabaseService.instance.database;
+  final forMonth = normalizeBillingMonthForStorage(billingMonth);
+  final rows = await db.rawQuery('''
+    SELECT COUNT(*) AS cnt
+    FROM Student_Class sc
+    JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
+    WHERE sc.Present = 1
+      AND sc.SessionYr = ?
+      AND sc.VGen = 'Y'
+      AND NOT EXISTS (SELECT 1 FROM SchLeaving sl WHERE sl.StuRegID = sc.Stu_RegID)
+      AND NOT EXISTS (
+        SELECT 1 FROM VoucharMas vm
+        WHERE vm.Student_Class_StuRegID = sc.Stu_RegID
+          AND vm.ForMonth = ? AND vm.SessionYr = ?
+      )
+  ''', [sessionYr, forMonth, sessionYr]);
+  return (rows.first['cnt'] as num?)?.toInt() ?? 0;
+}
+
+/// Distinct classes that still have whole-school candidates (same filters as
+/// [countSchoolVoucherCandidates]). Drives the per-class reuse loop so the
+/// existing [_generateVouchersBatch] pipeline can be reused verbatim.
+Future<List<int>> listSchoolVoucherCandidateClasses({
+  required String sessionYr,
+  required String billingMonth,
+}) async {
+  final db = await DatabaseService.instance.database;
+  final forMonth = normalizeBillingMonthForStorage(billingMonth);
+  final rows = await db.rawQuery('''
+    SELECT DISTINCT sc.ClassID
+    FROM Student_Class sc
+    JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
+    WHERE sc.Present = 1
+      AND sc.SessionYr = ?
+      AND sc.VGen = 'Y'
+      AND NOT EXISTS (SELECT 1 FROM SchLeaving sl WHERE sl.StuRegID = sc.Stu_RegID)
+      AND NOT EXISTS (
+        SELECT 1 FROM VoucharMas vm
+        WHERE vm.Student_Class_StuRegID = sc.Stu_RegID
+          AND vm.ForMonth = ? AND vm.SessionYr = ?
+      )
+    ORDER BY sc.ClassID ASC
+  ''', [sessionYr, forMonth, sessionYr]);
+  return rows.map((r) => r['ClassID'] as int).toList();
+}
+
+/// Student search for the Generate Single Voucher modal: active students in
+/// [sessionYr] flagged VGen='Y', not school-left, optionally filtered by
+/// class, with an EXISTS flag for vouchers already generated for the target
+/// month. Name filtering happens Dart-side via [formatStudentFullName] so a
+/// missing NameMiddle never produces double spaces in the match string.
+Future<List<SingleVoucherStudentRow>> searchStudentsForSingleVoucher({
+  required String sessionYr,
+  required String billingMonth,
+  int? classId,
+  String query = '',
+}) async {
+  final db = await DatabaseService.instance.database;
+  final forMonth = normalizeBillingMonthForStorage(billingMonth);
+  final rows = await db.rawQuery('''
+    SELECT sc.Stu_RegID, sc.ClassID, c.CName AS ClassName,
+           sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
+           EXISTS (
+             SELECT 1 FROM VoucharMas vm
+             WHERE vm.Student_Class_StuRegID = sc.Stu_RegID
+               AND vm.ForMonth = ? AND vm.SessionYr = ?
+           ) AS HasVoucher
+    FROM Student_Class sc
+    JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
+    LEFT JOIN Class c ON c.ClassID = sc.ClassID
+    WHERE sc.Present = 1
+      AND sc.SessionYr = ?
+      AND sc.VGen = 'Y'
+      AND NOT EXISTS (SELECT 1 FROM SchLeaving sl WHERE sl.StuRegID = sc.Stu_RegID)
+      AND (? IS NULL OR sc.ClassID = ?)
+    ORDER BY sc.ClassID ASC, sc.ClassRollNo ASC, sc.Stu_RegID ASC
+    LIMIT 200
+  ''', [forMonth, sessionYr, sessionYr, classId, classId]);
+
+  final all = rows
+      .map(
+        (r) => SingleVoucherStudentRow(
+          stuRegId: r['Stu_RegID'] as int,
+          fullName: formatStudentFullName(
+            r['NameFirst'] as String?,
+            r['NameMiddle'] as String?,
+            r['NameLast'] as String?,
+          ),
+          fatherName: (r['F_Name'] as String?)?.trim(),
+          classId: r['ClassID'] as int,
+          className: (r['ClassName'] as String?)?.trim(),
+          hasVoucherThisMonth: (r['HasVoucher'] as int? ?? 0) == 1,
+        ),
+      )
+      .toList();
+
+  final q = query.trim().toLowerCase();
+  if (q.isEmpty) return all;
+  return all
+      .where(
+        (s) =>
+            s.stuRegId.toString().contains(q) ||
+            s.fullName.toLowerCase().contains(q) ||
+            (s.fatherName?.toLowerCase().contains(q) ?? false),
+      )
+      .toList(growable: false);
+}
