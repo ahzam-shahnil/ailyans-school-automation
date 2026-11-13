@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/db/database.dart';
 import '../../core/providers/school_leaving_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -154,7 +155,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     }
   }
 
-  void _handlePrintCertificate() {
+  Future<void> _handlePrintCertificate() async {
     final slcState = ref.read(schoolLeavingProvider);
     if (!slcState.hasExistingSlc && slcState.committedSlc == null) {
       _showSnackBar('No leaving record available to print', isError: true);
@@ -183,26 +184,87 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       remarks = student.existingSlcRemarks ?? '';
     }
 
+    // Batch 1 (Ailyans): enrich the certificate from the DB — DOB, address,
+    // admitted class (AdmInClass/AdmClass), class at the time of leaving, and
+    // the latest paid voucher month for 'Dues Paid up to'.
+    String dob = student.dob ?? '';
+    String address = '';
+    String admittedClassName = '';
+    String leftClassName = '';
+    String duesPaidUpTo = '';
+    try {
+      final db = await DatabaseService.instance.database;
+
+      final stuRows = await db.rawQuery(
+        '''
+        SELECT sr.DOB, sr.P_Address, sr.T_Address, sr.AdmInClass, sr.AdmClass,
+               cIn.CName AS admittedCName
+        FROM Stu_Reg sr
+        LEFT JOIN Class cIn ON cIn.ClassID = COALESCE(sr.AdmInClass, sr.AdmClass)
+        WHERE sr.Stu_RegID = ?
+        ''',
+        [student.stuRegId],
+      );
+      if (stuRows.isNotEmpty) {
+        final row = stuRows.first;
+        dob = (row['DOB'] as String?)?.trim() ?? dob;
+        final pAddress = (row['P_Address'] as String?)?.trim() ?? '';
+        final tAddress = (row['T_Address'] as String?)?.trim() ?? '';
+        address = pAddress.isNotEmpty ? pAddress : tAddress;
+        admittedClassName = (row['admittedCName'] as String?)?.trim() ?? '';
+      }
+
+      final leftRows = student.classId != null
+          ? await db.rawQuery(
+              'SELECT CName FROM Class WHERE ClassID = ? LIMIT 1',
+              [student.classId],
+            )
+          : const <Map<String, dynamic>>[];
+      if (leftRows.isNotEmpty) {
+        leftClassName = (leftRows.first['CName'] as String?)?.trim() ?? '';
+      }
+
+      final paidRows = await db.rawQuery(
+        '''
+        SELECT ForMonth FROM VoucharMas
+        WHERE Student_Class_StuRegID = ? AND IsPaid = 'Y'
+        ORDER BY VoucherMasID DESC
+        LIMIT 1
+        ''',
+        [student.stuRegId],
+      );
+      if (paidRows.isNotEmpty) {
+        duesPaidUpTo = (paidRows.first['ForMonth'] as String?)?.trim() ?? '';
+      }
+    } catch (_) {
+      // Enrichment is best-effort — the certificate still prints with the
+      // base fields already collected from provider state.
+    }
+
     final slcData = <String, dynamic>{
+      'admissionNo': '${student.stuRegId}',
       'studentName': student.studentName,
       'fatherName': student.fatherName ?? '',
       'className': student.classSecDisplay,
-      'dob': (slcState.committedSlc?['DOB'] ??
-              slcState.committedSlc?['dob'] ??
-              student.dob ??
-              '')
-          .toString(),
+      'dob': dob,
       'admissionDate': student.admissionDate ?? '',
+      'address': address,
+      'admittedClass':
+          admittedClassName.isNotEmpty ? admittedClassName : student.classSecDisplay,
+      'leftClass': leftClassName.isNotEmpty
+          ? leftClassName
+          : student.classSecDisplay,
+      'duesPaidUpTo': duesPaidUpTo,
       'leavingDate': leavingDate,
       'conduct': conduct,
       'reason': reason,
       'remarks': remarks,
       'leftDate': leavingDate,
-      'leftClass': student.classSecDisplay,
       'charactor': conduct,
       'termOfLeaving': reason,
     };
 
+    if (!mounted) return;
     ReportPreviewModal.show(
       context,
       request: ReportRequest(
@@ -1231,7 +1293,12 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Row(
+                  // Batch 1 (Ailyans): Wrap instead of Row so the two new
+                  // reason options ('On Parent's Request', 'Discharge') never
+                  // overflow the card at narrow widths.
+                  Wrap(
+                    spacing: AppSpacing.md,
+                    runSpacing: 4,
                     children: [
                       _buildRadioOption<String>(
                         value: 'Leaving',
@@ -1241,7 +1308,22 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                             .read(schoolLeavingProvider.notifier)
                             .setReason(val),
                       ),
-                      const SizedBox(width: AppSpacing.md),
+                      _buildRadioOption<String>(
+                        value: 'On Parent\'s Request',
+                        groupValue: state.reason,
+                        label: 'On Parent\'s Request',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setReason(val),
+                      ),
+                      _buildRadioOption<String>(
+                        value: 'Discharge',
+                        groupValue: state.reason,
+                        label: 'Discharge',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setReason(val),
+                      ),
                       _buildRadioOption<String>(
                         value: 'Completed Studies',
                         groupValue: state.reason,
@@ -1250,7 +1332,6 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                             .read(schoolLeavingProvider.notifier)
                             .setReason(val),
                       ),
-                      const SizedBox(width: AppSpacing.md),
                       _buildRadioOption<String>(
                         value: 'Dismissed',
                         groupValue: state.reason,
@@ -1909,6 +1990,22 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                         value: 'Leaving',
                         groupValue: state.reason,
                         label: 'Leaving',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setReason(val),
+                      ),
+                      _buildRadioOption<String>(
+                        value: 'On Parent\'s Request',
+                        groupValue: state.reason,
+                        label: 'On Parent\'s Request',
+                        onChanged: (val) => ref
+                            .read(schoolLeavingProvider.notifier)
+                            .setReason(val),
+                      ),
+                      _buildRadioOption<String>(
+                        value: 'Discharge',
+                        groupValue: state.reason,
+                        label: 'Discharge',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
                             .setReason(val),

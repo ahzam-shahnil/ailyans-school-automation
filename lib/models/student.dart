@@ -1,5 +1,18 @@
 import 'package:intl/intl.dart';
 
+/// Formats the full 3-part student name from `Stu_Reg`:
+/// `NameFirst` + `NameMiddle` + `NameLast`, skipping null/blank parts so a
+/// missing middle name yields 'First Last' with no double spaces.
+///
+/// Shared helper — every display surface (directory rows, sibling cards,
+/// dialogs, certificates) must build names through this instead of
+/// concatenating `NameFirst` and `NameLast` manually.
+String formatStudentFullName(String? first, String? middle, String? last) =>
+    [first, middle, last]
+        .map((s) => (s ?? '').trim())
+        .where((s) => s.isNotEmpty)
+        .join(' ');
+
 /// Full domain model representing a student in `Stu_Reg` (32 typed columns).
 class Student {
   final int stuRegId;
@@ -72,16 +85,8 @@ class Student {
     this.photoPath,
   });
 
-  /// Full concatenated student name.
-  String get fullName {
-    final parts = [
-      nameFirst,
-      if (nameMiddle != null && nameMiddle!.trim().isNotEmpty)
-        nameMiddle!.trim(),
-      if (nameLast != null && nameLast!.trim().isNotEmpty) nameLast!.trim(),
-    ];
-    return parts.join(' ').trim();
-  }
+  /// Full concatenated student name (First + Middle + Last).
+  String get fullName => formatStudentFullName(nameFirst, nameMiddle, nameLast);
 
   /// Initials (e.g., "MK" for Muhammad Ali Khan).
   String get initials {

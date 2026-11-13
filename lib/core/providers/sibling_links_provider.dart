@@ -120,7 +120,7 @@ final siblingLinksForStudentProvider =
       final db = await DatabaseService.instance.database;
       return db.rawQuery(
         '''
-    SELECT sr.Stu_RegID, sr.NameFirst, sr.NameLast,
+    SELECT sr.Stu_RegID, sr.NameFirst, sr.NameMiddle, sr.NameLast,
            sc.ClassID, sc.ClassSecID, c.CName, cs.SecName, sl.LinkID
     FROM Stu_Reg sr
     JOIN Sibling_Links sl ON

@@ -282,7 +282,7 @@ final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
       break;
     case StudentSortColumn.studentName:
       orderClause =
-          'LOWER(sr.NameFirst) $dir, LOWER(COALESCE(sr.NameLast, "")) $dir';
+          'LOWER(sr.NameFirst) $dir, LOWER(COALESCE(sr.NameMiddle, "")) $dir, LOWER(COALESCE(sr.NameLast, "")) $dir';
       break;
     case StudentSortColumn.rollNo:
       orderClause = 'sc.ClassRollNo $dir';
@@ -297,6 +297,7 @@ final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
     SELECT
       sr.Stu_RegID,
       sr.NameFirst,
+      sr.NameMiddle,
       sr.NameLast,
       sr.F_Name,
       sr.photo_path,
@@ -320,7 +321,7 @@ final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
       AND (? IS NULL OR sc.ClassID = ?)
       AND (? IS NULL OR sc.ClassSecID = ?)
       AND (? = 'All' OR (CASE WHEN sc.Present = 1 THEN 'Active' WHEN sc.Present = 0 OR sl.StuRegID IS NOT NULL THEN 'Left' ELSE 'Active' END) = ?)
-      AND (? = '' OR LOWER(sr.NameFirst || ' ' || COALESCE(sr.NameLast, '')) LIKE LOWER('%' || ? || '%')
+      AND (? = '' OR LOWER(sr.NameFirst || ' ' || COALESCE(sr.NameMiddle, '') || ' ' || COALESCE(sr.NameLast, '')) LIKE LOWER('%' || ? || '%')
            OR CAST(sr.Stu_RegID AS TEXT) LIKE '%' || ? || '%'
            OR LOWER(COALESCE(sr.F_Name, '')) LIKE LOWER('%' || ? || '%')
            OR LOWER(COALESCE(sr.CNIC_No, '')) LIKE LOWER('%' || ? || '%'))

@@ -4,7 +4,14 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-/// Generates a formal A4 School Leaving Certificate (SLC) PDF.
+/// Generates the A4 School Leaving Certificate (SLC) PDF.
+///
+/// Batch 1 (Ailyans): the layout matches the school's physical pre-printed
+/// certificate stationery — a ~90pt blank spacer at the top so text prints
+/// cleanly below the pre-printed school logo/header, followed by a centered
+/// underlined title, an affiliation subtitle, 12 left-aligned label +
+/// dotted-line value rows, and a solid bottom rule with the certification
+/// footer. The document deliberately draws NO header/border of its own.
 class SlcPdfGenerator {
   SlcPdfGenerator._();
 
@@ -12,20 +19,26 @@ class SlcPdfGenerator {
   // Public API
   // ---------------------------------------------------------------------------
 
-  /// Generates a formal SLC PDF document.
+  /// Generates the SLC PDF document.
   ///
-  /// [slcData] must contain:
+  /// [slcData] keys (all optional, alternate DB column keys supported):
+  ///   - admissionNo   (Stu_RegID)
   ///   - studentName (String)
   ///   - fatherName  (String)
-  ///   - className   (String)
-  ///   - dob         (String, optional)
+  ///   - dob         (String)
+  ///   - address     (P_Address or T_Address)
   ///   - admissionDate (String)
+  ///   - admittedClass (Class.CName for AdmInClass/AdmClass)
+  ///   - className / leftClass (Class at the time of leaving)
   ///   - leavingDate   (String)
-  ///   - conduct       (String)
-  ///   - reason        (String)
+  ///   - duesPaidUpTo  (latest paid VoucharMas.ForMonth)
+  ///   - conduct       (String, defaults to 'Good')
+  ///   - reason        (String, e.g. "On Parent's Request")
   ///   - remarks       (String)
   ///
-  /// [branchName] and [branchAddress] are printed in the header.
+  /// [branchName] and [branchAddress] are accepted for call-site
+  /// compatibility but intentionally NOT printed — the pre-printed
+  /// stationery already carries the school letterhead.
   static Future<Uint8List> generate({
     required Map<String, dynamic> slcData,
     required String branchName,
@@ -37,243 +50,146 @@ class SlcPdfGenerator {
     final regularFont = pw.Font.helvetica();
     final italicFont = pw.Font.helveticaOblique();
 
-    final String studentName =
-        (slcData['studentName'] ??
-                slcData['name'] ??
-                slcData['stuName'] ??
-                slcData['Stu_Name'] ??
-                '')
-            .toString()
-            .trim();
-    final String fatherName =
-        (slcData['fatherName'] ??
-                slcData['father'] ??
-                slcData['fName'] ??
-                slcData['F_Name'] ??
-                '')
-            .toString()
-            .trim();
-    final String className =
-        (slcData['className'] ??
-                slcData['classLeft'] ??
-                slcData['leftClass'] ??
-                slcData['LeftClass'] ??
-                slcData['cName'] ??
-                slcData['CName'] ??
-                '')
-            .toString()
-            .trim();
-    final String dob =
-        (slcData['dob'] ??
-                slcData['dateOfBirth'] ??
-                slcData['DOB'] ??
-                '')
-            .toString()
-            .trim();
-    final String admissionDate =
-        (slcData['admissionDate'] ??
-                slcData['admDate'] ??
-                slcData['admission_date'] ??
-                slcData['DOAdmission'] ??
-                '')
-            .toString()
-            .trim();
-    final String leavingDate =
-        (slcData['leavingDate'] ??
-                slcData['leftDate'] ??
-                slcData['LeftDate'] ??
-                slcData['dateLeft'] ??
-                '')
-            .toString()
-            .trim();
-    final String conduct =
-        (slcData['conduct'] ??
-                slcData['charactor'] ??
-                slcData['Charactor'] ??
-                slcData['character'] ??
-                '')
-            .toString()
-            .trim();
-    final String reason =
-        (slcData['reason'] ??
-                slcData['termOfLeaving'] ??
-                slcData['TermOfLeavign'] ??
-                slcData['term'] ??
-                '')
-            .toString()
-            .trim();
-    final String remarks =
-        (slcData['remarks'] ?? slcData['slRemarks'] ?? slcData['Remarks'] ?? '')
-            .toString()
-            .trim();
+    String pick(List<dynamic> keys) {
+      for (final k in keys) {
+        final v = slcData[k];
+        if (v != null && v.toString().trim().isNotEmpty) {
+          return v.toString().trim();
+        }
+      }
+      return '';
+    }
+
+    final admissionNo = pick(['admissionNo', 'Stu_RegID', 'stuRegId']);
+    final studentName = pick(
+      ['studentName', 'name', 'stuName', 'Stu_Name'],
+    );
+    final fatherName = pick(['fatherName', 'father', 'fName', 'F_Name']);
+    final dob = pick(['dob', 'dateOfBirth', 'DOB']);
+    final address = pick(['address', 'pAddress', 'P_Address']);
+    final admissionDate = pick([
+      'admissionDate',
+      'admDate',
+      'admission_date',
+      'DOAdmission',
+    ]);
+    final admittedClass = pick(['admittedClass', 'admInClassCName']);
+    final className = pick([
+      'className',
+      'classLeft',
+      'leftClass',
+      'LeftClass',
+      'cName',
+      'CName',
+    ]);
+    final leavingDate = pick([
+      'leavingDate',
+      'leftDate',
+      'LeftDate',
+      'dateLeft',
+    ]);
+    final duesPaidUpTo = pick(['duesPaidUpTo', 'duesPaid']);
+    final conduct = pick([
+      'conduct',
+      'charactor',
+      'Charactor',
+      'character',
+    ]);
+    final reason = pick([
+      'reason',
+      'termOfLeaving',
+      'TermOfLeavign',
+      'term',
+    ]);
+    final remarks = pick(['remarks', 'slRemarks', 'Remarks']);
 
     final sName = studentName.isEmpty ? '__________________' : studentName;
     final fName = fatherName.isEmpty ? '__________________' : fatherName;
 
+    // 12 pre-printed stationery rows (label -> dotted-line value).
+    final rows = <(String, String)>[
+      ('Admission No:', admissionNo),
+      ('Student Name:', sName),
+      ('Father Name:', fName),
+      ('Date of Birth:', _formatDate(dob)),
+      ('Address:', address),
+      ('Admission Date:', _formatDate(admissionDate)),
+      ('Class Admitted:', admittedClass.isNotEmpty ? admittedClass : className),
+      ('Class At the Time of Leaving:', className),
+      ('Conduct:', conduct.isEmpty ? 'Good' : conduct),
+      ('Reason for Leaving', reason),
+      ('Dues Paid up to:', duesPaidUpTo.isNotEmpty ? duesPaidUpTo : _formatDate(leavingDate)),
+      ('Remarks:', remarks),
+    ];
+
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(24),
+        margin: const pw.EdgeInsets.fromLTRB(48, 40, 48, 36),
         build: (pw.Context context) {
-          return pw.Container(
-            width: double.infinity,
-            height: double.infinity,
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.blue900, width: 4),
-            ),
-            padding: const pw.EdgeInsets.all(8),
-            child: pw.Container(
-              width: double.infinity,
-              height: double.infinity,
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.blue900, width: 1),
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+            children: [
+              // ── Top blank letterhead spacer (~90pt) — the physical
+              // pre-printed school logo/header occupies this area. ──
+              pw.SizedBox(height: 90),
+
+              // ── Centered underlined title ──
+              pw.Center(
+                child: pw.Text(
+                  'SCHOOL LEAVING CERTIFICATE',
+                  style: pw.TextStyle(
+                    font: boldFont,
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                    letterSpacing: 2,
+                    decoration: pw.TextDecoration.underline,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
               ),
-              padding: const pw.EdgeInsets.all(24),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-                children: [
-                  // ── Logo Placeholder ──
-                  pw.Center(
-                    child: pw.Container(
-                      width: 60,
-                      height: 60,
-                      decoration: const pw.BoxDecoration(
-                        color: PdfColors.grey300,
-                        shape: pw.BoxShape.circle,
-                      ),
-                      alignment: pw.Alignment.center,
-                      child: pw.Text(
-                        'LOGO',
-                        style: pw.TextStyle(
-                          font: boldFont,
-                          fontSize: 10,
-                          color: PdfColors.grey700,
-                        ),
-                      ),
-                    ),
-                  ),
+              pw.SizedBox(height: 6),
 
-                  pw.SizedBox(height: 10),
-
-                  // ── Institution Name + Address ──
-                  pw.Center(
-                    child: pw.Text(
-                      branchName,
-                      style: pw.TextStyle(
-                        font: boldFont,
-                        fontSize: 22,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.blue900,
-                      ),
-                      textAlign: pw.TextAlign.center,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Center(
-                    child: pw.Text(
-                      branchAddress,
-                      style: pw.TextStyle(
-                        font: regularFont,
-                        fontSize: 12,
-                        color: PdfColors.grey700,
-                      ),
-                      textAlign: pw.TextAlign.center,
-                    ),
-                  ),
-
-                  pw.SizedBox(height: 16),
-
-                  // ── Document Title & Divider ──
-                  pw.Center(
-                    child: pw.Text(
-                      'SCHOOL LEAVING CERTIFICATE',
-                      style: pw.TextStyle(
-                        font: boldFont,
-                        fontSize: 18,
-                        fontWeight: pw.FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                      textAlign: pw.TextAlign.center,
-                    ),
-                  ),
-                  pw.Center(
-                    child: pw.Container(
-                      height: 2,
-                      width: 150,
-                      color: PdfColors.blue900,
-                      margin: const pw.EdgeInsets.symmetric(vertical: 10),
-                    ),
-                  ),
-
-                  pw.SizedBox(height: 14),
-
-                  // ── Body Certification Paragraph ──
-                  pw.Text(
-                    'This is to certify that Mr./Ms. $sName, son/daughter of Mr. $fName, was a bonafide student of this institution and has been duly enrolled in our records.',
-                    style: pw.TextStyle(
-                      font: regularFont,
-                      fontSize: 14,
-                      lineSpacing: 1.5,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                  ),
-
-                  pw.SizedBox(height: 20),
-
-                  // ── Detail Table ──
-                  _buildDetailTable(
-                    regularFont: regularFont,
-                    boldFont: boldFont,
-                    className: className,
-                    dob: (dob.isEmpty || _formatDate(dob) == '-' || _formatDate(dob).isEmpty)
-                        ? 'As per Admission Register'
-                        : _formatDate(dob),
-                    admissionDate: _formatDate(admissionDate),
-                    leavingDate: _formatDate(leavingDate),
-                    conduct: conduct,
-                    reason: reason,
-                  ),
-
-                  // ── Optional Remarks ──
-                  if (remarks.isNotEmpty) ...[
-                    pw.SizedBox(height: 12),
-                    pw.Center(
-                      child: pw.Text(
-                        'Remarks: $remarks',
-                        style: pw.TextStyle(
-                          font: italicFont,
-                          fontSize: 10,
-                          color: PdfColors.grey700,
-                        ),
-                      ),
-                    ),
-                  ],
-
-                  // ── Signatures Pushed to Bottom ──
-                  pw.Spacer(),
-                  _buildSignatureRow(
-                    boldFont: boldFont,
-                    regularFont: regularFont,
-                  ),
-
-                  pw.SizedBox(height: 16),
-
-                  // ── Footer Note ──
-                  pw.Center(
-                    child: pw.Text(
-                      'This certificate is issued on the request of the student/guardian.',
-                      style: pw.TextStyle(
-                        font: italicFont,
-                        fontSize: 10,
-                        fontStyle: pw.FontStyle.italic,
-                        color: PdfColors.grey600,
-                      ),
-                      textAlign: pw.TextAlign.center,
-                    ),
-                  ),
-                ],
+              // ── Affiliation subtitle ──
+              pw.Center(
+                child: pw.Text(
+                  'Recognized and affiliated with BISE Sargodha, AKU Karachi',
+                  style: pw.TextStyle(font: boldFont, fontSize: 11),
+                  textAlign: pw.TextAlign.center,
+                ),
               ),
-            ),
+
+              pw.SizedBox(height: 24),
+
+              // ── 12 Label + Dotted-Line Value Rows ──
+              for (final (label, value) in rows)
+                _buildFieldRow(
+                  label: label,
+                  value: value,
+                  regularFont: regularFont,
+                  boldFont: boldFont,
+                ),
+
+              // ── Bottom solid rule + centered italic footer ──
+              pw.Spacer(),
+              pw.Container(
+                height: 1.2,
+                color: PdfColors.black,
+                margin: const pw.EdgeInsets.only(bottom: 8),
+              ),
+              pw.Center(
+                child: pw.Text(
+                  'Certified that the above information is in accordance with school record.',
+                  style: pw.TextStyle(
+                    font: italicFont,
+                    fontSize: 10,
+                    fontStyle: pw.FontStyle.italic,
+                    color: PdfColors.grey800,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -321,131 +237,51 @@ class SlcPdfGenerator {
     return trimmed;
   }
 
-  static pw.Widget _buildDetailTable({
+  /// One pre-printed stationery row: the [label] sits on the left, and the
+  /// bold [value] sits above a dotted rule on the right (so handwriting and
+  /// print both align to the pre-printed dotted line).
+  static pw.Widget _buildFieldRow({
+    required String label,
+    required String value,
     required pw.Font regularFont,
     required pw.Font boldFont,
-    required String className,
-    required String dob,
-    required String admissionDate,
-    required String leavingDate,
-    required String conduct,
-    required String reason,
   }) {
-    final rows = <_SlcField>[
-      _SlcField('Class / Grade:', className),
-      _SlcField('Date of Birth:', dob),
-      _SlcField('Date of Admission:', admissionDate),
-      _SlcField('Date of Leaving:', leavingDate),
-      _SlcField('Character & Conduct:', conduct),
-      _SlcField('Reason for Leaving:', reason),
-    ];
+    const dottedLine =
+        '........................................................';
 
-    return pw.Table(
-      columnWidths: const {
-        0: pw.FlexColumnWidth(2.2),
-        1: pw.FlexColumnWidth(3.8),
-      },
-      children: rows.map((field) {
-        return pw.TableRow(
-          children: [
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 6,
-              ),
-              child: pw.Text(
-                field.label,
-                textAlign: pw.TextAlign.right,
-                style: pw.TextStyle(
-                  font: boldFont,
-                  fontSize: 11,
-                  fontWeight: pw.FontWeight.bold,
+    return pw.Padding(
+      padding: const pw.EdgeInsets.only(bottom: 10),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.SizedBox(
+            width: 150,
+            child: pw.Text(
+              label,
+              style: pw.TextStyle(font: regularFont, fontSize: 11),
+            ),
+          ),
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  value.isEmpty ? ' ' : value,
+                  style: pw.TextStyle(font: boldFont, fontSize: 11),
                 ),
-              ),
+                pw.Text(
+                  dottedLine,
+                  style: pw.TextStyle(
+                    font: regularFont,
+                    fontSize: 10,
+                    color: PdfColors.grey600,
+                  ),
+                ),
+              ],
             ),
-            pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(
-                horizontal: 10,
-                vertical: 6,
-              ),
-              child: pw.Text(
-                field.value.isEmpty ? '-' : field.value,
-                textAlign: pw.TextAlign.left,
-                style: pw.TextStyle(font: regularFont, fontSize: 11),
-              ),
-            ),
-          ],
-        );
-      }).toList(),
-    );
-  }
-
-  static pw.Widget _buildSignatureRow({
-    required pw.Font boldFont,
-    required pw.Font regularFont,
-  }) {
-    return pw.Row(
-      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-      children: [
-        _signatureBlock(
-          title: 'Class Teacher',
-          subtitle: 'Stamp & Signature',
-          boldFont: boldFont,
-          regularFont: regularFont,
-        ),
-        _signatureBlock(
-          title: 'Head of Department',
-          subtitle: 'Stamp & Signature',
-          boldFont: boldFont,
-          regularFont: regularFont,
-        ),
-        _signatureBlock(
-          title: 'Principal',
-          subtitle: 'Stamp & Signature',
-          boldFont: boldFont,
-          regularFont: regularFont,
-        ),
-      ],
-    );
-  }
-
-  static pw.Widget _signatureBlock({
-    required String title,
-    required String subtitle,
-    required pw.Font boldFont,
-    required pw.Font regularFont,
-  }) {
-    return pw.Column(
-      children: [
-        pw.Container(
-          width: 120,
-          height: 1,
-          color: PdfColors.black,
-          margin: const pw.EdgeInsets.only(bottom: 4),
-        ),
-        pw.Text(
-          title,
-          style: pw.TextStyle(
-            font: boldFont,
-            fontSize: 10,
-            fontWeight: pw.FontWeight.bold,
           ),
-        ),
-        pw.Text(
-          subtitle,
-          style: pw.TextStyle(
-            font: regularFont,
-            fontSize: 9,
-            color: PdfColors.grey700,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
-}
-
-class _SlcField {
-  final String label;
-  final String value;
-  const _SlcField(this.label, this.value);
 }

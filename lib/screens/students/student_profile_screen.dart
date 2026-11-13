@@ -777,7 +777,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                         style: AppTypography.h1.copyWith(
                           color: AppColors.textPrimary,
                         ),
-                        overflow: TextOverflow.ellipsis,
+                        // Batch 1 (Ailyans): full 3-part names like
+                        // "Muhammad Hasnain Nawaz Khan" must wrap cleanly
+                        // instead of truncating with an ellipsis.
+                        softWrap: true,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
@@ -3403,7 +3406,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   children: [
                     OutlinedButton(
                       child: const Text('Print Biodossier'),
-                      onPressed: () => _showSnackBar('Print coming in Phase 2'),
+                      // Batch 1 (Ailyans): wire to the same working
+                      // print/PDF preview handler as 'Print Biodata'.
+                      onPressed: () => _printBiodata(student),
                     ),
                     if (canEditBiodata) ...[
                       const SizedBox(width: AppSpacing.sm),
@@ -4521,7 +4526,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       description: 'Comprehensive single-page student summary with demographic records, enrollment history, and guardian contact details for school archives.',
       buttonLabel: 'Print Dossier →',
       icon: Icons.badge_outlined,
-      onTap: () => _showSnackBar('Print coming in Phase 2'),
+      // Batch 1 (Ailyans): wire to the same working print/PDF preview
+      // handler as the header 'Print Biodata' button.
+      onTap: () => _printBiodata(bundle.student),
     );
     final doc2 = _buildDocCard(
       title: 'Print School Leaving Certificate (SLC)',
@@ -4861,9 +4868,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           itemBuilder: (context, index) {
             final sib = siblings[index];
             final sibId = (sib['Stu_RegID'] as num).toInt();
-            final first = (sib['NameFirst'] as String? ?? '').trim();
-            final last = (sib['NameLast'] as String? ?? '').trim();
-            final fullName = last.isNotEmpty ? '$first $last' : first;
+            final fullName = formatStudentFullName(
+              sib['NameFirst'] as String?,
+              sib['NameMiddle'] as String?,
+              sib['NameLast'] as String?,
+            );
             final cName = (sib['CName'] as String?)?.trim();
             final secName = (sib['SecName'] as String?)?.trim();
             final linkId = (sib['LinkID'] as num?)?.toInt();
@@ -5099,7 +5108,7 @@ class _ManageSiblingLinksDialogState
     final db = await DatabaseService.instance.database;
     final results = await db.rawQuery(
       '''
-      SELECT sr.Stu_RegID, sr.NameFirst, sr.NameLast, sr.F_Name,
+      SELECT sr.Stu_RegID, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
              c.CName, cs.SecName
       FROM Stu_Reg sr
       LEFT JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID AND sc.Present = 1
@@ -5191,10 +5200,11 @@ class _ManageSiblingLinksDialogState
                       itemBuilder: (ctx, i) {
                         final row = _searchResults[i];
                         final id = (row['Stu_RegID'] as num).toInt();
-                        final first = (row['NameFirst'] as String? ?? '')
-                            .trim();
-                        final last = (row['NameLast'] as String? ?? '').trim();
-                        final name = last.isNotEmpty ? '$first $last' : first;
+                        final name = formatStudentFullName(
+                          row['NameFirst'] as String?,
+                          row['NameMiddle'] as String?,
+                          row['NameLast'] as String?,
+                        );
                         final fName = (row['F_Name'] as String?)?.trim();
                         final cName = (row['CName'] as String?)?.trim();
 
