@@ -917,9 +917,26 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                         // ~101px, which still ellipsized real names (e.g.
                         // "Muhammad Ali Khan" needs ~140px).
                         const minTableWidth = 1000.0;
-                        final tableWidth = constraints.maxWidth > minTableWidth
+                        // Intrinsic floor: fixed columns (checkbox 40 + photo
+                        // 56 + siblings 80) + the two 6px resize handles + the
+                        // resizable columns + the row's horizontal insets. The
+                        // name columns are fixed-width now, so tableWidth must
+                        // never drop below this or the rows overflow.
+                        final columnsFloor = 40.0 + 56.0 + 80.0 + 12.0 +
+                            (_colWidths['regId'] ?? 0) +
+                            (_colWidths['rollNo'] ?? 0) +
+                            (_colWidths['studentName'] ?? 0) +
+                            (_colWidths['fatherName'] ?? 0) +
+                            (_colWidths['classSec'] ?? 0) +
+                            (_colWidths['status'] ?? 0) +
+                            (_colWidths['actions'] ?? 0) +
+                            2 * AppSpacing.md;
+                        var tableWidth = constraints.maxWidth > minTableWidth
                             ? constraints.maxWidth
                             : minTableWidth;
+                        if (columnsFloor > tableWidth) {
+                          tableWidth = columnsFloor;
+                        }
                         return Scrollbar(
                           controller: _tableHorizontalScroll,
                           thumbVisibility: true,
@@ -930,7 +947,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             scrollDirection: Axis.horizontal,
                             child: ConstrainedBox(
                               constraints: BoxConstraints(
-                                minWidth: constraints.maxWidth,
+                                minWidth: tableWidth,
                               ),
                               child: SizedBox(
                                 width: tableWidth,
