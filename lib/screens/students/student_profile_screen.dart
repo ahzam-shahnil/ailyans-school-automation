@@ -13,6 +13,7 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/sibling_links_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/student_profile_provider.dart';
+import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
@@ -3738,7 +3739,17 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 ),
                 textStyle: AppTypography.label.copyWith(fontSize: 12),
               ),
-              onPressed: () => context.go('/fees/vouchers'),
+              onPressed: () {
+                // Shot 6c: deep-link into the voucher screen's full-screen
+                // single-student workspace with this student pre-selected.
+                ref
+                    .read(voucherGenFiltersProvider.notifier)
+                    .setMode('single');
+                ref
+                    .read(voucherGenFiltersProvider.notifier)
+                    .setSelectedStuRegId(bundle.student.stuRegId);
+                context.go('/fees/vouchers');
+              },
             ),
           ],
         ),

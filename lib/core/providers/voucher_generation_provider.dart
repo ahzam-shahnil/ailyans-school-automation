@@ -1348,10 +1348,16 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     final selectedGlobal = ref.read(globalSelectedFeeParamIdsProvider);
     final originalFilters = filters;
     final filtersNotifier = ref.read(voucherGenFiltersProvider.notifier);
+    // Shot 6c: remember which classes actually produced vouchers so the
+    // preview can land on a populated class instead of the (possibly empty)
+    // one selected before the batch ran.
+    final generatedByClass = <int, int>{};
+    var batchExclusions = const <int>{};
 
     try {
       final allFeeIds = await _loadAllFeeParamIds();
       final exclusions = allFeeIds.difference(selectedGlobal);
+      batchExclusions = exclusions;
       final classIds = await listSchoolVoucherCandidateClasses(
         sessionYr: filters.sessionYr,
         billingMonth: filters.billingMonth,
@@ -1406,6 +1412,7 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
           overwriteExisting: overwriteExisting,
         );
         if (classSummary != null) {
+          generatedByClass[classId] = classSummary.generatedCount;
           generated += classSummary.generatedCount;
           skipped += classSummary.skippedCount;
           billed += classSummary.totalBilled;
@@ -1437,7 +1444,27 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
       state = state.copyWith(error: 'Whole-school generation failed: $e');
       return null;
     } finally {
-      filtersNotifier.state = originalFilters;
+      // Shot 6c: if the class selected before the batch had no vouchers (or
+      // nothing was selected), land the preview on the first class that
+      // actually generated vouchers so the right-hand table is populated.
+      final firstGeneratedClassId = generatedByClass.entries
+          .where((e) => e.value > 0)
+          .map((e) => e.key)
+          .firstOrNull;
+      final originalClassHasVouchers =
+          originalFilters.classId != null &&
+          (generatedByClass[originalFilters.classId] ?? 0) > 0;
+      if (!originalClassHasVouchers && firstGeneratedClassId != null) {
+        filtersNotifier.state = originalFilters.copyWith(
+          classId: firstGeneratedClassId,
+          clearClassSecId: true,
+          excludedFeeParamIds: batchExclusions,
+          mode: 'batch',
+          clearSelectedStudent: true,
+        );
+      } else {
+        filtersNotifier.state = originalFilters;
+      }
       ref.invalidate(voucherGenPreviewProvider);
       if (state.isGenerating) {
         state = state.copyWith(isGenerating: false);

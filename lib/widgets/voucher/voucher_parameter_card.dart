@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/responsive_breakpoints.dart';
 
 /// Card hosting all parameter selection fields for cohort voucher generation.
 class VoucherParameterCard extends StatefulWidget {
@@ -91,6 +92,10 @@ class VoucherParameterCard extends StatefulWidget {
 
 class _VoucherParameterCardState extends State<VoucherParameterCard> {
   late final TextEditingController _lateFineController;
+
+  /// Shot 6c: null = follow the platform default (open on desktop so the
+  /// 'Late Fine (Rs.)' tests keep passing, collapsed on mobile to declutter).
+  bool? _advancedExpanded;
 
   @override
   void initState() {
@@ -676,6 +681,60 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
     );
   }
 
+  /// Shot 6c: Late Fine + Include Arrears folded into one compact
+  /// collapsible "Advanced Options" section so the left column stays
+  /// uncluttered. Defaults open on desktop (the 'Late Fine (Rs.)' tests
+  /// assert visibility there) and collapsed on mobile.
+  Widget _buildAdvancedOptionsBlock({
+    required Widget lateFineWidget,
+    required Widget arrearsWidget,
+    required bool expanded,
+    required VoidCallback onToggle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InkWell(
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.tune,
+                  size: 14,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Advanced Options (Arrears & Late Fine)',
+                    style: AppTypography.label.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                Icon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (expanded) ...[
+          const SizedBox(height: AppSpacing.xs),
+          lateFineWidget,
+          const SizedBox(height: AppSpacing.sm),
+          arrearsWidget,
+        ],
+      ],
+    );
+  }
+
   Widget _buildArrearsField() {
     return Material(
       type: MaterialType.transparency,
@@ -718,6 +777,8 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
     final bankWidget = _buildBankField();
     final lateFineWidget = _buildLateFineField();
     final arrearsWidget = _buildArrearsField();
+    final advancedOpen =
+        _advancedExpanded ?? !ResponsiveBreakpoints.isMobile(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -752,16 +813,16 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: bankWidget),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(child: lateFineWidget),
-                    ],
-                  ),
+                  bankWidget,
                   const SizedBox(height: AppSpacing.sm),
-                  arrearsWidget,
+                  _buildAdvancedOptionsBlock(
+                    lateFineWidget: lateFineWidget,
+                    arrearsWidget: arrearsWidget,
+                    expanded: advancedOpen,
+                    onToggle: () => setState(
+                      () => _advancedExpanded = !advancedOpen,
+                    ),
+                  ),
                 ],
               )
             : Column(
@@ -781,9 +842,14 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
                   const SizedBox(height: AppSpacing.sm),
                   bankWidget,
                   const SizedBox(height: AppSpacing.sm),
-                  lateFineWidget,
-                  const SizedBox(height: AppSpacing.sm),
-                  arrearsWidget,
+                  _buildAdvancedOptionsBlock(
+                    lateFineWidget: lateFineWidget,
+                    arrearsWidget: arrearsWidget,
+                    expanded: advancedOpen,
+                    onToggle: () => setState(
+                      () => _advancedExpanded = !advancedOpen,
+                    ),
+                  ),
                 ],
               );
 
