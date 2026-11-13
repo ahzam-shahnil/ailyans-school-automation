@@ -95,6 +95,15 @@ class WizardDraft {
   int? currentStuRegId;
   List<int> pendingSiblingIds;
 
+  // Phase H Shot 2 — Reg ID bar (VB6 all-in-one admission):
+  /// Explicitly chosen Registration ID (sequential default, manual edit, or
+  /// gap pick). Null falls back to NodeIdAllocator (offline node block).
+  int? customRegId;
+  /// Whether the Reg ID TextField is unlocked via [Edit Reg ID].
+  bool isRegIdEditable;
+  /// True after [GO] loads an existing student for editing (save = UPDATE).
+  bool isEditingExisting;
+
   WizardDraft({
     this.nameFirst = '',
     this.nameMiddle = '',
@@ -128,6 +137,9 @@ class WizardDraft {
     this.remarks,
     this.currentStuRegId,
     this.pendingSiblingIds = const [],
+    this.customRegId,
+    this.isRegIdEditable = false,
+    this.isEditingExisting = false,
   }) : doAdmission = doAdmission ?? DateTime.now();
 
   /// Validates requirement for specific step (0-indexed).
@@ -214,6 +226,9 @@ class WizardDraft {
     String? remarks,
     int? currentStuRegId,
     List<int>? pendingSiblingIds,
+    int? customRegId,
+    bool? isRegIdEditable,
+    bool? isEditingExisting,
   }) {
     return WizardDraft(
       nameFirst: nameFirst ?? this.nameFirst,
@@ -248,6 +263,9 @@ class WizardDraft {
       remarks: remarks ?? this.remarks,
       currentStuRegId: currentStuRegId ?? this.currentStuRegId,
       pendingSiblingIds: pendingSiblingIds ?? List.from(this.pendingSiblingIds),
+      customRegId: customRegId ?? this.customRegId,
+      isRegIdEditable: isRegIdEditable ?? this.isRegIdEditable,
+      isEditingExisting: isEditingExisting ?? this.isEditingExisting,
     );
   }
 }
@@ -318,6 +336,174 @@ class WizardDraftNotifier extends StateNotifier<WizardDraft> {
   void setRemarks(String? val) => state = state.copyWith(remarks: val);
 
   void reset() => state = WizardDraft(doAdmission: _now());
+
+  // ───────────────────────────────────────────────────────────────
+  // Phase H Shot 2 — Reg ID bar services (sequential / gaps / lookup)
+  // ───────────────────────────────────────────────────────────────
+
+  /// Explicitly chosen Registration ID (null = allocator fallback on save).
+  void setCustomRegId(int? val) {
+    final d = state.copyWith();
+    d.customRegId = val;
+    state = d;
+  }
+
+  /// [Edit Reg ID] toggle state.
+  void setRegIdEditable(bool val) {
+    final d = state.copyWith();
+    d.isRegIdEditable = val;
+    state = d;
+  }
+
+  /// Sequential default: `MAX(Stu_RegID) + 1` restricted to the shared
+  /// physical-register range (< 100000). Never proposes an offline node-block
+  /// ID by default. Returns null when no database is reachable (tests).
+  Future<int?> nextSequentialRegId() async {
+    try {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.rawQuery(
+        'SELECT COALESCE(MAX(Stu_RegID), 0) + 1 AS nextId '
+        'FROM Stu_Reg WHERE Stu_RegID < 100000',
+      );
+      final id = (rows.first['nextId'] as num?)?.toInt();
+      return (id != null && id >= 1) ? id : 1;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Finds up to 50 missing (gap) Registration IDs below 100000,
+  /// most-recent-first. Candidates inside the [LIMIT 200] window are each
+  /// confirmed with `SELECT 1 FROM Stu_Reg WHERE Stu_RegID = ?`.
+  Future<List<int>> findMissingRegIds() async {
+    try {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.rawQuery(
+        'SELECT Stu_RegID FROM Stu_Reg '
+        'WHERE Stu_RegID > 0 AND Stu_RegID < 100000 '
+        'ORDER BY Stu_RegID DESC LIMIT 200',
+      );
+      if (rows.isEmpty) return const [];
+      final existing = rows
+          .map((r) => (r['Stu_RegID'] as num).toInt())
+          .toList()
+        ..sort();
+      final minId = existing.first;
+      final maxId = existing.last;
+      final present = existing.toSet();
+
+      final gaps = <int>[];
+      for (int candidate = maxId - 1;
+          candidate > minId && gaps.length < 50;
+          candidate--) {
+        if (present.contains(candidate)) continue;
+        // Confirm the candidate is genuinely missing (zero rows = missing).
+        final dup = await db.rawQuery(
+          'SELECT 1 FROM Stu_Reg WHERE Stu_RegID = ? LIMIT 1',
+          [candidate],
+        );
+        if (dup.isEmpty) gaps.add(candidate);
+      }
+      return gaps;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// [GO] lookup: loads an existing student (Stu_Reg + active Student_Class)
+  /// into the draft and switches the form into edit mode. Returns false when
+  /// no record exists for [regId].
+  Future<bool> loadExistingStudentByRegId(int regId) async {
+    if (regId <= 0) return false;
+    try {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.rawQuery(
+        'SELECT * FROM Stu_Reg WHERE Stu_RegID = ? LIMIT 1',
+        [regId],
+      );
+      if (rows.isEmpty) return false;
+      final r = rows.first;
+
+      DateTime? dob;
+      final dobRaw = (r['DOB'] as String?)?.trim();
+      if (dobRaw != null && dobRaw.isNotEmpty) {
+        dob = DateTime.tryParse(dobRaw);
+        if (dob == null) {
+          final parts = dobRaw.split('/');
+          if (parts.length == 3) {
+            final d = int.tryParse(parts[1]);
+            final m = int.tryParse(parts[0]);
+            var y = int.tryParse(parts[2]);
+            if (d != null && m != null && y != null) {
+              if (y < 100) y += 2000;
+              dob = DateTime(y, m, d);
+            }
+          }
+        }
+      }
+      final doAdmRaw = (r['DOAdmission'] as String?)?.trim();
+      final doAdmission = (doAdmRaw != null && doAdmRaw.isNotEmpty
+              ? DateTime.tryParse(doAdmRaw)
+              : null) ??
+          _now();
+
+      int? admInClass;
+      int? admClass = (r['AdmClass'] as num?)?.toInt();
+      int? classSecId;
+      final enrollRows = await db.rawQuery(
+        'SELECT ClassID, ClassSecID FROM Student_Class '
+        'WHERE Stu_RegID = ? AND Present = 1 '
+        'ORDER BY SessionYr DESC LIMIT 1',
+        [regId],
+      );
+      if (enrollRows.isNotEmpty) {
+        admInClass = (enrollRows.first['ClassID'] as num?)?.toInt();
+        classSecId = (enrollRows.first['ClassSecID'] as num?)?.toInt();
+      }
+      admClass ??= admInClass;
+
+      state = WizardDraft(
+        nameFirst: (r['NameFirst'] as String?) ?? '',
+        nameMiddle: (r['NameMiddle'] as String?) ?? '',
+        nameLast: (r['NameLast'] as String?) ?? '',
+        dob: dob,
+        gender: (r['Sex'] as String?) ?? 'Male',
+        bloodGroup: r['BloodGroup'] as String?,
+        nationality: (r['Nationality'] as String?) ?? 'Pakistani',
+        religion: (r['Religion'] as String?) ?? 'Islam',
+        photoPath: r['photo_path'] as String?,
+        bFormNo: r['B_Form_No'] as String?,
+        fName: (r['F_Name'] as String?) ?? '',
+        cnicNo: (r['CNIC_No'] as String?) ?? '',
+        occupation: r['Occupation'] as String?,
+        pSchool: r['P_School'] as String?,
+        pClass: r['P_Class'] as String?,
+        slCertificate: r['SLCertificate'] as String?,
+        mobile1: (r['Mobile1'] as String?) ?? '',
+        mobile2: r['Mobile2'] as String?,
+        emerContName: r['EmerContName'] as String?,
+        emerContMobile: r['EmerContMobile'] as String?,
+        pAddress: r['P_Address'] as String?,
+        tAddress: r['T_Address'] as String?,
+        admInClass: admInClass,
+        admClass: admClass,
+        classSecId: classSecId,
+        doAdmission: doAdmission,
+        discount:
+            ((r['Discount'] as num?)?.toDouble()) ?? 0.0,
+        vmDiscount: (r['VMDiscount'] as num?)?.toInt() ?? 0,
+        fullDiscount: (r['FullDiscount'] as num?)?.toInt() == 1,
+        remarks: r['Remarls'] as String?,
+        currentStuRegId: regId,
+        customRegId: regId,
+        isRegIdEditable: false,
+        isEditingExisting: true,
+      );
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }
 
 /// Global provider for Wizard draft state.
@@ -598,12 +784,62 @@ Future<int> submitStudentAdmission(
   final resolvedSession = await _resolveActiveSession(db, override: sessionYr);
 
   return await db.transaction<int>((txn) async {
-    // 1. Allocate nextStuRegId via NodeIdAllocator
-    final nextStuRegId = await NodeIdAllocator.allocateInTransaction(
-      txn,
-      tableName: 'Stu_Reg',
-      pkColumn: 'Stu_RegID',
-    );
+    // 1. Resolve Stu_RegID.
+    //    - draft.customRegId set → sequential/manual Reg ID from the VB6-style
+    //      Reg ID bar (duplicate + cross-node-block guarded).
+    //    - draft.customRegId null → NodeIdAllocator (offline node block) —
+    //      preserved legacy/default allocation path.
+    final bool editingExisting =
+        draft.isEditingExisting &&
+        draft.currentStuRegId != null &&
+        draft.currentStuRegId == draft.customRegId;
+    final int nextStuRegId;
+    if (draft.customRegId != null) {
+      final requested = draft.customRegId!;
+      if (requested <= 0) {
+        throw StateError('Registration ID must be a positive number.');
+      }
+      final dup = await txn.rawQuery(
+        'SELECT 1 FROM Stu_Reg WHERE Stu_RegID = ? LIMIT 1',
+        [requested],
+      );
+      if (dup.isNotEmpty && !editingExisting) {
+        throw StateError(
+          'Registration ID $requested is already in use by another student. '
+          'Pick a different Registration ID or press GO to edit that student.',
+        );
+      }
+      // Multi-device safety: manual IDs >= 100000 must stay inside this
+      // device's allocated node block (LWW on out-of-block IDs destroys
+      // another device's record on next sync).
+      if (requested >= 100000 && !editingExisting) {
+        final nodeRows = await txn.rawQuery(
+          "SELECT node_block_start, node_block_end FROM _sync_state "
+          "WHERE table_name = '__node__' LIMIT 1",
+        );
+        if (nodeRows.isNotEmpty) {
+          final start =
+              (nodeRows.first['node_block_start'] as num?)?.toInt() ?? 100000;
+          final end =
+              (nodeRows.first['node_block_end'] as num?)?.toInt() ?? 199999;
+          if (requested < start || requested > end) {
+            throw StateError(
+              'Registration ID $requested lies outside this device\'s offline '
+              'node block ($start-$end). Use an ID below 100000 (shared '
+              'physical register) or within this device\'s own block — '
+              'cross-block IDs corrupt multi-device sync.',
+            );
+          }
+        }
+      }
+      nextStuRegId = requested;
+    } else {
+      nextStuRegId = await NodeIdAllocator.allocateInTransaction(
+        txn,
+        tableName: 'Stu_Reg',
+        pkColumn: 'Stu_RegID',
+      );
+    }
 
     // 2. Compute nextRollNo for Class & Section in resolved session
     int nextRollNo = 1;
@@ -636,7 +872,8 @@ Future<int> submitStudentAdmission(
     final doAdmIso = DateFormat('yyyy-MM-dd').format(draft.doAdmission);
 
     // 5. Insert into Stu_Reg (32 columns, verbatim column Remarls preserved)
-    await txn.insert('Stu_Reg', {
+    //    or update the existing row when editing via [GO] lookup.
+    final regRow = <String, dynamic>{
       'Stu_RegID': nextStuRegId,
       'NameFirst': draft.nameFirst.trim(),
       'NameMiddle': draft.nameMiddle.trim().isEmpty
@@ -697,21 +934,66 @@ Future<int> submitStudentAdmission(
       'Nationality': draft.nationality ?? 'Pakistani',
       'Sex': draft.gender ?? 'Male',
       'photo_path': finalPhotoPath,
-    });
+    };
 
-    // 6. Insert into Student_Class
+    if (editingExisting) {
+      // Preserve the existing photo when the edit did not choose a new one.
+      if (finalPhotoPath == null) regRow.remove('photo_path');
+      regRow.remove('Stu_RegID');
+      await txn.update(
+        'Stu_Reg',
+        regRow,
+        where: 'Stu_RegID = ?',
+        whereArgs: [nextStuRegId],
+      );
+    } else {
+      await txn.insert('Stu_Reg', regRow);
+    }
+
+    // 6. Insert into Student_Class (or update the active enrollment on edit)
     if (draft.admInClass != null) {
-      await txn.insert('Student_Class', {
-        'Stu_RegID': nextStuRegId,
-        'ClassID': draft.admInClass,
-        'ClassSecID': draft.classSecId ?? 25,
-        'ClassRollNo': nextRollNo,
-        'SessionYr': resolvedSession,
-        'Present': 1,
-        'PassingMarks': null,
-        'PromotionDate': null,
-        'VGen': 'Y',
-      });
+      if (editingExisting) {
+        final activeEnroll = await txn.rawQuery(
+          'SELECT 1 FROM Student_Class '
+          "WHERE Stu_RegID = ? AND Present = 1 LIMIT 1",
+          [nextStuRegId],
+        );
+        if (activeEnroll.isNotEmpty) {
+          await txn.update(
+            'Student_Class',
+            {
+              'ClassID': draft.admInClass,
+              'ClassSecID': draft.classSecId ?? 25,
+            },
+            where: 'Stu_RegID = ? AND Present = 1',
+            whereArgs: [nextStuRegId],
+          );
+        } else {
+          await txn.insert('Student_Class', {
+            'Stu_RegID': nextStuRegId,
+            'ClassID': draft.admInClass,
+            'ClassSecID': draft.classSecId ?? 25,
+            'ClassRollNo': nextRollNo,
+            'SessionYr': resolvedSession,
+            'Present': 1,
+            'PassingMarks': null,
+            'PromotionDate': null,
+            'VGen': 'Y',
+          });
+        }
+      } else {
+        await txn.insert('Student_Class', {
+          'Stu_RegID': nextStuRegId,
+          'ClassID': draft.admInClass,
+          'ClassSecID': draft.classSecId ?? 25,
+          'ClassRollNo': nextRollNo,
+          'SessionYr': resolvedSession,
+          'Present': 1,
+          'PassingMarks': null,
+          'PromotionDate': null,
+          'VGen': 'Y',
+        });
+      }
     }
 
     // Persist deferred sibling links from the wizard

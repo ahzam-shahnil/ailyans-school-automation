@@ -68,6 +68,15 @@ class _StudentRegistrationWizardState
   late final TextEditingController _vmDiscountController;
   late final TextEditingController _remarksController;
 
+  // Phase H Shot 2 — Reg ID bar (sequential default / Edit Reg ID / Missing
+  // Reg / GO lookup / New reset). Single-page all-in-one layout section keys.
+  late final TextEditingController _regIdController;
+  int? _sequentialRegId;
+  final GlobalKey _personalSectionKey = GlobalKey();
+  final GlobalKey _guardianSectionKey = GlobalKey();
+  final GlobalKey _contactSectionKey = GlobalKey();
+  final GlobalKey _academicSectionKey = GlobalKey();
+
   Timer? _siblingDebounce;
   String _debouncedCnic = '';
   String _debouncedFName = '';
@@ -126,6 +135,10 @@ class _StudentRegistrationWizardState
       text: draft.vmDiscount.toString(),
     );
     _remarksController = TextEditingController(text: draft.remarks ?? '');
+
+    // Reg ID bar: pre-fill with the sequential default (MAX + 1 below 100000).
+    _regIdController = TextEditingController();
+    _initRegId();
   }
 
   @override
@@ -163,6 +176,7 @@ class _StudentRegistrationWizardState
     _discountController.dispose();
     _vmDiscountController.dispose();
     _remarksController.dispose();
+    _regIdController.dispose();
 
     super.dispose();
   }
@@ -414,6 +428,7 @@ class _StudentRegistrationWizardState
         return;
       }
       ref.read(wizardStepProvider.notifier).state = 1;
+      _scrollToSection(1);
       _fNameFocusNode.requestFocus();
       return;
     }
@@ -431,6 +446,7 @@ class _StudentRegistrationWizardState
         return;
       }
       ref.read(wizardStepProvider.notifier).state = 2;
+      _scrollToSection(2);
       _mobile1FocusNode.requestFocus();
       return;
     }
@@ -443,6 +459,7 @@ class _StudentRegistrationWizardState
         return;
       }
       ref.read(wizardStepProvider.notifier).state = 3;
+      _scrollToSection(3);
       return;
     }
 
@@ -481,16 +498,355 @@ class _StudentRegistrationWizardState
     }
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // Phase H Shot 2 — Reg ID bar: sequential default, Edit Reg ID,
+  // Missing Reg gap picker, GO lookup, and New reset.
+  // ─────────────────────────────────────────────────────────────
+  Future<void> _initRegId() async {
+    final draft = ref.read(wizardDraftProvider);
+    if (draft.isEditingExisting) {
+      _regIdController.text = draft.customRegId?.toString() ?? '';
+      if (mounted) setState(() {});
+      return;
+    }
+    final next = await ref
+        .read(wizardDraftProvider.notifier)
+        .nextSequentialRegId();
+    if (!mounted) return;
+    final current = ref.read(wizardDraftProvider);
+    if (next != null &&
+        current.customRegId == null &&
+        !current.isEditingExisting) {
+      ref.read(wizardDraftProvider.notifier).setCustomRegId(next);
+      setState(() {
+        _sequentialRegId = next;
+        _regIdController.text = next.toString();
+      });
+    }
+  }
+
+  void _onRegIdChanged(String value) {
+    final parsed = int.tryParse(value.trim());
+    ref.read(wizardDraftProvider.notifier).setCustomRegId(parsed);
+  }
+
+  void _toggleRegIdEditable() {
+    final notifier = ref.read(wizardDraftProvider.notifier);
+    final draft = ref.read(wizardDraftProvider);
+    if (draft.isEditingExisting) {
+      _showSnackBar(
+        'Reg ID is locked while editing an existing student. '
+        'Press [New] to start a fresh admission.',
+        isError: true,
+      );
+      return;
+    }
+    final unlocking = !draft.isRegIdEditable;
+    notifier.setRegIdEditable(unlocking);
+    if (!unlocking) {
+      // Lock back onto the current draft value (invalid text reverts).
+      final id = ref.read(wizardDraftProvider).customRegId;
+      _regIdController.text = id?.toString() ?? '';
+    }
+    setState(() {});
+  }
+
+  Future<void> _openMissingRegPicker() async {
+    final notifier = ref.read(wizardDraftProvider.notifier);
+    final gaps = await notifier.findMissingRegIds();
+    if (!mounted) return;
+    if (gaps.isEmpty) {
+      _showSnackBar(
+        'No missing Registration IDs found below the latest entry.',
+      );
+      return;
+    }
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Missing Registration IDs'),
+        content: SizedBox(
+          width: 320,
+          height: 360,
+          child: ListView.builder(
+            itemCount: gaps.length,
+            itemBuilder: (_, i) => ListTile(
+              dense: true,
+              leading: const Icon(Icons.horizontal_rule, size: 16),
+              title: Text('Reg #${gaps[i]}'),
+              onTap: () => Navigator.pop(ctx, gaps[i]),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (selected == null || !mounted) return;
+    notifier.setCustomRegId(selected);
+    notifier.setRegIdEditable(false);
+    setState(() => _regIdController.text = selected.toString());
+    _showSnackBar('Registration ID #$selected applied.');
+  }
+
+  Future<void> _lookupByRegId() async {
+    final parsed = int.tryParse(_regIdController.text.trim());
+    if (parsed == null || parsed <= 0) {
+      _showSnackBar(
+        'Enter a Registration ID to look up (e.g. 4811).',
+        isError: true,
+      );
+      return;
+    }
+    final found = await ref
+        .read(wizardDraftProvider.notifier)
+        .loadExistingStudentByRegId(parsed);
+    if (!mounted) return;
+    if (!found) {
+      _showSnackBar(
+        'No student found with Registration ID #$parsed.',
+        isError: true,
+      );
+      return;
+    }
+    _syncControllersFromDraft();
+    _showSnackBar('Editing student Reg #$parsed. Save to update the record.');
+  }
+
+  Future<void> _resetToNew() async {
+    ref.read(wizardDraftProvider.notifier).reset();
+    ref.read(wizardStepProvider.notifier).state = 0;
+    _clearAllControllers();
+    setState(() => _sequentialRegId = null);
+    await _initRegId();
+  }
+
+  void _syncControllersFromDraft() {
+    final draft = ref.read(wizardDraftProvider);
+    _nameFirstController.text = draft.nameFirst;
+    _nameMiddleController.text = draft.nameMiddle;
+    _nameLastController.text = draft.nameLast;
+    _dobController.text = draft.dob != null
+        ? DateFormat('dd-MMM-yyyy').format(draft.dob!)
+        : '';
+    _bFormController.text = draft.bFormNo ?? '';
+    _nationalityController.text = draft.nationality ?? 'Pakistani';
+    _religionController.text = draft.religion ?? 'Islam';
+    _fNameController.text = draft.fName;
+    _cnicController.text = draft.cnicNo;
+    _debouncedCnic = draft.cnicNo;
+    _debouncedFName = draft.fName;
+    _occupationController.text = draft.occupation ?? '';
+    _pSchoolController.text = draft.pSchool ?? '';
+    _pClassController.text = draft.pClass ?? '';
+    _slCertificateController.text = draft.slCertificate ?? '';
+    _mobile1Controller.text = draft.mobile1;
+    _mobile2Controller.text = draft.mobile2 ?? '';
+    _emerContNameController.text = draft.emerContName ?? '';
+    _emerContMobileController.text = draft.emerContMobile ?? '';
+    _pAddressController.text = draft.pAddress ?? '';
+    _tAddressController.text = draft.tAddress ?? '';
+    _doAdmissionController.text = DateFormat(
+      'dd-MMM-yyyy',
+    ).format(draft.doAdmission);
+    _discountController.text = draft.discount.toStringAsFixed(0);
+    _vmDiscountController.text = draft.vmDiscount.toString();
+    _remarksController.text = draft.remarks ?? '';
+    _regIdController.text = draft.customRegId?.toString() ?? '';
+    setState(() {});
+  }
+
+  void _clearAllControllers() {
+    _nameFirstController.clear();
+    _nameMiddleController.clear();
+    _nameLastController.clear();
+    _dobController.clear();
+    _bFormController.clear();
+    _nationalityController.clear();
+    _religionController.clear();
+    _fNameController.clear();
+    _cnicController.clear();
+    _occupationController.clear();
+    _pSchoolController.clear();
+    _pClassController.clear();
+    _slCertificateController.clear();
+    _mobile1Controller.clear();
+    _mobile2Controller.clear();
+    _emerContNameController.clear();
+    _emerContMobileController.clear();
+    _pAddressController.clear();
+    _tAddressController.clear();
+    _doAdmissionController.clear();
+    _discountController.clear();
+    _vmDiscountController.clear();
+    _remarksController.clear();
+    _regIdController.clear();
+    _debouncedCnic = '';
+    _debouncedFName = '';
+  }
+
+  /// Scrolls the all-in-one page to the section card for [step] (0-3).
+  void _scrollToSection(int step) {
+    final key = switch (step) {
+      0 => _personalSectionKey,
+      1 => _guardianSectionKey,
+      2 => _contactSectionKey,
+      _ => _academicSectionKey,
+    };
+    final sectionContext = key.currentContext;
+    if (sectionContext != null) {
+      Scrollable.ensureVisible(
+        sectionContext,
+        duration: const Duration(milliseconds: 300),
+        alignment: 0.0,
+      );
+    }
+  }
+
+  /// Bordered card wrapper for one admission section in the all-in-one page.
+  /// The child sits inside its own transparent [Material] so ListTile/ink
+  /// widgets (e.g. the Full Fee Waiver checkbox) keep a Material ancestor
+  /// below the card's DecoratedBox.
+  Widget _sectionCard(GlobalKey sectionKey, Widget child) {
+    return Container(
+      key: sectionKey,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: child,
+      ),
+    );
+  }
+
+  /// Phase H Shot 2 — top Reg ID bar: sequential default, [Edit Reg ID]
+  /// toggle, [Missing Reg] gap picker, [GO] lookup, and [New] reset.
+  Widget _buildRegIdBar(WizardDraft draft) {
+    final regField = SizedBox(
+      width: 120,
+      child: TextField(
+        controller: _regIdController,
+        enabled: draft.isRegIdEditable && !draft.isEditingExisting,
+        keyboardType: TextInputType.number,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        style: AppTypography.monospace.copyWith(
+          color: AppColors.textPrimary,
+        ),
+        decoration: InputDecoration(
+          isDense: true,
+          prefixText: '#',
+          prefixStyle: AppTypography.monospace.copyWith(
+            color: AppColors.textSecondary,
+          ),
+          hintText: _sequentialRegId?.toString() ?? '—',
+          hintStyle: AppTypography.monospace.copyWith(
+            color: AppColors.textMuted,
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 10,
+          ),
+          border: const OutlineInputBorder(),
+        ),
+        onChanged: _onRegIdChanged,
+      ),
+    );
+
+    final editingBadge = draft.isEditingExisting
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.statusInfoBg,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.statusInfoBorder),
+            ),
+            child: Text(
+              'Editing Reg #${draft.currentStuRegId ?? draft.customRegId ?? ''}',
+              style: AppTypography.label.copyWith(
+                color: AppColors.statusInfoText,
+              ),
+            ),
+          )
+        : const SizedBox.shrink();
+
+    final compactOutlined = OutlinedButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      minimumSize: const Size(0, 34),
+      foregroundColor: AppColors.textPrimary,
+      side: const BorderSide(color: AppColors.borderDefault),
+    );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            'Reg ID',
+            style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+          ),
+          regField,
+          OutlinedButton(
+            key: const ValueKey('edit_reg_id_btn'),
+            onPressed: _toggleRegIdEditable,
+            style: compactOutlined,
+            child: Text(draft.isRegIdEditable ? 'Lock Reg ID' : 'Edit Reg ID'),
+          ),
+          OutlinedButton(
+            key: const ValueKey('missing_reg_btn'),
+            onPressed: _openMissingRegPicker,
+            style: compactOutlined,
+            child: const Text('Missing Reg'),
+          ),
+          ElevatedButton(
+            key: const ValueKey('lookup_reg_id_btn'),
+            onPressed: _lookupByRegId,
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(0, 34),
+            ),
+            child: const Text('GO'),
+          ),
+          TextButton(
+            key: const ValueKey('new_reg_btn'),
+            onPressed: _resetToNew,
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              minimumSize: const Size(0, 34),
+            ),
+            child: const Text('New'),
+          ),
+          editingBadge,
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentStep = ref.watch(wizardStepProvider);
     final draft = ref.watch(wizardDraftProvider);
     final isMobile = ResponsiveBreakpoints.isMobile(context);
 
-    // G-10 Shot 11b-2: mobile (< 600px) uses a whole-page Stitch scroll —
-    // breadcrumb, step indicator, and step form all move together inside one
-    // vertical scroll view while the action bar stays pinned. The desktop
-    // (>= 600px) layout below is frozen.
+    // Phase H Shot 2: mobile (< 600px) is a unified single-page scroll —
+    // breadcrumb, Reg ID bar, step indicator, and ALL FOUR section cards
+    // (VB6 all-in-one admission) inside one vertical scroll view while the
+    // action bar stays pinned.
     if (isMobile) {
       return Scaffold(
         backgroundColor: AppColors.surfaceCanvas,
@@ -520,34 +876,40 @@ class _StudentRegistrationWizardState
                           _buildBreadcrumbRow(),
                           const SizedBox(height: AppSpacing.md),
 
-                          // 2. Step Indicator (Component #40).
+                          // 2. Reg ID bar (sequential / edit / missing / GO).
+                          _buildRegIdBar(draft),
+                          const SizedBox(height: AppSpacing.md),
+
+                          // 3. Step Indicator (Component #40).
                           _buildStepIndicator(currentStep),
                           const SizedBox(height: AppSpacing.md),
 
-                          // 3. Step form card (scrolls with the page).
-                          Card(
-                            color: AppColors.surfaceRaised,
-                            elevation: AppElevation.raised,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                AppRadius.lg,
-                              ),
-                              side: const BorderSide(
-                                color: AppColors.borderDefault,
-                                width: 1.0,
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppSpacing.md),
-                              child: _buildStepCard(currentStep, draft),
-                            ),
+                          // 4. All four admission sections on one page.
+                          _sectionCard(
+                            _personalSectionKey,
+                            _buildStep1Personal(draft),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _sectionCard(
+                            _guardianSectionKey,
+                            _buildStep2Guardian(draft),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _sectionCard(
+                            _contactSectionKey,
+                            _buildStep3Contact(draft),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _sectionCard(
+                            _academicSectionKey,
+                            _buildStep4Academic(draft),
                           ),
                         ],
                       ),
                     ),
                   ),
 
-                  // 4. Pinned bottom action bar.
+                  // 5. Pinned bottom action bar.
                   _buildBottomActionBar(currentStep, draft),
                 ],
               ),
@@ -557,73 +919,107 @@ class _StudentRegistrationWizardState
       );
     }
 
-    // Desktop branch: unchanged (frozen).
+    // Phase H Shot 2: desktop (>= 600px) VB6-style all-in-one two-column
+    // layout — Left: Personal + Academic/Official; Right: Guardian/Family +
+    // Contact. Every section is visible on one page; the Reg ID bar sits
+    // above both columns.
     return SafeArea(
       top: false,
       left: false,
       right: false,
       bottom: false,
       child: CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): _onCancel,
-        const SingleActivator(LogicalKeyboardKey.enter): _advanceOrSubmit,
-        const SingleActivator(LogicalKeyboardKey.enter, control: true):
-            _advanceOrSubmit,
-      },
-      child: Focus(
-        autofocus: true,
-        child: Material(
-          color: AppColors.surface,
-          child: Container(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): _onCancel,
+          const SingleActivator(LogicalKeyboardKey.enter): _advanceOrSubmit,
+          const SingleActivator(LogicalKeyboardKey.enter, control: true):
+              _advanceOrSubmit,
+        },
+        child: Focus(
+          autofocus: true,
+          child: Material(
             color: AppColors.surface,
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Center(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 900),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 1. Breadcrumb row
-                    _buildBreadcrumbRow(),
-                    const SizedBox(height: AppSpacing.md),
+            child: Container(
+              color: AppColors.surface,
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 1. Breadcrumb row
+                      _buildBreadcrumbRow(),
+                      const SizedBox(height: AppSpacing.md),
 
-                    // 2. Step Indicator (Component #40)
-                    _buildStepIndicator(currentStep),
-                    const SizedBox(height: AppSpacing.lg),
+                      // 2. Step Indicator (Component #40)
+                      _buildStepIndicator(currentStep),
+                      const SizedBox(height: AppSpacing.md),
 
-                    // 3. Step Content Card
-                    Expanded(
-                      child: Card(
-                        color: AppColors.surfaceRaised,
-                        elevation: AppElevation.raised,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(AppRadius.lg),
-                          side: const BorderSide(
-                            color: AppColors.borderDefault,
-                            width: 1.0,
+                      // 3. Reg ID bar
+                      _buildRegIdBar(draft),
+                      const SizedBox(height: AppSpacing.md),
+
+                      // 4. Two-column all-in-one admission page
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _sectionCard(
+                                      _personalSectionKey,
+                                      _buildStep1Personal(draft),
+                                    ),
+                                    const SizedBox(height: AppSpacing.md),
+                                    _sectionCard(
+                                      _academicSectionKey,
+                                      _buildStep4Academic(draft),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.md),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _sectionCard(
+                                      _guardianSectionKey,
+                                      _buildStep2Guardian(draft),
+                                    ),
+                                    const SizedBox(height: AppSpacing.md),
+                                    _sectionCard(
+                                      _contactSectionKey,
+                                      _buildStep3Contact(draft),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(AppSpacing.xl),
-                          child: _buildStepCard(currentStep, draft),
-                        ),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.md),
 
-                    // 4. Bottom Action Bar
-                    _buildBottomActionBar(currentStep, draft),
-                    const SizedBox(height: AppSpacing.md),
+                      // 5. Bottom Action Bar
+                      _buildBottomActionBar(currentStep, draft),
+                      const SizedBox(height: AppSpacing.md),
 
-                    // 5. Keyboard hints bar
-                    _buildKeyboardHintsBar(),
-                  ],
+                      // 6. Keyboard hints bar
+                      _buildKeyboardHintsBar(),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -890,21 +1286,6 @@ class _StudentRegistrationWizardState
     );
   }
 
-  Widget _buildStepCard(int currentStep, WizardDraft draft) {
-    switch (currentStep) {
-      case 0:
-        return _buildStep1Personal(draft);
-      case 1:
-        return _buildStep2Guardian(draft);
-      case 2:
-        return _buildStep3Contact(draft);
-      case 3:
-        return _buildStep4Academic(draft);
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
   // ─────────────────────────────────────────────────────────────
   // STEP 1: Personal Info
   // ─────────────────────────────────────────────────────────────
@@ -1113,8 +1494,9 @@ class _StudentRegistrationWizardState
         const Divider(color: AppColors.borderDefault),
         const SizedBox(height: AppSpacing.lg),
 
-        // Two-column layout on desktop; stacked on mobile.
-        if (isMobile)
+        // Two-column layout on wide desktop; stacked when narrow (incl. the
+        // all-in-one page's half-width columns).
+        if (isMobile || MediaQuery.of(context).size.width < 1000)
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1341,8 +1723,6 @@ class _StudentRegistrationWizardState
   }
 
   Widget _buildSiblingPanel(List<SiblingInfo> siblings) {
-    final isMobile = ResponsiveBreakpoints.isMobile(context);
-
     return Container(
       margin: const EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -1463,46 +1843,26 @@ class _StudentRegistrationWizardState
               ),
             ),
           ],
-          if (isMobile)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sibling links are for family reference only. Fee concessions are configured separately per student.',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textMuted,
-                    fontSize: 11,
-                  ),
+          // Stacked (never a side-by-side Row): the link button's natural
+          // width exceeds the half-width section column and would overflow.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Sibling links are for family reference only. Fee concessions are configured separately per student.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
                 ),
-                if (siblings.isNotEmpty)
-                  TextButton.icon(
-                    icon: const Icon(Icons.link, size: 14),
-                    label: const Text('Link as Sibling & Copy Family Address'),
-                    onPressed: () => _linkAsSiblingAndCopyInfo(siblings),
-                  ),
-              ],
-            )
-          else
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'Sibling links are for family reference only. Fee concessions are configured separately per student.',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                      fontSize: 11,
-                    ),
-                  ),
+              ),
+              if (siblings.isNotEmpty)
+                TextButton.icon(
+                  icon: const Icon(Icons.link, size: 14),
+                  label: const Text('Link as Sibling & Copy Family Address'),
+                  onPressed: () => _linkAsSiblingAndCopyInfo(siblings),
                 ),
-                if (siblings.isNotEmpty)
-                  TextButton.icon(
-                    icon: const Icon(Icons.link, size: 14),
-                    label: const Text('Link as Sibling & Copy Family Address'),
-                    onPressed: () => _linkAsSiblingAndCopyInfo(siblings),
-                  ),
-              ],
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -1615,12 +1975,13 @@ class _StudentRegistrationWizardState
           )
         else
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Present Address (Optional)',
-                style: AppTypography.label.copyWith(
-                  color: AppColors.textPrimary,
+              Expanded(
+                child: Text(
+                  'Present Address (Optional)',
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
               TextButton.icon(
@@ -1687,7 +2048,7 @@ class _StudentRegistrationWizardState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMobile)
+        if (isMobile || MediaQuery.of(context).size.width < 1000)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1926,7 +2287,6 @@ class _StudentRegistrationWizardState
 
   Widget _buildFeePreviewCard(int classId) {
     final feeParamsAsync = ref.watch(feePreviewProvider(classId));
-    final isMobile = ResponsiveBreakpoints.isMobile(context);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -1950,65 +2310,40 @@ class _StudentRegistrationWizardState
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (isMobile)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.calculate_outlined,
-                          size: 18,
-                          color: AppColors.chartBlue,
-                        ),
-                        const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            'FEE PREVIEW CALCULATION',
-                            style: AppTypography.label.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
+              // Stacked (never a side-by-side Row): label + fee text exceed
+              // the half-width section column and would overflow.
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.calculate_outlined,
+                        size: 18,
+                        color: AppColors.chartBlue,
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'FEE PREVIEW CALCULATION',
+                          style: AppTypography.label.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Estimated Monthly Fee: Rs. ${sum.toStringAsFixed(0)}',
-                      style: AppTypography.monospace.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Estimated Monthly Fee: Rs. ${sum.toStringAsFixed(0)}',
+                    style: AppTypography.monospace.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
                     ),
-                  ],
-                )
-              else
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.calculate_outlined,
-                      size: 18,
-                      color: AppColors.chartBlue,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'FEE PREVIEW CALCULATION',
-                      style: AppTypography.label.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      'Estimated Monthly Fee: Rs. ${sum.toStringAsFixed(0)}',
-                      style: AppTypography.monospace.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               if (sum == 0.0)
                 Text(
