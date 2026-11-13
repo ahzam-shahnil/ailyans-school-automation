@@ -968,6 +968,9 @@ class _VoucherGenerationScreenState
             onTap: () {
               ref.read(voucherGenFiltersProvider.notifier).setMode('single');
               ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+              // Unified single-student entry point: the VB6 checkable
+              // student grid dialog (same one the fast-actions button opens).
+              _showSingleVoucherDialog(context);
             },
           ),
         ],
@@ -1437,72 +1440,299 @@ class _VoucherGenerationScreenState
     }
   }
 
-  /// Always-visible global fee-head checklist (`ID | Fee | Check`), VB6
-  /// style. Applies to the whole-school batch and the single/multi-student
-  /// modal via [globalSelectedFeeParamIdsProvider]; Tuition Fee (head 2) is
-  /// checked by default.
-  Widget _buildGlobalFeeHeadsStrip() {
-    final optionsAsync = ref.watch(allFeeParametersProvider);
-    final selected = ref.watch(globalSelectedFeeParamIdsProvider);
-    final options = optionsAsync.valueOrNull ?? const <FeeParamOption>[];
+  /// Whether the unified fee structure table's 16-row grid is expanded.
+  /// Collapsed by default (VB6 accordion style): the collapsed bar shows the
+  /// live summary; expanding reveals the full `ID | Fee Head | Class Tariff
+  /// (Rs.) | Check` grid plus the Edit tariffs shortcut.
+  bool _feeStructureExpanded = false;
+
+  /// Unified fee-head toggle for the VB6 fee structure table: updates the
+  /// class-level exclusion (driving the preview, Estimated Net Billed KPI and
+  /// single-class Generate) AND mirrors the resulting included set into
+  /// [globalSelectedFeeParamIdsProvider] so the whole-school batch and the
+  /// single/selected-student modal agree with the visible check state.
+  void _toggleFeeHeadUnified(int feeParamId) {
+    final filters = ref.read(voucherGenFiltersProvider);
+    final allIds = (ref.read(allFeeParametersProvider).valueOrNull ??
+            const <FeeParamOption>[])
+        .map((e) => e.feeParamId)
+        .toSet();
+
+    if (filters.classId != null) {
+      ref.read(voucherGenFiltersProvider.notifier).toggleFeeHead(feeParamId);
+      final newExcluded = ref.read(voucherGenFiltersProvider).excludedFeeParamIds;
+      ref
+          .read(globalSelectedFeeParamIdsProvider.notifier)
+          .replaceAll(allIds.difference(newExcluded));
+    } else {
+      ref.read(globalSelectedFeeParamIdsProvider.notifier).toggle(feeParamId);
+      final newGlobal = ref.read(globalSelectedFeeParamIdsProvider);
+      ref
+          .read(voucherGenFiltersProvider.notifier)
+          .setExcludedFeeParamIds(allIds.difference(newGlobal));
+    }
+  }
+
+  /// THE single VB6 fee structure table (`ID | Fee Head | Class Tariff (Rs.) |
+  /// Check`). Replaces the old disconnected checkbox wrap AND the bottom
+  /// class-tariff accordion: checking/unchecking a row live-updates the
+  /// per-student rate, the Estimated Net Billed KPI, the preview table, and
+  /// drives whole-school / single-class / selected-student generation alike.
+  ///
+  /// The 16 rows live in a bounded, internally-scrolling region so the card
+  /// can never push the preview pane past its available height.
+  Widget _buildFeeStructureTable({
+    double tableHeight = 180.0,
+    bool compact = false,
+  }) {
+    final rows = ref.watch(voucherFeeStructureProvider);
+    final filters = ref.watch(voucherGenFiltersProvider);
+    final globalSelection = ref.watch(globalSelectedFeeParamIdsProvider);
+
+    final checkedIds = filters.classId != null
+        ? {
+            for (final r in rows)
+              if (!filters.excludedFeeParamIds.contains(r.feeParamId)) r.feeParamId,
+          }
+        : globalSelection;
+
+    final checkedCount = checkedIds.length;
+    final perStudent = rows
+        .where(
+          (r) => checkedIds.contains(r.feeParamId) && r.classTariff != null,
+        )
+        .fold<double>(0, (sum, r) => sum + r.classTariff!);
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: 6,
-      ),
+      key: const Key('fee_parameters_checklist'),
       decoration: BoxDecoration(
         color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: AppColors.borderDefault),
       ),
-      child: options.isEmpty
-          ? Text(
-              'Fee heads load from the FeeParameters table.',
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            )
-          : Wrap(
-              spacing: AppSpacing.md,
-              runSpacing: AppSpacing.xs,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header: title + live summary (+ Edit tariffs when expanded).
+          // Title and summary share one Expanded column with ellipsis so the
+          // row can never overflow, even at narrow widths.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.sm,
+              6,
+              AppSpacing.xs,
+              6,
+            ),
+            child: Row(
               children: [
-                for (final option in options)
-                  InkWell(
-                    onTap: () => ref
-                        .read(globalSelectedFeeParamIdsProvider.notifier)
-                        .toggle(option.feeParamId),
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 32,
-                            height: 24,
-                            child: Checkbox(
-                              value: selected.contains(option.feeParamId),
-                              onChanged: (_) => ref
-                                  .read(globalSelectedFeeParamIdsProvider
-                                      .notifier)
-                                  .toggle(option.feeParamId),
-                              visualDensity: VisualDensity.compact,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      InkWell(
+                        onTap: () => setState(
+                          () => _feeStructureExpanded = !_feeStructureExpanded,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                'Fee Structure',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.label.copyWith(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${option.feeParamId} · ${option.description}',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: AppColors.textPrimary,
+                            const SizedBox(width: 4),
+                            Icon(
+                              _feeStructureExpanded
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              size: 18,
+                              color: AppColors.textSecondary,
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$checkedCount of ${rows.length} checked · '
+                        'Rs. ${currencyFormat.format(perStudent)} per student',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                if (_feeStructureExpanded)
+                  TextButton.icon(
+                    onPressed: () => context.go('/fees/parameters'),
+                    icon: const Icon(Icons.tune, size: 14),
+                    label: const Text('Edit tariffs'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.brandPrimary,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ),
               ],
             ),
+          ),
+          // Column header + 16-row body, only while expanded.
+          if (_feeStructureExpanded) ...[
+            Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: compact ? 2 : 4,
+            ),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: AppColors.borderDefault),
+              ),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 30,
+                  child: Text(
+                    'ID',
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Fee Head',
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: compact ? 66 : 110,
+                  child: Text(
+                    'Class Tariff (Rs.)',
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    style: AppTypography.label.copyWith(
+                      color: AppColors.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                const SizedBox(
+                  width: 40,
+                  child: Center(
+                    child: Text(
+                      'Check',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Bounded, internally-scrolling 16-row body.
+          SizedBox(
+            height: tableHeight,
+            child: rows.isEmpty
+                ? Center(
+                    child: Text(
+                      'Fee heads load from the FeeParameters table.',
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: rows.length,
+                    itemBuilder: (context, index) {
+                      final row = rows[index];
+                      final isChecked = checkedIds.contains(row.feeParamId);
+                      return InkWell(
+                        onTap: () => _toggleFeeHeadUnified(row.feeParamId),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: compact ? 1 : 2,
+                          ),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 30,
+                                child: Text(
+                                  '${row.feeParamId}',
+                                  style: AppTypography.monospace.copyWith(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  row.description.isEmpty
+                                      ? 'Fee Head ${row.feeParamId}'
+                                      : row.description,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.bodySmall.copyWith(
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: compact ? 66 : 110,
+                                child: Text(
+                                  row.classTariff == null
+                                      ? '—'
+                                      : 'Rs. ${currencyFormat.format(row.classTariff!)}',
+                                  textAlign: TextAlign.right,
+                                  maxLines: 1,
+                                  style: AppTypography.monospace.copyWith(
+                                    fontSize: 12,
+                                    color: row.classTariff == null
+                                        ? AppColors.textMuted
+                                        : AppColors.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: 40,
+                                height: compact ? 28 : 32,
+                                child: Checkbox(
+                                  value: isChecked,
+                                  onChanged: (_) =>
+                                      _toggleFeeHeadUnified(row.feeParamId),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1531,7 +1761,7 @@ class _VoucherGenerationScreenState
             style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
           ),
           const SizedBox(height: AppSpacing.xs),
-          _buildGlobalFeeHeadsStrip(),
+          _buildFeeStructureTable(tableHeight: 200, compact: true),
         ],
       ),
     );
@@ -1724,28 +1954,6 @@ class _VoucherGenerationScreenState
         currentToggleSum != null &&
         currentToggleSum != persistedSum;
 
-    final tariffsAsync = ref.watch(
-      voucherClassTariffsProvider(filters.classId),
-    );
-    final feeHeadList = tariffsAsync.valueOrNull ?? const <FeeHeadSummary>[];
-    final heads = feeHeadList.map((t) {
-      final isChecked = !filters.excludedFeeParamIds.contains(t.feeParamId);
-      return FeeHeadItem(
-        feeParamId: t.feeParamId,
-        name: t.description.trim(),
-        amount: t.fee.toInt(),
-        isChecked: isChecked,
-      );
-    }).toList();
-
-    final noTariffMsg = (filters.classId == null)
-        ? 'Select a class to configure fee heads'
-        : (feeHeadList.isEmpty && !tariffsAsync.isLoading
-              ? 'No fees set up for this class.'
-              : null);
-
-    final errorMsg = tariffsAsync.hasError ? "Couldn't load fee heads." : null;
-
     return Container(
       decoration: _cardDecoration(),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -1879,8 +2087,9 @@ class _VoucherGenerationScreenState
           ),
           const SizedBox(height: AppSpacing.sm),
 
-          // Always-visible global fee-head checklist (VB6: `ID | Fee | Check`).
-          _buildGlobalFeeHeadsStrip(),
+          // Unified VB6 fee structure table (`ID | Fee Head | Class Tariff
+          // (Rs.) | Check`) — the ONE fee-head control on this screen.
+          _buildFeeStructureTable(),
 
           const SizedBox(height: AppSpacing.sm),
 
@@ -1945,14 +2154,15 @@ class _VoucherGenerationScreenState
           ),
           const SizedBox(height: AppSpacing.sm),
 
-          // Fee heads accordion at bottom of preview pane
+          // Collapsed class-tariff summary bar — a second view of the SAME
+          // unified fee-head selection as the fee structure table above
+          // (same toggle handler, same check state).
           FeeHeadsAccordion(
-            heads: heads,
-            isLoading: tariffsAsync.isLoading,
-            errorMessage: errorMsg,
-            noTariffMessage: noTariffMsg,
-            onToggleHead: (id) =>
-                ref.read(voucherGenFiltersProvider.notifier).toggleFeeHead(id),
+            heads: _buildUnifiedFeeHeadItems(),
+            isLoading: false,
+            errorMessage: null,
+            noTariffMessage: null,
+            onToggleHead: _toggleFeeHeadUnified,
             onRetry: () =>
                 ref.invalidate(voucherClassTariffsProvider(filters.classId)),
             onOpenFeeParams: () => context.go('/fees/parameters'),
@@ -2653,6 +2863,8 @@ class _VoucherGenerationScreenState
               onTap: () {
                 ref.read(voucherGenFiltersProvider.notifier).setMode('single');
                 ref.read(voucherGenExecutionProvider.notifier).clearSummary();
+                // Unified single-student entry point (VB6 checkable grid).
+                _showSingleVoucherDialog(context);
               },
               borderRadius: BorderRadius.circular(AppRadius.sm),
               child: Container(
@@ -2866,20 +3078,6 @@ class _VoucherGenerationScreenState
       return _buildVoucherResultPanel(execState.completionSummary!);
     }
 
-    final tariffsAsync = ref.watch(
-      voucherClassTariffsProvider(filters.classId),
-    );
-    final feeHeadList = tariffsAsync.valueOrNull ?? const <FeeHeadSummary>[];
-    final heads = _buildFeeHeadItems(feeHeadList, filters);
-
-    final noTariffMsg = (filters.classId == null)
-        ? 'Select a class to configure fee heads'
-        : (feeHeadList.isEmpty && !tariffsAsync.isLoading
-              ? 'No fees set up for this class.'
-              : null);
-
-    final errorMsg = tariffsAsync.hasError ? "Couldn't load fee heads." : null;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -2969,18 +3167,6 @@ class _VoucherGenerationScreenState
           ],
         ],
         const SizedBox(height: AppSpacing.sm),
-        FeeHeadsAccordion(
-          heads: heads,
-          isLoading: tariffsAsync.isLoading,
-          errorMessage: errorMsg,
-          noTariffMessage: noTariffMsg,
-          onToggleHead: (id) =>
-              ref.read(voucherGenFiltersProvider.notifier).toggleFeeHead(id),
-          onRetry: () =>
-              ref.invalidate(voucherClassTariffsProvider(filters.classId)),
-          onOpenFeeParams: () => context.go('/fees/parameters'),
-          onEditTariffs: () => context.go('/fees/parameters'),
-        ),
       ],
     );
   }
@@ -3116,20 +3302,26 @@ class _VoucherGenerationScreenState
   }
 
 
-
-  List<FeeHeadItem> _buildFeeHeadItems(
-    List<FeeHeadSummary> tariffs,
-    VoucherGenFilters filters,
-  ) {
-    return tariffs.map((t) {
-      final isChecked = !filters.excludedFeeParamIds.contains(t.feeParamId);
-      return FeeHeadItem(
-        feeParamId: t.feeParamId,
-        name: t.description.trim(),
-        amount: t.fee.toInt(),
-        isChecked: isChecked,
-      );
-    }).toList();
+  /// The 16 unified fee-head rows as [FeeHeadItem]s for the summary accordion:
+  /// amount = the selected class's live tariff (0 when the class has no tariff
+  /// row for that head), isChecked = the unified selection state.
+  List<FeeHeadItem> _buildUnifiedFeeHeadItems() {
+    final rows = ref.watch(voucherFeeStructureProvider);
+    final filters = ref.watch(voucherGenFiltersProvider);
+    final globalSelection = ref.watch(globalSelectedFeeParamIdsProvider);
+    return [
+      for (final row in rows)
+        FeeHeadItem(
+          feeParamId: row.feeParamId,
+          name: row.description.isEmpty
+              ? 'Fee Head ${row.feeParamId}'
+              : row.description,
+          amount: row.classTariff?.toInt() ?? 0,
+          isChecked: filters.classId != null
+              ? !filters.excludedFeeParamIds.contains(row.feeParamId)
+              : globalSelection.contains(row.feeParamId),
+        ),
+    ];
   }
 
   void _openParamSheet(
@@ -3424,6 +3616,10 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
               ),
               child: Row(
                 children: [
+                  const SizedBox(
+                    width: 24,
+                    child: Text('#', style: AppTypography.label),
+                  ),
                   SizedBox(
                     width: 40,
                     child: Checkbox(
@@ -3447,6 +3643,11 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                   const SizedBox(
                     width: 96,
                     child: Text('Class', style: AppTypography.label),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const SizedBox(
+                    width: 110,
+                    child: Text('Status', style: AppTypography.label),
                   ),
                 ],
               ),
@@ -3483,6 +3684,16 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                                 ),
                                 child: Row(
                                   children: [
+                                    SizedBox(
+                                      width: 24,
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: AppTypography.monospace.copyWith(
+                                          fontSize: 11,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                    ),
                                     SizedBox(
                                       width: 40,
                                       child: Checkbox(
@@ -3526,31 +3737,27 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                                     const SizedBox(width: AppSpacing.sm),
                                     SizedBox(
                                       width: 96,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            row.className ?? 'Class ${row.classId}',
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: AppTypography.bodySmall
-                                                .copyWith(
-                                              color: AppColors.textPrimary,
-                                            ),
-                                          ),
-                                          if (disabled)
-                                            Text(
-                                              'Already Generated',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: AppTypography.label
-                                                  .copyWith(
-                                                color:
-                                                    AppColors.statusWarningText,
-                                              ),
-                                            ),
-                                        ],
+                                      child: Text(
+                                        row.className ?? 'Class ${row.classId}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.bodySmall.copyWith(
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    SizedBox(
+                                      width: 110,
+                                      child: Text(
+                                        disabled ? 'Already Generated' : 'Ready',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.label.copyWith(
+                                          color: disabled
+                                              ? AppColors.statusWarningText
+                                              : AppColors.statusSuccessText,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -3559,6 +3766,40 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                             );
                           },
                         ),
+            ),
+            // Footer: live selection + checked fee heads summary.
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+              child: Consumer(
+                builder: (context, ref, _) {
+                  final selectedGlobal = ref.watch(
+                    globalSelectedFeeParamIdsProvider,
+                  );
+                  final options =
+                      ref.watch(allFeeParametersProvider).valueOrNull ??
+                      const <FeeParamOption>[];
+                  final checkedNames = [
+                    for (final option in options)
+                      if (selectedGlobal.contains(option.feeParamId))
+                        option.description.trim(),
+                  ];
+                  return Text(
+                    '${_selected.length} Student(s) Selected · Checked Fee '
+                    'Heads: ${checkedNames.isEmpty ? '—' : checkedNames.join(', ')}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),

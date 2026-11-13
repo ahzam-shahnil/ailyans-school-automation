@@ -272,6 +272,13 @@ class VoucherGenFiltersNotifier extends StateNotifier<VoucherGenFilters> {
     state = state.copyWith(excludedFeeParamIds: next);
   }
 
+  /// Replaces the excluded-fee set wholesale (used by the unified fee
+  /// structure table so the class-level preview and the global whole-school /
+  /// single-voucher selection always agree after a user interaction).
+  void setExcludedFeeParamIds(Set<int> ids) {
+    state = state.copyWith(excludedFeeParamIds: Set<int>.from(ids));
+  }
+
   void setIncludeArrears(bool value) {
     state = state.copyWith(includeArrears: value);
   }
@@ -1535,11 +1542,58 @@ class GlobalFeeParamSelectionNotifier extends StateNotifier<Set<int>> {
     }
     state = next;
   }
+
+  /// Replaces the whole selection (used by the unified fee structure table's
+  /// toggle so the global whole-school / single-voucher selection mirrors the
+  /// visible check state exactly).
+  void replaceAll(Set<int> ids) {
+    state = Set<int>.from(ids);
+  }
 }
 
 final globalSelectedFeeParamIdsProvider =
     StateNotifierProvider<GlobalFeeParamSelectionNotifier, Set<int>>((ref) {
       return GlobalFeeParamSelectionNotifier();
+    });
+
+/// One row of the unified VB6 fee structure table: every FeeParameters row
+/// joined with the selected class's live `Cls_Param_Fee` tariff ([classTariff]
+/// is null when the class has no tariff row for that head).
+class Vb6FeeStructureRow {
+  final int feeParamId;
+  final String description;
+  final double? classTariff;
+
+  const Vb6FeeStructureRow({
+    required this.feeParamId,
+    required this.description,
+    this.classTariff,
+  });
+}
+
+/// The 16 fee-head rows for the unified `ID | Fee Head | Class Tariff | Check`
+/// table, reactive to the selected class ([voucherGenFiltersProvider.classId])
+/// and session year via [voucherClassTariffsProvider].
+final voucherFeeStructureProvider =
+    Provider<List<Vb6FeeStructureRow>>((ref) {
+      final options =
+          ref.watch(allFeeParametersProvider).valueOrNull ??
+          const <FeeParamOption>[];
+      final filters = ref.watch(voucherGenFiltersProvider);
+      final tariffs =
+          ref.watch(voucherClassTariffsProvider(filters.classId)).valueOrNull ??
+          const <FeeHeadSummary>[];
+      final tariffById = <int, double>{
+        for (final t in tariffs) t.feeParamId: t.fee,
+      };
+      return [
+        for (final option in options)
+          Vb6FeeStructureRow(
+            feeParamId: option.feeParamId,
+            description: option.description,
+            classTariff: tariffById[option.feeParamId],
+          ),
+      ];
     });
 
 /// A row in the "Generate Single Voucher" modal's checkable student table.
