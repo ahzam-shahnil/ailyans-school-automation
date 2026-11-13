@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../../repositories/photo_repository.dart';
 import '../db/database.dart';
 import 'package:school_automation/core/sync/node_id_allocator.dart';
+import '../../models/student.dart';
 import 'clock_provider.dart';
 
 /// Data draft holding all in-progress student admission form state.
@@ -332,6 +333,7 @@ final wizardStepProvider = StateProvider<int>((ref) => 0);
 class SiblingInfo {
   final int stuRegId;
   final String nameFirst;
+  final String? nameMiddle;
   final String? nameLast;
   final String? fName;
   final String? cnicNo;
@@ -348,6 +350,7 @@ class SiblingInfo {
   const SiblingInfo({
     required this.stuRegId,
     required this.nameFirst,
+    this.nameMiddle,
     this.nameLast,
     this.fName,
     this.cnicNo,
@@ -362,7 +365,8 @@ class SiblingInfo {
     this.mobile1,
   });
 
-  String get fullName => '$nameFirst ${nameLast ?? ''}'.trim();
+  String get fullName =>
+      formatStudentFullName(nameFirst, nameMiddle, nameLast);
 
   String get initials {
     if (fullName.isEmpty) return 'ST';
@@ -449,9 +453,10 @@ Future<List<SiblingInfo>> fetchSiblings(
 
   final query = canMatchCnic
       ? '''
-    SELECT 
+    SELECT
       sr.Stu_RegID,
       sr.NameFirst,
+      sr.NameMiddle,
       sr.NameLast,
       sr.F_Name,
       sr.CNIC_No,
@@ -473,9 +478,10 @@ Future<List<SiblingInfo>> fetchSiblings(
     ORDER BY sr.Stu_RegID ASC
   '''
       : '''
-    SELECT 
+    SELECT
       sr.Stu_RegID,
       sr.NameFirst,
+      sr.NameMiddle,
       sr.NameLast,
       sr.F_Name,
       sr.CNIC_No,
@@ -505,6 +511,7 @@ Future<List<SiblingInfo>> fetchSiblings(
         (r) => SiblingInfo(
           stuRegId: (r['Stu_RegID'] as int?) ?? 0,
           nameFirst: (r['NameFirst'] as String?) ?? '',
+          nameMiddle: (r['NameMiddle'] as String?)?.trim(),
           nameLast: r['NameLast'] as String?,
           fName: r['F_Name'] as String?,
           cnicNo: r['CNIC_No'] as String?,

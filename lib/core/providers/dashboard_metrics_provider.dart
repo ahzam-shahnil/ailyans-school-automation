@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/student.dart';
 import '../db/database.dart';
 import 'clock_provider.dart';
 
@@ -340,6 +341,7 @@ final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
       ft.PaidAmount,
       COALESCE(sr.Stu_RegID, CAST(substr(ft.VoucharNo, 6) AS INTEGER)) as Stu_RegID,
       COALESCE(sr.NameFirst, '') as NameFirst,
+      COALESCE(sr.NameMiddle, '') as NameMiddle,
       COALESCE(sr.NameLast, '') as NameLast
     FROM FeeTransaction ft
     LEFT JOIN VoucharMas vm ON ft.VoucharNo = vm.VoucherMasID
@@ -349,9 +351,11 @@ final dashboardMetricsProvider = FutureProvider<DashboardMetrics>((ref) async {
   ''');
 
   final recentPayments = paymentRows.map((r) {
-    final first = (r['NameFirst'] as String? ?? '').trim();
-    final last = (r['NameLast'] as String? ?? '').trim();
-    final name = last.isNotEmpty ? '$first $last' : first;
+    final name = formatStudentFullName(
+      r['NameFirst'] as String?,
+      r['NameMiddle'] as String?,
+      r['NameLast'] as String?,
+    );
     return RecentPaymentItem(
       submissionDate: r['SubmissionDate'] as String? ?? '',
       voucherNo: r['VoucharNo'] as String? ?? '',

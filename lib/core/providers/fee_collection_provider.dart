@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/fee_receipt_view.dart';
+import '../../models/student.dart';
 import '../db/database.dart';
 import '../sync/sync_provider.dart';
 import 'package:school_automation/core/sync/node_id_allocator.dart';
@@ -431,7 +432,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
 
       final rows = await db.rawQuery('''
         SELECT vm.VoucherMasID, vm.Student_Class_StuRegID,
-               sr.NameFirst, sr.NameLast, sr.F_Name,
+               sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
                c.CName AS class_name, cs.SecName AS section_name,
                sc.ClassRollNo, vm.ForMonth, vm.SubTotal, vm.Discount,
                vm.PaidAmt, vm.IsPaid, vm.DueDate
@@ -456,9 +457,11 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       }
 
       final summaries = rows.map((r) {
-        final first = (r['NameFirst'] as String?)?.trim() ?? '';
-        final last = (r['NameLast'] as String?)?.trim() ?? '';
-        final studentName = [first, last].where((s) => s.isNotEmpty).join(' ');
+        final studentName = formatStudentFullName(
+          r['NameFirst'] as String?,
+          r['NameMiddle'] as String?,
+          r['NameLast'] as String?,
+        );
         final subtotal = (r['SubTotal'] as num?)?.toInt() ?? 0;
         final discount = (r['Discount'] as num?)?.toInt() ?? 0;
         final paidAmt = (r['PaidAmt'] as num?)?.toInt() ?? 0;
@@ -607,17 +610,14 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           (mas['classSecName'] ?? mas['section_name']) as String?;
       final rollNo = ((mas['rollNo'] ?? mas['ClassRollNo']) as num?)?.toInt();
 
-      // Assemble student name
-      final nameFirst = (mas['NameFirst'] as String?)?.trim() ?? '';
-      final nameMid = (mas['NameMiddle'] as String?)?.trim() ?? '';
-      final nameLast = (mas['NameLast'] as String?)?.trim() ?? '';
-      final parts = [
-        nameFirst,
-        nameMid,
-        nameLast,
-      ].where((p) => p.isNotEmpty).toList();
-      final studentName = parts.isNotEmpty
-          ? parts.join(' ')
+      // Assemble student name (3-part via shared helper)
+      final rawName = formatStudentFullName(
+        mas['NameFirst'] as String?,
+        mas['NameMiddle'] as String?,
+        mas['NameLast'] as String?,
+      );
+      final studentName = rawName.isNotEmpty
+          ? rawName
           : 'Unknown Student';
       final fatherName = (mas['F_Name'] as String?)?.trim();
 
@@ -986,7 +986,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
 
     final rows = await db.rawQuery('''
       SELECT vm.VoucherMasID, vm.Student_Class_StuRegID,
-             sr.NameFirst, sr.NameLast, sr.F_Name, sr.Mobile1,
+             sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name, sr.Mobile1,
              c.CName AS class_name, cs.SecName AS section_name,
              sc.ClassRollNo, vm.ForMonth, vm.SubTotal, vm.Discount,
              vm.PaidAmt, vm.IsPaid, vm.DueDate, vm.SessionYr,
@@ -1005,9 +1005,11 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     final allRows = <DefaulterListRow>[];
 
     for (final r in rows) {
-      final first = (r['NameFirst'] as String?)?.trim() ?? '';
-      final last = (r['NameLast'] as String?)?.trim() ?? '';
-      final studentName = [first, last].where((s) => s.isNotEmpty).join(' ');
+      final studentName = formatStudentFullName(
+        r['NameFirst'] as String?,
+        r['NameMiddle'] as String?,
+        r['NameLast'] as String?,
+      );
       final subtotal = (r['SubTotal'] as num?)?.toInt() ?? 0;
       final discount = (r['Discount'] as num?)?.toInt() ?? 0;
       final paidAmt = (r['PaidAmt'] as num?)?.toInt() ?? 0;

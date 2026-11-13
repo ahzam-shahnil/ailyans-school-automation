@@ -4,6 +4,8 @@ import 'dart:math';
 
 import 'package:school_automation/core/utils/fee_head_display.dart';
 
+import 'student.dart';
+
 /// Production Fee Receipt Model for FeeCollectionScreen (/fees/receipts).
 /// Matches Behavior Spec §S19 (frmVoucharRecipt @ 0x0041c754).
 
@@ -65,7 +67,7 @@ class VoucherPaymentInstallment {
 class FeeReceiptView {
   final String voucherMasId;
   final int stuRegId;
-  final String studentName; // NameFirst + NameLast
+  final String studentName; // formatStudentFullName(NameFirst, NameMiddle, NameLast)
   final String fatherName; // F_Name
   final String? className; // Class.CName
   final String? sectionName; // ClassSec.SecName
@@ -188,9 +190,11 @@ class FeeReceiptView {
       return DateTime.tryParse(str);
     }
 
-    final first = (row['NameFirst'] as String?)?.trim() ?? '';
-    final last = (row['NameLast'] as String?)?.trim() ?? '';
-    final studentName = [first, last].where((s) => s.isNotEmpty).join(' ');
+    final studentName = formatStudentFullName(
+      row['NameFirst'] as String?,
+      row['NameMiddle'] as String?,
+      row['NameLast'] as String?,
+    );
 
     return FeeReceiptView(
       voucherMasId: row['VoucherMasID'] as String,
@@ -238,9 +242,11 @@ class FeeReceiptView {
       return DateTime.tryParse(str);
     }
 
-    final first = (studentRow['NameFirst'] as String?)?.trim() ?? '';
-    final last = (studentRow['NameLast'] as String?)?.trim() ?? '';
-    final studentName = [first, last].where((s) => s.isNotEmpty).join(' ');
+    final studentName = formatStudentFullName(
+      studentRow['NameFirst'] as String?,
+      studentRow['NameMiddle'] as String?,
+      studentRow['NameLast'] as String?,
+    );
 
     return FeeReceiptView(
       voucherMasId: voucherRow['VoucherMasID'] as String,

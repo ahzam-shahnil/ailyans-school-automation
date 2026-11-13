@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../models/student.dart';
 import '../../models/voucher_preview_row.dart';
 import '../db/database.dart';
 import '../sync/sync_provider.dart';
@@ -470,7 +471,7 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
   }
 
   final candidates = await db.rawQuery('''
-    SELECT sc.Stu_RegID, sr.NameFirst, sr.NameLast, sc.ClassID, sc.ClassSecID,
+    SELECT sc.Stu_RegID, sr.NameFirst, sr.NameMiddle, sr.NameLast, sc.ClassID, sc.ClassSecID,
            sr.FullDiscount,
            COALESCE(NULLIF(sr.VMDiscount, 0), sr.Discount, 0) AS StudentDiscount
     FROM Student_Class sc
@@ -494,9 +495,11 @@ final voucherGenPreviewProvider = FutureProvider<List<VoucherPreviewRow>>((
     final studentConcession =
         ((student['StudentDiscount'] as num?)?.toDouble() ?? 0.0).round();
 
-    final nameFirst = (student['NameFirst'] as String? ?? '').trim();
-    final nameLast = (student['NameLast'] as String? ?? '').trim();
-    final studentName = '$nameFirst $nameLast'.trim();
+    final studentName = formatStudentFullName(
+      student['NameFirst'] as String?,
+      student['NameMiddle'] as String?,
+      student['NameLast'] as String?,
+    );
 
     final voucherId = '$yyMm-$stuRegId';
 

@@ -354,7 +354,7 @@ class _VoucherGenerationScreenState
 
     final rows = await db.rawQuery(
       '''
-      SELECT vm.*, sr.NameFirst, sr.NameLast, sr.F_Name,
+      SELECT vm.*, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
              c.CName AS class_name, cs.SecName AS section_name,
              sc.ClassRollNo, sc.SessionYr
       FROM VoucharMas vm

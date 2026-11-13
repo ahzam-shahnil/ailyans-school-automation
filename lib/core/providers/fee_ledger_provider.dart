@@ -657,9 +657,9 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
       if (state.searchQuery.trim().isNotEmpty) {
         final term = '%${state.searchQuery.trim()}%';
         whereConditions.add(
-          '(vm.VoucherMasID LIKE ? OR CAST(vm.Student_Class_StuRegID AS TEXT) LIKE ? OR sr.NameFirst LIKE ? OR sr.NameLast LIKE ?)',
+          '(vm.VoucherMasID LIKE ? OR CAST(vm.Student_Class_StuRegID AS TEXT) LIKE ? OR sr.NameFirst LIKE ? OR sr.NameMiddle LIKE ? OR sr.NameLast LIKE ?)',
         );
-        whereArgs.addAll([term, term, term, term]);
+        whereArgs.addAll([term, term, term, term, term]);
       }
 
       final whereClause = whereConditions.isNotEmpty
@@ -714,6 +714,7 @@ class FeeLedgerNotifier extends StateNotifier<FeeLedgerState> {
           vm.VoucherMasID,
           vm.Student_Class_StuRegID,
           sr.NameFirst,
+          sr.NameMiddle,
           sr.NameLast,
           sr.F_Name,
           sr.Mobile1,

@@ -108,6 +108,7 @@ class BulkEnrollmentNotifier extends StateNotifier<BulkEnrollmentState> {
           sc.Stu_RegID,
           sc.ClassRollNo,
           sr.NameFirst,
+          sr.NameMiddle,
           sr.NameLast,
           sr.F_Name,
           sc.Present,
@@ -335,13 +336,13 @@ class BulkEnrollmentNotifier extends StateNotifier<BulkEnrollmentState> {
       final db = await DatabaseService.instance.database;
       final rows = await db.rawQuery(
         '''
-        SELECT sc.Stu_RegID, c.CName, sr.NameFirst, sr.NameLast
+        SELECT sc.Stu_RegID, c.CName, sr.NameFirst, sr.NameMiddle, sr.NameLast
         FROM Student_Class sc
         INNER JOIN Stu_Reg sr ON sc.Stu_RegID = sr.Stu_RegID
         INNER JOIN Class c ON sc.ClassID = c.ClassID
         LEFT JOIN SchLeaving sl ON sl.StuRegID = sc.Stu_RegID
         WHERE sc.ClassID = ? AND sc.SessionYr = ? AND sc.Present = 0 AND sl.StuRegID IS NULL
-        ORDER BY sr.NameFirst, sr.NameLast
+        ORDER BY sr.NameFirst, sr.NameMiddle, sr.NameLast
         ''',
         [state.selectedClassId, state.selectedSessionYr],
       );
