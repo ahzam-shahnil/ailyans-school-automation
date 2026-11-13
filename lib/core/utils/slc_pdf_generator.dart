@@ -15,6 +15,20 @@ import 'package:pdf/widgets.dart' as pw;
 class SlcPdfGenerator {
   SlcPdfGenerator._();
 
+  /// Width (pt) of the left-hand row label column.
+  static const double kLabelWidth = 135;
+
+  /// Right-hand padding (pt) applied inside the dotted value area so the bold
+  /// value's optical centre aligns exactly with the page centre axis.
+  ///
+  /// Geometry: the value area is `pw.Expanded` inside a `pw.Row` whose left
+  /// label occupies [kLabelWidth]. Centre of the un-padded area therefore sits
+  /// `kLabelWidth / 2` pt right of the page axis; padding the RIGHT side by the
+  /// full label width pulls the centre back onto the axis
+  /// (offset = (kLabelWidth - pad) / 2), landing the value directly under the
+  /// centered 'SCHOOL LEAVING CERTIFICATE' heading.
+  static const double kValueOpticalOffset = kLabelWidth;
+
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
@@ -240,6 +254,13 @@ class SlcPdfGenerator {
   /// One pre-printed stationery row: the [label] sits on the left, and the
   /// bold [value] sits above a dotted rule on the right (so handwriting and
   /// print both align to the pre-printed dotted line).
+  ///
+  /// Optical centering: the label column eats [kLabelWidth] pt on the left,
+  /// which pushes the naive centre of the right-hand `Expanded` region
+  /// (labelWidth / 2) pt to the right of the page's true centre axis. The
+  /// value text is therefore padded on the right by that same amount so its
+  /// optical centre lands directly under the centered
+  /// 'SCHOOL LEAVING CERTIFICATE' heading.
   static pw.Widget _buildFieldRow({
     required String label,
     required String value,
@@ -255,7 +276,7 @@ class SlcPdfGenerator {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-            width: 150,
+            width: kLabelWidth,
             child: pw.Text(
               label,
               style: pw.TextStyle(font: regularFont, fontSize: 11),
@@ -265,9 +286,14 @@ class SlcPdfGenerator {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(
-                  value.isEmpty ? ' ' : value,
-                  style: pw.TextStyle(font: boldFont, fontSize: 11),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(right: kValueOpticalOffset),
+                  child: pw.Center(
+                    child: pw.Text(
+                      value.isEmpty ? ' ' : value,
+                      style: pw.TextStyle(font: boldFont, fontSize: 11),
+                    ),
+                  ),
                 ),
                 pw.Text(
                   dottedLine,

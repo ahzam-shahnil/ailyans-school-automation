@@ -41,6 +41,37 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   // Horizontal scroll for the data table (narrow viewports)
   final ScrollController _tableHorizontalScroll = ScrollController();
 
+  /// User-adjustable desktop column widths (pt), keyed by column id. The two
+  /// text-heavy name columns are driven by these widths; the remaining fixed
+  /// utility columns keep their intrinsic sizes.
+  final Map<String, double> _colWidths = <String, double>{
+    'regId': 90,
+    'rollNo': 80,
+    'studentName': 260,
+    'fatherName': 200,
+    'classSec': 130,
+    'contact': 140,
+    'status': 100,
+    'actions': 120,
+  };
+
+  /// Right-edge drag handle that resizes [columnId] horizontally.
+  Widget _buildColumnResizeHandle(String columnId) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeColumn,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: (details) {
+          setState(() {
+            _colWidths[columnId] = (_colWidths[columnId]! + details.delta.dx)
+                .clamp(70.0, 500.0);
+          });
+        },
+        child: Container(width: 6, color: Colors.transparent),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -951,7 +982,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: 90.0,
+                                width: _colWidths['regId'],
                                 child: _buildSortableHeader(
                                   'REG ID',
                                   StudentSortColumn.regId,
@@ -971,29 +1002,43 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                   ),
                                 ),
                               ),
-                              Expanded(
-                                flex: 2,
-                                child: _buildSortableHeader(
-                                  'STUDENT NAME',
-                                  StudentSortColumn.studentName,
-                                  filters,
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  'FATHER NAME',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.label.copyWith(
-                                    fontSize: 11.0,
-                                    color: AppColors.textSecondary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              SizedBox(
+                                width: _colWidths['studentName'],
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildSortableHeader(
+                                        'STUDENT NAME',
+                                        StudentSortColumn.studentName,
+                                        filters,
+                                      ),
+                                    ),
+                                    _buildColumnResizeHandle('studentName'),
+                                  ],
                                 ),
                               ),
                               SizedBox(
-                                width: 120.0,
+                                width: _colWidths['fatherName'],
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'FATHER NAME',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: AppTypography.label.copyWith(
+                                          fontSize: 11.0,
+                                          color: AppColors.textSecondary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    _buildColumnResizeHandle('fatherName'),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(
+                                width: _colWidths['classSec'],
                                 child: Text(
                                   'CLASS-SEC',
                                   style: AppTypography.label.copyWith(
@@ -1004,7 +1049,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: 80.0,
+                                width: _colWidths['rollNo'],
                                 child: _buildSortableHeader(
                                   'ROLL NO',
                                   StudentSortColumn.rollNo,
@@ -1013,7 +1058,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: 100.0,
+                                width: _colWidths['status'],
                                 child: Center(
                                   child: Text(
                                     'STATUS',
@@ -1039,7 +1084,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: 100.0,
+                                width: _colWidths['actions'],
                                 child: Align(
                                   alignment: Alignment.centerRight,
                                   child: Text(
@@ -1198,7 +1243,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Reg ID (plain integer, monospace)
                                           SizedBox(
-                                            width: 90.0,
+                                            width: _colWidths['regId'],
                                             child: Text(
                                               '${student.stuRegId}',
                                               style: AppTypography.monospace
@@ -1220,8 +1265,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                           ),
 
                                           // Student Full Name
-                                          Expanded(
-                                            flex: 2,
+                                          SizedBox(
+                                            width:
+                                                _colWidths['studentName'],
                                             child: Text(
                                               student.fullName,
                                               style: AppTypography.body
@@ -1231,28 +1277,28 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                                     fontWeight: FontWeight.w600,
                                                   ),
                                               overflow: TextOverflow.ellipsis,
-                                              maxLines: 1,
+                                              maxLines: 2,
                                             ),
                                           ),
 
                                           // Father Name
-                                          Expanded(
-                                            flex: 2,
+                                          SizedBox(
+                                            width: _colWidths['fatherName'],
                                             child: Text(
                                               student.fatherName ?? '-',
                                               style: AppTypography.body
                                                   .copyWith(
-                                                    color:
-                                                        AppColors.textSecondary,
+                                                    color: AppColors
+                                                        .textSecondary,
                                                   ),
                                               overflow: TextOverflow.ellipsis,
-                                              maxLines: 1,
+                                              maxLines: 2,
                                             ),
                                           ),
 
                                           // Class-Sec Badge
                                           SizedBox(
-                                            width: 120.0,
+                                            width: _colWidths['classSec'],
                                             child: Align(
                                               alignment: Alignment.centerLeft,
                                               child: Container(
@@ -1288,7 +1334,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Roll No
                                           SizedBox(
-                                            width: 80.0,
+                                            width: _colWidths['rollNo'],
                                             child: Align(
                                               alignment: Alignment.centerRight,
                                               child: Text(
@@ -1307,7 +1353,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Status Badge
                                           SizedBox(
-                                            width: 100.0,
+                                            width: _colWidths['status'],
                                             child: Center(
                                               child: _buildStatusBadge(
                                                 student.status,
@@ -1327,7 +1373,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Actions Button
                                           SizedBox(
-                                            width: 100.0,
+                                            width: _colWidths['actions'],
                                             child: Align(
                                               alignment: Alignment.centerRight,
                                               child: TextButton(
