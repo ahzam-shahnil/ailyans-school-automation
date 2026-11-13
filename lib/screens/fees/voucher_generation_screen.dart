@@ -137,6 +137,10 @@ class _VoucherGenerationScreenState
   // LOGIC (unchanged)
   // ---------------------------------------------------------------------------
 
+  /// Shot 6g: the unified fee structure table starts collapsed every time
+  /// the screen opens; the 'N fee heads · Rs X per student' bar toggles it.
+  bool _isFeeStructureExpanded = false;
+
   Future<void> _handleGenerateTrigger(int eligibleCount) async {
     final execState = ref.read(voucherGenExecutionProvider);
     if (execState.isGenerating) return;
@@ -1054,13 +1058,12 @@ class _VoucherGenerationScreenState
             child: _buildStepIndicator(filters, execState),
           ),
         ] else ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildModeSwitch(filters),
-              _buildStepIndicator(filters, execState),
-            ],
-          ),
+          // Shot 6g: the desktop header is decluttered — the [Batch | Single]
+          // pill toggle and the 1 Select > 2 Preview > 3 Confirm > 4 Print
+          // stepper are removed (Single Student mode is reached from the
+          // 'Single / Selected Student Voucher' fast action and profile
+          // deep-links; the workspace has its own back button).
+          const SizedBox.shrink(),
         ],
       ],
     );
@@ -1646,6 +1649,8 @@ class _VoucherGenerationScreenState
   Widget _buildFeeStructureTable({
     double tableHeight = 180.0,
     bool compact = false,
+    bool isExpanded = true,
+    VoidCallback? onToggleHeader,
   }) {
     final rows = ref.watch(voucherFeeStructureProvider);
     final filters = ref.watch(voucherGenFiltersProvider);
@@ -1670,14 +1675,16 @@ class _VoucherGenerationScreenState
         mainAxisSize: MainAxisSize.min,
         children: [
           // Reactive summary bar: 'N fee heads · Rs X per student'.
-          // Shot 6f: wrapped in IgnorePointer so clicking it can never toggle
-          // the accordion's internal duplicate checkbox grid — the unified
-          // `ID | Fee Head | Class Tariff | Check` table below is the ONE
-          // place heads are configured. The widget stays mounted (tests pin
-          // find.byType(FeeHeadsAccordion)).
-          IgnorePointer(
-            ignoring: true,
-            child: FeeHeadsAccordion(
+          // Shot 6f: IgnorePointer keeps the accordion's internal duplicate
+          // checkbox grid permanently suppressed. Shot 6g: the bar itself is
+          // wrapped in a GestureDetector that toggles the unified fee table
+          // below (collapsed by default on load).
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onToggleHeader,
+            child: IgnorePointer(
+              ignoring: true,
+              child: FeeHeadsAccordion(
               heads: [
                 for (final row in rows)
                   FeeHeadItem(
@@ -1696,11 +1703,15 @@ class _VoucherGenerationScreenState
               onRetry: () =>
                   ref.invalidate(voucherClassTariffsProvider(filters.classId)),
               onOpenFeeParams: () => context.go('/fees/parameters'),
-              onEditTariffs: null,
+                onEditTariffs: null,
+              ),
             ),
           ),
-          // Column header.
-          Container(
+          // Shot 6g: the table rows + Edit tariffs footer only render when
+          // the summary bar is expanded (collapsed by default on load).
+          if (isExpanded) ...[
+            // Column header.
+            Container(
             padding: EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
               vertical: compact ? 2 : 4,
@@ -1991,6 +2002,7 @@ class _VoucherGenerationScreenState
               ),
             ),
           ),
+          ],
         ],
       ),
     );
@@ -2455,12 +2467,14 @@ class _VoucherGenerationScreenState
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.sm),
+          const SizedBox(height: AppSpacing.md),
 
           // Phase H Shot 6a: everything below the header lives in ONE
           // scrollable body with NO Expanded/Flexible vertical children, so
           // the card can never overflow regardless of the height it is
           // given (fixes the 107/76/13px RenderFlex overflows at h=343).
+          // Shot 6g: md gap keeps the KPI strip clear of the header actions
+          // row so the cards' top edges are never visually clipped.
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -2508,11 +2522,16 @@ class _VoucherGenerationScreenState
 
                   // Unified VB6 fee structure table (`ID | Fee Head | Class
                   // Tariff (Rs.) | Check`) — the ONE fee-head control on this
-                  // screen. Height adapts to the configured row count.
+                  // screen. Collapsed by default (Shot 6g); the
+                  // 'N fee heads · Rs X per student' bar toggles it.
                   _buildFeeStructureTable(
                     tableHeight: ResponsiveBreakpoints.isTablet(context)
                         ? 110
                         : 180,
+                    isExpanded: _isFeeStructureExpanded,
+                    onToggleHeader: () => setState(() {
+                      _isFeeStructureExpanded = !_isFeeStructureExpanded;
+                    }),
                   ),
 
                   const SizedBox(height: AppSpacing.sm),
@@ -4249,7 +4268,7 @@ class _SingleVoucherWorkspaceState
       key: const Key('back_to_batch_mode_btn'),
       onPressed: widget.onBack,
       icon: const Icon(Icons.arrow_back, size: 16),
-      label: const Text('\u2190 Back to Batch Mode'),
+      label: const Text('Back to Batch Mode'),
     );
 
     final cancelButton = TextButton(
@@ -4466,7 +4485,7 @@ class _SingleVoucherWorkspaceState
             width: 100,
             child: Text('Status', style: AppTypography.label),
           ),
-          const SizedBox(width: 76),
+          const SizedBox(width: 84),
         ],
       ),
     );
@@ -4616,7 +4635,7 @@ class _SingleVoucherWorkspaceState
                             ),
                           ),
                           SizedBox(
-                            width: 76,
+                            width: 84,
                             child: Row(
                               children: [
                                 if (hasVoucher)
@@ -4628,6 +4647,12 @@ class _SingleVoucherWorkspaceState
                                     color: AppColors.brandPrimary,
                                     tooltip: 'Print Voucher',
                                     padding: EdgeInsets.zero,
+                                    style: IconButton.styleFrom(
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      minimumSize: const Size(32, 32),
+                                      fixedSize: const Size(32, 32),
+                                    ),
                                     onPressed: () => widget.onPrintVouchers(
                                       {row.stuRegId},
                                     ),
@@ -4641,6 +4666,12 @@ class _SingleVoucherWorkspaceState
                                     color: AppColors.statusErrorText,
                                     tooltip: 'Delete Voucher',
                                     padding: EdgeInsets.zero,
+                                    style: IconButton.styleFrom(
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      minimumSize: const Size(32, 32),
+                                      fixedSize: const Size(32, 32),
+                                    ),
                                     onPressed: () => _deleteRow(row.stuRegId),
                                   ),
                               ],

@@ -2112,9 +2112,15 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // 1. Expanded by default: the single fee control shows the Edit
-        //    tariffs shortcut immediately (no collapsed state anymore).
+        // 1. Collapsed by default (Shot 6g): tap the summary bar to expand
+        //    the fee structure table, then the Edit tariffs shortcut shows.
         expect(find.byType(FeeHeadsAccordion), findsOneWidget);
+        expect(find.text('Edit tariffs'), findsNothing);
+        // The accordion is wrapped in IgnorePointer (its internal duplicate
+        // grid is suppressed); the tap lands on the GestureDetector
+        // ancestor that toggles the fee table, so warnIfMissed is off.
+        await tester.tap(find.byType(FeeHeadsAccordion), warnIfMissed: false);
+        await tester.pumpAndSettle();
         expect(find.text('Edit tariffs'), findsOneWidget);
       },
     );
@@ -2265,6 +2271,14 @@ void main() {
         );
         await tester.pumpAndSettle();
 
+        // Shot 6g: the fee table is collapsed by default — expand it via the
+        // summary bar before asserting the Late Fine row.
+        // The accordion is wrapped in IgnorePointer (its internal duplicate
+        // grid is suppressed); the tap lands on the GestureDetector
+        // ancestor that toggles the fee table, so warnIfMissed is off.
+        await tester.tap(find.byType(FeeHeadsAccordion), warnIfMissed: false);
+        await tester.pumpAndSettle();
+
         expect(find.text('Late Fine (Rs.)'), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
@@ -2333,6 +2347,13 @@ void main() {
             ),
           ),
         );
+        await tester.pumpAndSettle();
+
+        // Shot 6g: expand the collapsed fee table via the summary bar first.
+        // The accordion is wrapped in IgnorePointer (its internal duplicate
+        // grid is suppressed); the tap lands on the GestureDetector
+        // ancestor that toggles the fee table, so warnIfMissed is off.
+        await tester.tap(find.byType(FeeHeadsAccordion), warnIfMissed: false);
         await tester.pumpAndSettle();
 
         expect(container.read(voucherGenFiltersProvider).lateFineAmount, 100);
