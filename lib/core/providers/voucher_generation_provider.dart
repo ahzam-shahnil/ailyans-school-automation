@@ -390,8 +390,11 @@ final voucherBankListProvider = FutureProvider<List<BankOption>>((ref) async {
 });
 
 /// Provider for fee heads configured in Cls_Param_Fee for the selected class.
+/// Watches [dbDataVersionProvider] so edits made in Fee Structure & Bank Setup
+/// reflect here immediately.
 final voucherClassTariffsProvider =
     FutureProvider.family<List<FeeHeadSummary>, int?>((ref, classId) async {
+      ref.watch(dbDataVersionProvider);
       if (classId == null) return [];
       final filters = ref.watch(voucherGenFiltersProvider);
       final db = await DatabaseService.instance.database;
@@ -697,7 +700,9 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
   /// inside the per-row sqflite transaction (Android-specific failures that
   /// do not occur on desktop FFI, where the lock model differs) escaped this
   /// method and left the UI spinning on "Generating..." forever.
-  Future<BatchGenerationSummary?> generateVouchers() async {
+  Future<BatchGenerationSummary?> generateVouchers({
+    bool overwriteExisting = false,
+  }) async {
     final previewRows = ref.read(voucherGenPreviewProvider).valueOrNull;
     if (previewRows == null || previewRows.isEmpty) {
       state = state.copyWith(error: 'No eligible students for this cohort');
@@ -705,7 +710,9 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     }
 
     try {
-      return await _generateVouchersBatch();
+      return await _generateVouchersBatch(
+        overwriteExisting: overwriteExisting,
+      );
     } catch (e, st) {
       debugPrint('generateVouchers error: $e\n$st');
       state = state.copyWith(error: 'Voucher generation failed: $e');
@@ -722,7 +729,9 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
   /// `db.transaction` block MUST go through `txn` — using the outer `db`
   /// handle while a transaction is open deadlocks sqflite on Android
   /// (the operation queues behind the transaction that is waiting on it).
-  Future<BatchGenerationSummary?> _generateVouchersBatch() async {
+  Future<BatchGenerationSummary?> _generateVouchersBatch({
+    bool overwriteExisting = false,
+  }) async {
     final filters = ref.read(voucherGenFiltersProvider);
     final previewRows = ref.read(voucherGenPreviewProvider).valueOrNull;
     if (previewRows == null || previewRows.isEmpty) {
@@ -781,8 +790,12 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
             'Generating voucher ${i + 1} of $totalCount (${row.studentName})...',
       );
 
-      // Check if already generated
-      if (row.status == VoucherPreviewStatus.alreadyGenerated) {
+      // Check if already generated. With [overwriteExisting] the row is
+      // regenerated as long as the existing voucher is still UNPAID — paid
+      // vouchers are never touched.
+      String? existingPaidFlag;
+      if (row.status == VoucherPreviewStatus.alreadyGenerated &&
+          !overwriteExisting) {
         skipped++;
         skippedReasons.add(
           'Duplicate voucher record skipped: ${row.studentName} (${row.voucherId}).',
@@ -793,16 +806,19 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
 
       // Double check in DB to avoid race conditions
       final existing = await db.rawQuery(
-        'SELECT VoucherMasID FROM VoucharMas WHERE VoucherMasID = ? LIMIT 1',
+        'SELECT VoucherMasID, IsPaid FROM VoucharMas WHERE VoucherMasID = ? LIMIT 1',
         [row.voucherId],
       );
       if (existing.isNotEmpty) {
-        skipped++;
-        skippedReasons.add(
-          'Duplicate voucher record skipped: ${row.studentName} (${row.voucherId}).',
-        );
-        state = state.copyWith(skippedCount: skipped);
-        continue;
+        existingPaidFlag = (existing.first['IsPaid'] as String?) ?? 'N';
+        if (!overwriteExisting || existingPaidFlag == 'Y') {
+          skipped++;
+          skippedReasons.add(
+            'Duplicate voucher record skipped: ${row.studentName} (${row.voucherId}).',
+          );
+          state = state.copyWith(skippedCount: skipped);
+          continue;
+        }
       }
 
       // Query student ClassID
@@ -832,6 +848,19 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
       await db.transaction((txn) async {
         try {
           final billingMonthPrefix = _yyMmPrefix(filters.billingMonth);
+
+          // 0. Overwrite mode: drop the student's existing UNPAID voucher for
+          //    this month/session (master + details) before re-inserting.
+          if (overwriteExisting && existingPaidFlag != null) {
+            await txn.rawDelete(
+              "DELETE FROM VoucharDet WHERE VoucharMasID = ?",
+              [row.voucherId],
+            );
+            await txn.rawDelete(
+              "DELETE FROM VoucharMas WHERE VoucherMasID = ? AND COALESCE(IsPaid, 'N') != 'Y'",
+              [row.voucherId],
+            );
+          }
 
           // 1. Arrears rollover: mark prior unpaid as 'O' (strictly prior billing months)
           if (filters.includeArrears) {
@@ -974,6 +1003,70 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
     ref.invalidate(voucherGenPreviewProvider);
 
     return summary;
+  }
+
+  /// Delete every voucher (master + details) for the given students in one
+  /// billing month/session. Runs in one transaction, bumps
+  /// [dbDataVersionProvider] and invalidates the preview providers.
+  Future<int> deleteVouchersByStudentIds({
+    required Set<int> stuRegIds,
+    required String forMonth,
+    required String sessionYr,
+  }) async {
+    if (stuRegIds.isEmpty) return 0;
+    final db = await DatabaseService.instance.database;
+    final month = normalizeBillingMonthForStorage(forMonth);
+    final ids = stuRegIds.toList();
+    final idPlaceholders = List.filled(ids.length, '?').join(',');
+    int deleted = 0;
+    await db.transaction((txn) async {
+      final masRows = await txn.rawQuery(
+        'SELECT VoucherMasID FROM VoucharMas '
+        'WHERE Student_Class_StuRegID IN ($idPlaceholders) '
+        'AND ForMonth = ? AND SessionYr = ?',
+        [...ids, month, sessionYr],
+      );
+      final voucherIds = masRows
+          .map((r) => r['VoucherMasID'] as String)
+          .toList(growable: false);
+      if (voucherIds.isEmpty) return;
+      deleted = await _deleteVoucherRows(txn, voucherIds);
+    });
+    _bumpDataVersion();
+    ref.invalidate(voucherGenPreviewProvider);
+    return deleted;
+  }
+
+  /// Delete vouchers (master + details) by their VoucharMasIDs. Runs in one
+  /// transaction, bumps [dbDataVersionProvider] and invalidates the preview.
+  Future<int> deleteVouchersByIds(Set<String> voucherMasIds) async {
+    if (voucherMasIds.isEmpty) return 0;
+    final db = await DatabaseService.instance.database;
+    final ids = voucherMasIds.toList(growable: false);
+    int deleted = 0;
+    await db.transaction((txn) async {
+      deleted = await _deleteVoucherRows(txn, ids);
+    });
+    _bumpDataVersion();
+    ref.invalidate(voucherGenPreviewProvider);
+    return deleted;
+  }
+
+  /// Shared delete helper: removes VoucharDet + VoucharMas rows for the given
+  /// master IDs inside an open transaction. Returns the master row count.
+  Future<int> _deleteVoucherRows(
+    dynamic txn,
+    List<String> voucherIds,
+  ) async {
+    final placeholders = List.filled(voucherIds.length, '?').join(',');
+    await txn.rawDelete(
+      'DELETE FROM VoucharDet WHERE VoucharMasID IN ($placeholders)',
+      voucherIds,
+    );
+    return txn.rawDelete(
+      'DELETE FROM VoucharMas WHERE VoucherMasID IN ($placeholders)',
+      voucherIds,
+    );
   }
 
   /// Apply late fine to cohort vouchers (cmdSetFine VA 0x005f2400).
@@ -1247,7 +1340,9 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
   /// the preview provider (filter-mutation loop — no parallel insert path).
   /// The global fee-head checklist is applied per class as
   /// excludedFeeParamIds = allFeeParameters - selectedGlobalFeeParameters.
-  Future<BatchGenerationSummary?> generateAllSchoolVouchers() async {
+  Future<BatchGenerationSummary?> generateAllSchoolVouchers({
+    bool overwriteExisting = true,
+  }) async {
     if (state.isGenerating) return null;
     final filters = ref.read(voucherGenFiltersProvider);
     final selectedGlobal = ref.read(globalSelectedFeeParamIdsProvider);
@@ -1300,12 +1395,16 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
         );
 
         final rows = await _refreshPreview();
-        final hasGeneratable = rows.any(
-          (r) => r.status != VoucherPreviewStatus.alreadyGenerated,
-        );
+        final hasGeneratable = overwriteExisting
+            ? rows.isNotEmpty
+            : rows.any(
+                (r) => r.status != VoucherPreviewStatus.alreadyGenerated,
+              );
         if (!hasGeneratable) continue;
 
-        final classSummary = await generateVouchers();
+        final classSummary = await generateVouchers(
+          overwriteExisting: overwriteExisting,
+        );
         if (classSummary != null) {
           generated += classSummary.generatedCount;
           skipped += classSummary.skippedCount;
@@ -1351,8 +1450,9 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
   /// provider (filter-mutation loop — no parallel insert path). Applies the
   /// global fee-head checklist the same way as [generateAllSchoolVouchers].
   Future<BatchGenerationSummary?> generateForSelectedStudents(
-    Set<int> stuRegIds,
-  ) async {
+    Set<int> stuRegIds, {
+    bool overwriteExisting = true,
+  }) async {
     if (stuRegIds.isEmpty) return null;
     if (state.isGenerating) return null;
     final filters = ref.read(voucherGenFiltersProvider);
@@ -1411,17 +1511,21 @@ class VoucherGenExecutionNotifier extends StateNotifier<VoucherGenState> {
         );
 
         final rows = await _refreshPreview();
-        final hasGeneratable = rows.any(
-          (r) => r.status != VoucherPreviewStatus.alreadyGenerated,
-        );
+        final hasGeneratable = overwriteExisting
+            ? rows.isNotEmpty
+            : rows.any(
+                (r) => r.status != VoucherPreviewStatus.alreadyGenerated,
+              );
         if (!hasGeneratable) {
           skipped++;
-          reasons.add('Voucher already generated this month for Reg ID $regId.');
+          reasons.add('No active cohort found for Reg ID $regId.');
           state = state.copyWith(skippedCount: skipped);
           continue;
         }
 
-        final studentSummary = await generateVouchers();
+        final studentSummary = await generateVouchers(
+          overwriteExisting: overwriteExisting,
+        );
         if (studentSummary != null) {
           generated += studentSummary.generatedCount;
           skipped += studentSummary.skippedCount;
@@ -1507,13 +1611,26 @@ class FeeParamOption {
   const FeeParamOption({required this.feeParamId, required this.description});
 }
 
-/// All fee heads defined in the FeeParameters table. Powers the always-visible
-/// global fee-head checklist, available even before any class is selected.
+/// Fee heads that are actually CONFIGURED for billing: only FeeParameters
+/// rows that have a `Cls_Param_Fee` row with `Fee > 0` (for any class).
+/// Powers the unified fee-head checklist, the whole-school/single-voucher
+/// exclusion math, and the single-voucher dialog's checked-heads summary.
+/// Watches [dbDataVersionProvider] so edits made in Fee Structure & Bank
+/// Setup reflect here immediately.
 final allFeeParametersProvider =
     FutureProvider<List<FeeParamOption>>((ref) async {
+      ref.watch(dbDataVersionProvider);
       final db = await DatabaseService.instance.database;
       final rows = await db.rawQuery(
-        'SELECT FeeParamID, ParamDesciption FROM FeeParameters ORDER BY FeeParamID ASC',
+        '''
+      SELECT DISTINCT fp.FeeParamID, COALESCE(fp.ParamDesciption, '') AS ParamDesciption
+      FROM FeeParameters fp
+      WHERE EXISTS (
+        SELECT 1 FROM Cls_Param_Fee cpf
+        WHERE cpf.FeeParamID = fp.FeeParamID AND cpf.Fee > 0
+      )
+      ORDER BY fp.FeeParamID ASC
+    ''',
       );
       return rows
           .map(
@@ -1556,6 +1673,14 @@ final globalSelectedFeeParamIdsProvider =
       return GlobalFeeParamSelectionNotifier();
     });
 
+/// Distinct fee-parameter IDs that have a configured `Cls_Param_Fee` row with
+/// `Fee > 0` for ANY class in the current session. Watches
+/// [dbDataVersionProvider] so fee-setup edits reflect immediately.
+final configuredFeeParamIdsProvider = FutureProvider<Set<int>>((ref) async {
+  final options = await ref.watch(allFeeParametersProvider.future);
+  return {for (final o in options) o.feeParamId};
+});
+
 /// One row of the unified VB6 fee structure table: every FeeParameters row
 /// joined with the selected class's live `Cls_Param_Fee` tariff ([classTariff]
 /// is null when the class has no tariff row for that head).
@@ -1571,28 +1696,52 @@ class Vb6FeeStructureRow {
   });
 }
 
-/// The 16 fee-head rows for the unified `ID | Fee Head | Class Tariff | Check`
-/// table, reactive to the selected class ([voucherGenFiltersProvider.classId])
-/// and session year via [voucherClassTariffsProvider].
+/// The configured fee-head rows for the unified `ID | Fee Head | Class
+/// Tariff | Check` table — ONLY heads that have a `Cls_Param_Fee` row with
+/// `Fee > 0` (for the selected class/session, or across all classes when no
+/// class is selected), so unconfigured FeeParameters rows never appear.
+/// Reactive to the selected class ([voucherGenFiltersProvider.classId]), the
+/// session year, and [dbDataVersionProvider] (fee-setup edits show up here
+/// immediately).
 final voucherFeeStructureProvider =
     Provider<List<Vb6FeeStructureRow>>((ref) {
       final options =
           ref.watch(allFeeParametersProvider).valueOrNull ??
           const <FeeParamOption>[];
       final filters = ref.watch(voucherGenFiltersProvider);
-      final tariffs =
-          ref.watch(voucherClassTariffsProvider(filters.classId)).valueOrNull ??
-          const <FeeHeadSummary>[];
-      final tariffById = <int, double>{
-        for (final t in tariffs) t.feeParamId: t.fee,
-      };
+      final configured =
+          ref.watch(configuredFeeParamIdsProvider).valueOrNull;
+      if (configured == null) return const <Vb6FeeStructureRow>[];
+
+      if (filters.classId != null) {
+        final tariffs =
+            ref
+                .watch(voucherClassTariffsProvider(filters.classId))
+                .valueOrNull ??
+            const <FeeHeadSummary>[];
+        final tariffById = <int, double>{
+          for (final t in tariffs)
+            if (t.fee > 0) t.feeParamId: t.fee,
+        };
+        return [
+          for (final option in options)
+            if (tariffById.containsKey(option.feeParamId))
+              Vb6FeeStructureRow(
+                feeParamId: option.feeParamId,
+                description: option.description,
+                classTariff: tariffById[option.feeParamId],
+              ),
+        ];
+      }
+
+      // No class selected: show every head configured for any class.
       return [
         for (final option in options)
-          Vb6FeeStructureRow(
-            feeParamId: option.feeParamId,
-            description: option.description,
-            classTariff: tariffById[option.feeParamId],
-          ),
+          if (configured.contains(option.feeParamId))
+            Vb6FeeStructureRow(
+              feeParamId: option.feeParamId,
+              description: option.description,
+            ),
       ];
     });
 
@@ -1637,6 +1786,7 @@ Future<int> countSchoolVoucherCandidates({
         SELECT 1 FROM VoucharMas vm
         WHERE vm.Student_Class_StuRegID = sc.Stu_RegID
           AND vm.ForMonth = ? AND vm.SessionYr = ?
+          AND COALESCE(vm.IsPaid, 'N') = 'Y'
       )
   ''', [sessionYr, forMonth, sessionYr]);
   return (rows.first['cnt'] as num?)?.toInt() ?? 0;
@@ -1663,6 +1813,7 @@ Future<List<int>> listSchoolVoucherCandidateClasses({
         SELECT 1 FROM VoucharMas vm
         WHERE vm.Student_Class_StuRegID = sc.Stu_RegID
           AND vm.ForMonth = ? AND vm.SessionYr = ?
+          AND COALESCE(vm.IsPaid, 'N') = 'Y'
       )
     ORDER BY sc.ClassID ASC
   ''', [sessionYr, forMonth, sessionYr]);

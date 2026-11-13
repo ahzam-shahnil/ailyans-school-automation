@@ -53,6 +53,7 @@ class _VoucherGenerationScreenState
   static const double _kIdColWidth = 82;
   static const double _kStatusColWidth = 112;
   static const double _kPrintColWidth = 36;
+  static const double _kDeleteColWidth = 36;
   static const double _kColGap = 6;
   static const double _kRowHeight = 44;
 
@@ -178,7 +179,25 @@ class _VoucherGenerationScreenState
     final execState = ref.read(voucherGenExecutionProvider);
     if (execState.isGenerating) return;
 
-    await ref.read(voucherGenExecutionProvider.notifier).generateVouchers();
+    // Shot 6a: Generate overwrites existing UNPAID vouchers for the month so
+    // a cohort with 'Generated' rows can be re-generated in one click. Paid
+    // vouchers are never touched.
+    await ref
+        .read(voucherGenExecutionProvider.notifier)
+        .generateVouchers(overwriteExisting: true);
+  }
+
+  /// Deletes every already-generated voucher in the current preview cohort
+  /// (VoucharDet + VoucharMas) via the execution notifier.
+  Future<void> _deleteGeneratedVouchers(
+    List<VoucherPreviewRow> generatedRows,
+  ) async {
+    if (generatedRows.isEmpty) return;
+    await ref
+        .read(voucherGenExecutionProvider.notifier)
+        .deleteVouchersByIds({
+      for (final r in generatedRows) r.voucherId,
+    });
   }
 
   Future<void> _onRegenerateUnpaid() async {
@@ -1590,9 +1609,14 @@ class _VoucherGenerationScreenState
               ],
             ),
           ),
-          // Bounded, internally-scrolling 16-row body.
+          // Bounded, internally-scrolling body. Height adapts to the number
+          // of CONFIGURED fee heads (typically 2-3 rows per class) so the
+          // card stays compact instead of reserving the full tableHeight.
           SizedBox(
-            height: tableHeight,
+            height: rows.isEmpty
+                ? 40.0
+                : (rows.length * (compact ? 30.0 : 36.0))
+                    .clamp(48.0, tableHeight),
             child: rows.isEmpty
                 ? Center(
                     child: Text(
@@ -1924,8 +1948,10 @@ class _VoucherGenerationScreenState
         children: [
           // Header row
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
+                flex: 2,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1950,175 +1976,221 @@ class _VoucherGenerationScreenState
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              if (generatedCount > 0) ...[
-                ElevatedButton.icon(
-                  onPressed: () => _openPrintPreview(),
-                  icon: const Icon(Icons.print, size: 16),
-                  label: Text('Print $generatedCount Vouchers (Ctrl+P)'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.brandPrimary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                OutlinedButton.icon(
-                  onPressed: execState.isGenerating
-                      ? null
-                      : _onRegenerateUnpaid,
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Regenerate'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.brandPrimary,
-                    side: const BorderSide(color: AppColors.brandPrimary),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                  ),
-                ),
-              ] else ...[
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Re-calculate'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.borderDefault),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                  ),
-                  onPressed: () => ref.invalidate(voucherGenPreviewProvider),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                OutlinedButton.icon(
-                  onPressed: () => context.go('/fees/ledger'),
-                  icon: const Icon(Icons.assessment_outlined, size: 16),
-                  label: const Text('View Full Ledger'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.borderDefault),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppRadius.md),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // KPI strip
-          Row(
-            children: [
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'Eligible Students',
-                  value: '$eligibleCount students',
-                  icon: Icons.people_outline,
-                  color: AppColors.textPrimary,
-                  bg: AppColors.surfaceSubtle,
-                  border: AppColors.borderDefault,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: _buildKpiCard(
-                  title: 'Full Tuition Waiver',
-                  value: '$waiverCount students',
-                  icon: Icons.card_membership_outlined,
-                  color: AppColors.brandPrimary,
-                  bg: AppColors.statusInfoBg,
-                  border: AppColors.statusInfoBorder,
-                ),
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Expanded(
-                child: _buildKpiCard(
-                  title: displayLabel,
-                  value: 'Rs. ${currencyFormat.format(displayBilled)}',
-                  icon: Icons.payments_outlined,
-                  color: AppColors.statusSuccessText,
-                  bg: AppColors.statusSuccessBg,
-                  border: AppColors.statusSuccessBorder,
-                  emphasize: true,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-
-          // Unified VB6 fee structure table (`ID | Fee Head | Class Tariff
-          // (Rs.) | Check`) — the ONE fee-head control on this screen.
-          // Tablet-width panes are height-bounded (580px), so the grid body
-          // shrinks there to keep the ledger preview table readable.
-          _buildFeeStructureTable(
-            tableHeight: ResponsiveBreakpoints.isTablet(context) ? 110 : 180,
-          ),
-
-          const SizedBox(height: AppSpacing.sm),
-
-          if (hasDrift) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: 8,
-              ),
-              decoration: BoxDecoration(
-                color: AppColors.statusWarningBg,
-                borderRadius: BorderRadius.circular(AppRadius.sm),
-                border: Border.all(color: AppColors.statusWarningBorder),
-              ),
-              child: Row(
+              // Actions share a bounded flex slice so the Wrap can flow onto
+              // a second line on narrow cards instead of overflowing.
+              Flexible(
+                flex: 3,
+                child: Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
                 children: [
-                  const Icon(
-                    Icons.info_outline,
-                    size: 16,
-                    color: AppColors.statusWarningText,
+                  if (generatedCount > 0) ...[
+                    ElevatedButton.icon(
+                      onPressed: () => _openPrintPreview(),
+                      icon: const Icon(Icons.print, size: 16),
+                      label: Text('Print $generatedCount Vouchers (Ctrl+P)'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandPrimary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: execState.isGenerating
+                          ? null
+                          : () => _deleteGeneratedVouchers(generatedRows),
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: const Text('Delete Generated'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.statusErrorText,
+                        side: const BorderSide(
+                          color: AppColors.statusErrorBorder,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: execState.isGenerating
+                          ? null
+                          : _onRegenerateUnpaid,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Regenerate'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.brandPrimary,
+                        side: const BorderSide(color: AppColors.brandPrimary),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                    ),
+                  ] else ...[
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('Re-calculate'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.borderDefault),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                      onPressed: () => ref.invalidate(voucherGenPreviewProvider),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => context.go('/fees/ledger'),
+                      icon: const Icon(Icons.assessment_outlined, size: 16),
+                      label: const Text('View Full Ledger'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.borderDefault),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppRadius.md),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+
+          // Phase H Shot 6a: everything below the header lives in ONE
+          // scrollable body with NO Expanded/Flexible vertical children, so
+          // the card can never overflow regardless of the height it is
+          // given (fixes the 107/76/13px RenderFlex overflows at h=343).
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // KPI strip
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildKpiCard(
+                          title: 'Eligible Students',
+                          value: '$eligibleCount students',
+                          icon: Icons.people_outline,
+                          color: AppColors.textPrimary,
+                          bg: AppColors.surfaceSubtle,
+                          border: AppColors.borderDefault,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: _buildKpiCard(
+                          title: 'Full Tuition Waiver',
+                          value: '$waiverCount students',
+                          icon: Icons.card_membership_outlined,
+                          color: AppColors.brandPrimary,
+                          bg: AppColors.statusInfoBg,
+                          border: AppColors.statusInfoBorder,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: _buildKpiCard(
+                          title: displayLabel,
+                          value: 'Rs. ${currencyFormat.format(displayBilled)}',
+                          icon: Icons.payments_outlined,
+                          color: AppColors.statusSuccessText,
+                          bg: AppColors.statusSuccessBg,
+                          border: AppColors.statusSuccessBorder,
+                          emphasize: true,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Fee head configuration changed. Click Regenerate to apply.',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.statusWarningText,
-                        fontWeight: FontWeight.w500,
+                  const SizedBox(height: AppSpacing.sm),
+
+                  // Unified VB6 fee structure table (`ID | Fee Head | Class
+                  // Tariff (Rs.) | Check`) — the ONE fee-head control on this
+                  // screen. Height adapts to the configured row count.
+                  _buildFeeStructureTable(
+                    tableHeight: ResponsiveBreakpoints.isTablet(context)
+                        ? 110
+                        : 180,
+                  ),
+
+                  const SizedBox(height: AppSpacing.sm),
+
+                  if (hasDrift) ...[
+                    Container(
+                      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.statusWarningBg,
+                        borderRadius: BorderRadius.circular(AppRadius.sm),
+                        border: Border.all(
+                          color: AppColors.statusWarningBorder,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: AppColors.statusWarningText,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Fee head configuration changed. Click Regenerate to apply.',
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.statusWarningText,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // Preview table (shrinkWrap: it scrolls with the card body
+                  // instead of managing its own viewport).
+                  previewAsync.when(
+                    data: (rows) {
+                      if (rows.isEmpty) return _buildEmptyState();
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildCohortSummaryChips(rows),
+                          const SizedBox(height: AppSpacing.sm),
+                          _buildTable(
+                            rows,
+                            readyCount,
+                            generatedCount,
+                            shrinkWrap: true,
+                          ),
+                        ],
+                      );
+                    },
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (err, __) => Center(
+                      child: Text(
+                        'Error loading preview: $err',
+                        style: const TextStyle(color: AppColors.statusErrorText),
                       ),
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.sm),
                 ],
               ),
             ),
-          ],
-
-          // Table (header sticky, body scrolls internally, footer pinned)
-          Expanded(
-            child: previewAsync.when(
-              data: (rows) {
-                if (rows.isEmpty) return _buildEmptyState();
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildCohortSummaryChips(rows),
-                    const SizedBox(height: AppSpacing.sm),
-                    Expanded(
-                      child: _buildTable(rows, readyCount, generatedCount),
-                    ),
-                  ],
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, __) => Center(
-                child: Text(
-                  'Error loading preview: $err',
-                  style: const TextStyle(color: AppColors.statusErrorText),
-                ),
-              ),
-            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
         ],
       ),
     );
@@ -2198,8 +2270,9 @@ class _VoucherGenerationScreenState
   Widget _buildTable(
     List<VoucherPreviewRow> rows,
     int readyCount,
-    int generatedCount,
-  ) {
+    int generatedCount, {
+    bool shrinkWrap = false,
+  }) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppRadius.md),
       child: DecoratedBox(
@@ -2208,6 +2281,7 @@ class _VoucherGenerationScreenState
           borderRadius: BorderRadius.circular(AppRadius.md),
         ),
         child: Column(
+          mainAxisSize: shrinkWrap ? MainAxisSize.min : MainAxisSize.max,
           children: [
             // Sticky header
             Container(
@@ -2231,20 +2305,32 @@ class _VoucherGenerationScreenState
                   _headerCell('Status', width: _kStatusColWidth, center: true),
                   const SizedBox(width: _kColGap),
                   const SizedBox(width: _kPrintColWidth),
+                  const SizedBox(width: _kDeleteColWidth),
                 ],
               ),
             ),
             const Divider(height: 1, color: AppColors.borderDefault),
 
-            // Body (internal scroll only if the cohort is large)
-            Expanded(
-              child: ListView.builder(
-                itemCount: rows.length,
-                itemExtent: _kRowHeight,
-                itemBuilder: (context, index) =>
-                    _buildPreviewRow(rows[index], index),
-              ),
-            ),
+            // Body (internal scroll only if the cohort is large). In
+            // shrinkWrap mode the table scrolls with the surrounding card
+            // body instead of managing its own viewport.
+            shrinkWrap
+                ? ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: rows.length,
+                    itemExtent: _kRowHeight,
+                    itemBuilder: (context, index) =>
+                        _buildPreviewRow(rows[index], index),
+                  )
+                : Expanded(
+                    child: ListView.builder(
+                      itemCount: rows.length,
+                      itemExtent: _kRowHeight,
+                      itemBuilder: (context, index) =>
+                          _buildPreviewRow(rows[index], index),
+                    ),
+                  ),
 
             // Footer summary
             Container(
@@ -2497,6 +2583,21 @@ class _VoucherGenerationScreenState
                       }
                     },
                   ),
+                ),
+                const SizedBox(width: _kColGap),
+                SizedBox(
+                  width: _kDeleteColWidth,
+                  child: row.status == VoucherPreviewStatus.alreadyGenerated
+                      ? IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 16),
+                          color: AppColors.statusErrorText,
+                          tooltip: 'Delete Voucher',
+                          padding: EdgeInsets.zero,
+                          onPressed: () => ref
+                              .read(voucherGenExecutionProvider.notifier)
+                              .deleteVouchersByIds({row.voucherId}),
+                        )
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),
@@ -3428,9 +3529,7 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
         _rows = rows;
         _loading = false;
         _selected.removeWhere(
-          (id) => !rows.any(
-            (r) => r.stuRegId == id && !r.hasVoucherThisMonth,
-          ),
+          (id) => !rows.any((r) => r.stuRegId == id),
         );
       });
     } catch (_) {
@@ -3448,21 +3547,54 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
   }
 
   bool get _allSelectableSelected {
-    final selectable = _rows
-        .where((r) => !r.hasVoucherThisMonth)
-        .toList(growable: false);
-    return selectable.isNotEmpty &&
-        selectable.every((r) => _selected.contains(r.stuRegId));
+    // Shot 6a: every row is selectable — already-generated (unpaid) vouchers
+    // can be re-checked for regeneration too.
+    return _rows.isNotEmpty &&
+        _rows.every((r) => _selected.contains(r.stuRegId));
+  }
+
+  /// Deletes the currently selected students' vouchers for the dialog's
+  /// billing month/session, then refreshes the table.
+  Future<void> _deleteSelected() async {
+    if (_selected.isEmpty) return;
+    final deleted = await ref
+        .read(voucherGenExecutionProvider.notifier)
+        .deleteVouchersByStudentIds(
+          stuRegIds: Set<int>.from(_selected),
+          forMonth: widget.billingMonth,
+          sessionYr: widget.sessionYr,
+        );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          deleted > 0
+              ? '$deleted voucher(s) deleted.'
+              : 'No vouchers found to delete.',
+        ),
+      ),
+    );
+    setState(_selected.clear);
+    _load();
+  }
+
+  /// Deletes one student's voucher for the dialog's billing month/session.
+  Future<void> _deleteRow(int stuRegId) async {
+    await ref
+        .read(voucherGenExecutionProvider.notifier)
+        .deleteVouchersByStudentIds(
+          stuRegIds: {stuRegId},
+          forMonth: widget.billingMonth,
+          sessionYr: widget.sessionYr,
+        );
+    if (!mounted) return;
+    _load();
   }
 
   void _toggleAll(bool? value) {
     setState(() {
       if (value == true) {
-        _selected.addAll(
-          _rows
-              .where((r) => !r.hasVoucherThisMonth)
-              .map((r) => r.stuRegId),
-        );
+        _selected.addAll(_rows.map((r) => r.stuRegId));
       } else {
         _selected.clear();
       }
@@ -3481,7 +3613,7 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final selectableCount = _rows.where((r) => !r.hasVoucherThisMonth).length;
+    final selectableCount = _rows.length;
     final headStyle = AppTypography.label.copyWith(
       fontWeight: FontWeight.w600,
       color: AppColors.textSecondary,
@@ -3577,6 +3709,7 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                     width: 110,
                     child: Text('Status', style: AppTypography.label),
                   ),
+                  const SizedBox(width: 36),
                 ],
               ),
             ),
@@ -3602,10 +3735,10 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                           itemCount: _rows.length,
                           itemBuilder: (context, index) {
                             final row = _rows[index];
-                            final disabled = row.hasVoucherThisMonth;
+                            final hasVoucher = row.hasVoucherThisMonth;
                             final checked = _selected.contains(row.stuRegId);
                             return InkWell(
-                              onTap: disabled ? null : () => _toggleRow(row.stuRegId),
+                              onTap: () => _toggleRow(row.stuRegId),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 2,
@@ -3626,9 +3759,8 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                                       width: 40,
                                       child: Checkbox(
                                         value: checked,
-                                        onChanged: disabled
-                                            ? null
-                                            : (_) => _toggleRow(row.stuRegId),
+                                        onChanged: (_) =>
+                                            _toggleRow(row.stuRegId),
                                         visualDensity: VisualDensity.compact,
                                       ),
                                     ),
@@ -3645,7 +3777,7 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: AppTypography.bodySmall.copyWith(
-                                          color: disabled
+                                          color: hasVoucher
                                               ? AppColors.textSecondary
                                               : AppColors.textPrimary,
                                         ),
@@ -3678,15 +3810,33 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                                     SizedBox(
                                       width: 110,
                                       child: Text(
-                                        disabled ? 'Already Generated' : 'Ready',
+                                        hasVoucher
+                                            ? 'Already Generated'
+                                            : 'Ready',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: AppTypography.label.copyWith(
-                                          color: disabled
+                                          color: hasVoucher
                                               ? AppColors.statusWarningText
                                               : AppColors.statusSuccessText,
                                         ),
                                       ),
+                                    ),
+                                    SizedBox(
+                                      width: 36,
+                                      child: hasVoucher
+                                          ? IconButton(
+                                              icon: const Icon(
+                                                Icons.delete_outline,
+                                                size: 16,
+                                              ),
+                                              color: AppColors.statusErrorText,
+                                              tooltip: 'Delete Voucher',
+                                              padding: EdgeInsets.zero,
+                                              onPressed: () =>
+                                                  _deleteRow(row.stuRegId),
+                                            )
+                                          : const SizedBox.shrink(),
                                     ),
                                   ],
                                 ),
@@ -3716,16 +3866,33 @@ class _SingleVoucherDialogState extends ConsumerState<_SingleVoucherDialog> {
                       if (selectedGlobal.contains(option.feeParamId))
                         option.description.trim(),
                   ];
-                  return Text(
-                    '${_selected.length} Student(s) Selected · Checked Fee '
-                    'Heads: ${checkedNames.isEmpty ? '—' : checkedNames.join(', ')}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500,
+              return Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${_selected.length} Student(s) Selected · Checked Fee '
+                      'Heads: ${checkedNames.isEmpty ? '—' : checkedNames.join(', ')}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  );
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  TextButton.icon(
+                    key: const Key('delete_selected_vouchers_btn'),
+                    onPressed: _selected.isEmpty ? null : _deleteSelected,
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    label: const Text('Delete Selected Vouchers'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.statusErrorText,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              );
                 },
               ),
             ),
