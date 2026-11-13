@@ -18,6 +18,7 @@ import '../../screens/fees/voucher_generation_screen.dart';
 import '../../screens/library/book_profile_screen.dart';
 import '../../screens/library/library_books_screen.dart';
 import '../../screens/login/login_screen.dart';
+import '../../screens/reports/reports_hub_screen.dart';
 import '../../screens/search/global_search_screen.dart';
 import '../../screens/setup/license_entry_screen.dart';
 import '../../screens/setup/school_setup_screen.dart';
@@ -505,6 +506,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/fees/ledger',
             builder: (context, state) => const FeeLedgerScreen(),
+          ),
+          GoRoute(
+            path: '/reports',
+            builder: (context, state) => const ReportsHubScreen(),
           ),
           GoRoute(
             path: '/exams',

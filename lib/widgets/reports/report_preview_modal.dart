@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
 import 'package:school_automation/core/providers/report_preview_provider.dart';
+import 'package:school_automation/core/sync/sync_provider.dart';
 import 'package:school_automation/core/theme/app_theme_tokens.dart';
 import 'package:school_automation/widgets/reports/report_definition.dart';
 
@@ -95,6 +96,20 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
   void _handleClose() => Navigator.of(context).pop();
 
+  /// Live `Refresh Data`: re-queries local SQLite with the current filters by
+  /// re-running the request builder (updating the preview rows and printable
+  /// PDF in-place, without closing the preview), then triggers a non-blocking
+  /// background cloud sync. The sync trigger is guarded so widget tests never
+  /// hang on network I/O.
+  Future<void> _onRefreshData() async {
+    await ref.read(reportPreviewProvider(widget.request).notifier).generate();
+    if (!const bool.fromEnvironment('FLUTTER_TEST')) {
+      try {
+        ref.read(syncPushProvider.notifier).triggerManualSync();
+      } catch (_) {}
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Voucher mode toggle helper
   // ---------------------------------------------------------------------------
@@ -127,6 +142,15 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(reportPreviewProvider(widget.request));
+
+    // Live refresh: if a background cloud sync pull completes while this
+    // preview is open (dbDataVersionProvider bumped), regenerate the report
+    // in-place with the fresh local SQLite data.
+    ref.listen<int>(dbDataVersionProvider, (prev, next) {
+      if (prev != next && !state.isLoading) {
+        ref.read(reportPreviewProvider(widget.request).notifier).generate();
+      }
+    });
 
     final shortcuts = <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.escape): _handleClose,
@@ -259,14 +283,13 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             const SizedBox(width: AppSpacing.sm),
           ],
 
-          // --- Refresh --------------------------------------------------------
+          // --- Refresh Data (re-query + background sync) ----------------------
           IconButton(
+            key: const Key('report_preview_refresh_btn'),
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Regenerate',
+            tooltip: 'Refresh Data',
             iconSize: 20,
-            onPressed: () => ref
-                .read(reportPreviewProvider(widget.request).notifier)
-                .generate(),
+            onPressed: state.isLoading ? null : _onRefreshData,
           ),
 
           const SizedBox(width: AppSpacing.xs),
@@ -289,10 +312,11 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
           const SizedBox(width: AppSpacing.xs),
 
-          // --- Print button ---------------------------------------------------
+          // --- Print / Export PDF button --------------------------------------
           ElevatedButton.icon(
+            key: const Key('report_preview_print_btn'),
             icon: const Icon(Icons.print_outlined, size: 16),
-            label: const Text('Print'),
+            label: const Text('Print / Export PDF'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.brandPrimary,
               foregroundColor: Colors.white,
@@ -353,6 +377,12 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             ),
           ),
           IconButton(
+            key: const Key('report_preview_refresh_btn'),
+            icon: const Icon(Icons.refresh_rounded, size: 20),
+            tooltip: 'Refresh Data',
+            onPressed: state.isLoading ? null : _onRefreshData,
+          ),
+          IconButton(
             icon: const Icon(Icons.share_outlined, size: 20),
             tooltip: 'Share PDF',
             onPressed: hasBytes
@@ -363,6 +393,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                 : null,
           ),
           IconButton(
+            key: const Key('report_preview_print_btn'),
             icon: const Icon(Icons.print_outlined, size: 20),
             tooltip: 'Print',
             onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
@@ -376,9 +407,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                   if (hasBytes) _handleSavePdf(state.bytes!);
                   break;
                 case 'regenerate':
-                  ref
-                      .read(reportPreviewProvider(widget.request).notifier)
-                      .generate();
+                  _onRefreshData();
                   break;
                 case 'voucher_slips':
                   _setVoucherMode(0);

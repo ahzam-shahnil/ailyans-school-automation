@@ -190,6 +190,12 @@ class AppSidebar extends ConsumerWidget {
       icon: Icons.local_library_outlined,
       requiredObjIds: [3],
     ),
+    _NavItemData(
+      label: 'Reports',
+      route: '/reports',
+      icon: Icons.bar_chart_outlined,
+      requiredObjIds: [16, 17, 18, 19, 21],
+    ),
   ];
 
   static int _getStudentCount(ShellMetadata m) => m.studentCount;
