@@ -142,8 +142,7 @@ class _VoucherGenerationScreenState
     if (execState.isGenerating) return;
 
     final filters = ref.read(voucherGenFiltersProvider);
-    if (filters.classId == null ||
-        filters.sessionYr.isEmpty ||
+    if (filters.sessionYr.isEmpty ||
         filters.billingMonth.isEmpty ||
         filters.dueDate.isBefore(filters.issueDate)) {
       setState(() => _hasValidated = true);
@@ -151,6 +150,14 @@ class _VoucherGenerationScreenState
     }
 
     if (eligibleCount <= 0) return;
+
+    // Shot 6f: 'All Classes' (classId == null) means whole-school billing —
+    // route to the school-wide confirm + generate + summary/print flow
+    // instead of aborting. A specific class keeps the per-class flow.
+    if (filters.classId == null) {
+      await _confirmGenerateAllSchool(context);
+      return;
+    }
 
     final classesAsync = ref.read(classesProvider);
     final classes = classesAsync.valueOrNull ?? [];
@@ -218,6 +225,14 @@ class _VoucherGenerationScreenState
 
   Future<void> _onRegenerateUnpaid() async {
     final filters = ref.read(voucherGenFiltersProvider);
+
+    // Shot 6f: with 'All Classes' selected, Regenerate means the whole
+    // school — reuse the school-wide confirm + generate + summary flow.
+    if (filters.classId == null) {
+      await _confirmGenerateAllSchool(context);
+      return;
+    }
+
     final classesAsync = ref.read(classesProvider);
     final classes = classesAsync.valueOrNull ?? [];
     final match = classes
@@ -1654,29 +1669,35 @@ class _VoucherGenerationScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Reactive summary bar: 'N fee heads · Rs X per student' + chevron.
-          // Edit tariffs is suppressed here — the single shortcut lives in
-          // the footer below so it is visible immediately.
-          FeeHeadsAccordion(
-            heads: [
-              for (final row in rows)
-                FeeHeadItem(
-                  feeParamId: row.feeParamId,
-                  name: row.description.isEmpty
-                      ? 'Fee Head ${row.feeParamId}'
-                      : row.description,
-                  amount: row.classTariff?.toInt() ?? 0,
-                  isChecked: checkedIds.contains(row.feeParamId),
-                ),
-            ],
-            isLoading: false,
-            errorMessage: null,
-            noTariffMessage: null,
-            onToggleHead: _toggleFeeHeadUnified,
-            onRetry: () =>
-                ref.invalidate(voucherClassTariffsProvider(filters.classId)),
-            onOpenFeeParams: () => context.go('/fees/parameters'),
-            onEditTariffs: null,
+          // Reactive summary bar: 'N fee heads · Rs X per student'.
+          // Shot 6f: wrapped in IgnorePointer so clicking it can never toggle
+          // the accordion's internal duplicate checkbox grid — the unified
+          // `ID | Fee Head | Class Tariff | Check` table below is the ONE
+          // place heads are configured. The widget stays mounted (tests pin
+          // find.byType(FeeHeadsAccordion)).
+          IgnorePointer(
+            ignoring: true,
+            child: FeeHeadsAccordion(
+              heads: [
+                for (final row in rows)
+                  FeeHeadItem(
+                    feeParamId: row.feeParamId,
+                    name: row.description.isEmpty
+                        ? 'Fee Head ${row.feeParamId}'
+                        : row.description,
+                    amount: row.classTariff?.toInt() ?? 0,
+                    isChecked: checkedIds.contains(row.feeParamId),
+                  ),
+              ],
+              isLoading: false,
+              errorMessage: null,
+              noTariffMessage: null,
+              onToggleHead: _toggleFeeHeadUnified,
+              onRetry: () =>
+                  ref.invalidate(voucherClassTariffsProvider(filters.classId)),
+              onOpenFeeParams: () => context.go('/fees/parameters'),
+              onEditTariffs: null,
+            ),
           ),
           // Column header.
           Container(

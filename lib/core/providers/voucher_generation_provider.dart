@@ -1638,7 +1638,17 @@ class FeeParamOption {
   final int feeParamId;
   final String description;
 
-  const FeeParamOption({required this.feeParamId, required this.description});
+  /// Shot 6f: highest `Cls_Param_Fee.Fee` for this head across ALL classes in
+  /// the session — used as the representative tariff when no class is
+  /// selected (All Classes), so the fee table and summary bar show a real
+  /// amount instead of Rs. 0.
+  final double? maxFee;
+
+  const FeeParamOption({
+    required this.feeParamId,
+    required this.description,
+    this.maxFee,
+  });
 }
 
 /// Fee heads that are actually CONFIGURED for billing in the CURRENT
@@ -1658,12 +1668,13 @@ final allFeeParametersProvider =
       final db = await DatabaseService.instance.database;
       final rows = await db.rawQuery(
         '''
-      SELECT DISTINCT fp.FeeParamID, COALESCE(fp.ParamDesciption, '') AS ParamDesciption
+      SELECT fp.FeeParamID,
+             COALESCE(fp.ParamDesciption, '') AS ParamDesciption,
+             MAX(cpf.Fee) AS MaxFee
       FROM FeeParameters fp
-      WHERE EXISTS (
-        SELECT 1 FROM Cls_Param_Fee cpf
-        WHERE cpf.FeeParamID = fp.FeeParamID AND cpf.Fee > 0 AND cpf.FeeYr = ?
-      )
+      JOIN Cls_Param_Fee cpf
+        ON cpf.FeeParamID = fp.FeeParamID AND cpf.Fee > 0 AND cpf.FeeYr = ?
+      GROUP BY fp.FeeParamID
       ORDER BY fp.FeeParamID ASC
     ''',
         [sessionYr],
@@ -1674,6 +1685,7 @@ final allFeeParametersProvider =
               feeParamId: r['FeeParamID'] as int,
               description:
                   FeeHeadDisplay.of(r['ParamDesciption'] as String?),
+              maxFee: (r['MaxFee'] as num?)?.toDouble(),
             ),
           )
           .toList();
@@ -1771,13 +1783,16 @@ final voucherFeeStructureProvider =
         ];
       }
 
-      // No class selected: show every head configured for any class.
+      // No class selected: show every head configured for any class, with
+      // the highest tariff across classes as the representative amount
+      // (Shot 6f — the summary bar reads 'Rs 4,500 per student', not 'Rs 0').
       return [
         for (final option in options)
           if (configured.contains(option.feeParamId))
             Vb6FeeStructureRow(
               feeParamId: option.feeParamId,
               description: option.description,
+              classTariff: option.maxFee,
             ),
       ];
     });
