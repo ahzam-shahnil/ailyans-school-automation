@@ -959,6 +959,11 @@ class _StudentRegistrationWizardState
                   //    shows the breadcrumb and the active session).
                   Row(
                     children: [
+                      // Shot 6i: restore the context-aware back button
+                      // ('← Back to Students' / '← Back to Dashboard') that
+                      // 9e0a311 dropped along with the breadcrumb row.
+                      _buildContextBackButton(),
+                      const SizedBox(width: 12),
                       Text(
                         'New Student Admission',
                         style: AppTypography.h2.copyWith(
@@ -1087,6 +1092,29 @@ class _StudentRegistrationWizardState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
+      ),
+    );
+  }
+
+  /// Shot 6i — context-aware back button for the desktop top bar: returns
+  /// to the origin route when the screen was opened with a `?from=` query
+  /// (dashboard or student list), otherwise falls back to `/students`.
+  Widget _buildContextBackButton() {
+    final from = _getFromOrigin(context);
+    final isFromDashboard = from != null && from.contains('dashboard');
+    final target = (from == null || from.isEmpty) ? '/students' : from;
+    return OutlinedButton.icon(
+      onPressed: () => context.go(target),
+      icon: const Icon(Icons.arrow_back, size: 14),
+      label: Text(
+        isFromDashboard ? 'Back to Dashboard' : 'Back to Students',
+        style: const TextStyle(fontSize: 12),
+      ),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        minimumSize: const Size(0, 32),
+        foregroundColor: AppColors.textPrimary,
+        side: const BorderSide(color: AppColors.borderDefault),
       ),
     );
   }
