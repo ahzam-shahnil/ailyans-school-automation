@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme_tokens.dart';
-import '../../core/utils/responsive_breakpoints.dart';
 
 /// Card hosting all parameter selection fields for cohort voucher generation.
 class VoucherParameterCard extends StatefulWidget {
@@ -40,6 +39,7 @@ class VoucherParameterCard extends StatefulWidget {
     this.includeArrears = true,
     this.onIncludeArrearsChanged,
     this.hasCustomDates = false,
+    this.showCohortFilters = true,
     super.key,
   });
 
@@ -57,6 +57,10 @@ class VoucherParameterCard extends StatefulWidget {
 
   final int? sectionId;
   final List<({int id, String label})> sections;
+
+  /// Shot 6e: false hides the Target Class / Target Section dropdowns (the
+  /// cohort filter moves to the right-hand preview header on desktop).
+  final bool showCohortFilters;
 
   final DateTime issueDate;
   final String? issueDateError;
@@ -92,10 +96,6 @@ class VoucherParameterCard extends StatefulWidget {
 
 class _VoucherParameterCardState extends State<VoucherParameterCard> {
   late final TextEditingController _lateFineController;
-
-  /// Shot 6c: null = follow the platform default (open on desktop so the
-  /// 'Late Fine (Rs.)' tests keep passing, collapsed on mobile to declutter).
-  bool? _advancedExpanded;
 
   @override
   void initState() {
@@ -600,161 +600,7 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
     );
   }
 
-  Widget _buildLateFineField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildFieldLabel('Late Fine (Rs.)'),
-        const SizedBox(height: 4),
-        Container(
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceRaised,
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: AppColors.borderDefault),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Opacity(
-                opacity: 0.0,
-                child: SizedBox(
-                  width: 0,
-                  height: 0,
-                  child: TextField(
-                    controller: _lateFineController,
-                    keyboardType: TextInputType.number,
-                    onChanged: (val) {
-                      final parsed = int.tryParse(val.trim());
-                      if (parsed != null && widget.onLateFineChanged != null) {
-                        widget.onLateFineChanged!(parsed);
-                      }
-                    },
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.remove, size: 18),
-                    tooltip: 'Decrease late fine',
-                    splashRadius: 18,
-                    onPressed: widget.onLateFineChanged == null ||
-                            widget.lateFineAmount <= 0
-                        ? null
-                        : () {
-                            final next =
-                                (widget.lateFineAmount - 50).clamp(0, 100000);
-                            widget.onLateFineChanged!(next);
-                          },
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        'Rs. ${widget.lateFineAmount}',
-                        style: AppTypography.body.copyWith(
-                          color: AppColors.textPrimary,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add, size: 18),
-                    tooltip: 'Increase late fine',
-                    splashRadius: 18,
-                    onPressed: widget.onLateFineChanged == null
-                        ? null
-                        : () {
-                            final next = widget.lateFineAmount + 50;
-                            widget.onLateFineChanged!(next);
-                          },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
-  /// Shot 6c: Late Fine + Include Arrears folded into one compact
-  /// collapsible "Advanced Options" section so the left column stays
-  /// uncluttered. Defaults open on desktop (the 'Late Fine (Rs.)' tests
-  /// assert visibility there) and collapsed on mobile.
-  Widget _buildAdvancedOptionsBlock({
-    required Widget lateFineWidget,
-    required Widget arrearsWidget,
-    required bool expanded,
-    required VoidCallback onToggle,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        InkWell(
-          onTap: onToggle,
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.tune,
-                  size: 14,
-                  color: AppColors.textSecondary,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'Advanced Options (Arrears & Late Fine)',
-                    style: AppTypography.label.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ),
-                Icon(
-                  expanded ? Icons.expand_less : Icons.expand_more,
-                  size: 18,
-                  color: AppColors.textSecondary,
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (expanded) ...[
-          const SizedBox(height: AppSpacing.xs),
-          lateFineWidget,
-          const SizedBox(height: AppSpacing.sm),
-          arrearsWidget,
-        ],
-      ],
-    );
-  }
-
-  Widget _buildArrearsField() {
-    return Material(
-      type: MaterialType.transparency,
-      child: SwitchListTile.adaptive(
-        value: widget.includeArrears,
-        onChanged: widget.onIncludeArrearsChanged,
-        title: Text(
-          'Include arrears in vouchers',
-          style: AppTypography.body.copyWith(
-            color: AppColors.textPrimary,
-            fontSize: 13.5,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        activeThumbColor: AppColors.brandPrimary,
-        contentPadding: EdgeInsets.zero,
-        dense: true,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -775,10 +621,6 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
       onTap: widget.onPickDueDate,
     );
     final bankWidget = _buildBankField();
-    final lateFineWidget = _buildLateFineField();
-    final arrearsWidget = _buildArrearsField();
-    final advancedOpen =
-        _advancedExpanded ?? !ResponsiveBreakpoints.isMobile(context);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -795,15 +637,16 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.sm),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(child: classWidget),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(child: sectionWidget),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
+                  if (widget.showCohortFilters)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: classWidget),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(child: sectionWidget),
+                      ],
+                    ),
+                  if (widget.showCohortFilters) const SizedBox(height: AppSpacing.sm),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -814,15 +657,6 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   bankWidget,
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildAdvancedOptionsBlock(
-                    lateFineWidget: lateFineWidget,
-                    arrearsWidget: arrearsWidget,
-                    expanded: advancedOpen,
-                    onToggle: () => setState(
-                      () => _advancedExpanded = !advancedOpen,
-                    ),
-                  ),
                 ],
               )
             : Column(
@@ -832,24 +666,17 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
                   const SizedBox(height: AppSpacing.sm),
                   billingMonthWidget,
                   const SizedBox(height: AppSpacing.sm),
-                  classWidget,
-                  const SizedBox(height: AppSpacing.sm),
-                  sectionWidget,
-                  const SizedBox(height: AppSpacing.sm),
+                  if (widget.showCohortFilters) ...[
+                    classWidget,
+                    const SizedBox(height: AppSpacing.sm),
+                    sectionWidget,
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                   issueDateWidget,
                   const SizedBox(height: AppSpacing.sm),
                   dueDateWidget,
                   const SizedBox(height: AppSpacing.sm),
                   bankWidget,
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildAdvancedOptionsBlock(
-                    lateFineWidget: lateFineWidget,
-                    arrearsWidget: arrearsWidget,
-                    expanded: advancedOpen,
-                    onToggle: () => setState(
-                      () => _advancedExpanded = !advancedOpen,
-                    ),
-                  ),
                 ],
               );
 

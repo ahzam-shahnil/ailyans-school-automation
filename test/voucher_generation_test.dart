@@ -2035,9 +2035,11 @@ void main() {
         await tester.tap(find.text('Generate another'));
         await tester.pumpAndSettle();
 
-        // 3. Result panel gone, class field is cleared to hint
+        // 3. Result panel gone, cohort filter reset to the all-classes
+        //    placeholder (Shot 6e: the class dropdown now lives in the
+        //    right preview header on desktop).
         expect(find.byType(VoucherResultPanel), findsNothing);
-        expect(find.textContaining('Select a class'), findsWidgets);
+        expect(find.text('All Classes'), findsWidgets);
 
         final element = tester.element(find.byType(VoucherGenerationScreen))
             as ConsumerStatefulElement;

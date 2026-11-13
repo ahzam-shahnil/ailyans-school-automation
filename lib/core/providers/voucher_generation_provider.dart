@@ -8,6 +8,7 @@ import '../../models/student.dart';
 import '../../models/voucher_preview_row.dart';
 import '../db/database.dart';
 import '../sync/sync_provider.dart';
+import '../utils/fee_head_display.dart';
 
 /// Default offset between issue date and due date, in days.
 /// Preserves the pre-G-7 behavior of issueDate=day 1 -> dueDate=day 10.
@@ -413,7 +414,7 @@ final voucherClassTariffsProvider =
       return rows.map((r) {
         return FeeHeadSummary(
           feeParamId: r['FeeParamID'] as int,
-          description: (r['ParamDesciption'] as String? ?? 'Fee').trim(),
+          description: FeeHeadDisplay.of(r['ParamDesciption'] as String?),
           fee: (r['Fee'] as num?)?.toDouble() ?? 0.0,
         );
       }).toList();
@@ -1671,7 +1672,8 @@ final allFeeParametersProvider =
           .map(
             (r) => FeeParamOption(
               feeParamId: r['FeeParamID'] as int,
-              description: (r['ParamDesciption'] as String? ?? '').trim(),
+              description:
+                  FeeHeadDisplay.of(r['ParamDesciption'] as String?),
             ),
           )
           .toList();

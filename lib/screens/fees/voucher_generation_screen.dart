@@ -53,6 +53,10 @@ class _VoucherGenerationScreenState
   // inline across the full screen instead of the old cramped AlertDialog.
   bool _isSingleStudentFullScreen = false;
 
+  // Shot 6e: last non-zero late fine amount, restored when the fee-table
+  // Late Fine checkbox is re-checked.
+  int? _lastNonZeroLateFine;
+
   // Layout constants for the preview table.
   static const double _kIdColWidth = 82;
   static const double _kStatusColWidth = 112;
@@ -730,6 +734,7 @@ class _VoucherGenerationScreenState
                   readyCount,
                   generatedCount,
                   execState.isGenerating,
+                  showCohortFilters: false,
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -747,6 +752,7 @@ class _VoucherGenerationScreenState
                   readyCount,
                   generatedCount,
                   execState,
+                  showCohortFilter: true,
                 ),
               ),
             ],
@@ -1265,6 +1271,7 @@ class _VoucherGenerationScreenState
     int generatedCount,
     bool isGenerating, {
     int columnCount = 1,
+    bool showCohortFilters = true,
   }) {
     final classesAsync = ref.watch(classesProvider);
     final sectionsAsync = ref.watch(sectionsProvider);
@@ -1354,6 +1361,9 @@ class _VoucherGenerationScreenState
                     .setIncludeArrears(val);
               },
               columnCount: columnCount,
+              // Shot 6e: on desktop the cohort filter lives in the right
+              // preview header — the left card stays scroll-free.
+              showCohortFilters: showCohortFilters,
               onSessionYearChanged: (val) {
                 ref.read(voucherGenFiltersProvider.notifier).setSessionYr(val);
               },
@@ -1457,6 +1467,31 @@ class _VoucherGenerationScreenState
         ),
       ],
     );
+  }
+
+  /// Shot 6e: toggles the Late Fine row inside the fee-heads checklist.
+  /// Checking restores the last non-zero amount (default 100); unchecking
+  /// zeroes it. Keeps the inline TextField in sync (called outside build).
+  void _toggleLateFine(bool? value) {
+    final notifier = ref.read(voucherGenFiltersProvider.notifier);
+    if (value == true) {
+      final amount = _lastNonZeroLateFine ?? 100;
+      notifier.setLateFineAmount(amount);
+      _lateFineController.text = amount.toString();
+    } else {
+      final current = ref.read(voucherGenFiltersProvider).lateFineAmount;
+      if (current > 0) _lastNonZeroLateFine = current;
+      notifier.setLateFineAmount(0);
+      _lateFineController.text = '0';
+    }
+  }
+
+  /// Shot 6e: toggles the Previous Arrears row inside the fee-heads
+  /// checklist.
+  void _toggleIncludeArrears(bool? value) {
+    ref
+        .read(voucherGenFiltersProvider.notifier)
+        .setIncludeArrears(value ?? true);
   }
 
   /// Confirms the 1-click whole-school batch with the live eligible-student
@@ -1789,6 +1824,130 @@ class _VoucherGenerationScreenState
                     },
                   ),
           ),
+          // Shot 6e: Previous Arrears + Late Fine live INSIDE the fee-heads
+          // checklist as dedicated toggleable rows (replaces the old
+          // 'Advanced Options' section in the parameter card).
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: compact ? 1 : 2,
+            ),
+            decoration: const BoxDecoration(
+              border: Border(
+                top: BorderSide(color: AppColors.borderDefault),
+              ),
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 30,
+                  child: Text(
+                    '\u2014',
+                    style: AppTypography.monospace.copyWith(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Previous Arrears',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: compact ? 66 : 110,
+                  child: Text(
+                    'Auto (Unpaid)',
+                    textAlign: TextAlign.right,
+                    maxLines: 1,
+                    style: AppTypography.label.copyWith(
+                      fontSize: 11,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 40,
+                  height: compact ? 28 : 32,
+                  child: Checkbox(
+                    value: filters.includeArrears,
+                    onChanged: _toggleIncludeArrears,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: compact ? 1 : 2,
+            ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 30,
+                  child: Text(
+                    '\u2014',
+                    style: AppTypography.monospace.copyWith(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    'Late Fine (Rs.)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: compact ? 66 : 110,
+                  child: TextField(
+                    controller: _lateFineController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.right,
+                    style: AppTypography.monospace.copyWith(fontSize: 12),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 6,
+                      ),
+                    ),
+                    onChanged: (text) {
+                      final parsed = int.tryParse(text.trim());
+                      if (parsed != null) {
+                        if (parsed > 0) _lastNonZeroLateFine = parsed;
+                        ref
+                            .read(voucherGenFiltersProvider.notifier)
+                            .setLateFineAmount(parsed);
+                      }
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 40,
+                  height: compact ? 28 : 32,
+                  child: Checkbox(
+                    value: filters.lateFineAmount > 0,
+                    onChanged: _toggleLateFine,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ),
           // Always-visible Edit tariffs shortcut (single instance on screen).
           Padding(
             padding: EdgeInsets.fromLTRB(
@@ -1972,8 +2131,9 @@ class _VoucherGenerationScreenState
     int displayBilled,
     int readyCount,
     int generatedCount,
-    VoucherGenState execState,
-  ) {
+    VoucherGenState execState, {
+    bool showCohortFilter = false,
+  }) {
     if (execState.completionSummary != null) {
       return _buildVoucherResultPanel(execState.completionSummary!);
     }
@@ -1987,6 +2147,117 @@ class _VoucherGenerationScreenState
       displayBilled,
       readyCount,
       generatedCount,
+      showCohortFilter: showCohortFilter,
+    );
+  }
+
+  /// Shot 6e: compact Class + Section cohort filter shown in the right
+  /// preview card header on desktop (the left parameter card no longer
+  /// carries the Target Class / Target Section dropdowns there). Same
+  /// bindings/handlers as the old left-card dropdowns.
+  Widget? _buildCohortHeaderFilter(VoucherGenFilters filters) {
+    final classesAsync = ref.watch(classesProvider);
+    final classList = classesAsync.valueOrNull ?? const <SchoolClass>[];
+    final sectionsAsync = ref.watch(sectionsProvider);
+    final sectionList = sectionsAsync.valueOrNull ?? const <ClassSec>[];
+    final filteredSections = filters.classId == null
+        ? sectionList
+        : sectionList.where((s) => s.classId == filters.classId).toList();
+    // Defensive (same as the old left-card dropdowns): only bind the value
+    // when it actually exists in the loaded list, otherwise the Dropdown
+    // assertion fires when classes/sections are still loading.
+    final effectiveClassId = classList.any((c) => c.classId == filters.classId)
+        ? filters.classId
+        : null;
+    final effectiveSectionId =
+        filteredSections.any((s) => s.classSecId == filters.classSecId)
+            ? filters.classSecId
+            : null;
+
+    // Plain reactive DropdownButtons (not FormFields): the value must track
+    // external filter changes (e.g. 'Generate another' resetting the class).
+    Widget dropdown({
+      required int? value,
+      required String allLabel,
+      required List<DropdownMenuItem<int?>> items,
+      required ValueChanged<int?>? onChanged,
+      required double width,
+    }) {
+      return Container(
+        width: width,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        height: 34,
+        child: DropdownButton<int?>(
+          value: value,
+          // DropdownButton shows the hint whenever value is null — the
+          // all-classes/all-sections placeholder doubles as the hint.
+          hint: Text(
+            allLabel,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textPrimary,
+            ),
+          ),
+          isDense: true,
+          isExpanded: true,
+          underline: const SizedBox.shrink(),
+          style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
+          iconEnabledColor: AppColors.textSecondary,
+          items: items,
+          onChanged: onChanged,
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        dropdown(
+          value: effectiveClassId,
+          width: 150,
+          allLabel: 'All Classes',
+          items: [
+            const DropdownMenuItem<int?>(
+              value: null,
+              child: Text('All Classes', maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            ...classList.map(
+              (c) => DropdownMenuItem<int?>(
+                value: c.classId,
+                child: Text(c.cName, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+          ],
+          onChanged: (val) =>
+              ref.read(voucherGenFiltersProvider.notifier).setClassId(val),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        dropdown(
+          value: effectiveSectionId,
+          width: 120,
+          allLabel: 'All Sections',
+          items: [
+            const DropdownMenuItem<int?>(
+              value: null,
+              child: Text('All Sections', maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            ...filteredSections.map(
+              (s) => DropdownMenuItem<int?>(
+                value: s.classSecId,
+                child: Text(s.secName, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+          ],
+          onChanged: (val) =>
+              ref.read(voucherGenFiltersProvider.notifier).setClassSecId(val),
+        ),
+      ],
     );
   }
 
@@ -1998,8 +2269,9 @@ class _VoucherGenerationScreenState
     String displayLabel,
     int displayBilled,
     int readyCount,
-    int generatedCount,
-  ) {
+    int generatedCount, {
+    bool showCohortFilter = false,
+  }) {
     final filters = ref.watch(voucherGenFiltersProvider);
     final execState = ref.watch(voucherGenExecutionProvider);
     final generatedRows = previewList
@@ -2033,6 +2305,9 @@ class _VoucherGenerationScreenState
         persistedSum != null &&
         currentToggleSum != null &&
         currentToggleSum != persistedSum;
+
+    final cohortFilter =
+        showCohortFilter ? _buildCohortHeaderFilter(filters) : null;
 
     return Container(
       decoration: _cardDecoration(),
@@ -2070,6 +2345,11 @@ class _VoucherGenerationScreenState
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
+              // Shot 6e: compact cohort filter (desktop only).
+              if (cohortFilter != null) ...[
+                cohortFilter,
+                const SizedBox(width: AppSpacing.sm),
+              ],
               // Actions share a bounded flex slice so the Wrap can flow onto
               // a second line on narrow cards instead of overflowing.
               Flexible(
@@ -3621,9 +3901,20 @@ class _SingleVoucherWorkspaceState
   /// {feeParamId -> amount}`), used for the live Gross/Discount/Net preview.
   Map<int, Map<int, double>> _tariffs = const {};
 
+  /// Shot 6e: last non-zero late fine amount, restored when the Late Fine
+  /// checkbox is re-checked.
+  int? _lastNonZeroLateFine;
+
+  /// Shot 6e: inline Late Fine amount editor inside the workspace's fee
+  /// checklist (kept in sync with the checkbox toggle).
+  late final TextEditingController _wsLateFineCtrl;
+
   @override
   void initState() {
     super.initState();
+    _wsLateFineCtrl = TextEditingController(
+      text: ref.read(voucherGenFiltersProvider).lateFineAmount.toString(),
+    );
     _seedDeepLinkedStudent(widget.initialStuRegId);
     _load();
   }
@@ -3652,6 +3943,7 @@ class _SingleVoucherWorkspaceState
   void dispose() {
     _debounce?.cancel();
     _searchCtrl.dispose();
+    _wsLateFineCtrl.dispose();
     super.dispose();
   }
 
@@ -3982,34 +4274,115 @@ class _SingleVoucherWorkspaceState
               final selectedGlobal = ref.watch(
                 globalSelectedFeeParamIdsProvider,
               );
-              if (options.isEmpty) {
-                return Text(
-                  'No fee heads configured for this session.',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                  ),
-                );
-              }
-              return Column(
-                children: [
-                  for (final option in options)
+              // Shot 6e: Material wrapper so CheckboxListTile ink splashes
+              // are never flagged invisible inside the colored container.
+              return Material(
+                type: MaterialType.transparency,
+                child: Column(
+                  children: [
+                    if (options.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Text(
+                          'No fee heads configured for this session.',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    for (final option in options)
+                      CheckboxListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          option.description.trim(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.bodySmall,
+                        ),
+                        value: selectedGlobal.contains(option.feeParamId),
+                        onChanged: (_) => ref
+                            .read(globalSelectedFeeParamIdsProvider.notifier)
+                            .toggle(option.feeParamId),
+                      ),
+                    // Shot 6e: Previous Arrears + Late Fine rows.
                     CheckboxListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
                       controlAffinity: ListTileControlAffinity.leading,
                       contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        option.description.trim(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      title: const Text(
+                        'Previous Arrears',
                         style: AppTypography.bodySmall,
                       ),
-                      value: selectedGlobal.contains(option.feeParamId),
-                      onChanged: (_) => ref
-                          .read(globalSelectedFeeParamIdsProvider.notifier)
-                          .toggle(option.feeParamId),
+                      subtitle: Text(
+                        'Auto (Unpaid)',
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      value: filters.includeArrears,
+                      onChanged: (v) => ref
+                          .read(voucherGenFiltersProvider.notifier)
+                          .setIncludeArrears(v ?? true),
                     ),
-                ],
+                    CheckboxListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Late Fine (Rs.)',
+                        style: AppTypography.bodySmall,
+                      ),
+                      value: filters.lateFineAmount > 0,
+                      onChanged: (checked) {
+                        final notifier = ref
+                            .read(voucherGenFiltersProvider.notifier);
+                        if (checked == true) {
+                          final amount = _lastNonZeroLateFine ?? 100;
+                          notifier.setLateFineAmount(amount);
+                          _wsLateFineCtrl.text = amount.toString();
+                        } else {
+                          final current = filters.lateFineAmount;
+                          if (current > 0) _lastNonZeroLateFine = current;
+                          notifier.setLateFineAmount(0);
+                          _wsLateFineCtrl.text = '0';
+                        }
+                      },
+                      secondary: SizedBox(
+                        width: 72,
+                        child: TextField(
+                          controller: _wsLateFineCtrl,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.right,
+                          style: AppTypography.monospace.copyWith(
+                            fontSize: 12,
+                          ),
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 6,
+                            ),
+                          ),
+                          onChanged: (text) {
+                            final parsed = int.tryParse(text.trim());
+                            if (parsed != null) {
+                              if (parsed > 0) _lastNonZeroLateFine = parsed;
+                              ref
+                                  .read(voucherGenFiltersProvider.notifier)
+                                  .setLateFineAmount(parsed);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
             },
           ),
