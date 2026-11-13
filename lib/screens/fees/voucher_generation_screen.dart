@@ -1440,12 +1440,6 @@ class _VoucherGenerationScreenState
     }
   }
 
-  /// Whether the unified fee structure table's 16-row grid is expanded.
-  /// Collapsed by default (VB6 accordion style): the collapsed bar shows the
-  /// live summary; expanding reveals the full `ID | Fee Head | Class Tariff
-  /// (Rs.) | Check` grid plus the Edit tariffs shortcut.
-  bool _feeStructureExpanded = false;
-
   /// Unified fee-head toggle for the VB6 fee structure table: updates the
   /// class-level exclusion (driving the preview, Estimated Net Billed KPI and
   /// single-class Generate) AND mirrors the resulting included set into
@@ -1481,6 +1475,11 @@ class _VoucherGenerationScreenState
   ///
   /// The 16 rows live in a bounded, internally-scrolling region so the card
   /// can never push the preview pane past its available height.
+  /// Phase H Shot 5e — the ONE fee-head control on this screen: a single
+  /// card whose header is the [FeeHeadsAccordion] summary bar
+  /// ('N fee heads · Rs X per student', reactive) and whose always-visible
+  /// body is the unified VB6 grid `ID | Fee Head | Class Tariff (Rs.) |
+  /// Check` plus the Edit tariffs shortcut. No duplicate collapsed bar.
   Widget _buildFeeStructureTable({
     double tableHeight = 180.0,
     bool compact = false,
@@ -1496,13 +1495,6 @@ class _VoucherGenerationScreenState
           }
         : globalSelection;
 
-    final checkedCount = checkedIds.length;
-    final perStudent = rows
-        .where(
-          (r) => checkedIds.contains(r.feeParamId) && r.classTariff != null,
-        )
-        .fold<double>(0, (sum, r) => sum + r.classTariff!);
-
     return Container(
       key: const Key('fee_parameters_checklist'),
       decoration: BoxDecoration(
@@ -1514,83 +1506,32 @@ class _VoucherGenerationScreenState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header: title + live summary (+ Edit tariffs when expanded).
-          // Title and summary share one Expanded column with ellipsis so the
-          // row can never overflow, even at narrow widths.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.sm,
-              6,
-              AppSpacing.xs,
-              6,
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      InkWell(
-                        onTap: () => setState(
-                          () => _feeStructureExpanded = !_feeStructureExpanded,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Fee Structure',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.label.copyWith(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              _feeStructureExpanded
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                              size: 18,
-                              color: AppColors.textSecondary,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '$checkedCount of ${rows.length} checked · '
-                        'Rs. ${currencyFormat.format(perStudent)} per student',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+          // Reactive summary bar: 'N fee heads · Rs X per student' + chevron.
+          // Edit tariffs is suppressed here — the single shortcut lives in
+          // the footer below so it is visible immediately.
+          FeeHeadsAccordion(
+            heads: [
+              for (final row in rows)
+                FeeHeadItem(
+                  feeParamId: row.feeParamId,
+                  name: row.description.isEmpty
+                      ? 'Fee Head ${row.feeParamId}'
+                      : row.description,
+                  amount: row.classTariff?.toInt() ?? 0,
+                  isChecked: checkedIds.contains(row.feeParamId),
                 ),
-                const SizedBox(width: AppSpacing.xs),
-                if (_feeStructureExpanded)
-                  TextButton.icon(
-                    onPressed: () => context.go('/fees/parameters'),
-                    icon: const Icon(Icons.tune, size: 14),
-                    label: const Text('Edit tariffs'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.brandPrimary,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-              ],
-            ),
+            ],
+            isLoading: false,
+            errorMessage: null,
+            noTariffMessage: null,
+            onToggleHead: _toggleFeeHeadUnified,
+            onRetry: () =>
+                ref.invalidate(voucherClassTariffsProvider(filters.classId)),
+            onOpenFeeParams: () => context.go('/fees/parameters'),
+            onEditTariffs: null,
           ),
-          // Column header + 16-row body, only while expanded.
-          if (_feeStructureExpanded) ...[
-            Container(
+          // Column header.
+          Container(
             padding: EdgeInsets.symmetric(
               horizontal: AppSpacing.sm,
               vertical: compact ? 2 : 4,
@@ -1730,7 +1671,28 @@ class _VoucherGenerationScreenState
                     },
                   ),
           ),
-          ],
+          // Always-visible Edit tariffs shortcut (single instance on screen).
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.sm,
+              0,
+              AppSpacing.xs,
+              compact ? 2 : 4,
+            ),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => context.go('/fees/parameters'),
+                icon: const Icon(Icons.tune, size: 14),
+                label: const Text('Edit tariffs'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.brandPrimary,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2089,7 +2051,11 @@ class _VoucherGenerationScreenState
 
           // Unified VB6 fee structure table (`ID | Fee Head | Class Tariff
           // (Rs.) | Check`) — the ONE fee-head control on this screen.
-          _buildFeeStructureTable(),
+          // Tablet-width panes are height-bounded (580px), so the grid body
+          // shrinks there to keep the ledger preview table readable.
+          _buildFeeStructureTable(
+            tableHeight: ResponsiveBreakpoints.isTablet(context) ? 110 : 180,
+          ),
 
           const SizedBox(height: AppSpacing.sm),
 
@@ -2153,21 +2119,6 @@ class _VoucherGenerationScreenState
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-
-          // Collapsed class-tariff summary bar — a second view of the SAME
-          // unified fee-head selection as the fee structure table above
-          // (same toggle handler, same check state).
-          FeeHeadsAccordion(
-            heads: _buildUnifiedFeeHeadItems(),
-            isLoading: false,
-            errorMessage: null,
-            noTariffMessage: null,
-            onToggleHead: _toggleFeeHeadUnified,
-            onRetry: () =>
-                ref.invalidate(voucherClassTariffsProvider(filters.classId)),
-            onOpenFeeParams: () => context.go('/fees/parameters'),
-            onEditTariffs: () => context.go('/fees/parameters'),
-          ),
         ],
       ),
     );
@@ -3299,29 +3250,6 @@ class _VoucherGenerationScreenState
         ),
       ),
     );
-  }
-
-
-  /// The 16 unified fee-head rows as [FeeHeadItem]s for the summary accordion:
-  /// amount = the selected class's live tariff (0 when the class has no tariff
-  /// row for that head), isChecked = the unified selection state.
-  List<FeeHeadItem> _buildUnifiedFeeHeadItems() {
-    final rows = ref.watch(voucherFeeStructureProvider);
-    final filters = ref.watch(voucherGenFiltersProvider);
-    final globalSelection = ref.watch(globalSelectedFeeParamIdsProvider);
-    return [
-      for (final row in rows)
-        FeeHeadItem(
-          feeParamId: row.feeParamId,
-          name: row.description.isEmpty
-              ? 'Fee Head ${row.feeParamId}'
-              : row.description,
-          amount: row.classTariff?.toInt() ?? 0,
-          isChecked: filters.classId != null
-              ? !filters.excludedFeeParamIds.contains(row.feeParamId)
-              : globalSelection.contains(row.feeParamId),
-        ),
-    ];
   }
 
   void _openParamSheet(

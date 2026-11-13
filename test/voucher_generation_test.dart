@@ -2110,15 +2110,9 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        // 1. Initially collapsed
+        // 1. Expanded by default: the single fee control shows the Edit
+        //    tariffs shortcut immediately (no collapsed state anymore).
         expect(find.byType(FeeHeadsAccordion), findsOneWidget);
-        expect(find.text('Edit tariffs'), findsNothing);
-
-        // 2. Tap to expand
-        await tester.tap(find.textContaining('fee heads'));
-        await tester.pumpAndSettle();
-
-        // 3. Edit tariffs button is visible
         expect(find.text('Edit tariffs'), findsOneWidget);
       },
     );
