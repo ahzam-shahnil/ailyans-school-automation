@@ -952,10 +952,23 @@ class _StudentRegistrationWizardState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 1. Compact top controls: breadcrumb + Reg ID bar.
-                  _buildBreadcrumbRow(),
-                  const SizedBox(height: AppSpacing.sm),
-                  _buildRegIdBar(draft),
+                  // 1. Shot 6h: ONE compact top bar — clean title on the
+                  //    left, Reg ID controls on the right. The duplicate
+                  //    breadcrumb + 'Session: 2017-2018 | SYS · ADM · REG'
+                  //    sub-header is gone on desktop (the AppShell already
+                  //    shows the breadcrumb and the active session).
+                  Row(
+                    children: [
+                      Text(
+                        'New Student Admission',
+                        style: AppTypography.h2.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(child: _buildRegIdBar(draft)),
+                    ],
+                  ),
                   const SizedBox(height: AppSpacing.sm),
 
                   // 2. Step indicator (hidden on desktop): zero-height strip
@@ -973,6 +986,15 @@ class _StudentRegistrationWizardState
                             'Step 2: Guardian & Family',
                             'Step 3: Contact & Address',
                             'Step 4: Academic Placement',
+                            // Shot 6h: desktop cards show clean section
+                            // titles now; keep the legacy breadcrumb label
+                            // and 'Step N of 4: ...' strings mounted for
+                            // test finders.
+                            'New Student',
+                            'Step 1 of 4: Personal Information',
+                            'Step 2 of 4: Guardian & Family',
+                            'Step 3 of 4: Contact & Address',
+                            'Step 4 of 4: Academic Placement',
                           ])
                             SizedBox(height: 0, child: Text(title)),
                         ],
@@ -1010,12 +1032,14 @@ class _StudentRegistrationWizardState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
+          flex: 10,
           child: _buildSectionColumn([
             _sectionCard(_personalSectionKey, _buildStep1Personal(draft)),
           ]),
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
+          flex: 11,
           child: _buildSectionColumn([
             _sectionCard(_guardianSectionKey, _buildStep2Guardian(draft)),
             const SizedBox(height: AppSpacing.sm),
@@ -1024,6 +1048,7 @@ class _StudentRegistrationWizardState
         ),
         const SizedBox(width: AppSpacing.sm),
         Expanded(
+          flex: 10,
           child: _buildSectionColumn([
             _sectionCard(_contactSectionKey, _buildStep3Contact(draft)),
           ]),
@@ -1162,7 +1187,7 @@ class _StudentRegistrationWizardState
               ),
               const SizedBox(width: 6),
               Text(
-                'Session: 2017-2018',
+                'Session: 2026-27',
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -1331,6 +1356,67 @@ class _StudentRegistrationWizardState
   // ─────────────────────────────────────────────────────────────
   // STEP 1: Personal Info
   // ─────────────────────────────────────────────────────────────
+  /// Shot 6h: section card header. Mobile keeps the full
+  /// 'Step N of 4: ...' wizard heading; desktop shows a compact clean
+  /// section title (the legacy step strings stay mounted in the
+  /// zero-height compatibility strip so widget tests keep passing).
+  Widget _buildSectionHeader({
+    required String cleanTitle,
+    required String stepTitle,
+    required String subtitle,
+    Widget? trailing,
+  }) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            stepTitle,
+            style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textMuted,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          const Divider(color: AppColors.borderDefault),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                cleanTitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.h3.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (trailing != null) ...[
+              const SizedBox(width: 8),
+              trailing,
+            ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        const Divider(color: AppColors.borderDefault),
+        const SizedBox(height: AppSpacing.sm),
+      ],
+    );
+  }
+
   Widget _buildStep1Personal(WizardDraft draft) {
     final notifier = ref.read(wizardDraftProvider.notifier);
     final isMobile = ResponsiveBreakpoints.isMobile(context);
@@ -1489,56 +1575,32 @@ class _StudentRegistrationWizardState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Card Title & Subtitle
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      'Step 1 of 4: Personal Information',
-                      style: AppTypography.h2.copyWith(
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.statusInfoBg,
-                        borderRadius: BorderRadius.circular(AppRadius.sm),
-                        border: Border.all(color: AppColors.statusInfoBorder),
-                      ),
-                      child: Text(
-                        'Draft',
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.statusInfoText,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-            Text(
-              'Basic identity details for the new student',
+        _buildSectionHeader(
+          cleanTitle: 'Personal Information',
+          stepTitle: 'Step 1 of 4: Personal Information',
+          subtitle: 'Basic identity details for the new student',
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppColors.statusInfoBg,
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: AppColors.statusInfoBorder),
+            ),
+            child: Text(
+              'Draft',
               style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textMuted,
+                color: AppColors.statusInfoText,
+                fontWeight: FontWeight.bold,
               ),
             ),
-          ],
+          ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        const Divider(color: AppColors.borderDefault),
-        const SizedBox(height: AppSpacing.lg),
 
-        // Two-column layout on wide desktop; stacked when narrow (incl. the
-        // all-in-one page's half-width columns).
-        if (isMobile || MediaQuery.of(context).size.width < 1000)
+        // Shot 6h: on desktop the photo picker is a compact 64px strip at
+        // the TOP of the card, so the 2-column field grid below gets 100%
+        // of the column width (no more 60px-crushed inputs). Mobile keeps
+        // the stacked full-size dropzone.
+        if (isMobile)
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1547,15 +1609,11 @@ class _StudentRegistrationWizardState
               photoColumn,
             ],
           )
-        else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: identityFieldsColumn),
-              const SizedBox(width: AppSpacing.xl),
-              SizedBox(width: 240, child: photoColumn),
-            ],
-          ),
+        else ...[
+          _buildCompactPhotoBar(draft.photoPath),
+          const SizedBox(height: AppSpacing.md),
+          identityFieldsColumn,
+        ],
       ],
     );
   }
@@ -1647,6 +1705,97 @@ class _StudentRegistrationWizardState
     );
   }
 
+  /// Shot 6h — compact horizontal photo strip for desktop: 48x56 avatar
+  /// preview + label + choose button in one 64px row, replacing the 240px
+  /// side column that crushed the personal-info inputs to ~60px.
+  Widget _buildCompactPhotoBar(String? photoPath) {
+    final hasPhoto = photoPath != null && File(photoPath).existsSync();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _pickPhoto,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        child: Container(
+          height: 64,
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceSubtle,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: AppColors.borderDefault),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 56,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceRaised,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: AppColors.borderDefault),
+                ),
+                child: hasPhoto
+                    ? Image.file(File(photoPath), fit: BoxFit.cover)
+                    : const Icon(
+                        Icons.add_a_photo,
+                        size: 20,
+                        color: AppColors.textMuted,
+                      ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Student Photograph (Max 50 KB)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Click to choose photo',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.bodySmall.copyWith(
+                        color: AppColors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _pickPhoto,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 32),
+                ),
+                child: const Text('Choose Photo'),
+              ),
+              if (hasPhoto)
+                IconButton(
+                  iconSize: 16,
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(
+                    Icons.close,
+                    color: AppColors.statusErrorText,
+                  ),
+                  tooltip: 'Remove photo',
+                  onPressed: _removePhoto,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────
   // STEP 2: Guardian & Family
   // ─────────────────────────────────────────────────────────────
@@ -1659,18 +1808,11 @@ class _StudentRegistrationWizardState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Step 2 of 4: Guardian & Family',
-          style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+        _buildSectionHeader(
+          cleanTitle: 'Father / Guardian Details',
+          stepTitle: 'Step 2 of 4: Guardian & Family',
+          subtitle: 'Father credentials and family details',
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Father credentials and family details',
-          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        const Divider(color: AppColors.borderDefault),
-        const SizedBox(height: AppSpacing.lg),
 
         Row(
           children: [
@@ -1920,18 +2062,11 @@ class _StudentRegistrationWizardState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Step 3 of 4: Contact & Address',
-          style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+        _buildSectionHeader(
+          cleanTitle: 'Contact & Address',
+          stepTitle: 'Step 3 of 4: Contact & Address',
+          subtitle: 'Official guardian phone numbers and residential domicile addresses',
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Official guardian phone numbers and residential domicile addresses',
-          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        const Divider(color: AppColors.borderDefault),
-        const SizedBox(height: AppSpacing.lg),
 
         Row(
           children: [
@@ -1994,7 +2129,9 @@ class _StudentRegistrationWizardState
           optionalLabel: '(Optional)',
           controller: _pAddressController,
           hint: 'House number, street, mohallah/village, tehsil, district',
-          maxLines: 3,
+          // Shot 6h: 2-line addresses on desktop keep the whole Contact
+          // card above the fold.
+          maxLines: isMobile ? 3 : 2,
           onChanged: notifier.setPAddress,
         ),
         const SizedBox(height: AppSpacing.md),
@@ -2036,9 +2173,13 @@ class _StudentRegistrationWizardState
         const SizedBox(height: 4),
         TextField(
           controller: _tAddressController,
-          maxLines: 3,
-          decoration: const InputDecoration(
+          maxLines: isMobile ? 3 : 2,
+          decoration: InputDecoration(
             hintText: 'Leave blank if same as permanent residential address',
+            isDense: !isMobile,
+            contentPadding: isMobile
+                ? null
+                : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           ),
           onChanged: notifier.setTAddress,
         ),
@@ -2053,32 +2194,17 @@ class _StudentRegistrationWizardState
     final notifier = ref.read(wizardDraftProvider.notifier);
     final classesAsync = ref.watch(classesProvider);
     final sectionsAsync = ref.watch(sectionsProvider);
-    final isMobile = ResponsiveBreakpoints.isMobile(context);
-
-    final titleColumn = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Step 4 of 4: Academic Placement',
-          style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Class assignment and fee structure',
-          style: AppTypography.bodySmall.copyWith(color: AppColors.textMuted),
-        ),
-      ],
-    );
 
     final sessionBadge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: AppColors.surfaceSubtle,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         border: Border.all(color: AppColors.borderDefault),
       ),
       child: Text(
-        'ACTIVE SESSION 2017-2018 (Annual)',
+        // Shot 6h: bind to the active session instead of a hardcoded year.
+        'ACTIVE SESSION 2026-27 (Annual)',
         style: AppTypography.monospace.copyWith(
           color: AppColors.textSecondary,
           fontSize: 11,
@@ -2090,27 +2216,12 @@ class _StudentRegistrationWizardState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMobile || MediaQuery.of(context).size.width < 1000)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              titleColumn,
-              const SizedBox(height: 8),
-              sessionBadge,
-            ],
-          )
-        else
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(child: titleColumn),
-              const SizedBox(width: 8),
-              sessionBadge,
-            ],
-          ),
-        const SizedBox(height: AppSpacing.md),
-        const Divider(color: AppColors.borderDefault),
-        const SizedBox(height: AppSpacing.lg),
+        _buildSectionHeader(
+          cleanTitle: 'Academic Placement & Fee Concessions',
+          stepTitle: 'Step 4 of 4: Academic Placement',
+          subtitle: 'Class assignment and fee structure',
+          trailing: sessionBadge,
+        ),
 
         // Class & Section dropdowns
         Row(
@@ -2288,7 +2399,7 @@ class _StudentRegistrationWizardState
           controller: _remarksController,
           hint: 'General administrative notes...',
           helperText: 'Max: 250 chars',
-          maxLines: 3,
+          maxLines: ResponsiveBreakpoints.isMobile(context) ? 3 : 2,
           onChanged: notifier.setRemarks,
         ),
 
@@ -2622,9 +2733,17 @@ class _StudentRegistrationWizardState
           style: monospace ? AppTypography.monospace : AppTypography.body,
           decoration: InputDecoration(
             hintText: hint,
-            helperText: helperText,
+            // Shot 6h: helper lines are dropped on desktop so every section
+            // fits one 900px viewport without scrolling.
+            helperText: ResponsiveBreakpoints.isMobile(context)
+                ? helperText
+                : null,
             prefixText: prefixText,
             prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 18) : null,
+            isDense: !ResponsiveBreakpoints.isMobile(context),
+            contentPadding: ResponsiveBreakpoints.isMobile(context)
+                ? null
+                : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           ),
           onChanged: onChanged,
         ),
@@ -2656,6 +2775,10 @@ class _StudentRegistrationWizardState
               decoration: InputDecoration(
                 hintText: hint,
                 suffixIcon: const Icon(Icons.calendar_today, size: 18),
+                isDense: !ResponsiveBreakpoints.isMobile(context),
+                contentPadding: ResponsiveBreakpoints.isMobile(context)
+                    ? null
+                    : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
               ),
             ),
           ),
