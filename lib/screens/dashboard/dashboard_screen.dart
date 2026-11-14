@@ -17,6 +17,32 @@ import '../../core/utils/responsive_breakpoints.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
+// ─── Shot 1a · Refined institutional palette (no neon pastels) ───────────────
+// Disciplined 4-accent system on crisp white cards with a deep-slate ink.
+const Color _inkPrimary = Color(0xFF0F172A); // headings & metrics · w800
+const Color _inkSubtitle = Color(0xFF334155); // w600 secondary lines
+const Color _inkBody = Color(0xFF475569); // module descriptions
+const Color _cardBorder = Color(0xFFCBD5E1); // 1.5px card stroke
+const Color _bandSurface = Color(0xFFF8FAFC); // 40px header bands / footers
+const Color _bandBorder = Color(0xFFE2E8F0); // 1px footer top stroke
+// Oxford Navy — students, directory & admissions.
+const Color _navyAccent = Color(0xFF1D4ED8);
+const Color _navyDeep = Color(0xFF1E3A8A);
+const Color _navyBadge = Color(0xFFDBEAFE);
+// Forest Emerald — fee collection & recovered revenue.
+const Color _emeraldAccent = Color(0xFF047857);
+const Color _emeraldBright = Color(0xFF059669);
+const Color _emeraldBadge = Color(0xFFD1FAE5);
+// Institutional Indigo — monthly vouchers, exams & staff.
+const Color _indigoAccent = Color(0xFF3730A3);
+const Color _indigoBright = Color(0xFF4338CA);
+const Color _indigoBadge = Color(0xFFE0E7FF);
+// Amber / Crimson — attendance alerts & unpaid arrears.
+const Color _amberAccent = Color(0xFFB45309);
+const Color _amberBadge = Color(0xFFFEF3C7);
+const Color _crimsonAccent = Color(0xFFBE123C);
+const Color _crimsonBadge = Color(0xFFFFE4E6);
+
 class _CandidateModule {
   final String label;
   final String route;
@@ -91,7 +117,9 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with SingleTickerProviderStateMixin {
-  static const double _defaultSplitRatio = 0.55;
+  /// Shot 1a: prototype's 58/42 split (was 55/45). The drag/reset assertions
+  /// in the responsive test are relative and tolerate this default.
+  static const double _defaultSplitRatio = 0.58;
   static const double _minSplitRatio = 0.38;
   static const double _maxSplitRatio = 0.72;
 
@@ -300,6 +328,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       isLoading: isLoading,
                       currencyFormatter: currencyFormatter,
                       isDesktop: isDesktop,
+                    ),
+                    gap,
+                    _buildDepartmentLaunchpad(
+                      metrics: metrics,
+                      currencyFormatter: currencyFormatter,
+                      isDesktop: isDesktop,
+                      isTablet: isTablet,
+                      isMobile: isMobile,
                     ),
                   ],
                 ),
@@ -555,26 +591,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       );
     }
 
-    final title = Row(
+    // Shot 1a: welcome header — school identity + operational date line.
+    final schoolName =
+        (shellMeta?.branchName.trim().isNotEmpty ?? false)
+        ? shellMeta!.branchName.trim()
+        : 'School Administration';
+
+    final title = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: const BoxDecoration(
-            color: AppColors.brandPrimary,
-            shape: BoxShape.circle,
+        Text(
+          'PRINCIPAL CONSOLE',
+          style: AppTypography.label.copyWith(
+            fontSize: 10,
+            color: _navyDeep,
+            letterSpacing: 1.0,
+            fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(width: AppSpacing.sm),
-        Flexible(
-          child: AutoSizeText(
-            'Operational Overview — $todayFormatted',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.h2.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+        const SizedBox(height: 4),
+        AutoSizeText(
+          schoolName,
+          maxLines: 1,
+          minFontSize: 11,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            color: _inkPrimary,
+          ),
+        ),
+        const SizedBox(height: 2),
+        AutoSizeText(
+          'Operational Overview — $todayFormatted',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: _inkSubtitle,
           ),
         ),
       ],
@@ -620,34 +676,126 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       ],
     );
 
+    // Shot 1a: 4 tactile quick-launch buttons (46px, accent-filled).
+    final quickLaunch = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildTactileActionButton(
+          label: 'Admit New Student',
+          route: '/students/new',
+          accent: _navyAccent,
+          icon: Icons.person_add_alt_1_outlined,
+        ),
+        const SizedBox(width: 8),
+        _buildTactileActionButton(
+          label: 'Collect Fee Challan',
+          route: '/fees/receipts',
+          accent: _emeraldAccent,
+          icon: Icons.payments_outlined,
+        ),
+        const SizedBox(width: 8),
+        _buildTactileActionButton(
+          label: 'Generate Vouchers',
+          route: '/fees/vouchers',
+          accent: _indigoAccent,
+          icon: Icons.receipt_long_outlined,
+        ),
+        const SizedBox(width: 8),
+        _buildTactileActionButton(
+          label: 'Mark Attendance',
+          route: '/attendance',
+          accent: _amberAccent,
+          icon: Icons.fact_check_outlined,
+        ),
+      ],
+    );
+
     return _SurfaceCard(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: isStacked
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AutoSizeText(
-                  'PRINCIPAL CONSOLE',
-                  style: AppTypography.label.copyWith(
-                    fontSize: 10,
-                    color: AppColors.brandPrimary,
-                    letterSpacing: 1.0,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
                 title,
                 const SizedBox(height: AppSpacing.xs),
                 Align(alignment: Alignment.centerLeft, child: controls),
+                const SizedBox(height: AppSpacing.sm),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: quickLaunch,
+                ),
               ],
             )
           : Row(
               children: [
                 Expanded(child: title),
                 const SizedBox(width: AppSpacing.md),
-                controls,
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      controls,
+                      const SizedBox(height: AppSpacing.xs),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: quickLaunch,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
+    );
+  }
+
+  /// Shot 1a: high-affordance 46px filled action button with icon, bold
+  /// label and a trailing arrow, wired to an existing navigation route.
+  Widget _buildTactileActionButton({
+    required String label,
+    required String route,
+    required Color accent,
+    required IconData icon,
+  }) {
+    return Material(
+      color: accent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: () => context.go(route),
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                maxLines: 1,
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                '→',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -668,8 +816,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final card1 = _buildKpiCard(
       label: 'ACTIVE ENROLLMENT',
       icon: Icons.groups_outlined,
-      accentColor: AppColors.accentStudents,
-      accentSoftBg: AppColors.accentStudentsSoftBg,
+      accentColor: _navyAccent,
+      accentSoftBg: _navyBadge,
       badgeText:
           '${shellMeta?.studentCount ?? (metrics?.activeEnrollment ?? 0)} Total',
       value: '${metrics?.activeEnrollment ?? 0}',
@@ -678,6 +826,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           '${metrics?.classCount ?? 0} Classes, ${metrics?.sectionCount ?? 0} Sections',
       isLoading: isLoading,
       isMobile: isMobile,
+      footerLabel: 'View Student Directory',
       onTap: () => context.go('/students'),
       tooltip: 'View student directory',
     );
@@ -695,14 +844,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final card2 = _buildKpiCard(
       label: "TODAY'S COLLECTION",
       icon: Icons.payments_outlined,
-      accentColor: AppColors.accentFees,
-      accentSoftBg: AppColors.accentFeesSoftBg,
+      accentColor: _emeraldAccent,
+      accentSoftBg: _emeraldBadge,
       badgeText: "Today's Counter",
       value: 'Rs. ${currencyFormatter.format(todayCollected)}',
       monospace: true,
       subtitle: 'Daily Register',
       isLoading: isLoading,
       isMobile: isMobile,
+      footerLabel: 'Open Fee Collection',
       onTap: () => context.go('/fees/receipts?from=dashboard'),
       tooltip: "View today's fee receipts",
     );
@@ -711,8 +861,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final card3 = _buildKpiCard(
       label: 'MONTHLY FEE COLLECTION',
       icon: Icons.account_balance_outlined,
-      accentColor: AppColors.accentFees,
-      accentSoftBg: AppColors.accentFeesSoftBg,
+      accentColor: _emeraldAccent,
+      accentSoftBg: _emeraldBadge,
       badgeText: '${metrics?.collectionPace ?? 0}% Pace',
       value: 'Rs. ${currencyFormatter.format(metrics?.monthlyCollected ?? 0)}',
       monospace: true,
@@ -721,8 +871,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               metrics!.latestBilledMonthLabel.isNotEmpty)
           ? '${metrics.latestBilledMonthLabel} • Exp: Rs. ${currencyFormatter.format(metrics.monthlyExpected)}'
           : 'Exp: Rs. ${currencyFormatter.format(metrics?.monthlyExpected ?? 0)}',
+      progressPercent: metrics?.collectionPace ?? 0,
       isLoading: isLoading,
       isMobile: isMobile,
+      footerLabel: 'Open Fee Ledger',
       onTap: () => context.go('/fees/ledger?from=/dashboard'),
       tooltip: 'View monthly fee ledger & billing',
     );
@@ -731,11 +883,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final card4 = _buildKpiCard(
       label: 'PENDING VOUCHERS',
       icon: Icons.assignment_late_outlined,
-      accentColor: AppColors.statusErrorText,
-      accentSoftBg: AppColors.statusErrorBg,
+      accentColor: _crimsonAccent,
+      accentSoftBg: _crimsonBadge,
       badgeText: 'Action Req',
       value: '${metrics?.pendingVouchers ?? 0}',
-      valueColor: AppColors.statusErrorText,
+      valueColor: _crimsonAccent,
       suffix: 'Defaulters',
       subtitle:
           'Total Overdue: Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)}',
@@ -815,6 +967,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             ),
       isLoading: isLoading,
       isMobile: isMobile,
+      footerLabel: 'View Defaulter List',
       onTap: () => context.go('/fees/ledger?status=Unpaid&from=/dashboard'),
       tooltip: 'View pending fee defaulters',
     );
@@ -835,7 +988,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     // Card 6: Academic Faculty
     final card6 = isMobile
         ? _StitchCard(
-            accentColor: AppColors.accentStaff,
+            accentColor: _indigoAccent,
             onTap: () => context.go('/staff/teachers'),
             tooltip: 'View faculty & staff directory',
             child: Row(
@@ -844,14 +997,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: AppColors.accentStaffSoftBg,
+                    color: _indigoBadge,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   alignment: Alignment.center,
                   child: const Icon(
                     Icons.badge_outlined,
                     size: 18,
-                    color: AppColors.accentStaff,
+                    color: _indigoAccent,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -882,9 +1035,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 const SizedBox(width: 8),
                 _buildStatusPill(
                   text: 'All Present Today',
-                  background: AppColors.accentStaffSoftBg,
-                  foreground: AppColors.accentStaff,
-                  border: AppColors.accentStaff.withValues(alpha: 0.25),
+                  background: _indigoBadge,
+                  foreground: _indigoAccent,
+                  border: _indigoAccent.withValues(alpha: 0.25),
                 ),
                 const SizedBox(width: 10),
                 Text(
@@ -901,12 +1054,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         : _buildKpiCard(
             label: 'ACADEMIC FACULTY',
             icon: Icons.badge_outlined,
-            accentColor: AppColors.accentStaff,
-            accentSoftBg: AppColors.accentStaffSoftBg,
+            accentColor: _indigoAccent,
+            accentSoftBg: _indigoBadge,
             badgeText: 'All Present Today',
             value: '${shellMeta?.staffCount ?? 5}',
             subtitle: 'Teaching & Admin Staff',
             isLoading: isLoading,
+            footerLabel: 'View Staff Directory',
             onTap: () => context.go('/staff/teachers'),
             tooltip: 'View faculty & staff directory',
           );
@@ -1017,13 +1171,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     String? suffix,
     Color? valueColor,
     bool monospace = false,
+    int? progressPercent,
+    String? footerLabel,
     Widget? footerAction,
     VoidCallback? onTap,
     String? tooltip,
   }) {
     if (isMobile) {
       return _StitchCard(
-        height: 115,
+        height: 125,
         accentColor: accentColor,
         onTap: onTap,
         tooltip: tooltip,
@@ -1073,9 +1229,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                     ? AppTypography.monospace
                                     : AppTypography.display)
                                 .copyWith(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: valueColor ?? AppColors.textPrimary,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w800,
+                                  color: valueColor ?? _inkPrimary,
                                 ),
                       ),
                     ),
@@ -1136,10 +1292,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     }
 
     return _StitchCard(
-      height: 135,
+      height: 165,
       accentColor: accentColor,
       onTap: onTap,
       tooltip: tooltip,
+      footer: footerLabel == null
+          ? null
+          : _buildKpiFooterStrip(footerLabel, accentColor),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1147,14 +1306,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   color: accentSoftBg,
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon, size: 16, color: accentColor),
+                child: Icon(icon, size: 18, color: accentColor),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1163,10 +1322,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.label.copyWith(
-                    fontSize: 11,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.4,
-                    color: AppColors.textSecondary,
+                    letterSpacing: 0.2,
+                    color: _inkPrimary,
                   ),
                 ),
               ),
@@ -1200,9 +1359,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                                   ? AppTypography.monospace
                                   : AppTypography.display)
                               .copyWith(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w700,
-                                color: valueColor ?? AppColors.textPrimary,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                color: valueColor ?? _inkPrimary,
                               ),
                     ),
                   ),
@@ -1219,6 +1378,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ],
               ],
             ),
+          if (progressPercent != null && !isLoading) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: SizedBox(
+                height: 7,
+                child: Row(
+                  children: [
+                    if (progressPercent > 0)
+                      Expanded(
+                        flex: progressPercent.clamp(1, 100),
+                        child: Container(color: _emeraldBright),
+                      ),
+                    Expanded(
+                      flex: 100 - progressPercent.clamp(0, 99),
+                      child: Container(color: _bandBorder),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+          ],
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -1231,8 +1412,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textMuted,
-                    fontSize: 11.5,
+                    color: _inkSubtitle,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
                   ),
                 ),
                 if (footerAction != null) ...[
@@ -1241,6 +1423,47 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ],
               ],
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shot 1a: 30px clickable footer strip — tinted surface, 1px top stroke,
+  /// bold accent label with a trailing arrow. It sits inside the card's
+  /// InkWell, so tapping it triggers the card's navigation.
+  Widget _buildKpiFooterStrip(String label, Color accent) {
+    return Container(
+      height: 30,
+      decoration: const BoxDecoration(
+        color: _bandSurface,
+        border: Border(top: BorderSide(color: _bandBorder, width: 1)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.label.copyWith(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: accent,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '→',
+            style: AppTypography.label.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: accent,
+            ),
           ),
         ],
       ),
@@ -1257,10 +1480,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     String? tooltip,
   }) {
     return _StitchCard(
-      height: 135,
-      accentColor: AppColors.accentAttendance,
+      height: 165,
+      accentColor: _amberAccent,
       onTap: onTap,
       tooltip: tooltip,
+      footer: _buildKpiFooterStrip('Open Attendance Register', _amberAccent),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1268,17 +1492,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.accentAttendanceSoftBg,
-                  borderRadius: BorderRadius.circular(6),
+                  color: _amberBadge,
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 alignment: Alignment.center,
                 child: const Icon(
                   Icons.how_to_reg_outlined,
-                  size: 16,
-                  color: AppColors.accentAttendance,
+                  size: 18,
+                  color: _amberAccent,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1288,19 +1512,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.label.copyWith(
-                    fontSize: 11,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.4,
-                    color: AppColors.textSecondary,
+                    letterSpacing: 0.2,
+                    color: _inkPrimary,
                   ),
                 ),
               ),
               const SizedBox(width: 4),
               _buildStatusPill(
                 text: 'Class Attendance',
-                background: AppColors.accentAttendanceSoftBg,
-                foreground: AppColors.accentAttendance,
-                border: AppColors.accentAttendance.withValues(alpha: 0.25),
+                background: _amberBadge,
+                foreground: _amberAccent,
+                border: _amberAccent.withValues(alpha: 0.25),
               ),
             ],
           ),
@@ -1316,9 +1540,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     child: Text(
                       rateString,
                       style: AppTypography.display.copyWith(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: _inkPrimary,
                       ),
                     ),
                   ),
@@ -1543,9 +1767,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _cardBorder, width: 1.5),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
@@ -1741,6 +1965,292 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // SECTION B2 — DEPARTMENT LAUNCHPAD (Shot 1a)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _buildDepartmentLaunchpad({
+    required DashboardMetrics? metrics,
+    required NumberFormat currencyFormatter,
+    required bool isDesktop,
+    required bool isTablet,
+    required bool isMobile,
+  }) {
+    final modules = [
+      _LaunchpadModule(
+        title: 'Student Directory & Admissions',
+        description: 'Find, edit and admit students',
+        route: '/students',
+        icon: Icons.people_outline,
+        accent: _navyAccent,
+        badge: _navyBadge,
+        pill: '${metrics?.activeEnrollment ?? 0} Enrolled',
+      ),
+      _LaunchpadModule(
+        title: 'Fee Collection & Challan Print',
+        description: 'Receive fees and print challans',
+        route: '/fees/receipts',
+        icon: Icons.payments_outlined,
+        accent: _emeraldAccent,
+        badge: _emeraldBadge,
+        pill:
+            'Rs. ${currencyFormatter.format(metrics?.monthlyCollected ?? 0)} Collected',
+      ),
+      _LaunchpadModule(
+        title: 'Monthly Voucher Generation',
+        description: 'Create monthly vouchers for all classes',
+        route: '/fees/vouchers',
+        icon: Icons.receipt_long_outlined,
+        accent: _indigoAccent,
+        badge: _indigoBadge,
+        pill: '${metrics?.pendingVouchers ?? 0} Unpaid',
+      ),
+      _LaunchpadModule(
+        title: 'Daily Attendance Register',
+        description: 'Mark present / absent today',
+        route: '/attendance',
+        icon: Icons.fact_check_outlined,
+        accent: _amberAccent,
+        badge: _amberBadge,
+        pill:
+            '${(metrics?.attendancePercent ?? 0).toStringAsFixed(0)}% Present Today',
+      ),
+      _LaunchpadModule(
+        title: 'Examinations & Result Gazette',
+        description: 'Enter marks, print result cards',
+        route: '/exams',
+        icon: Icons.grading_outlined,
+        accent: _indigoBright,
+        badge: _indigoBadge,
+        pill:
+            '${metrics?.classCount ?? 0} Cls · ${metrics?.sectionCount ?? 0} Secs',
+      ),
+      _LaunchpadModule(
+        title: 'Financial & Defaulter Reports',
+        description: 'Recovery, arrears and summaries',
+        route: '/reports',
+        icon: Icons.assessment_outlined,
+        accent: _crimsonAccent,
+        badge: _crimsonBadge,
+        pill:
+            'Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)} Overdue',
+      ),
+    ];
+
+    const gap = 10.0;
+    Widget body;
+    if (isDesktop) {
+      // 3 columns x 2 rows
+      body = Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildLaunchpadCard(modules[0])),
+              const SizedBox(width: gap),
+              Expanded(child: _buildLaunchpadCard(modules[1])),
+              const SizedBox(width: gap),
+              Expanded(child: _buildLaunchpadCard(modules[2])),
+            ],
+          ),
+          const SizedBox(height: gap),
+          Row(
+            children: [
+              Expanded(child: _buildLaunchpadCard(modules[3])),
+              const SizedBox(width: gap),
+              Expanded(child: _buildLaunchpadCard(modules[4])),
+              const SizedBox(width: gap),
+              Expanded(child: _buildLaunchpadCard(modules[5])),
+            ],
+          ),
+        ],
+      );
+    } else if (isTablet) {
+      // 2 columns x 3 rows
+      body = Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildLaunchpadCard(modules[0])),
+              const SizedBox(width: gap),
+              Expanded(child: _buildLaunchpadCard(modules[1])),
+            ],
+          ),
+          const SizedBox(height: gap),
+          Row(
+            children: [
+              Expanded(child: _buildLaunchpadCard(modules[2])),
+              const SizedBox(width: gap),
+              Expanded(child: _buildLaunchpadCard(modules[3])),
+            ],
+          ),
+          const SizedBox(height: gap),
+          Row(
+            children: [
+              Expanded(child: _buildLaunchpadCard(modules[4])),
+              const SizedBox(width: gap),
+              Expanded(child: _buildLaunchpadCard(modules[5])),
+            ],
+          ),
+        ],
+      );
+    } else {
+      // Mobile: single column of 6 module cards
+      body = Column(
+        children: [
+          for (int i = 0; i < modules.length; i++) ...[
+            _buildLaunchpadCard(modules[i]),
+            if (i < modules.length - 1) const SizedBox(height: gap),
+          ],
+        ],
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _cardBorder, width: 1.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 40px tinted header band with a 2.5px navy underline.
+          Container(
+            height: 40,
+            decoration: const BoxDecoration(
+              color: _bandSurface,
+              border: Border(bottom: BorderSide(color: _navyDeep, width: 2.5)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            alignment: Alignment.centerLeft,
+            child: const Row(
+              children: [
+                Icon(Icons.account_balance_rounded, size: 18, color: _navyDeep),
+                SizedBox(width: 8),
+                Text(
+                  'Department Launchpad',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: _inkPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: body,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLaunchpadCard(_LaunchpadModule module) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _cardBorder, width: 1.5),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(7),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () => context.go(module.route),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 4px left accent stripe.
+                  Container(width: 4, color: module.accent),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                module.icon,
+                                size: 18,
+                                color: module.accent,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  module.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: _inkPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            module.description,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _inkBody,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: _buildStatusPill(
+                                  text: module.pill,
+                                  background: module.badge,
+                                  foreground: module.accent,
+                                  border: module.accent.withValues(
+                                    alpha: 0.25,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  alignment: Alignment.centerRight,
+                                  child: Text(
+                                    'Open Module →',
+                                    maxLines: 1,
+                                    style: AppTypography.label.copyWith(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: module.accent,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildShortcutBadge(String shortcut) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -1793,7 +2303,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
     // Desktop: side-by-side with split handle
     return SizedBox(
-      height: 520,
+      height: 420,
       child: LayoutBuilder(
         builder: (context, constraints) {
           const handleWidth = 12.0;
@@ -2128,8 +2638,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          // Shot 1a: 40px tinted header band with a 2.5px accent underline.
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: _bandSurface,
+              border: Border(
+                bottom: BorderSide(color: iconColor, width: 2.5),
+              ),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
               children: [
                 Icon(icon, size: 18, color: iconColor),
@@ -2181,7 +2699,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ],
             ),
           ),
-          const Divider(height: 1, color: AppColors.borderDefault),
           if (fillHeight) Expanded(child: content) else content,
           const Divider(height: 1, color: AppColors.borderDefault),
           footer,
@@ -2385,8 +2902,30 @@ class _QuickOpItem {
   });
 }
 
-/// Stitch KPI Card with a 3.5px colored accent strip on the left border,
-/// hover lift, cursor feedback, and tooltip.
+/// Shot 1a: one interactive module card in the Department Launchpad grid.
+class _LaunchpadModule {
+  final String title;
+  final String description;
+  final String route;
+  final IconData icon;
+  final Color accent;
+  final Color badge;
+  final String pill;
+
+  const _LaunchpadModule({
+    required this.title,
+    required this.description,
+    required this.route,
+    required this.icon,
+    required this.accent,
+    required this.badge,
+    required this.pill,
+  });
+}
+
+/// Stitch KPI Card with a 4.5px colored accent bar on the top edge, an
+/// optional 30px clickable footer strip, hover lift, cursor feedback, and
+/// tooltip.
 class _StitchCard extends StatefulWidget {
   const _StitchCard({
     required this.accentColor,
@@ -2394,6 +2933,7 @@ class _StitchCard extends StatefulWidget {
     this.onTap,
     this.tooltip,
     this.height,
+    this.footer,
   });
 
   final Color accentColor;
@@ -2401,6 +2941,7 @@ class _StitchCard extends StatefulWidget {
   final VoidCallback? onTap;
   final String? tooltip;
   final double? height;
+  final Widget? footer;
 
   @override
   State<_StitchCard> createState() => _StitchCardState();
@@ -2416,16 +2957,17 @@ class _StitchCardState extends State<_StitchCard> {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
     final lifted = _hovered && _interactive && !reduceMotion;
 
-    final innerRow = Row(
+    final body = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      child: widget.child,
+    );
+
+    final stack = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(width: 3.5, color: widget.accentColor),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: widget.child,
-          ),
-        ),
+        Container(height: 4.5, color: widget.accentColor),
+        widget.height != null ? Expanded(child: body) : body,
+        if (widget.footer != null) widget.footer!,
       ],
     );
 
@@ -2435,10 +2977,11 @@ class _StitchCardState extends State<_StitchCard> {
       transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
       height: widget.height,
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: lifted ? AppColors.borderHover : AppColors.borderDefault,
+          color: lifted ? AppColors.borderHover : _cardBorder,
+          width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
@@ -2449,10 +2992,8 @@ class _StitchCardState extends State<_StitchCard> {
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(AppRadius.lg - 1),
-        child: widget.height != null
-            ? innerRow
-            : IntrinsicHeight(child: innerRow),
+        borderRadius: BorderRadius.circular(9),
+        child: widget.height != null ? stack : IntrinsicHeight(child: stack),
       ),
     );
 
@@ -2461,7 +3002,7 @@ class _StitchCardState extends State<_StitchCard> {
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(10),
           hoverColor: Colors.transparent,
           splashColor: widget.accentColor.withValues(alpha: 0.08),
           highlightColor: widget.accentColor.withValues(alpha: 0.04),
@@ -2520,10 +3061,11 @@ class _SurfaceCardState extends State<_SurfaceCard> {
       curve: Curves.easeOutCubic,
       transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: lifted ? AppColors.borderHover : AppColors.borderDefault,
+          color: lifted ? AppColors.borderHover : _cardBorder,
+          width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
@@ -2537,7 +3079,7 @@ class _SurfaceCardState extends State<_SurfaceCard> {
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          borderRadius: BorderRadius.circular(10),
           hoverColor: Colors.transparent,
           splashColor: AppColors.brandPrimary.withValues(alpha: 0.05),
           highlightColor: AppColors.brandPrimary.withValues(alpha: 0.03),
