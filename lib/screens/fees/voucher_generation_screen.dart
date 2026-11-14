@@ -18,7 +18,9 @@ import '../../core/utils/voucher_pdf_generator.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../models/school_class.dart';
 import '../../models/voucher_preview_row.dart';
+import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 import '../../widgets/voucher/voucher.dart';
@@ -365,6 +367,17 @@ class _VoucherGenerationScreenState
     List<FeeReceiptView> receipts;
     try {
       receipts = specific ?? await _loadGeneratedVouchers(wholeSchool: wholeSchool);
+      // Shot 2b fix: if the month-scoped query found nothing for the
+      // single-student workspace, fall back to that student's latest
+      // voucher regardless of billing month so Print never dead-ends
+      // right after generation.
+      if (receipts.isEmpty &&
+          !wholeSchool &&
+          ref.read(voucherGenFiltersProvider).selectedStuRegId != null) {
+        receipts = await _loadLatestVouchersForStudents({
+          ref.read(voucherGenFiltersProvider).selectedStuRegId!,
+        });
+      }
     } catch (e, st) {
       debugPrint('Print preview load failed: $e\n$st');
       if (!mounted) return;
@@ -403,6 +416,13 @@ class _VoucherGenerationScreenState
     List<FeeReceiptView> receipts;
     try {
       receipts = await _loadGeneratedVouchers(stuRegIds: stuRegIds);
+      // Shot 2b fix: clicking Print 0.1s after generating a single voucher
+      // must ALWAYS open the preview. If the month-scoped query misses
+      // (ForMonth text mismatch, prefix mismatch), fall back to the latest
+      // VoucherMasID for these students queried straight from SQLite.
+      if (receipts.isEmpty) {
+        receipts = await _loadLatestVouchersForStudents(stuRegIds);
+      }
     } catch (e, st) {
       debugPrint('Print voucher load failed: $e\n$st');
       if (!mounted) return;
@@ -550,6 +570,58 @@ class _VoucherGenerationScreenState
 
 
 
+
+  /// Shot 2b fix: loads each student's LATEST voucher (highest
+  /// VoucherMasID) directly from SQLite, ignoring the billing-month filter.
+  /// Used as the print fallback right after single-student generation.
+  Future<List<FeeReceiptView>> _loadLatestVouchersForStudents(
+    Set<int> stuRegIds,
+  ) async {
+    if (stuRegIds.isEmpty) return const [];
+    final db = await DatabaseService.instance.database;
+    final ids = stuRegIds.join(',');
+    final rows = await db.rawQuery(
+      '''
+      SELECT vm.*, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
+             c.CName AS class_name, cs.SecName AS section_name,
+             sc.ClassRollNo, sc.SessionYr
+      FROM VoucharMas vm
+      JOIN Stu_Reg sr ON vm.student_class_StuRegId = sr.Stu_RegID
+      LEFT JOIN Student_Class sc
+        ON sr.Stu_RegID = sc.Stu_RegID AND sc.SessionYr = vm.SessionYr
+      LEFT JOIN Class c ON sc.ClassID = c.ClassID
+      LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+      WHERE vm.VoucherMasID IN (
+        SELECT MAX(VoucherMasID) FROM VoucharMas
+        WHERE Student_Class_StuRegID IN ($ids)
+      )
+      ORDER BY sc.ClassRollNo ASC
+    ''',
+    );
+
+    final out = <FeeReceiptView>[];
+    for (final row in rows) {
+      final vid = row['VoucherMasID'] as String;
+      final det = await db.rawQuery(
+        '''
+        SELECT vd.feeParameterID, vd.Amount, vd.Discount,
+               fp.ParamDesciption
+        FROM VoucharDet vd
+        LEFT JOIN FeeParameters fp ON vd.feeParameterID = fp.FeeParamID
+        WHERE vd.VoucharMasID = ?
+        ORDER BY vd.feeParameterID ASC
+      ''',
+        [vid],
+      );
+      out.add(
+        FeeReceiptView.fromFlatMap(
+          Map<String, dynamic>.from(row),
+          lineItems: det.map((m) => Map<String, dynamic>.from(m)).toList(),
+        ),
+      );
+    }
+    return out;
+  }
 
   Future<void> _pickDate(
     BuildContext context,
@@ -4268,7 +4340,14 @@ class _SingleVoucherWorkspaceState
       );
       return;
     }
-    unawaited(_load());
+    // Shot 2b fix: refresh the workspace rows from SQLite and bump the
+    // data version BEFORE the completion dialog / print so every row's
+    // voucherMasId and hasExistingVoucher are fresh in memory.
+    await _load();
+    if (!mounted) return;
+    ref.read(dbDataVersionProvider.notifier).state++;
+    ref.invalidate(voucherGenPreviewProvider);
+    ref.invalidate(dashboardMetricsProvider);
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(

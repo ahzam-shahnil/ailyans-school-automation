@@ -5,7 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
+import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/school_leaving_provider.dart';
+import '../../core/providers/student_profile_provider.dart';
+import '../../core/sync/sync_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
@@ -27,6 +30,10 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   final TextEditingController _remarksController = TextEditingController();
 
   String? _lastSyncedUri;
+
+  // Shot 2b: students whose stale enrollment was already reconciled after
+  // loading an existing SchLeaving record.
+  final Set<int> _reconciledStuRegIds = <int>{};
 
   @override
   void didChangeDependencies() {
@@ -75,6 +82,127 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
             : AppColors.statusSuccessBg,
         duration: const Duration(seconds: 3),
       ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHOT 2b — ENROLLMENT RECONCILIATION + SLC REVOKE
+  // ─────────────────────────────────────────────────────────────────────────
+
+  void _invalidateDependentProviders() {
+    ref.invalidate(dashboardMetricsProvider);
+    ref.invalidate(studentProfileProvider);
+    ref.read(dbDataVersionProvider.notifier).state++;
+  }
+
+  /// Shot 2b: a student with an issued SLC must never keep an active
+  /// enrollment. Updates ALL Student_Class rows for the student across all
+  /// sessions (Present = 0, VGen = 'N').
+  Future<void> _reconcileEnrollment(int stuRegId) async {
+    try {
+      final db = await DatabaseService.instance.database;
+      final stale = await db.rawQuery(
+        '''
+        SELECT COUNT(*) AS n FROM Student_Class
+        WHERE Stu_RegID = ?
+          AND (COALESCE(Present, 0) = 1 OR COALESCE(VGen, 'Y') = 'Y')
+        ''',
+        [stuRegId],
+      );
+      final count = (stale.first['n'] as num?)?.toInt() ?? 0;
+      if (count == 0) return;
+      await db.rawUpdate(
+        '''
+        UPDATE Student_Class
+        SET Present = 0, VGen = 'N'
+        WHERE Stu_RegID = ?
+        ''',
+        [stuRegId],
+      );
+      _invalidateDependentProviders();
+      debugPrint(
+        'Shot 2b: reconciled $count stale Student_Class row(s) for $stuRegId',
+      );
+    } catch (e) {
+      debugPrint('Enrollment reconciliation failed for $stuRegId: $e');
+    }
+  }
+
+  /// Shot 2b: revoke an SLC issued by mistake — deletes the SchLeaving row
+  /// and re-activates the latest Student_Class enrollment (Present = 1,
+  /// VGen = 'Y') so the student can be billed again.
+  Future<void> _revokeSlc() async {
+    final student = ref.read(schoolLeavingProvider).selectedStudent;
+    if (student == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'Revoke SLC / Re-Admit ${student.stuRegId} - ${student.studentName}?',
+        ),
+        content: const Text(
+          'This will delete the School Leaving record and restore the student\'s active enrollment so vouchers can be generated again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.statusErrorText,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Revoke SLC / Re-Admit'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final db = await DatabaseService.instance.database;
+      await db.transaction((txn) async {
+        // 1. Remove the School Leaving record(s).
+        await txn.delete(
+          'SchLeaving',
+          where: 'StuRegID = ?',
+          whereArgs: [student.stuRegId],
+        );
+        // 2. Re-activate the latest enrollment row (highest SessionYr).
+        await txn.rawUpdate(
+          '''
+          UPDATE Student_Class
+          SET Present = 1, VGen = 'Y'
+          WHERE Stu_RegID = ?
+            AND SessionYr = (
+              SELECT MAX(SessionYr) FROM Student_Class WHERE Stu_RegID = ?
+            )
+          ''',
+          [student.stuRegId, student.stuRegId],
+        );
+      });
+    } catch (e) {
+      debugPrint('Revoke SLC failed: $e');
+      if (!mounted) return;
+      _showSnackBar('Failed to revoke SLC: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+
+    _invalidateDependentProviders();
+    _reconciledStuRegIds.remove(student.stuRegId);
+    await ref.read(schoolLeavingProvider.notifier).loadInitialData();
+    if (!mounted) return;
+    await ref
+        .read(schoolLeavingProvider.notifier)
+        .selectStudent(student.stuRegId);
+    if (!mounted) return;
+    _showSnackBar(
+      'SLC revoked. ${student.stuRegId} - ${student.studentName} re-admitted.',
     );
   }
 
@@ -152,6 +280,12 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           .commitLeaving();
       if (!mounted) return;
       _showSnackBar(msg, isError: !ok);
+      if (ok) {
+        // Shot 2b: commitLeaving deactivates Present only — also clear VGen
+        // on every Student_Class row so voucher generation stops for ALL
+        // sessions of this student.
+        await _reconcileEnrollment(student.stuRegId);
+      }
     }
   }
 
@@ -352,6 +486,24 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
 
       if (next.remarks != _remarksController.text) {
         _remarksController.text = next.remarks;
+      }
+
+      // Shot 2b: if a freshly SELECTED student already has an SLC but
+      // Student_Class still shows an active enrollment, reconcile it once
+      // automatically. Only fires on selection change — not when the same
+      // student re-syncs right after committing a new SLC (that path runs
+      // its own unenroll inside _handleCommit).
+      final loaded = next.selectedStudent;
+      final previous = prev?.selectedStudent;
+      final isNewSelection = loaded != null &&
+          (previous == null || previous.stuRegId != loaded.stuRegId);
+      if (isNewSelection &&
+          loaded.hasExistingSlc &&
+          !_reconciledStuRegIds.contains(loaded.stuRegId)) {
+        _reconciledStuRegIds.add(loaded.stuRegId);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _reconcileEnrollment(loaded.stuRegId);
+        });
       }
     });
 
@@ -1155,6 +1307,24 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                   color: AppColors.statusInfoText,
                   fontWeight: FontWeight.w500,
                 ),
+              ),
+            ),
+            // Shot 2b: escape hatch — an SLC issued by mistake can be
+            // revoked and the student re-admitted in one action.
+            TextButton.icon(
+              onPressed: _revokeSlc,
+              icon: const Icon(Icons.settings_backup_restore_rounded,
+                  size: 14),
+              label: const Text(
+                'Revoke SLC / Re-Admit',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.statusInfoText,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 30),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
           ],

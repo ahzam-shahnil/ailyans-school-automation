@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/db/database.dart';
 import '../../core/providers/clock_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/fee_collection_provider.dart';
@@ -2460,6 +2461,84 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   }
 
   /// Shot 1e: 38px Oxford Blue header band for the voucher dossier card.
+  /// Shot 2b: confirmation dialog + permanent voucher deletion (payments,
+  /// details, master) directly from the Voucher Dossier header.
+  Future<void> _confirmDeleteVoucher(FeeReceiptView receipt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete Voucher #${receipt.voucherMasId}?'),
+        content: const Text(
+          'This will permanently remove the voucher and any recorded fee transactions for it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.statusErrorText,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete Voucher'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final db = await DatabaseService.instance.database;
+    try {
+      await db.transaction((txn) async {
+        // 1. Recorded payments for this voucher.
+        await txn.delete(
+          'FeeTransaction',
+          where: 'VoucharNo = ?',
+          whereArgs: [receipt.voucherMasId],
+        );
+        // 2. Fee line items.
+        await txn.delete(
+          'VoucharDet',
+          where: 'VoucharMasID = ?',
+          whereArgs: [receipt.voucherMasId],
+        );
+        // 3. Voucher master. AFTER DELETE triggers (Migration 009) capture
+        //    sync tombstones automatically.
+        await txn.delete(
+          'VoucharMas',
+          where: 'VoucherMasID = ?',
+          whereArgs: [receipt.voucherMasId],
+        );
+      });
+    } catch (e) {
+      debugPrint('Delete voucher failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete voucher: $e'),
+          backgroundColor: AppColors.statusErrorBg,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+
+    ref.invalidate(dashboardMetricsProvider);
+    final notifier = ref.read(feeCollectionProvider.notifier);
+    await notifier.lookupVoucherByFilter(
+      ref.read(feeCollectionProvider).activeDirectoryFilter ?? 'unpaid',
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Voucher #${receipt.voucherMasId} deleted.'),
+        backgroundColor: AppColors.statusSuccessBg,
+      ),
+    );
+  }
+
   Widget _buildVoucherDossierBand() {
     return Container(
       height: 38,
@@ -2806,6 +2885,27 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                       horizontal: AppSpacing.sm,
                     ),
                     minimumSize: const Size(0, 32),
+                  ),
+                ),
+                // Shot 2b: crimson outlined Delete Voucher action with a
+                // confirmation dialog, right next to Print.
+                const SizedBox(width: AppSpacing.xs),
+                Tooltip(
+                  message: 'Delete Voucher',
+                  child: OutlinedButton.icon(
+                    onPressed: () => _confirmDeleteVoucher(receipt),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 14),
+                    label: const Text('Delete'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.statusErrorText,
+                      side: const BorderSide(
+                        color: AppColors.statusErrorBorder,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                      ),
+                      minimumSize: const Size(0, 32),
+                    ),
                   ),
                 ),
               ],
