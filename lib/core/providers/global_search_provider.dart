@@ -15,6 +15,10 @@ class StudentSearchHit {
   final String? mobile;
   final bool isPresent;
 
+  /// Shot 2a: father CNIC (or student B-Form when no CNIC is on file) so the
+  /// omni-search subtitle can surface the ID document that was typed.
+  final String? cnic;
+
   const StudentSearchHit({
     required this.stuRegId,
     required this.fullName,
@@ -24,6 +28,7 @@ class StudentSearchHit {
     this.rollNo,
     this.mobile,
     required this.isPresent,
+    this.cnic,
   });
 
   String get classSectionDisplay {
@@ -31,6 +36,8 @@ class StudentSearchHit {
     if (className != null && className!.isNotEmpty) parts.add(className!);
     if (secName != null && secName!.isNotEmpty) parts.add('Sec $secName');
     if (rollNo != null) parts.add('Roll #$rollNo');
+    // Shot 2a: append the matched CNIC / B-Form to the result subtitle.
+    if (cnic != null && cnic!.isNotEmpty) parts.add('CNIC: $cnic');
     return parts.isEmpty ? 'Not Enrolled' : parts.join(' - ');
   }
 }
@@ -159,6 +166,11 @@ final globalSearchProvider = FutureProvider.autoDispose
 
       final db = await DatabaseService.instance.database;
       final pattern = '%${q.toLowerCase()}%';
+      // Shot 2a: CNIC / B-Form search must match both the formatted
+      // (`38302-1234567-1`) and the hyphen-free (`3830212345671`) spelling,
+      // so the hyphens are stripped from the pattern before the LIKE test.
+      final digitsPattern =
+          '%${q.replaceAll('-', '').replaceAll(' ', '').toLowerCase()}%';
 
       // 1. Students
       // Shot 6k: a student can have multiple Student_Class rows (promotion
@@ -171,6 +183,7 @@ final globalSearchProvider = FutureProvider.autoDispose
       final studentRows = await db.rawQuery(
         '''
     SELECT sr.Stu_RegID, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name, sr.Mobile1,
+           sr.CNIC_No, sr.B_Form_No,
            sc.ClassRollNo, sc.Present, c.CName, cs.SecName
     FROM Stu_Reg sr
     LEFT JOIN Student_Class sc ON sc.rowid = (
@@ -186,6 +199,8 @@ final globalSearchProvider = FutureProvider.autoDispose
        OR LOWER(COALESCE(sr.F_Name,'')) LIKE ?
        OR CAST(sr.Stu_RegID AS TEXT) LIKE ?
        OR LOWER(COALESCE(sr.Mobile1,'')) LIKE ?
+       OR REPLACE(COALESCE(sr.CNIC_No,''), '-', '') LIKE ?
+       OR REPLACE(COALESCE(sr.B_Form_No,''), '-', '') LIKE ?
     GROUP BY sr.Stu_RegID
     ORDER BY CASE
         WHEN CAST(sr.Stu_RegID AS TEXT) = ? THEN 0
@@ -195,7 +210,16 @@ final globalSearchProvider = FutureProvider.autoDispose
       sr.Stu_RegID DESC
     LIMIT 25
     ''',
-        [pattern, pattern, pattern, pattern, q, pattern],
+        [
+          pattern,
+          pattern,
+          pattern,
+          pattern,
+          digitsPattern,
+          digitsPattern,
+          q,
+          pattern,
+        ],
       );
 
       final students = studentRows.map((r) {
@@ -213,6 +237,9 @@ final globalSearchProvider = FutureProvider.autoDispose
           rollNo: (r['ClassRollNo'] as num?)?.toInt(),
           mobile: (r['Mobile1'] as String?)?.trim(),
           isPresent: (r['Present'] as num?)?.toInt() == 1,
+          cnic: ((r['CNIC_No'] as String?)?.trim().isNotEmpty == true)
+              ? (r['CNIC_No'] as String).trim()
+              : (r['B_Form_No'] as String?)?.trim(),
         );
       }).toList();
 

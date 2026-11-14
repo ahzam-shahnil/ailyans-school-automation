@@ -5,6 +5,7 @@ import '../../models/student.dart';
 import '../../models/student_enrollment.dart';
 import '../../models/student_voucher.dart';
 import '../db/database.dart';
+import '../sync/node_id_allocator.dart';
 import '../utils/biodata_pdf_generator.dart';
 
 /// Aggregated data bundle for the 360-degree Student Profile Workstation.
@@ -26,6 +27,11 @@ class StudentProfileBundle {
   final List<Map<String, dynamic>> attendance;
   final bool isEnrolled;
 
+  /// Shot 2a: true when a school-leaving record (SchLeaving) exists for this
+  /// student — the profile must surface `Alumni` / `Left` status and never
+  /// present a stale active enrollment as `Active`.
+  final bool hasLeftRecord;
+
   const StudentProfileBundle({
     required this.student,
     required this.enrollments,
@@ -43,6 +49,7 @@ class StudentProfileBundle {
     required this.exams,
     required this.attendance,
     this.isEnrolled = true,
+    this.hasLeftRecord = false,
   });
 }
 
@@ -95,12 +102,39 @@ final studentProfileProvider =
         .map((r) => StudentEnrollment.fromMap(r))
         .toList();
 
+    // 5. School-leaving record (Shot 2a): the leaving workflow commits into
+    // `SchLeaving` and deactivates the enrollment. If a leaving row exists we
+    // reconcile any stale active enrollment (Present = 1 / VGen = 'Y') so an
+    // SLC-issued student is never stuck as `Active` in their old class, and
+    // the profile renders the `Alumni` status badge.
+    final leftRows = await db.query(
+      'SchLeaving',
+      where: 'StuRegID = ?',
+      whereArgs: [stuRegId],
+      limit: 1,
+    );
+    final hasLeftRecord = leftRows.isNotEmpty;
+    if (hasLeftRecord) {
+      await db.rawUpdate(
+        '''
+        UPDATE Student_Class
+        SET Present = 0, VGen = 'N'
+        WHERE Stu_RegID = ?
+          AND (COALESCE(Present, 0) = 1 OR COALESCE(VGen, 'Y') = 'Y')
+        ''',
+        [stuRegId],
+      );
+    }
+
+
     // Current enrollment metadata
     final activeEnrollments =
         enrollments.where((e) => e.present == 1).toList();
     final currentEnrollment =
         activeEnrollments.isNotEmpty ? activeEnrollments.first : null;
-    final isEnrolled = currentEnrollment != null;
+    // Shot 2a: a committed school-leaving record always wins — the student is
+    // Alumni regardless of any stale Student_Class.Present flag.
+    final isEnrolled = !hasLeftRecord && currentEnrollment != null;
     final classRollNo = currentEnrollment?.classRollNo ?? 0;
     final currentClassName =
         isEnrolled ? currentEnrollment.className : 'Not Enrolled';
@@ -123,26 +157,43 @@ final studentProfileProvider =
     final vouchers = voucherRows.map((r) => StudentVoucher.fromMap(r)).toList();
 
     // 4. Financial calculations
-    int totalBilled = 0;
-    int totalPaid = 0;
-
+    // Shot 2a (Ailyans production `#4810 Ahzam Shah`): the old query billed
+    // `SubTotal` while payments settled `SubTotal - Discount`, so every
+    // discounted voucher reported a phantom outstanding balance equal to its
+    // concession (voucher 2610-4810: SubTotal 4500, Discount 1000, 3500 paid
+    // → falsely "Rs. 1,000 outstanding"). Each voucher's unpaid balance is
+    // now MAX(0, SubTotal - Discount - Paid), and a voucher marked settled
+    // (`IsPaid = 'Y'`) can never contribute arrears.
+    // The voucher query LEFT JOINs FeeTransaction, so one voucher with several
+    // installments yields several rows — aggregate per VoucherMasID first.
+    final voucherAggregates = <String, List<StudentVoucher>>{};
     for (final v in vouchers) {
-      totalBilled += v.subtotal;
-      if (v.paidAmount != null && v.paidAmount! > 0) {
-        totalPaid += v.paidAmount!;
-      } else if (v.isPaid == 'Y') {
-        totalPaid += (v.subtotal - v.discount);
-      }
+      voucherAggregates.putIfAbsent(v.voucherMasId, () => []).add(v);
     }
 
-    final outstandingArrears = totalBilled - totalPaid;
+    int totalBilled = 0; // net billable = SubTotal - Discount
+    int totalPaid = 0;
+    int outstandingArrears = 0;
+
+    for (final rows in voucherAggregates.values) {
+      final head = rows.first;
+      final net = head.subtotal - head.discount;
+      int paid = 0;
+      for (final r in rows) {
+        if (r.paidAmount != null && r.paidAmount! > 0) paid += r.paidAmount!;
+      }
+      final balance = head.isPaid == 'Y' ? 0 : (net - paid > 0 ? net - paid : 0);
+      totalBilled += net;
+      totalPaid += paid;
+      outstandingArrears += balance;
+    }
     final currencyFormat = NumberFormat('#,##0');
 
     final feeBalanceSummary = outstandingArrears <= 0
         ? 'Rs. 0.00 (All clear)'
         : 'Rs. ${currencyFormat.format(outstandingArrears)} outstanding';
 
-    // 5. Fetch Advances
+    // 5b. Fetch Advances
     final advanceRows = await db.query(
       'StuAdv',
       where: 'StuRegID = ?',
@@ -195,6 +246,7 @@ final studentProfileProvider =
       exams: examRows,
       attendance: attendanceRows,
       isEnrolled: isEnrolled,
+      hasLeftRecord: hasLeftRecord,
     );
   },
 );
@@ -233,7 +285,7 @@ Future<StudentBiodataPrintData> buildBiodataPrintData(
   final db = await DatabaseService.instance.database;
   final feeRows = await db.rawQuery(
     '''
-    SELECT COALESCE(SUM(SubTotal), 0) as total_billed,
+    SELECT COALESCE(SUM(SubTotal - COALESCE(Discount, 0)), 0) as total_billed,
            COALESCE(SUM(COALESCE(PaidAmt, 0)), 0) as total_paid
     FROM VoucharMas WHERE Student_Class_StuRegID = ?
     ''',
@@ -314,4 +366,152 @@ Future<StudentBiodataPrintData> buildBiodataPrintData(
     feeBalance: feeBalance,
     currentClassSection: currentClassSection,
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Shot 2a — Mutations: voucher delete, concession settings, student purge.
+// Sync note: `_sync_outbox` AFTER DELETE triggers (Migration 009) capture
+// tombstones automatically for every synced table touched below, as long as
+// the writes run with `is_applying_remote = 0` (the default for local UX).
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Deletes one voucher and all of its dependent rows (payment transactions,
+/// voucher details, master row) inside a single transaction. Returns true if
+/// the master row was removed.
+Future<bool> deleteStudentVoucher(String voucherMasId) async {
+  final db = await DatabaseService.instance.database;
+  int deleted = 0;
+  await db.transaction((txn) async {
+    await txn.rawDelete(
+      'DELETE FROM FeeTransaction WHERE VoucharNo = ?',
+      [voucherMasId],
+    );
+    await txn.rawDelete(
+      'DELETE FROM VoucharDet WHERE VoucharMasID = ?',
+      [voucherMasId],
+    );
+    deleted = await txn.rawDelete(
+      'DELETE FROM VoucharMas WHERE VoucherMasID = ?',
+      [voucherMasId],
+    );
+  });
+  return deleted > 0;
+}
+
+/// Persists the Fee Concessions & Advance Credit panel onto `Stu_Reg`
+/// (`Discount` = monthly tuition concession, `VMDiscount` = voucher
+/// adjustment credit, `FullDiscount` = 100% free-ship waiver flag).
+Future<void> updateStudentConcessions({
+  required int stuRegId,
+  required double tuitionConcession,
+  required int voucherAdjustmentCredit,
+  required int fullFeeWaiver,
+}) async {
+  final db = await DatabaseService.instance.database;
+  await db.update(
+    'Stu_Reg',
+    {
+      'Discount': tuitionConcession,
+      'VMDiscount': voucherAdjustmentCredit,
+      'FullDiscount': fullFeeWaiver,
+    },
+    where: 'Stu_RegID = ?',
+    whereArgs: [stuRegId],
+  );
+}
+
+/// Records a positive advance-credit deposit into `StuAdv`.
+Future<void> addStudentAdvanceCredit({
+  required int stuRegId,
+  required int amount,
+  required DateTime date,
+  String depositedBy = 'Office',
+}) async {
+  final db = await DatabaseService.instance.database;
+  await db.transaction((txn) async {
+    final nextAdvId = await NodeIdAllocator.allocateInTransaction(
+      txn,
+      tableName: 'StuAdv',
+      pkColumn: 'StuAdvID',
+    );
+    await txn.insert('StuAdv', {
+      'StuAdvID': nextAdvId,
+      'StuRegID': stuRegId,
+      'AdvAmount': amount,
+      'MOP': 'Cash',
+      'Date': DateFormat('yyyy-MM-dd').format(date),
+      'DepositedBy': depositedBy,
+      'Detail': 'Advance fee credit deposited from student profile',
+    });
+  });
+}
+
+/// Permanently deletes a student and every dependent record inside one
+/// transaction: fee transactions, voucher details, voucher masters,
+/// attendance detail rows, school-leaving record, exam marks, advance
+/// credits, enrollments, and finally the `Stu_Reg` demographic row.
+Future<void> permanentlyDeleteStudent(int stuRegId) async {
+  final db = await DatabaseService.instance.database;
+  await db.transaction((txn) async {
+    final voucherRows = await txn.rawQuery(
+      'SELECT VoucherMasID FROM VoucharMas WHERE Student_Class_StuRegID = ?',
+      [stuRegId],
+    );
+    final voucherIds = voucherRows
+        .map((r) => r['VoucherMasID'] as String)
+        .toList(growable: false);
+    if (voucherIds.isNotEmpty) {
+      final placeholders = List.filled(voucherIds.length, '?').join(',');
+      await txn.rawDelete(
+        'DELETE FROM FeeTransaction WHERE VoucharNo IN ($placeholders)',
+        voucherIds,
+      );
+      await txn.rawDelete(
+        'DELETE FROM VoucharDet WHERE VoucharMasID IN ($placeholders)',
+        voucherIds,
+      );
+    }
+    await txn.rawDelete(
+      'DELETE FROM VoucharMas WHERE Student_Class_StuRegID = ?',
+      [stuRegId],
+    );
+    await txn.rawDelete(
+      'DELETE FROM AttDet WHERE Stu_RegID = ?',
+      [stuRegId],
+    );
+    await txn.rawDelete(
+      'DELETE FROM SchLeaving WHERE StuRegID = ?',
+      [stuRegId],
+    );
+    final examRows = await txn.rawQuery(
+      'SELECT ExamMasID FROM ExamMas WHERE Stu_RegID = ?',
+      [stuRegId],
+    );
+    final examIds = examRows
+        .map((r) => r['ExamMasID'] as num)
+        .toList(growable: false);
+    if (examIds.isNotEmpty) {
+      final placeholders = List.filled(examIds.length, '?').join(',');
+      await txn.rawDelete(
+        'DELETE FROM ExamDet WHERE ExamMasID IN ($placeholders)',
+        examIds,
+      );
+    }
+    await txn.rawDelete(
+      'DELETE FROM ExamMas WHERE Stu_RegID = ?',
+      [stuRegId],
+    );
+    await txn.rawDelete(
+      'DELETE FROM StuAdv WHERE StuRegID = ?',
+      [stuRegId],
+    );
+    await txn.rawDelete(
+      'DELETE FROM Student_Class WHERE Stu_RegID = ?',
+      [stuRegId],
+    );
+    await txn.rawDelete(
+      'DELETE FROM Stu_Reg WHERE Stu_RegID = ?',
+      [stuRegId],
+    );
+  });
 }

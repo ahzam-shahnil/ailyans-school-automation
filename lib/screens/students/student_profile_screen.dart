@@ -7,7 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
+import '../../models/fee_receipt_view.dart';
 import '../../core/providers/fee_collection_provider.dart';
+import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/sibling_links_provider.dart';
@@ -78,6 +80,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   bool _initializedFromStudent = false;
   int _lastLoadedStuRegId = -1;
 
+  // Shot 2a: Advances tab state
+  late final TextEditingController _advTuitionController;
+  late final TextEditingController _advVoucherAdjController;
+  bool _advFullWaiver = false;
+  bool _advSaving = false;
+  int _advSeededStuRegId = -1;
+  late final TextEditingController _advAmountController;
+  late final TextEditingController _advDepositedByController;
+
   final List<String> _tabLabels = const [
     'Overview',
     'Enrollment History',
@@ -128,6 +139,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     _vmDiscountController = TextEditingController();
     _remarksController = TextEditingController();
     _nationalityController = TextEditingController();
+    _advTuitionController = TextEditingController();
+    _advVoucherAdjController = TextEditingController();
+    _advAmountController = TextEditingController();
+    _advDepositedByController = TextEditingController();
   }
 
   @override
@@ -152,6 +167,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     _vmDiscountController.dispose();
     _remarksController.dispose();
     _nationalityController.dispose();
+    _advTuitionController.dispose();
+    _advVoucherAdjController.dispose();
+    _advAmountController.dispose();
+    _advDepositedByController.dispose();
 
     _firstNameFocus.dispose();
     _fatherNameFocus.dispose();
@@ -257,6 +276,257 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         },
       ),
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHOT 2a — FEE LEDGER PRINT / DELETE + VOUCHER RECEIPT LOADING
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Loads every voucher of this student as a printable [FeeReceiptView]
+  /// (same joined shape the voucher generator prints from).
+  Future<List<FeeReceiptView>> _loadStudentVoucherReceipts() async {
+    final db = await DatabaseService.instance.database;
+    final stuRegId = int.tryParse(widget.studentId) ?? -1;
+    final rows = await db.rawQuery(
+      '''
+      SELECT vm.*, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
+             c.CName AS class_name, cs.SecName AS section_name,
+             sc.ClassRollNo, sc.SessionYr
+      FROM VoucharMas vm
+      JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
+      LEFT JOIN Student_Class sc
+        ON sr.Stu_RegID = sc.Stu_RegID AND sc.SessionYr = vm.SessionYr
+      LEFT JOIN Class c ON sc.ClassID = c.ClassID
+      LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+      WHERE vm.Student_Class_StuRegID = ?
+      ORDER BY vm.VDate DESC, vm.VoucherMasID DESC
+    ''',
+      [stuRegId],
+    );
+
+    final out = <FeeReceiptView>[];
+    for (final row in rows) {
+      final vid = row['VoucherMasID'] as String;
+      final det = await db.rawQuery(
+        '''
+        SELECT vd.feeParameterID, vd.Amount, vd.Discount,
+               fp.ParamDesciption
+        FROM VoucharDet vd
+        LEFT JOIN FeeParameters fp ON vd.feeParameterID = fp.FeeParamID
+        WHERE vd.VoucharMasID = ?
+        ORDER BY vd.feeParameterID ASC
+      ''',
+        [vid],
+      );
+      out.add(
+        FeeReceiptView.fromFlatMap(
+          Map<String, dynamic>.from(row),
+          lineItems: det.map((m) => Map<String, dynamic>.from(m)).toList(),
+        ),
+      );
+    }
+    return out;
+  }
+
+  Map<String, String> _branchPrintParams() {
+    final meta = ref.read(shellMetadataProvider).value;
+    final branchName =
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+        ? meta.branchName.trim()
+        : '-';
+    final branchAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+        ? meta.branchAddress.trim()
+        : '-';
+    return {'branchName': branchName, 'branchAddress': branchAddress};
+  }
+
+  /// Shot 2a: prints ALL vouchers of this student as one fee-voucher report
+  /// preview ('Student Fee Vouchers').
+  Future<void> _printAllVouchers(StudentProfileBundle bundle) async {
+    List<FeeReceiptView> receipts;
+    try {
+      receipts = await _loadStudentVoucherReceipts();
+    } catch (e) {
+      debugPrint('Print all vouchers failed: $e');
+      if (!mounted) return;
+      _showSnackBar('Failed to load vouchers: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+    if (receipts.isEmpty) {
+      _showSnackBar('No vouchers issued for this student yet.');
+      return;
+    }
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.feeVoucher,
+        titleOverride: 'Student Fee Vouchers',
+        vouchers: receipts,
+        extraParams: _branchPrintParams(),
+      ),
+    );
+  }
+
+  /// Shot 2a: prints a single voucher challan straight from the ledger row.
+  Future<void> _printVoucher(String voucherMasId) async {
+    final db = await DatabaseService.instance.database;
+    final stuRegId = int.tryParse(widget.studentId) ?? -1;
+    final rows = await db.rawQuery(
+      '''
+      SELECT vm.*, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
+             c.CName AS class_name, cs.SecName AS section_name,
+             sc.ClassRollNo, sc.SessionYr
+      FROM VoucharMas vm
+      JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
+      LEFT JOIN Student_Class sc
+        ON sr.Stu_RegID = sc.Stu_RegID AND sc.SessionYr = vm.SessionYr
+      LEFT JOIN Class c ON sc.ClassID = c.ClassID
+      LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+      WHERE vm.VoucherMasID = ? AND vm.Student_Class_StuRegID = ?
+      LIMIT 1
+    ''',
+      [voucherMasId, stuRegId],
+    );
+    if (!mounted) return;
+    if (rows.isEmpty) {
+      _showSnackBar('Voucher not found.', isError: true);
+      return;
+    }
+    final det = await db.rawQuery(
+      '''
+      SELECT vd.feeParameterID, vd.Amount, vd.Discount,
+             fp.ParamDesciption
+      FROM VoucharDet vd
+      LEFT JOIN FeeParameters fp ON vd.feeParameterID = fp.FeeParamID
+      WHERE vd.VoucharMasID = ?
+      ORDER BY vd.feeParameterID ASC
+    ''',
+      [voucherMasId],
+    );
+    final receipt = FeeReceiptView.fromFlatMap(
+      Map<String, dynamic>.from(rows.first),
+      lineItems: det.map((m) => Map<String, dynamic>.from(m)).toList(),
+    );
+    if (!mounted) return;
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.feeVoucher,
+        vouchers: [receipt],
+        extraParams: _branchPrintParams(),
+      ),
+    );
+  }
+
+  /// Shot 2a: confirmation dialog + permanent voucher deletion (payments,
+  /// details, master) with provider refresh and success toast.
+  Future<void> _confirmDeleteVoucher(String voucherMasId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete Voucher #$voucherMasId?'),
+        content: const Text(
+          'This will remove the voucher and its fee items from the ledger.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.statusErrorText,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete Voucher'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final deleted = await deleteStudentVoucher(voucherMasId);
+    if (!mounted) return;
+    if (!deleted) {
+      _showSnackBar(
+        'Voucher #$voucherMasId could not be deleted.',
+        isError: true,
+      );
+      return;
+    }
+    final stuRegId = int.tryParse(widget.studentId) ?? -1;
+    ref.invalidate(studentProfileProvider(stuRegId));
+    ref.invalidate(dashboardMetricsProvider);
+    _showSnackBar('Voucher #$voucherMasId deleted from the ledger.');
+  }
+
+  /// Shot 2a: permanent student purge with a type-DELETE confirmation.
+  Future<void> _confirmDeleteStudent(StudentProfileBundle bundle) async {
+    final student = bundle.student;
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'Permanently Delete Student #${student.stuRegId} (${student.fullName})?',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Type DELETE to confirm permanent removal of this student and all associated enrollment and voucher records',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                isDense: true,
+                border: OutlineInputBorder(),
+                hintText: 'DELETE',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ListenableBuilder(
+            listenable: controller,
+            builder: (context, _) => FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.statusErrorText,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: controller.text.trim() == 'DELETE'
+                  ? () => Navigator.of(dialogContext).pop(true)
+                  : null,
+              child: const Text('Delete Forever'),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await permanentlyDeleteStudent(student.stuRegId);
+    } catch (e) {
+      debugPrint('Delete student failed: $e');
+      if (!mounted) return;
+      _showSnackBar('Failed to delete student: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+    ref.invalidate(dashboardMetricsProvider);
+    _showSnackBar('Student #${student.stuRegId} permanently deleted.');
+    context.go('/students');
   }
 
   Future<void> _handleSave(Student currentStudent) async {
@@ -495,11 +765,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                 const SizedBox(height: AppSpacing.md),
 
                                 // Tab Canvas
-                                _buildTabContent(
-                                  bundle,
-                                  activeTab,
-                                  isEditMode,
-                                ),
+                                _buildTabContent(bundle, activeTab, isEditMode),
                               ],
                             ),
                           ),
@@ -514,62 +780,56 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   : Container(
                       color: AppColors.surface,
                       padding: const EdgeInsets.all(AppSpacing.lg),
-                      // Shot 1e: in Overview view mode the whole page scrolls
-                      // as one surface (no inner tab-body scroll-lock) and the
-                      // sections render in a 2x2 institutional grid. Edit mode
-                      // and every other tab keep the fixed-canvas layout.
-                      child: (!isEditMode && activeTab == 0)
-                          ? SingleChildScrollView(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _buildBreadcrumb(
-                                    bundle.student,
-                                    activeTab,
-                                    isEditMode,
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  _buildHeroCard(
-                                    bundle,
-                                    isEditMode,
-                                    canEditBiodata,
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  _buildTabBar(activeTab),
-                                  const SizedBox(height: AppSpacing.md),
-                                  _buildOverviewViewPanel(bundle.student, bundle),
-                                ],
-                              ),
-                            )
-                          : Column(
+                      // Shot 2a: the WHOLE page scrolls as one surface on
+                      // desktop — breadcrumb, identity header, tab bar and
+                      // the active tab's full-height content move together,
+                      // killing the ~350px inner scroll box on 1366x768
+                      // laptops. Every tab renders at natural height (no
+                      // inner Expanded scroll traps).
+                      child: Stack(
+                        children: [
+                          SingleChildScrollView(
+                            child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                  // Breadcrumb Bar
-                                  _buildBreadcrumb(
-                                    bundle.student,
-                                    activeTab,
-                                    isEditMode,
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-
-                                  // Top Hero Profile Card
-                                  _buildHeroCard(bundle, isEditMode, canEditBiodata),
-                                  const SizedBox(height: AppSpacing.md),
-
-                                  // Tab Switcher
-                                  _buildTabBar(activeTab),
-                                  const SizedBox(height: AppSpacing.md),
-
-                                  // Tab Canvas (Expanded)
-                                  Expanded(
-                                    child: _buildTabContent(
-                                      bundle,
-                                      activeTab,
-                                      isEditMode,
-                                    ),
-                                  ),
-                                ],
+                                _buildBreadcrumb(
+                                  bundle.student,
+                                  activeTab,
+                                  isEditMode,
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                _buildHeroCard(
+                                  bundle,
+                                  isEditMode,
+                                  canEditBiodata,
+                                ),
+                                const SizedBox(height: AppSpacing.md),
+                                _buildTabBar(activeTab),
+                                const SizedBox(height: AppSpacing.md),
+                                _buildTabContent(bundle, activeTab, isEditMode),
+                                // Keep the last form rows clear of the
+                                // sticky edit bar overlay.
+                                if (isEditMode && activeTab == 0)
+                                  const SizedBox(height: 72),
+                              ],
                             ),
+                          ),
+                          // Shot 2a: while editing, the Save/Cancel bar stays
+                          // pinned to the bottom of the viewport so it is
+                          // always reachable no matter how far the page is
+                          // scrolled.
+                          if (isEditMode && activeTab == 0)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: _buildOverviewBottomBar(
+                                bundle.student,
+                                isEditMode,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
             ),
           ),
@@ -588,7 +848,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     if (ResponsiveBreakpoints.isMobile(context)) {
       final session = ref.watch(sessionProvider);
       final canEditBiodata =
-          session == null || session.user.userLevel == 1 || session.hasAccess(12);
+          session == null ||
+          session.user.userLevel == 1 ||
+          session.hasAccess(12);
 
       return Row(
         children: [
@@ -1015,51 +1277,88 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             ),
           ),
 
-          // Action Buttons
-          if (!isEditMode) ...[
-            if (canEditBiodata) ...[
-              ElevatedButton.icon(
-                icon: const Icon(Icons.edit_outlined, size: 16),
-                label: const Text('Edit Profile (F2)'),
-                onPressed: () {
-                  _populateForm(student);
-                  ref.read(studentEditModeProvider.notifier).state = true;
-                },
-              ),
-              const SizedBox(width: AppSpacing.sm),
-            ],
-            OutlinedButton.icon(
-              icon: const Icon(Icons.print_outlined, size: 16),
-              label: const Text('Print Biodata'),
-              onPressed: () => _printBiodata(student),
-            ),
-            if (isLeft) ...[
-              const SizedBox(width: AppSpacing.sm),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.description_outlined, size: 16),
-                label: const Text('Print SLC'),
-                onPressed: () => context.go('/students/leaving'),
-              ),
-            ],
-            if (!isLeft) ...[
-              const SizedBox(width: AppSpacing.sm),
-              OutlinedButton.icon(
-                icon: const Icon(
-                  Icons.person_remove_outlined,
-                  size: 16,
-                  color: AppColors.statusErrorText,
+          // Action Buttons — Shot 2a: Flexible + right-aligned Wrap so the
+          // extra Delete Student button never overflows the header row.
+          if (!isEditMode)
+            Flexible(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    if (canEditBiodata) ...[
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.edit_outlined, size: 16),
+                        label: const Text('Edit Profile (F2)'),
+                        onPressed: () {
+                          _populateForm(student);
+                          ref.read(studentEditModeProvider.notifier).state =
+                              true;
+                        },
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                    ],
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.print_outlined, size: 16),
+                      label: const Text('Print Biodata'),
+                      onPressed: () => _printBiodata(student),
+                    ),
+                    if (isLeft) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.description_outlined, size: 16),
+                        label: const Text('Print SLC'),
+                        onPressed: () => context.go('/students/leaving'),
+                      ),
+                    ],
+                    if (!isLeft) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      OutlinedButton.icon(
+                        icon: const Icon(
+                          Icons.person_remove_outlined,
+                          size: 16,
+                          color: AppColors.statusErrorText,
+                        ),
+                        label: const Text(
+                          'Withdraw Student',
+                          style: TextStyle(color: AppColors.statusErrorText),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(
+                            color: AppColors.statusErrorBorder,
+                          ),
+                        ),
+                        onPressed: () => _withdrawStudent(student),
+                      ),
+                    ],
+                    // Shot 2a: permanent purge — high-contrast crimson outline next
+                    // to Withdraw Student, guarded by a type-DELETE dialog.
+                    const SizedBox(width: AppSpacing.sm),
+                    OutlinedButton.icon(
+                      icon: const Icon(
+                        Icons.delete_forever_rounded,
+                        size: 16,
+                        color: AppColors.statusErrorText,
+                      ),
+                      label: const Text(
+                        'Delete Student',
+                        style: TextStyle(color: AppColors.statusErrorText),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(
+                          color: AppColors.statusErrorBorder,
+                        ),
+                      ),
+                      onPressed: () => _confirmDeleteStudent(bundle),
+                    ),
+                  ],
                 ),
-                label: const Text(
-                  'Withdraw Student',
-                  style: TextStyle(color: AppColors.statusErrorText),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.statusErrorBorder),
-                ),
-                onPressed: () => _withdrawStudent(student),
               ),
-            ],
-          ] else ...[
+            )
+          else ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -1188,8 +1487,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     if (bundle.attendance.isNotEmpty) {
       int present = 0;
       for (final a in bundle.attendance) {
-        final status =
-            (a['Status'] ?? a['status'] ?? '').toString().toUpperCase();
+        final status = (a['Status'] ?? a['status'] ?? '')
+            .toString()
+            .toUpperCase();
         if (status == 'P' || status == 'PRESENT') present++;
       }
       final pct = (present / bundle.attendance.length) * 100;
@@ -1198,11 +1498,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
     final initials = student.fullName.isNotEmpty
         ? student.fullName
-            .split(' ')
-            .where((p) => p.isNotEmpty)
-            .map((p) => p[0])
-            .take(2)
-            .join()
+              .split(' ')
+              .where((p) => p.isNotEmpty)
+              .map((p) => p[0])
+              .take(2)
+              .join()
         : 'ST';
 
     return Container(
@@ -1216,10 +1516,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              width: 4,
-              color: AppColors.accentStudents,
-            ),
+            Container(width: 4, color: AppColors.accentStudents),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
@@ -1234,14 +1531,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                           onTap: () => _handlePhotoTap(student),
                           child: CircleAvatar(
                             radius: 22,
-                            backgroundColor: AppColors.accentStudents.withValues(
-                              alpha: 0.12,
-                            ),
-                            backgroundImage: student.photoPath != null &&
+                            backgroundColor: AppColors.accentStudents
+                                .withValues(alpha: 0.12),
+                            backgroundImage:
+                                student.photoPath != null &&
                                     File(student.photoPath!).existsSync()
                                 ? FileImage(File(student.photoPath!))
                                 : null,
-                            child: student.photoPath == null ||
+                            child:
+                                student.photoPath == null ||
                                     !File(student.photoPath!).existsSync()
                                 ? Text(
                                     initials,
@@ -1685,7 +1983,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               Expanded(
                 child: _buildBentoWell(
                   label: 'Blood Group',
-                  value: (student.docsDetail != null &&
+                  value:
+                      (student.docsDetail != null &&
                           student.docsDetail!.isNotEmpty)
                       ? student.docsDetail!
                       : '—',
@@ -1842,7 +2141,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           const SizedBox(height: AppSpacing.sm),
           _buildBentoWell(
             label: 'Permanent Residence',
-            value: student.pAddress ??
+            value:
+                student.pAddress ??
                 student.tAddress ??
                 'House #14, St 2, Mohallah Khel, Mianwali',
           ),
@@ -1914,11 +2214,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       final reg = s['Stu_RegID'] ?? '';
       final initials = name.isNotEmpty
           ? name
-              .split(' ')
-              .where((p) => p.isNotEmpty)
-              .map((p) => p[0])
-              .take(2)
-              .join()
+                .split(' ')
+                .where((p) => p.isNotEmpty)
+                .map((p) => p[0])
+                .take(2)
+                .join()
           : 'S';
       return Padding(
         padding: const EdgeInsets.only(bottom: 6),
@@ -1934,8 +2234,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 children: [
                   CircleAvatar(
                     radius: 14,
-                    backgroundColor:
-                        AppColors.accentStudents.withValues(alpha: 0.15),
+                    backgroundColor: AppColors.accentStudents.withValues(
+                      alpha: 0.15,
+                    ),
                     child: Text(
                       initials,
                       style: AppTypography.label.copyWith(
@@ -2159,13 +2460,14 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: (monospace
-                          ? AppTypography.monospace
-                          : AppTypography.bodySmall)
-                      .copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: valueColor ?? AppColors.textPrimary,
-                  ),
+                  style:
+                      (monospace
+                              ? AppTypography.monospace
+                              : AppTypography.bodySmall)
+                          .copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: valueColor ?? AppColors.textPrimary,
+                          ),
                 ),
               ],
             ),
@@ -2539,7 +2841,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                           size: 16,
                           color: AppColors.statusErrorText,
                         ),
-                        onPressed: () => setState(() => _validationError = null),
+                        onPressed: () =>
+                            setState(() => _validationError = null),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(
                           minWidth: 24,
@@ -2558,6 +2861,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     }
 
     if (isEditMode) {
+      // Shot 2a: natural-height canvas — the page-level scroll carries the
+      // edit form, so no inner Expanded/scroll trap here anymore.
       return Container(
         decoration: BoxDecoration(
           color: AppColors.surfaceRaised,
@@ -2565,6 +2870,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           border: Border.all(color: AppColors.borderDefault),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // If in Edit Mode and validation error exists, show Top Banner
             if (_validationError != null)
@@ -2614,21 +2920,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 ),
               ),
 
-            // Edit form (scrollable canvas)
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildOverviewEditForm(bundle.student),
-                  ],
-                ),
+            // Edit form at natural height (page scrolls; the Save/Cancel
+            // bar is pinned by the page-level Stack overlay).
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [_buildOverviewEditForm(bundle.student)],
               ),
             ),
-
-            // Sticky Bottom Bar (visible while editing)
-            _buildOverviewBottomBar(bundle.student, isEditMode),
           ],
         ),
       );
@@ -2665,8 +2965,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     );
   }
 
-// Shot 1e — replacement for _buildOverviewViewGrid in
-// lib/screens/students/student_profile_screen.dart (spliced by python).
+  // Shot 1e — replacement for _buildOverviewViewGrid in
+  // lib/screens/students/student_profile_screen.dart (spliced by python).
   // ─────────────────────────────────────────────────────────────────────────
   // OVERVIEW VIEW PANEL (Shot 1e) — 2×2 institutional section grid.
   // The whole page scrolls (no inner scroll-lock); the View-Mode footer bar
@@ -2913,7 +3213,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     ];
   }
 
-  List<Widget> _overviewAcademicRows(Student student, StudentProfileBundle bundle) {
+  List<Widget> _overviewAcademicRows(
+    Student student,
+    StudentProfileBundle bundle,
+  ) {
     return [
       _responsiveFieldRow([
         _buildViewField(
@@ -2951,10 +3254,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             if (student.fullDiscount == 1) ...[
               const SizedBox(height: 4),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.statusInfoBg,
                   borderRadius: BorderRadius.circular(AppRadius.sm),
@@ -3664,11 +3964,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               ),
             )
           else
-            Expanded(
-              child: SingleChildScrollView(
-                child: _buildEnrollmentTable(enrollments),
-              ),
-            ),
+            // Shot 2a: natural height — the page-level scroll carries the
+            // full enrollment timeline.
+            _buildEnrollmentTable(enrollments),
         ],
       ),
     );
@@ -3889,7 +4187,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 ),
                 textStyle: AppTypography.label.copyWith(fontSize: 12),
               ),
-              onPressed: () => _showSnackBar('Print coming in Phase 2'),
+              onPressed: () => _printAllVouchers(bundle),
             ),
             ElevatedButton.icon(
               icon: const Icon(Icons.add, size: 14),
@@ -3906,9 +4204,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 // single-student workspace with this student pre-selected
                 // (provider state carries the payload; the query params
                 // keep the URI self-describing).
-                ref
-                    .read(voucherGenFiltersProvider.notifier)
-                    .setMode('single');
+                ref.read(voucherGenFiltersProvider.notifier).setMode('single');
                 ref
                     .read(voucherGenFiltersProvider.notifier)
                     .setSelectedStuRegId(bundle.student.stuRegId);
@@ -3956,16 +4252,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         border: Border.all(color: AppColors.borderDefault),
       ),
       padding: const EdgeInsets.all(AppSpacing.lg),
-      child: isMobile
-          ? voucherCardContent
-          : SingleChildScrollView(child: voucherCardContent),
+      // Shot 2a: natural height — the page-level scroll carries the ledger.
+      child: voucherCardContent,
     );
 
     return Column(
       children: [
         kpiSection,
         const SizedBox(height: AppSpacing.md),
-        if (isMobile) voucherCard else Expanded(child: voucherCard),
+        voucherCard,
       ],
     );
   }
@@ -4139,6 +4434,37 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                   );
                                 },
                               ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.print_outlined,
+                                  size: 15,
+                                  color: AppColors.textMuted,
+                                ),
+                                tooltip: 'Print Voucher',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 26,
+                                  minHeight: 26,
+                                ),
+                                onPressed: () => _printVoucher(v.voucherMasId),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 15,
+                                  color: AppColors.statusErrorText,
+                                ),
+                                tooltip: 'Delete Voucher',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 26,
+                                  minHeight: 26,
+                                ),
+                                onPressed: () =>
+                                    _confirmDeleteVoucher(v.voucherMasId),
+                              ),
                             ],
                           )
                         : Wrap(
@@ -4167,6 +4493,22 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                 ),
                                 onPressed: () =>
                                     _onPrintReceipt(v.voucherMasId),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 15,
+                                  color: AppColors.statusErrorText,
+                                ),
+                                tooltip: 'Delete Voucher',
+                                visualDensity: VisualDensity.compact,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 26,
+                                  minHeight: 26,
+                                ),
+                                onPressed: () =>
+                                    _confirmDeleteVoucher(v.voucherMasId),
                               ),
                               IconButton(
                                 icon: const Icon(
@@ -4285,87 +4627,574 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   // ─────────────────────────────────────────────────────────────────────────
   Widget _buildAdvancesTab(StudentProfileBundle bundle) {
     final advances = bundle.advances;
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+    final currencyFormat = NumberFormat('#,##0');
     int totalAdvance = 0;
     for (final a in advances) {
       totalAdvance += (a['AdvAmount'] as int?) ?? 0;
     }
 
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceRaised,
-            borderRadius: BorderRadius.circular(AppRadius.lg),
-            border: Border.all(color: AppColors.borderDefault),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Available Advance Credit',
+    // Seed the concession form once per loaded student.
+    if (_advSeededStuRegId != bundle.student.stuRegId) {
+      _advSeededStuRegId = bundle.student.stuRegId;
+      _advTuitionController.text = (bundle.student.discount ?? 0) == 0
+          ? ''
+          : bundle.student.discount!.toStringAsFixed(0);
+      _advVoucherAdjController.text = (bundle.student.vmDiscount ?? 0) == 0
+          ? ''
+          : bundle.student.vmDiscount!.toString();
+      _advFullWaiver = bundle.student.fullDiscount == 1;
+    }
+
+    Widget summaryCard(
+      String title,
+      String value,
+      IconData icon,
+      Color accent,
+      Color tint, {
+      String? pill,
+    }) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: tint,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(icon, size: 15, color: accent),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
                     style: AppTypography.label.copyWith(
+                      fontSize: 11,
                       color: AppColors.textSecondary,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Rs. ${NumberFormat("#,##0").format(totalAdvance)}.00',
-                    style: AppTypography.h1.copyWith(
-                      color: AppColors.brandSecondary,
-                    ),
-                  ),
-                ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.h3.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w800,
               ),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Add Advance'),
-                onPressed: () => _showSnackBar('Coming in Phase 2'),
+            ),
+            if (pill != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: tint,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  pill,
+                  style: AppTypography.label.copyWith(
+                    fontSize: 10,
+                    color: accent,
+                  ),
+                ),
               ),
             ],
-          ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.md),
-        if (ResponsiveBreakpoints.isMobile(context))
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surfaceRaised,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
-              border: Border.all(color: AppColors.borderDefault),
-            ),
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: advances.isEmpty
-                ? _buildEmptyTabState(
-                    icon: Icons.account_balance_wallet_outlined,
-                    title: 'No advance payments recorded',
-                    subtitle:
-                        'Student has not deposited any advance fee credits.',
-                  )
-                : const SizedBox.shrink(),
+      );
+    }
+
+    final summaryCards = [
+      summaryCard(
+        'Available Advance Credit',
+        'Rs. ${currencyFormat.format(totalAdvance)}.00',
+        Icons.account_balance_wallet_outlined,
+        const Color(0xFF047857),
+        const Color(0xFFECFDF5),
+      ),
+      summaryCard(
+        'Tuition Concession',
+        (bundle.student.discount ?? 0) == 0
+            ? 'None'
+            : 'Rs. ${currencyFormat.format(bundle.student.discount!.round())}.00',
+        Icons.percent_rounded,
+        const Color(0xFF1E40AF),
+        const Color(0xFFEFF6FF),
+      ),
+      summaryCard(
+        'Voucher Adjustment',
+        (bundle.student.vmDiscount ?? 0) == 0
+            ? 'None'
+            : 'Rs. ${currencyFormat.format(bundle.student.vmDiscount!)}.00',
+        Icons.redeem_outlined,
+        const Color(0xFF3730A3),
+        const Color(0xFFEEF2FF),
+        pill: bundle.student.fullDiscount == 1 ? 'FULL WAIVER' : null,
+      ),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isMobile)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final card in summaryCards) ...[
+                card,
+                const SizedBox(height: AppSpacing.sm),
+              ],
+            ],
           )
         else
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.surfaceRaised,
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                border: Border.all(color: AppColors.borderDefault),
-              ),
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: advances.isEmpty
-                  ? _buildEmptyTabState(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: 'No advance payments recorded',
-                      subtitle:
-                          'Student has not deposited any advance fee credits.',
-                    )
-                  : const SizedBox.shrink(),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < summaryCards.length; i++) ...[
+                Expanded(child: summaryCards[i]),
+                if (i < summaryCards.length - 1)
+                  const SizedBox(width: AppSpacing.sm),
+              ],
+            ],
+          ),
+        const SizedBox(height: AppSpacing.md),
+        _buildConcessionFormCard(bundle),
+        const SizedBox(height: AppSpacing.md),
+        _buildAdvanceEntryCard(bundle),
+        const SizedBox(height: AppSpacing.md),
+        _buildAdvanceHistoryCard(advances, currencyFormat),
+      ],
+    );
+  }
+
+  Widget _advBandHeader(String title, IconData icon, Color accent, Color tint) {
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: BoxDecoration(
+        color: tint,
+        border: Border(bottom: BorderSide(color: accent, width: 2.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: accent),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: AppTypography.label.copyWith(
+              fontSize: 12,
+              letterSpacing: 0.6,
+              color: accent,
             ),
           ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _advFieldDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: AppTypography.label.copyWith(
+        fontSize: 12.5,
+        color: AppColors.textSecondary,
+      ),
+      isDense: true,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 12,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF94A3B8), width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2.0),
+      ),
+    );
+  }
+
+  /// Shot 2a: inline concession editor persisting Discount / VMDiscount /
+  /// FullDiscount to Stu_Reg.
+  Widget _buildConcessionFormCard(StudentProfileBundle bundle) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _advBandHeader(
+            'CONCESSIONS & WAIVERS',
+            Icons.percent_rounded,
+            const Color(0xFF1E40AF),
+            const Color(0xFFEFF6FF),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _advTuitionController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: _advFieldDecoration(
+                          'Tuition Concession (Rs.)',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _advVoucherAdjController,
+                        keyboardType: TextInputType.number,
+                        decoration: _advFieldDecoration(
+                          'Voucher Adjustment (Rs.)',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Switch(
+                      value: _advFullWaiver,
+                      activeThumbColor: const Color(0xFF047857),
+                      onChanged: (v) => setState(() => _advFullWaiver = v),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Full Fee Waiver (100%)',
+                        style: AppTypography.label.copyWith(
+                          fontSize: 12.5,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    FilledButton.icon(
+                      icon: _advSaving
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.save_outlined, size: 15),
+                      label: const Text('Save Concessions'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF1D4ED8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      onPressed: _advSaving
+                          ? null
+                          : () => _saveConcessions(bundle),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _saveConcessions(StudentProfileBundle bundle) async {
+    setState(() => _advSaving = true);
+    try {
+      await updateStudentConcessions(
+        stuRegId: bundle.student.stuRegId,
+        tuitionConcession:
+            double.tryParse(_advTuitionController.text.trim()) ?? 0.0,
+        voucherAdjustmentCredit:
+            int.tryParse(_advVoucherAdjController.text.trim()) ?? 0,
+        fullFeeWaiver: _advFullWaiver ? 1 : 0,
+      );
+    } catch (e) {
+      debugPrint('Save concessions failed: $e');
+      if (!mounted) return;
+      setState(() => _advSaving = false);
+      _showSnackBar('Failed to save concessions: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _advSaving = false);
+    ref.invalidate(studentProfileProvider(bundle.student.stuRegId));
+    _showSnackBar('Concessions saved for ${bundle.student.fullName}.');
+  }
+
+  /// Shot 2a: inline advance entry persisting a positive StuAdv row.
+  Widget _buildAdvanceEntryCard(StudentProfileBundle bundle) {
+    final today = DateFormat('dd-MMM-yyyy').format(DateTime.now());
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _advBandHeader(
+            'RECORD ADVANCE PAYMENT',
+            Icons.add_card_rounded,
+            const Color(0xFF047857),
+            const Color(0xFFECFDF5),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _advAmountController,
+                        keyboardType: TextInputType.number,
+                        decoration: _advFieldDecoration('Advance Amount (Rs.)'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _advDepositedByController,
+                        textInputAction: TextInputAction.done,
+                        decoration: _advFieldDecoration('Deposited By'),
+                      ),
+                    ),
+                    if (!ResponsiveBreakpoints.isMobile(context)) ...[
+                      const SizedBox(width: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFFCBD5E1),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.event_outlined,
+                              size: 15,
+                              color: AppColors.textSecondary,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              today,
+                              style: AppTypography.label.copyWith(
+                                fontSize: 12.5,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    icon: const Icon(Icons.add, size: 15),
+                    label: const Text('Add Advance'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF047857),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () => _submitAdvance(bundle),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitAdvance(StudentProfileBundle bundle) async {
+    final amount = int.tryParse(_advAmountController.text.trim());
+    if (amount == null || amount <= 0) {
+      _showSnackBar('Enter a valid advance amount (Rs.).', isError: true);
+      return;
+    }
+    final depositedBy = _advDepositedByController.text.trim();
+    try {
+      await addStudentAdvanceCredit(
+        stuRegId: bundle.student.stuRegId,
+        amount: amount,
+        date: DateTime.now(),
+        depositedBy: depositedBy.isEmpty ? 'Office' : depositedBy,
+      );
+    } catch (e) {
+      debugPrint('Add advance failed: $e');
+      if (!mounted) return;
+      _showSnackBar('Failed to record advance: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+    _advAmountController.clear();
+    _advDepositedByController.clear();
+    ref.invalidate(studentProfileProvider(bundle.student.stuRegId));
+    _showSnackBar(
+      'Advance of Rs. ${NumberFormat("#,##0").format(amount)} recorded.',
+    );
+  }
+
+  /// Shot 2a: advance payment history (natural height, page scrolls).
+  Widget _buildAdvanceHistoryCard(
+    List<Map<String, dynamic>> advances,
+    NumberFormat currencyFormat,
+  ) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _advBandHeader(
+            'ADVANCE PAYMENT HISTORY (${advances.length})',
+            Icons.history_rounded,
+            const Color(0xFF3730A3),
+            const Color(0xFFEEF2FF),
+          ),
+          if (advances.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: _buildEmptyTabState(
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'No advance payments recorded',
+                subtitle:
+                    'Student has not deposited any advance fee credits.',
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                children: [
+                  for (int i = 0; i < advances.length; i++) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: i.isEven
+                            ? Colors.white
+                            : const Color(0xFFF8FAFC),
+                        border: Border.all(
+                          color: const Color(0xFFE2E8F0),
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.savings_outlined,
+                            size: 15,
+                            color: Color(0xFF047857),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              (advances[i]['AdvDate'] ?? '').toString(),
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              (advances[i]['DepositedBy'] ?? 'Office')
+                                  .toString(),
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.bodySmall.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            'Rs. ${currencyFormat.format((advances[i]['AdvAmount'] as int?) ?? 0)}.00',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: const Color(0xFF047857),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (i < advances.length - 1)
+                      const SizedBox(height: 6),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -4559,110 +5388,108 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     ],
                   )
                 else
-                  Expanded(
-                    child: Column(
-                      children: [
-                        // Day names header
-                        const Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            _DayHeader('Mon'),
-                            _DayHeader('Tue'),
-                            _DayHeader('Wed'),
-                            _DayHeader('Thu'),
-                            _DayHeader('Fri'),
-                            _DayHeader('Sat'),
-                            _DayHeader('Sun'),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        // 5 Weeks Grid
-                        Expanded(
-                          child: GridView.builder(
-                            physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate:
-                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: 7,
-                                  crossAxisSpacing: 8,
-                                  mainAxisSpacing: 8,
-                                  childAspectRatio: 1.6,
-                                ),
-                            itemCount: 35,
-                            itemBuilder: (context, index) {
-                              final dayNumber = index + 1;
-                              if (dayNumber > 31) {
-                                return const SizedBox.shrink();
-                              }
+                  // Shot 2a: natural height — same layout as mobile, the
+                  // page-level scroll carries the heatmap.
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Day names header
+                      const Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _DayHeader('Mon'),
+                          _DayHeader('Tue'),
+                          _DayHeader('Wed'),
+                          _DayHeader('Thu'),
+                          _DayHeader('Fri'),
+                          _DayHeader('Sat'),
+                          _DayHeader('Sun'),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // 5 Weeks Grid
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 7,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                              childAspectRatio: 1.6,
+                            ),
+                        itemCount: 35,
+                        itemBuilder: (context, index) {
+                          final dayNumber = index + 1;
+                          if (dayNumber > 31) {
+                            return const SizedBox.shrink();
+                          }
 
-                              // Seeded attendance or simulation for weekdays
-                              final isWeekend =
-                                  (index % 7 == 5) || (index % 7 == 6);
-                              Color cellColor = AppColors.surfaceSubtle;
-                              Color textColor = AppColors.textDisabled;
+                          // Seeded attendance or simulation for weekdays
+                          final isWeekend =
+                              (index % 7 == 5) || (index % 7 == 6);
+                          Color cellColor = AppColors.surfaceSubtle;
+                          Color textColor = AppColors.textDisabled;
 
-                              if (!isWeekend) {
-                                cellColor = AppColors.statusSuccessBg;
-                                textColor = AppColors.statusSuccessText;
-                              }
+                          if (!isWeekend) {
+                            cellColor = AppColors.statusSuccessBg;
+                            textColor = AppColors.statusSuccessText;
+                          }
 
-                              return Container(
-                                decoration: BoxDecoration(
-                                  color: cellColor,
-                                  borderRadius: BorderRadius.circular(
-                                    AppRadius.sm,
+                          return Container(
+                            decoration: BoxDecoration(
+                              color: cellColor,
+                              borderRadius: BorderRadius.circular(AppRadius.sm),
+                              border: Border.all(
+                                color: isWeekend
+                                    ? AppColors.borderDefault
+                                    : AppColors.statusSuccessBorder,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '$dayNumber',
+                              style: AppTypography.monospace
+                                  .copyWith(fontSize: 11)
+                                  .copyWith(
+                                    color: textColor,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  border: Border.all(
-                                    color: isWeekend
-                                        ? AppColors.borderDefault
-                                        : AppColors.statusSuccessBorder,
-                                  ),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  '$dayNumber',
-                                  style: AppTypography.monospace
-                                      .copyWith(fontSize: 11)
-                                      .copyWith(
-                                        color: textColor,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                ),
-                              );
-                            },
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      // Legend
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildLegendDot(
+                            AppColors.statusSuccessBg,
+                            AppColors.statusSuccessBorder,
+                            'Present',
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        // Legend
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildLegendDot(
-                              AppColors.statusSuccessBg,
-                              AppColors.statusSuccessBorder,
-                              'Present',
-                            ),
-                            const SizedBox(width: 16),
-                            _buildLegendDot(
-                              AppColors.statusErrorBg,
-                              AppColors.statusErrorBorder,
-                              'Absent',
-                            ),
-                            const SizedBox(width: 16),
-                            _buildLegendDot(
-                              AppColors.statusWarningBg,
-                              AppColors.statusWarningBorder,
-                              'Leave',
-                            ),
-                            const SizedBox(width: 16),
-                            _buildLegendDot(
-                              AppColors.surfaceSubtle,
-                              AppColors.borderDefault,
-                              'Weekend',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 16),
+                          _buildLegendDot(
+                            AppColors.statusErrorBg,
+                            AppColors.statusErrorBorder,
+                            'Absent',
+                          ),
+                          const SizedBox(width: 16),
+                          _buildLegendDot(
+                            AppColors.statusWarningBg,
+                            AppColors.statusWarningBorder,
+                            'Leave',
+                          ),
+                          const SizedBox(width: 16),
+                          _buildLegendDot(
+                            AppColors.surfaceSubtle,
+                            AppColors.borderDefault,
+                            'Weekend',
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
               ],
             ),
@@ -4995,7 +5822,6 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   Widget _buildFamilyTab(StudentProfileBundle bundle) {
     final stuId = bundle.student.stuRegId;
     final siblingsAsync = ref.watch(siblingLinksForStudentProvider(stuId));
-    final isMobile = ResponsiveBreakpoints.isMobile(context);
 
     final siblingsContent = siblingsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -5037,8 +5863,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         }
 
         return ListView.separated(
-          shrinkWrap: isMobile,
-          physics: isMobile ? const NeverScrollableScrollPhysics() : null,
+          // Shot 2a: natural height in the page-level scroll.
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
           itemCount: siblings.length,
           separatorBuilder: (context, index) =>
               const SizedBox(height: AppSpacing.sm),
@@ -5240,7 +6067,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          if (isMobile) siblingsContent else Expanded(child: siblingsContent),
+          // Shot 2a: natural height — no Expanded scroll trap.
+          siblingsContent,
         ],
       ),
     );
