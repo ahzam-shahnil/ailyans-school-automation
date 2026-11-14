@@ -583,140 +583,162 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              OutlinedButton(
-                onPressed: () => _onFilter('unpaid'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 40),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+              // Shot 2d: shrinkable so the scan bar never overflows on
+              // narrow desktop widths (labels ellipsize instead).
+              Flexible(
+                child: OutlinedButton(
+                  onPressed: () => _onFilter('unpaid'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 40),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'Load All Unpaid',
-                  style: TextStyle(fontSize: 13),
+                  child: const Text(
+                    'Load All Unpaid',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              OutlinedButton(
-                onPressed: () => _onFilter('paid'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 40),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+              Flexible(
+                child: OutlinedButton(
+                  onPressed: () => _onFilter('paid'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 40),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'Load All Paid',
-                  style: TextStyle(fontSize: 13),
+                  child: const Text(
+                    'Load All Paid',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final notifier = ref.read(feeCollectionProvider.notifier);
-                  final buildData = await notifier.buildDefaulterList();
-                  final meta = ref.read(shellMetadataProvider).value;
-                  final branchName =
-                      (meta?.branchName != null &&
-                          meta!.branchName.trim().isNotEmpty)
-                      ? meta.branchName.trim()
-                      : '-';
-                  final branchAddress =
-                      (meta?.branchAddress != null &&
-                          meta!.branchAddress.trim().isNotEmpty)
-                      ? meta.branchAddress.trim()
-                      : '-';
-                  final branchPhone = meta?.branchPhone ?? '03334449993';
-                  final branchPrincipal = meta?.branchPrincipal ?? '-';
+              Flexible(
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    final notifier = ref.read(feeCollectionProvider.notifier);
+                    final buildData = await notifier.buildDefaulterList();
+                    final meta = ref.read(shellMetadataProvider).value;
+                    final branchName =
+                        (meta?.branchName != null &&
+                            meta!.branchName.trim().isNotEmpty)
+                        ? meta.branchName.trim()
+                        : '-';
+                    final branchAddress =
+                        (meta?.branchAddress != null &&
+                            meta!.branchAddress.trim().isNotEmpty)
+                        ? meta.branchAddress.trim()
+                        : '-';
+                    final branchPhone = meta?.branchPhone ?? '03334449993';
+                    final branchPrincipal = meta?.branchPrincipal ?? '-';
 
-                  if (!mounted) return;
-                  await ReportPreviewModal.show(
-                    context,
-                    request: ReportRequest(
-                      type: ReportType.defaulterList,
-                      vouchers: buildData.groups,
-                      extraParams: {
-                        'summary': buildData.summary,
-                        'branchName': branchName,
-                        'branchAddress': branchAddress,
-                        'branchPhone': branchPhone,
-                        'branchPrincipal': branchPrincipal,
-                      },
-                    ),
-                    headerControls: DefaulterFilterControls(
-                      initialClassId: null,
-                      initialMonth: null,
-                      onFiltersChanged: ({int? classId, String? month}) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Close preview and change filters on the screen to update the PDF.',
+                    if (!mounted) return;
+                    await ReportPreviewModal.show(
+                      context,
+                      request: ReportRequest(
+                        type: ReportType.defaulterList,
+                        vouchers: buildData.groups,
+                        extraParams: {
+                          'summary': buildData.summary,
+                          'branchName': branchName,
+                          'branchAddress': branchAddress,
+                          'branchPhone': branchPhone,
+                          'branchPrincipal': branchPrincipal,
+                        },
+                      ),
+                      headerControls: DefaulterFilterControls(
+                        initialClassId: null,
+                        initialMonth: null,
+                        onFiltersChanged: ({int? classId, String? month}) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Close preview and change filters on the screen to update the PDF.',
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                  );
-                },
-                icon: const Icon(
-                  Icons.assignment_late_outlined,
-                  size: 16,
-                  color: AppColors.statusErrorText,
-                ),
-                label: const Text(
-                  'Defaulter Report',
-                  style: TextStyle(
-                    fontSize: 13,
+                          );
+                        },
+                      ),
+                    );
+                  },
+                  icon: const Icon(
+                    Icons.assignment_late_outlined,
+                    size: 16,
                     color: AppColors.statusErrorText,
                   ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 40),
-                  side: const BorderSide(color: AppColors.statusErrorBorder),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  label: const Text(
+                    'Defaulter Report',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.statusErrorText,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 40),
+                    side: const BorderSide(color: AppColors.statusErrorBorder),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: AppSpacing.xs),
-              OutlinedButton.icon(
-                onPressed: () => context.go('/fees/ledger'),
-                icon: const Icon(Icons.assessment_outlined, size: 16),
-                label: const Text(
-                  'View Full Ledger',
-                  style: TextStyle(fontSize: 13),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  minimumSize: const Size(0, 40),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+              Flexible(
+                child: OutlinedButton.icon(
+                  onPressed: () => context.go('/fees/ledger'),
+                  icon: const Icon(Icons.assessment_outlined, size: 16),
+                  label: const Text(
+                    'View Full Ledger',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 40),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              ElevatedButton.icon(
-                onPressed: state.isLoadingLookup ? null : _onLookup,
-                icon: state.isLoadingLookup
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.search, size: 16),
-                label: const Text(
-                  'Load Voucher',
-                  style: TextStyle(fontSize: 13),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandPrimary,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(0, 40),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppRadius.md),
+              Flexible(
+                child: ElevatedButton.icon(
+                  onPressed: state.isLoadingLookup ? null : _onLookup,
+                  icon: state.isLoadingLookup
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.search, size: 16),
+                  label: const Text(
+                    'Load Voucher',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandPrimary,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 40),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.md),
+                    ),
                   ),
                 ),
               ),
@@ -2418,7 +2440,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             if (_fixedWorkspace(context))
               Expanded(
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppSpacing.md),
+                  // Shot 2d: comfortable 16px top / 20px side-bottom rhythm.
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                   child: _buildReceiptDossier(receipt, state),
                 ),
               )
@@ -2551,10 +2574,23 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       ),
       child: Row(
         children: [
-          const Icon(
-            Icons.receipt_long_outlined,
-            size: 16,
-            color: Color(0xFF1E3A8A),
+          // Shot 2d: numbered badge matching the '2' on Payment Settlement.
+          Container(
+            width: 24,
+            height: 24,
+            decoration: const BoxDecoration(
+              color: Color(0xFF1E3A8A),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '1',
+              style: AppTypography.label.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -3148,11 +3184,17 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           _buildLineItemsTable(receipt.lineItems),
 
         const SizedBox(height: AppSpacing.sm),
-        const Divider(height: 1, color: AppColors.borderDefault),
-        const SizedBox(height: AppSpacing.sm),
 
-        // Totals pinned at bottom
-        _buildTotals(receipt),
+        // Shot 2d: anchored totals summary box.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+          ),
+          child: _buildTotals(receipt),
+        ),
 
         // Advance credit callout if available
         if (receipt.advanceBalance > 0) ...[
@@ -3398,7 +3440,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             physics: ResponsiveBreakpoints.isMobile(context)
                 ? null
                 : const NeverScrollableScrollPhysics(),
-            itemExtent: 32,
+            // Shot 2d: roomier fee-head rows (was 32).
+            itemExtent: 40,
             itemCount: lineItems.length,
             itemBuilder: (context, index) {
               final item = lineItems[index];
@@ -3652,7 +3695,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                 if (fixed)
                   Expanded(
                     child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(AppSpacing.md),
+                      // Shot 2d: comfortable 16px top / 20px side-bottom rhythm.
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -3856,12 +3900,16 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         // 1 + 2. Payment Date & Receiving Bank — side-by-side on desktop
         // (Shot 1e), stacked on tablet/mobile.
         if (fixed)
+          // Shot 2d: 4:6 split so 'Askari Bank — Ballo Khel Road' fits.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _buildPaymentDateSelector(state)),
-              const SizedBox(width: 12),
-              Expanded(child: _buildBankSelector(state, bankListAsync)),
+              Expanded(flex: 4, child: _buildPaymentDateSelector(state)),
+              const SizedBox(width: 14),
+              Expanded(
+                flex: 6,
+                child: _buildBankSelector(state, bankListAsync),
+              ),
             ],
           )
         else ...[
@@ -3876,7 +3924,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           'Payment Mode *',
           style: AppTypography.label.copyWith(color: AppColors.textSecondary),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 8),
         Row(
           children: ['Cash', 'Bank Slip', 'Cheque'].map((mode) {
             final isSelected = state.paymentMode == mode;
@@ -3890,7 +3938,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                         .setPaymentMode(mode);
                   },
                   child: Container(
-                    height: 38,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: isSelected
                           ? AppColors.brandPrimary.withValues(alpha: 0.1)
@@ -3922,7 +3970,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             );
           }).toList(),
         ),
-        SizedBox(height: fixed ? 10.0 : AppSpacing.sm),
+        SizedBox(height: fixed ? 14.0 : AppSpacing.sm),
 
         // 4. Amount Tendered + live balance badge — side-by-side on desktop.
         if (fixed)
@@ -3930,11 +3978,11 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Expanded(
-                flex: 3,
+                flex: 11,
                 child: _buildAmountTenderedSection(receipt, state),
               ),
-              const SizedBox(width: 10),
-              Expanded(flex: 2, child: _buildBalanceCallout(remainingBalance)),
+              const SizedBox(width: 14),
+              Expanded(flex: 9, child: _buildBalanceCallout(remainingBalance)),
             ],
           )
         else ...[
@@ -3944,18 +3992,15 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           const SizedBox(height: AppSpacing.sm),
         ],
 
-        // 5 + 6. Remarks with the SMS confirmation toggle inline on desktop.
-        if (fixed)
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(child: _buildRemarksField()),
-              const SizedBox(width: 10),
-              SizedBox(width: 210, child: _buildSmsToggle(state)),
-            ],
-          )
-        else ...[
-          _buildRemarksField(),
+        // 5. Remarks — full horizontal width on desktop (Shot 2d).
+        _buildRemarksField(),
+
+        // 6. SMS confirmation toggle on its own clean row (desktop).
+        if (fixed) ...[
+          const SizedBox(height: 14),
+          _buildSmsToggle(state),
+          const SizedBox(height: 14),
+        ] else ...[
           const SizedBox(height: AppSpacing.sm),
           _buildSmsToggle(state),
           const SizedBox(height: AppSpacing.md),
@@ -3978,7 +4023,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.brandPrimary,
             foregroundColor: Colors.white,
-            minimumSize: const Size.fromHeight(48),
+            minimumSize: const Size.fromHeight(46),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
@@ -4137,9 +4182,32 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Amount Tendered (Rs.) *',
-          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        // Shot 2d: hint moved inline beside the label so it can never
+        // collide with the Remarks label below.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              'Amount Tendered (Rs.) *',
+              style: AppTypography.label.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const Spacer(),
+            Flexible(
+              child: Text(
+                receipt.isPartiallyPaid
+                    ? 'Pre-filled with remaining balance due: Rs. ${_currencyFormat.format(receipt.remainingBalance)}'
+                    : 'Pre-filled with net payable${state.useAdvanceCredit ? " minus advance credit" : ""}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 4),
         TextField(
@@ -4153,23 +4221,13 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             suffixText: 'PKR',
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 12,
-              vertical: 10,
+              vertical: 12,
             ),
           ),
           onChanged: (val) {
             final parsed = int.tryParse(val) ?? 0;
             ref.read(feeCollectionProvider.notifier).setAmountTendered(parsed);
           },
-        ),
-        const SizedBox(height: 4),
-        Text(
-          receipt.isPartiallyPaid
-              ? 'Pre-filled with remaining balance due: Rs. ${_currencyFormat.format(receipt.remainingBalance)}'
-              : 'Pre-filled with net payable${state.useAdvanceCredit ? " minus advance credit" : ""}',
-          style: AppTypography.bodySmall.copyWith(
-            color: AppColors.textMuted,
-            fontSize: 11,
-          ),
         ),
       ],
     );
@@ -4203,14 +4261,19 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                 : AppColors.textSecondary,
           ),
           const SizedBox(width: 6),
+          // Shot 2d: always renders on one clean line.
           Flexible(
-            child: Text(
-              'Balance After This Payment: Rs. ${_currencyFormat.format(remainingBalance)}',
-              style: AppTypography.bodySmall.copyWith(
-                fontWeight: FontWeight.w600,
-                color: remainingBalance == 0
-                    ? AppColors.statusSuccessText
-                    : AppColors.textSecondary,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                'Balance After This Payment: Rs. ${_currencyFormat.format(remainingBalance)}',
+                maxLines: 1,
+                style: AppTypography.bodySmall.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: remainingBalance == 0
+                      ? AppColors.statusSuccessText
+                      : AppColors.textSecondary,
+                ),
               ),
             ),
           ),
@@ -4231,11 +4294,14 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         const SizedBox(height: 4),
         TextField(
           controller: _remarksController,
-          maxLines: 2,
+          maxLines: 1,
           style: AppTypography.bodySmall,
           decoration: _fcFieldDecoration(
             hintText: 'Teller settlement remarks or transaction note...',
-            contentPadding: const EdgeInsets.all(10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 12,
+            ),
           ),
           onChanged: (val) {
             ref.read(feeCollectionProvider.notifier).setRemarks(val);
