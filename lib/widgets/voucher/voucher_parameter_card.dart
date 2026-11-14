@@ -3,6 +3,10 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme/app_theme_tokens.dart';
 
+// Shot 1c — high-contrast institutional input styling for this card.
+const Color _vpcInkPrimary = Color(0xFF0F172A);
+const Color _vpcInputBorderRest = Color(0xFF94A3B8);
+
 /// Card hosting all parameter selection fields for cohort voucher generation.
 class VoucherParameterCard extends StatefulWidget {
   const VoucherParameterCard({
@@ -137,7 +141,9 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
         child: Text(
           labelText,
           style: AppTypography.label.copyWith(
-            color: AppColors.textSecondary,
+            color: _vpcInkPrimary,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
           ),
         ),
       );
@@ -148,7 +154,9 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
         TextSpan(
           text: labelText,
           style: AppTypography.label.copyWith(
-            color: AppColors.textSecondary,
+            color: _vpcInkPrimary,
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
           ),
           children: [
             if (isRequired)
@@ -179,9 +187,9 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
       alignment: AlignmentDirectional.centerStart,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.borderDefault),
+        border: Border.all(color: _vpcInputBorderRest, width: 1.5),
       ),
       child: DropdownButtonHideUnderline(child: child),
     );
@@ -499,9 +507,9 @@ class _VoucherParameterCardState extends State<VoucherParameterCard> {
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: AppColors.surfaceRaised,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.borderDefault),
+              border: Border.all(color: _vpcInputBorderRest, width: 1.5),
             ),
             child: Row(
               children: [

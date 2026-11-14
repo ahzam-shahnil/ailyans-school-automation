@@ -31,6 +31,29 @@ import '../../widgets/voucher/voucher.dart';
 ///
 /// UI refactor: grouped inputs, pill late-fine control, fee-head chip grid,
 /// dashboard KPI strip, zebra table with sticky header + pill status badges.
+
+// Shot 1c — refined institutional palette for the voucher engine.
+const Color _vgInkPrimary = Color(0xFF0F172A);
+const Color _vgInputBorderRest = Color(0xFF94A3B8);
+const Color _vgInputBorderFocus = Color(0xFF2563EB);
+const Color _vgDeepNavy = Color(0xFF1E3A8A);
+const Color _vgOxfordBlue = Color(0xFF1D4ED8);
+const Color _vgBlueTint = Color(0xFFEFF6FF);
+const Color _vgTeal = Color(0xFF0F766E);
+const Color _vgTealTint = Color(0xFFF0FDFA);
+const Color _vgIndigoTint = Color(0xFFEEF2FF);
+const Color _vgBlueBorder = Color(0xFF2563EB);
+const Color _vgVioletBorder = Color(0xFF7C3AED);
+const Color _vgVioletDeep = Color(0xFF6D28D9);
+const Color _vgVioletTint = Color(0xFFF5F3FF);
+const Color _vgEmeraldBorder = Color(0xFF059669);
+const Color _vgEmerald = Color(0xFF047857);
+const Color _vgEmeraldTint = Color(0xFFECFDF5);
+const Color _vgAmberBorder = Color(0xFFD97706);
+const Color _vgAmberTint = Color(0xFFFEF3C7);
+const Color _vgAmberTintLight = Color(0xFFFFFBEB);
+const Color _vgSlateHeader = Color(0xFFE2E8F0);
+const Color _vgRowBorder = Color(0xFFCBD5E1);
 class VoucherGenerationScreen extends ConsumerStatefulWidget {
   const VoucherGenerationScreen({super.key});
 
@@ -1302,6 +1325,61 @@ class _VoucherGenerationScreenState
     return list;
   }
 
+  /// Shot 1c — full-bleed numbered institutional header band (38px) with a
+  /// 2.5px solid bottom accent border.
+  Widget _buildSectionBand({
+    required String number,
+    required String title,
+    required Color tint,
+    required Color borderColor,
+    Color? titleColor,
+  }) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: tint,
+        border: Border(bottom: BorderSide(color: borderColor, width: 2.5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: borderColor,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              number,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                height: 1.0,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
+                color: titleColor ?? _vgDeepNavy,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildConfigurationCard(
     BuildContext context,
     VoucherGenFilters filters,
@@ -1350,16 +1428,24 @@ class _VoucherGenerationScreenState
     return SingleChildScrollView(
       child: Container(
         decoration: _cardDecoration(),
-        padding: const EdgeInsets.all(AppSpacing.md),
+        padding: EdgeInsets.zero,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Batch Generation Parameters',
-              style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+            // Shot 1c: full-bleed numbered header band.
+            _buildSectionBand(
+              number: '1',
+              title: 'Batch Generation Parameters',
+              tint: _vgBlueTint,
+              borderColor: _vgDeepNavy,
             ),
-            const SizedBox(height: AppSpacing.sm),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
             // VB6-style fast actions: 1-click whole-school batch and the
             // Single / Selected Student voucher modal.
             _buildFastActionsRow(context, filters, isGenerating),
@@ -1446,6 +1532,9 @@ class _VoucherGenerationScreenState
                     ref.read(voucherGenFiltersProvider.notifier).setDueDate(d),
               ),
             ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1474,8 +1563,12 @@ class _VoucherGenerationScreenState
           icon: const Icon(Icons.school_outlined, size: 16),
           label: const Text('Generate All School Vouchers (All Students)'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.brandPrimary,
+            backgroundColor: _vgOxfordBlue,
             foregroundColor: Colors.white,
+            textStyle: const TextStyle(
+              fontSize: 13.5,
+              fontWeight: FontWeight.w800,
+            ),
             padding: const EdgeInsets.symmetric(
               vertical: 10,
               horizontal: AppSpacing.md,
@@ -1492,8 +1585,9 @@ class _VoucherGenerationScreenState
           icon: const Icon(Icons.person_add_alt_1_outlined, size: 16),
           label: const Text('Single / Selected Student Voucher'),
           style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.brandPrimary,
-            side: const BorderSide(color: AppColors.brandPrimary),
+            foregroundColor: _vgTeal,
+            backgroundColor: _vgTealTint,
+            side: const BorderSide(color: _vgTeal, width: 1.5),
             padding: const EdgeInsets.symmetric(
               vertical: 10,
               horizontal: AppSpacing.md,
@@ -1686,9 +1780,9 @@ class _VoucherGenerationScreenState
     return Container(
       key: const Key('fee_parameters_checklist'),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.borderDefault),
+        color: _vgAmberTintLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _vgAmberBorder, width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1699,7 +1793,13 @@ class _VoucherGenerationScreenState
           // checkbox grid permanently suppressed. Shot 6g: the bar itself is
           // wrapped in a GestureDetector that toggles the unified fee table
           // below (collapsed by default on load).
-          GestureDetector(
+          // Shot 1c: high-visibility amber collapsible summary bar.
+          Container(
+            decoration: BoxDecoration(
+              color: _vgAmberTint,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onToggleHeader,
             child: IgnorePointer(
@@ -1727,6 +1827,7 @@ class _VoucherGenerationScreenState
               ),
             ),
           ),
+          ),
           // Shot 6g: the table rows + Edit tariffs footer only render when
           // the summary bar is expanded (collapsed by default on load).
           if (isExpanded) ...[
@@ -1737,6 +1838,7 @@ class _VoucherGenerationScreenState
               vertical: compact ? 2 : 4,
             ),
             decoration: const BoxDecoration(
+              color: _vgSlateHeader,
               border: Border(
                 bottom: BorderSide(color: AppColors.borderDefault),
               ),
@@ -1748,8 +1850,9 @@ class _VoucherGenerationScreenState
                   child: Text(
                     'ID',
                     style: AppTypography.label.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
+                      color: _vgInkPrimary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -1757,8 +1860,9 @@ class _VoucherGenerationScreenState
                   child: Text(
                     'Fee Head',
                     style: AppTypography.label.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
+                      color: _vgInkPrimary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -1769,8 +1873,9 @@ class _VoucherGenerationScreenState
                     textAlign: TextAlign.right,
                     maxLines: 1,
                     style: AppTypography.label.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
+                      color: _vgInkPrimary,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
@@ -1968,11 +2073,13 @@ class _VoucherGenerationScreenState
                     controller: _lateFineController,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.right,
-                    style: AppTypography.monospace.copyWith(fontSize: 12),
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(
+                    style: AppTypography.monospace.copyWith(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _vgInkPrimary,
+                    ),
+                    decoration: _vgInputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(
                         horizontal: 6,
                         vertical: 6,
                       ),
@@ -2240,9 +2347,9 @@ class _VoucherGenerationScreenState
         width: width,
         padding: const EdgeInsets.symmetric(horizontal: 8),
         decoration: BoxDecoration(
-          color: AppColors.surfaceRaised,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(AppRadius.sm),
-          border: Border.all(color: AppColors.borderDefault),
+          border: Border.all(color: _vgInputBorderRest, width: 1.5),
         ),
         height: 34,
         child: DropdownButton<int?>(
@@ -2364,12 +2471,25 @@ class _VoucherGenerationScreenState
 
     return Container(
       decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header row
-          Row(
+          // Shot 1c: full-bleed indigo header band.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.sm,
+              AppSpacing.md,
+              AppSpacing.sm,
+            ),
+            decoration: const BoxDecoration(
+              color: _vgIndigoTint,
+              border: Border(
+                bottom: BorderSide(color: _vgOxfordBlue, width: 2.5),
+              ),
+            ),
+            child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
@@ -2380,7 +2500,8 @@ class _VoucherGenerationScreenState
                     Text(
                       'Cohort Billing Audit & Ledger Preview',
                       style: AppTypography.h2.copyWith(
-                        color: AppColors.textPrimary,
+                        color: _vgDeepNavy,
+                        fontWeight: FontWeight.w800,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -2487,16 +2608,11 @@ class _VoucherGenerationScreenState
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.md),
-
-          // Phase H Shot 6a: everything below the header lives in ONE
-          // scrollable body with NO Expanded/Flexible vertical children, so
-          // the card can never overflow regardless of the height it is
-          // given (fixes the 107/76/13px RenderFlex overflows at h=343).
-          // Shot 6g: md gap keeps the KPI strip clear of the header actions
-          // row so the cards' top edges are never visually clipped.
+          ),
           Expanded(
-            child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -2508,9 +2624,9 @@ class _VoucherGenerationScreenState
                           title: 'Eligible Students',
                           value: '$eligibleCount students',
                           icon: Icons.people_outline,
-                          color: AppColors.textPrimary,
-                          bg: AppColors.surfaceSubtle,
-                          border: AppColors.borderDefault,
+                          color: _vgOxfordBlue,
+                          bg: _vgBlueTint,
+                          border: _vgBlueBorder,
                         ),
                       ),
                       const SizedBox(width: AppSpacing.xs),
@@ -2519,9 +2635,9 @@ class _VoucherGenerationScreenState
                           title: 'Full Tuition Waiver',
                           value: '$waiverCount students',
                           icon: Icons.card_membership_outlined,
-                          color: AppColors.brandPrimary,
-                          bg: AppColors.statusInfoBg,
-                          border: AppColors.statusInfoBorder,
+                          color: _vgVioletDeep,
+                          bg: _vgVioletTint,
+                          border: _vgVioletBorder,
                         ),
                       ),
                       const SizedBox(width: AppSpacing.xs),
@@ -2530,9 +2646,9 @@ class _VoucherGenerationScreenState
                           title: displayLabel,
                           value: 'Rs. ${currencyFormat.format(displayBilled)}',
                           icon: Icons.payments_outlined,
-                          color: AppColors.statusSuccessText,
-                          bg: AppColors.statusSuccessBg,
-                          border: AppColors.statusSuccessBorder,
+                          color: _vgEmerald,
+                          bg: _vgEmeraldTint,
+                          border: _vgEmeraldBorder,
                           emphasize: true,
                         ),
                       ),
@@ -2624,6 +2740,7 @@ class _VoucherGenerationScreenState
                 ],
               ),
             ),
+            ),
           ),
         ],
       ),
@@ -2647,7 +2764,7 @@ class _VoucherGenerationScreenState
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: border),
+        border: Border.all(color: border, width: 1.5),
       ),
       child: Row(
         children: [
@@ -2655,7 +2772,7 @@ class _VoucherGenerationScreenState
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: AppColors.surfaceRaised,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
             child: Icon(icon, size: 18, color: color),
@@ -2671,8 +2788,9 @@ class _VoucherGenerationScreenState
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
+                    color: _vgInkPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13.5,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -4210,6 +4328,31 @@ class _SingleVoucherWorkspaceState
 
   String _rs(num amount) => 'Rs. ${_currencyFormat.format(amount.round())}';
 
+  /// Shot 1c — 38px institutional header band for the workspace options
+  /// card (#EFF6FF tint, 2.5px solid #1D4ED8 bottom border).
+  Widget _buildWorkspaceOptionsBand() {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: _vgBlueTint,
+        border: Border(bottom: BorderSide(color: _vgOxfordBlue, width: 2.5)),
+      ),
+      alignment: Alignment.centerLeft,
+      child: const Text(
+        'Voucher Options',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 14.5,
+          fontWeight: FontWeight.w800,
+          color: _vgDeepNavy,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+
   Widget _buildWorkspaceInfoRow(String label, String value) {
     return Row(
       children: [
@@ -4241,19 +4384,21 @@ class _SingleVoucherWorkspaceState
     final checkedHeads = ref.watch(globalSelectedFeeParamIdsProvider);
     final selectableCount = _rows.length;
     final headStyle = AppTypography.label.copyWith(
-      fontWeight: FontWeight.w600,
-      color: AppColors.textSecondary,
+      fontSize: 13,
+      fontWeight: FontWeight.w800,
+      color: _vgInkPrimary,
     );
     final dateFormat = DateFormat('dd-MMM-yyyy');
 
     final classDropdown = DropdownButtonFormField<int?>(
       initialValue: _classFilter,
       isDense: true,
-      decoration: const InputDecoration(
-        labelText: 'Class',
-        border: OutlineInputBorder(),
-        isDense: true,
+      style: AppTypography.body.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: _vgInkPrimary,
       ),
+      decoration: _vgInputDecoration(labelText: 'Class'),
       items: [
         const DropdownMenuItem<int?>(
           value: null,
@@ -4275,11 +4420,14 @@ class _SingleVoucherWorkspaceState
     final searchField = TextField(
       key: const Key('single_voucher_reg_search'),
       controller: _searchCtrl,
-      decoration: InputDecoration(
+      style: AppTypography.body.copyWith(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: _vgInkPrimary,
+      ),
+      decoration: _vgInputDecoration(
         labelText: 'Reg Code / Student Name',
         prefixIcon: const Icon(Icons.search, size: 18),
-        border: const OutlineInputBorder(),
-        isDense: true,
         suffixIcon: _searchCtrl.text.isEmpty
             ? null
             : IconButton(
@@ -4358,53 +4506,87 @@ class _SingleVoucherWorkspaceState
                         ),
                       ),
                     for (final option in options)
-                      CheckboxListTile(
-                        dense: true,
-                        visualDensity: VisualDensity.compact,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          option.description.trim(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.bodySmall,
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: _vgRowBorder,
+                            width: 1.5,
+                          ),
                         ),
-                        value: selectedGlobal.contains(option.feeParamId),
-                        onChanged: (_) => ref
-                            .read(globalSelectedFeeParamIdsProvider.notifier)
-                            .toggle(option.feeParamId),
-                      ),
-                    // Shot 6e: Previous Arrears + Late Fine rows.
-                    CheckboxListTile(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'Previous Arrears',
-                        style: AppTypography.bodySmall,
-                      ),
-                      subtitle: Text(
-                        'Auto (Unpaid)',
-                        style: AppTypography.label.copyWith(
-                          color: AppColors.textSecondary,
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: CheckboxListTile(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(
+                              option.description.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.bodySmall,
+                            ),
+                            value: selectedGlobal.contains(option.feeParamId),
+                            onChanged: (_) => ref
+                                .read(globalSelectedFeeParamIdsProvider.notifier)
+                                .toggle(option.feeParamId),
+                          ),
                         ),
                       ),
-                      value: filters.includeArrears,
-                      onChanged: (v) => ref
-                          .read(voucherGenFiltersProvider.notifier)
-                          .setIncludeArrears(v ?? true),
+                    // Shot 1c: bordered, Material-backed Previous Arrears row.
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _vgRowBorder, width: 1.5),
+                      ),
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: CheckboxListTile(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'Previous Arrears',
+                            style: AppTypography.bodySmall,
+                          ),
+                          subtitle: Text(
+                            'Auto (Unpaid)',
+                            style: AppTypography.label.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          value: filters.includeArrears,
+                          onChanged: (v) => ref
+                              .read(voucherGenFiltersProvider.notifier)
+                              .setIncludeArrears(v ?? true),
+                        ),
+                      ),
                     ),
-                    CheckboxListTile(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text(
-                        'Late Fine (Rs.)',
-                        style: AppTypography.bodySmall,
+                    // Shot 1c: bordered, Material-backed Late Fine row.
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _vgRowBorder, width: 1.5),
                       ),
-                      value: filters.lateFineAmount > 0,
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: CheckboxListTile(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text(
+                            'Late Fine (Rs.)',
+                            style: AppTypography.bodySmall,
+                          ),
+                          value: filters.lateFineAmount > 0,
                       onChanged: (checked) {
                         final notifier = ref
                             .read(voucherGenFiltersProvider.notifier);
@@ -4428,10 +4610,8 @@ class _SingleVoucherWorkspaceState
                           style: AppTypography.monospace.copyWith(
                             fontSize: 12,
                           ),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
+                          decoration: _vgInputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(
                               horizontal: 6,
                               vertical: 6,
                             ),
@@ -4448,6 +4628,8 @@ class _SingleVoucherWorkspaceState
                         ),
                       ),
                     ),
+                        ),
+                      ),
                   ],
                 ),
               );
@@ -4458,18 +4640,27 @@ class _SingleVoucherWorkspaceState
     );
 
     // Table header: select-all checkbox doubles as the Check column.
+    // Shot 1c: slate sticky header with high-contrast column titles.
     final tableHeader = Container(
       padding: const EdgeInsets.symmetric(vertical: 4),
       decoration: const BoxDecoration(
+        color: _vgSlateHeader,
         border: Border(
           bottom: BorderSide(color: AppColors.borderDefault),
         ),
       ),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 24,
-            child: Text('#', style: AppTypography.label),
+            child: Text(
+              '#',
+              style: AppTypography.label.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: _vgInkPrimary,
+              ),
+            ),
           ),
           SizedBox(
             width: 40,
@@ -4483,34 +4674,30 @@ class _SingleVoucherWorkspaceState
             width: 56,
             child: Text('Reg ID', style: AppTypography.label),
           ),
-          Expanded(
-            child: Text('Student Name', style: headStyle),
-          ),
+          Expanded(child: Text('Student Name', style: headStyle)),
           const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Text('Father Name', style: headStyle),
-          ),
+          Expanded(child: Text('Father Name', style: headStyle)),
           const SizedBox(width: AppSpacing.xs),
-          const SizedBox(
+          SizedBox(
             width: 84,
-            child: Text('Class', style: AppTypography.label),
+            child: Text('Class', style: headStyle),
           ),
-          const SizedBox(
+          SizedBox(
             width: 72,
-            child: Text('Gross Fee', style: AppTypography.label),
+            child: Text('Gross Fee', style: headStyle),
           ),
-          const SizedBox(
+          SizedBox(
             width: 64,
-            child: Text('Discount', style: AppTypography.label),
+            child: Text('Discount', style: headStyle),
           ),
-          const SizedBox(
+          SizedBox(
             width: 80,
-            child: Text('Net Payable', style: AppTypography.label),
+            child: Text('Net Payable', style: headStyle),
           ),
           const SizedBox(width: AppSpacing.xs),
-          const SizedBox(
+          SizedBox(
             width: 100,
-            child: Text('Status', style: AppTypography.label),
+            child: Text('Status', style: headStyle),
           ),
           const SizedBox(width: 84),
         ],
@@ -4546,7 +4733,9 @@ class _SingleVoucherWorkspaceState
                   );
                   return InkWell(
                     onTap: () => _toggleRow(row.stuRegId),
-                    child: Padding(
+                    child: Container(
+                      // Shot 1c: #EFF6FF highlight for selected rows.
+                      color: checked ? _vgBlueTint : null,
                       padding: const EdgeInsets.symmetric(
                         vertical: 2,
                       ),
@@ -4836,6 +5025,7 @@ class _SingleVoucherWorkspaceState
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    _buildWorkspaceOptionsBand(),
                     leftPanel,
                     const SizedBox(height: AppSpacing.sm),
                     Expanded(
@@ -4849,7 +5039,16 @@ class _SingleVoucherWorkspaceState
               : Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SizedBox(width: 300, child: leftPanel),
+                    SizedBox(
+                      width: 300,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildWorkspaceOptionsBand(),
+                          Expanded(child: leftPanel),
+                        ],
+                      ),
+                    ),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4922,4 +5121,36 @@ class _SingleVoucherWorkspaceState
       ),
     );
   }
+}
+
+/// Shot 1c — shared high-contrast input decoration (scoped to this file;
+/// the global InputDecorationTheme is untouched).
+InputDecoration _vgInputDecoration({
+  String? labelText,
+  Widget? prefixIcon,
+  Widget? suffixIcon,
+  bool dense = true,
+  EdgeInsetsGeometry? contentPadding,
+}) {
+  final radius = BorderRadius.circular(8);
+  final restBorder = OutlineInputBorder(
+    borderRadius: radius,
+    borderSide: const BorderSide(color: _vgInputBorderRest, width: 1.5),
+  );
+  final focusBorder = OutlineInputBorder(
+    borderRadius: radius,
+    borderSide: const BorderSide(color: _vgInputBorderFocus, width: 2),
+  );
+  return InputDecoration(
+    labelText: labelText,
+    prefixIcon: prefixIcon,
+    suffixIcon: suffixIcon,
+    filled: true,
+    fillColor: Colors.white,
+    isDense: dense,
+    contentPadding: contentPadding,
+    border: restBorder,
+    enabledBorder: restBorder,
+    focusedBorder: focusBorder,
+  );
 }
