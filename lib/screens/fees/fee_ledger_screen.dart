@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/db/database.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/fee_ledger_provider.dart';
 import '../../core/providers/session_provider.dart';
@@ -12,6 +13,7 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../models/fee_ledger_row.dart';
+import '../../models/fee_receipt_view.dart';
 import '../../widgets/mobile/mobile_kpi_card.dart';
 import '../../widgets/mobile/mobile_status_pill.dart';
 import '../../widgets/reports/report_definition.dart';
@@ -299,6 +301,198 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
         items: items,
         onReprintSlip: row.isPaid == 'Y' ? () => _reprintSlip(row) : null,
       ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHOT 3b — INSTITUTIONAL VOUCHER DOSSIER MODAL
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Loads the full dossier payload (fee heads + payment receipts) for one
+  /// voucher and opens the rich institutional dossier modal.
+  Future<void> _showVoucherDossier(FeeLedgerRow row) async {
+    final items = await ref
+        .read(feeLedgerProvider.notifier)
+        .loadVoucherDetails(row.voucherMasId);
+
+    List<Map<String, dynamic>> payments = const [];
+    try {
+      final db = await DatabaseService.instance.database;
+      final rows = await db.rawQuery(
+        '''
+        SELECT SubmissionDate, TotalAmount, PaidAmount, Detail
+        FROM FeeTransaction
+        WHERE VoucharNo = ?
+        ORDER BY SubmissionDate ASC
+        ''',
+        [row.voucherMasId],
+      );
+      payments = rows.map((m) => Map<String, dynamic>.from(m)).toList();
+    } catch (e) {
+      debugPrint('Failed to load voucher payments: $e');
+    }
+    if (!mounted) return;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => _VoucherDossierDialog(
+        row: row,
+        items: items,
+        payments: payments,
+        onCollectFee: () {
+          Navigator.of(ctx).pop();
+          context.go('/fees/receipts');
+        },
+        onPrintChallan: () {
+          Navigator.of(ctx).pop();
+          _printChallan(row);
+        },
+        onOpenProfile: () {
+          Navigator.of(ctx).pop();
+          context.go('/students/${row.stuRegId}');
+        },
+        onDeleteVoucher: () {
+          Navigator.of(ctx).pop();
+          _deleteVoucherFromLedger(row);
+        },
+      ),
+    );
+  }
+
+  /// Shot 3b: prints the 3-copy fee challan for this voucher with the exact
+  /// same bank extraParams contract as the profile ledger print path.
+  Future<void> _printChallan(FeeLedgerRow row) async {
+    final db = await DatabaseService.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT vm.*, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name,
+             c.CName AS class_name, cs.SecName AS section_name,
+             sc.ClassRollNo, sc.SessionYr
+      FROM VoucharMas vm
+      JOIN Stu_Reg sr ON vm.Student_Class_StuRegID = sr.Stu_RegID
+      LEFT JOIN Student_Class sc
+        ON sr.Stu_RegID = sc.Stu_RegID AND sc.SessionYr = vm.SessionYr
+      LEFT JOIN Class c ON sc.ClassID = c.ClassID
+      LEFT JOIN ClassSec cs ON sc.ClassSecID = cs.ClassSecID
+      WHERE vm.VoucherMasID = ?
+      LIMIT 1
+    ''',
+      [row.voucherMasId],
+    );
+    if (!mounted) return;
+    if (rows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Voucher not found.'),
+          backgroundColor: AppColors.statusErrorText,
+        ),
+      );
+      return;
+    }
+    final det = await db.rawQuery(
+      '''
+      SELECT vd.feeParameterID, vd.Amount, vd.Discount,
+             fp.ParamDesciption
+      FROM VoucharDet vd
+      LEFT JOIN FeeParameters fp ON vd.feeParameterID = fp.FeeParamID
+      WHERE vd.VoucharMasID = ?
+      ORDER BY vd.feeParameterID ASC
+    ''',
+      [row.voucherMasId],
+    );
+    final receipt = FeeReceiptView.fromFlatMap(
+      Map<String, dynamic>.from(rows.first),
+      lineItems: det.map((m) => Map<String, dynamic>.from(m)).toList(),
+    );
+    if (!mounted) return;
+
+    final meta = ref.read(shellMetadataProvider).value;
+    final safeBranchName =
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+        ? meta.branchName.trim()
+        : 'Ailyans Higher Secondary School';
+    final safeBranchAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+        ? meta.branchAddress.trim()
+        : '-';
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.feeVoucher,
+        vouchers: [receipt],
+        extraParams: {
+          'branchName': safeBranchName,
+          'branchAddress': safeBranchAddress,
+          'bankName': 'Askari Bank Limited',
+          'bankBranch': 'Ballo Khel Road',
+          'bankAcctNo': '4528',
+        },
+      ),
+    );
+  }
+
+  /// Shot 3b: confirmation + permanent voucher deletion (payments, details,
+  /// master) followed by a ledger refresh.
+  Future<void> _deleteVoucherFromLedger(FeeLedgerRow row) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete Voucher #${row.voucherMasId}?'),
+        content: const Text(
+          'This will permanently remove the voucher and any recorded fee transactions for it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.statusErrorText,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete Voucher'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final db = await DatabaseService.instance.database;
+      await db.transaction((txn) async {
+        await txn.delete(
+          'FeeTransaction',
+          where: 'VoucharNo = ?',
+          whereArgs: [row.voucherMasId],
+        );
+        await txn.delete(
+          'VoucharDet',
+          where: 'VoucharMasID = ?',
+          whereArgs: [row.voucherMasId],
+        );
+        await txn.delete(
+          'VoucharMas',
+          where: 'VoucherMasID = ?',
+          whereArgs: [row.voucherMasId],
+        );
+      });
+    } catch (e) {
+      debugPrint('Delete voucher failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete voucher: $e'),
+          backgroundColor: AppColors.statusErrorText,
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    ref.invalidate(feeLedgerProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Voucher #${row.voucherMasId} deleted.')),
     );
   }
 
@@ -1553,15 +1747,18 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     return DataRow(
       cells: [
         DataCell(
+          onTap: () => _showVoucherDossier(r),
           Text(
             r.voucherMasId,
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
           ),
         ),
         DataCell(
+          onTap: () => _showVoucherDossier(r),
           Text(r.stuRegId.toString(), style: const TextStyle(fontSize: 12)),
         ),
         DataCell(
+          onTap: () => _showVoucherDossier(r),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 160),
             child: Text(
@@ -1572,6 +1769,7 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
           ),
         ),
         DataCell(
+          onTap: () => _showVoucherDossier(r),
           Text(
             r.sectionName.isNotEmpty
                 ? '${r.className} - ${r.sectionName}'
@@ -1580,18 +1778,21 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
           ),
         ),
         DataCell(
+          onTap: () => _showVoucherDossier(r),
           Text(
             _currencyFormat.format(r.gross),
             style: const TextStyle(fontSize: 12),
           ),
         ),
         DataCell(
+          onTap: () => _showVoucherDossier(r),
           Text(
             _currencyFormat.format(r.discount),
             style: const TextStyle(fontSize: 12),
           ),
         ),
         DataCell(
+          onTap: () => _showVoucherDossier(r),
           Text(
             _currencyFormat.format(r.netDue),
             style: TextStyle(
@@ -1603,8 +1804,12 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
             ),
           ),
         ),
-        DataCell(_buildStatusBadge(r)),
         DataCell(
+          onTap: () => _showVoucherDossier(r),
+          _buildStatusBadge(r),
+        ),
+        DataCell(
+          onTap: () => _showVoucherDossier(r),
           Text(
             r.dueDate != null ? _dateFormat.format(r.dueDate!) : '-',
             style: const TextStyle(fontSize: 12),
@@ -1918,7 +2123,10 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
       _ => ('Unpaid', MobileStatusVariant.error),
     };
 
-    return Container(
+    // Shot 3b: tapping the card opens the rich voucher dossier modal.
+    return GestureDetector(
+      onTap: () => _showVoucherDossier(r),
+      child: Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xs),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -2066,6 +2274,7 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -2681,6 +2890,529 @@ class _VoucherDetailDialog extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 // CLASS COLLECTION SUMMARY DIALOG
 // ══════════════════════════════════════════════════════════════════════════════
+/// Shot 3b: rich institutional voucher dossier modal — 38px Oxford Blue
+/// header band, student metadata strip, itemized fee-head breakdown,
+/// payment receipts history, and four direct action buttons.
+class _VoucherDossierDialog extends StatelessWidget {
+  final FeeLedgerRow row;
+  final List<FeeLedgerDetailItem> items;
+  final List<Map<String, dynamic>> payments;
+  final VoidCallback onCollectFee;
+  final VoidCallback onPrintChallan;
+  final VoidCallback onOpenProfile;
+  final VoidCallback onDeleteVoucher;
+
+  static final NumberFormat _money = NumberFormat('#,##0');
+  static final DateFormat _dateFmt = DateFormat('dd-MMM-yyyy hh:mm a');
+
+  const _VoucherDossierDialog({
+    required this.row,
+    required this.items,
+    required this.payments,
+    required this.onCollectFee,
+    required this.onPrintChallan,
+    required this.onOpenProfile,
+    required this.onDeleteVoucher,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final dialogWidth = screenWidth < 720 ? screenWidth * 0.96 : 880.0;
+
+    int totalGross = 0;
+    int totalDiscount = 0;
+    for (final it in items) {
+      totalGross += it.amount;
+      totalDiscount += it.discount;
+    }
+    final totalNet = totalGross - totalDiscount;
+    int totalPaid = 0;
+    for (final p in payments) {
+      totalPaid += (p['PaidAmount'] as num?)?.toInt() ?? 0;
+    }
+
+    final statusLabel =
+        row.isPaid == 'Y' ? 'Paid' : (row.isPaid == 'O' ? 'Overdue' : 'Unpaid');
+    final statusColor = row.isPaid == 'Y'
+        ? AppColors.statusSuccessText
+        : (row.isPaid == 'O'
+              ? AppColors.statusErrorText
+              : AppColors.statusWarningText);
+
+    return Dialog(
+      backgroundColor: AppColors.surfaceRaised,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+      ),
+      child: Container(
+        width: dialogWidth,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── 38px Oxford Blue header band ──
+            Container(
+              height: 38,
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              color: const Color(0xFF1E3A8A),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.receipt_long_rounded,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'VOUCHER DOSSIER · #${row.voucherMasId}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.label.copyWith(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    color: Colors.white,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 28),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Student metadata strip ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(
+                  bottom: BorderSide(color: AppColors.borderDefault),
+                ),
+              ),
+              child: Wrap(
+                spacing: 14,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    row.studentName,
+                    style: AppTypography.bodySmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  _metaChip('Reg ID', row.stuRegId.toString()),
+                  _metaChip(
+                    'Class',
+                    row.sectionName.isNotEmpty
+                        ? '${row.className} - ${row.sectionName}'
+                        : row.className,
+                  ),
+                  _metaChip('Month', row.forMonth),
+                  _metaChip('Session', row.sessionYr),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      statusLabel.toUpperCase(),
+                      style: AppTypography.label.copyWith(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Scrollable body ──
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _sectionLabel('FEE HEAD BREAKDOWN'),
+                    const SizedBox(height: 6),
+                    _breakdownTable(totalGross, totalDiscount, totalNet),
+                    const SizedBox(height: 16),
+                    _sectionLabel('PAYMENT RECEIPTS HISTORY'),
+                    const SizedBox(height: 6),
+                    _paymentsTable(totalPaid),
+                  ],
+                ),
+              ),
+            ),
+
+            // ── Action bar ──
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                border: Border(top: BorderSide(color: AppColors.borderDefault)),
+              ),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                alignment: WrapAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: onCollectFee,
+                    icon: const Icon(Icons.payments_outlined, size: 15),
+                    label: const Text('Collect Fee'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF047857),
+                      side: const BorderSide(color: Color(0xFFA7F3D0)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: const Size(0, 32),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onPrintChallan,
+                    icon: const Icon(Icons.print_outlined, size: 15),
+                    label: const Text('Print 3-Copy Challan'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF1E40AF),
+                      side: const BorderSide(color: Color(0xFFBFDBFE)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: const Size(0, 32),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onOpenProfile,
+                    icon: const Icon(Icons.person_outline_rounded, size: 15),
+                    label: const Text('Open Student Profile'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textSecondary,
+                      side: const BorderSide(color: AppColors.borderDefault),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: const Size(0, 32),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: onDeleteVoucher,
+                    icon: const Icon(Icons.delete_outline_rounded, size: 15),
+                    label: const Text('Delete Voucher'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.statusErrorText,
+                      side: const BorderSide(color: AppColors.statusErrorBorder),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: const Size(0, 32),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metaChip(String label, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '$label: ',
+          style: AppTypography.bodySmall.copyWith(
+            fontSize: 11.5,
+            color: AppColors.textSecondary,
+          ),
+        ),
+        Text(
+          value,
+          style: AppTypography.bodySmall.copyWith(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: AppTypography.label.copyWith(
+        fontSize: 11.5,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.8,
+        color: const Color(0xFF1E3A8A),
+      ),
+    );
+  }
+
+  Widget _breakdownTable(int totalGross, int totalDiscount, int totalNet) {
+    if (items.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: const Text(
+          'No line item breakdown found.',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+      );
+    }
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.borderDefault),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: const Color(0xFFF8FAFC),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                const Expanded(
+                  flex: 5,
+                  child: Text(
+                    'Fee Head',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                _cell('Amount', right: true, bold: true),
+                _cell('Disc', right: true, bold: true),
+                _cell('Net', right: true, bold: true),
+              ],
+            ),
+          ),
+          for (final it in items)
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppColors.borderSubtle),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      it.paramDescription,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  _cell(_money.format(it.amount), right: true),
+                  _cell(
+                    it.discount > 0 ? '-${_money.format(it.discount)}' : '-',
+                    right: true,
+                  ),
+                  _cell(
+                    _money.format(it.amount - it.discount),
+                    right: true,
+                    bold: true,
+                  ),
+                ],
+              ),
+            ),
+          Container(
+            color: const Color(0xFFF8FAFC),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                const Expanded(
+                  flex: 5,
+                  child: Text(
+                    'TOTAL',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                _cell(_money.format(totalGross), right: true, bold: true),
+                _cell(
+                  totalDiscount > 0 ? '-${_money.format(totalDiscount)}' : '-',
+                  right: true,
+                  bold: true,
+                ),
+                _cell(_money.format(totalNet), right: true, bold: true),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _paymentsTable(int totalPaid) {
+    if (payments.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: const Text(
+          'No payments recorded yet for this voucher.',
+          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+      );
+    }
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.borderDefault),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            color: const Color(0xFFF8FAFC),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                const Expanded(
+                  flex: 5,
+                  child: Text(
+                    'Submission Date',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                _cell('Mode', bold: true),
+                _cell('Paid (Rs)', right: true, bold: true),
+              ],
+            ),
+          ),
+          for (final p in payments)
+            Container(
+              decoration: const BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: AppColors.borderSubtle),
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: Text(
+                      _formatDbDate(p['SubmissionDate'] as String?),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  _cell(
+                    ((p['Detail'] as String?) ?? '').trim().isEmpty
+                        ? '-'
+                        : (p['Detail'] as String).trim(),
+                  ),
+                  _cell(
+                    _money.format((p['PaidAmount'] as num?)?.toInt() ?? 0),
+                    right: true,
+                    bold: true,
+                  ),
+                ],
+              ),
+            ),
+          Container(
+            color: const Color(0xFFF8FAFC),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                const Expanded(
+                  flex: 5,
+                  child: Text(
+                    'TOTAL RECEIVED',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+                _cell(_money.format(totalPaid), right: true, bold: true),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cell(
+    String text, {
+    bool right = false,
+    bool bold = false,
+  }) {
+    return Expanded(
+      flex: 2,
+      child: Text(
+        text,
+        textAlign: right ? TextAlign.right : TextAlign.left,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+
+  String _formatDbDate(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return '-';
+    final dt = DateTime.tryParse(raw.trim());
+    if (dt == null) return raw.trim();
+    return _dateFmt.format(dt);
+  }
+}
+
 // ignore: unused_element
 class _ClassSummaryDialog extends StatelessWidget {
   final String month;

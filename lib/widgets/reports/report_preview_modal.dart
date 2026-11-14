@@ -135,6 +135,35 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   // Voucher mode toggle helper
   // ---------------------------------------------------------------------------
 
+  /// Shot 3b: high-contrast count pill for the preview header — shows the
+  /// exact number of vouchers in this batch and the pages they will print
+  /// (one A4 page per voucher), e.g. '71 Vouchers · 71 Pages'. Hidden when
+  /// the report carries no voucher records.
+  Widget? _buildCountBadge() {
+    final count = widget.request.vouchers?.length ?? 0;
+    if (count == 0) return null;
+    final label = count == 1
+        ? '1 Voucher · 1 Page'
+        : '$count Vouchers · $count Pages';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        style: AppTypography.label.copyWith(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFF1E40AF),
+        ),
+      ),
+    );
+  }
+
   Widget _buildVoucherModeToggle() {
     return SegmentedButton<int>(
       style: SegmentedButton.styleFrom(
@@ -289,6 +318,12 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             ),
           ),
 
+          // --- Shot 3b: N Vouchers · N Pages count pill ------------------------
+          if (_buildCountBadge() != null) ...[
+            _buildCountBadge()!,
+            const SizedBox(width: AppSpacing.sm),
+          ],
+
           // --- Optional caller-supplied controls ------------------------------
           if (widget.headerControls != null) ...[
             widget.headerControls!,
@@ -394,6 +429,11 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
               style: AppTypography.h3,
             ),
           ),
+          // --- Shot 3b: N Vouchers · N Pages count pill ------------------------
+          if (_buildCountBadge() != null) ...[
+            _buildCountBadge()!,
+            const SizedBox(width: AppSpacing.xs),
+          ],
           IconButton(
             key: const Key('report_preview_refresh_btn'),
             icon: const Icon(Icons.refresh_rounded, size: 20),

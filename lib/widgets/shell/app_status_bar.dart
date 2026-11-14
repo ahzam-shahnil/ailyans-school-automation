@@ -221,6 +221,51 @@ class AppStatusBar extends ConsumerWidget {
           ),
         ],
 
+        // 3b. ByteWave branding badge — sits left of the shortcuts button,
+        // wrapped in Flexible so narrow viewports ellipsize instead of
+        // overflowing the fixed 28px status bar.
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 1.0,
+                height: 12.0,
+                color: AppColors.borderDefault,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              const Flexible(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'ByteWave ERP',
+                        style: TextStyle(
+                          fontSize: 11.0,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E3A8A),
+                        ),
+                      ),
+                      TextSpan(
+                        text: ' · Developed by Ahzam Shahnil',
+                        style: TextStyle(
+                          fontSize: 11.0,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+
         // 4. Right: Keyboard Shortcuts Quick Reference Button
         if (showShortcuts) ...[
           const SizedBox(width: AppSpacing.xs),

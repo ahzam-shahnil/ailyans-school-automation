@@ -737,6 +737,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ),
                             ),
                             const SizedBox(width: AppSpacing.xs),
+                            // Shot 3b: institutional attribution line.
+                            const Flexible(
+                              child: Text(
+                                'ByteWave School Automation · Engineered by Ahzam Shahnil',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                softWrap: false,
+                                style: TextStyle(
+                                  fontSize: 11.0,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF475569),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.xs),
                             Text(
                               'SQLite Local',
                               style: AppTypography.monospace.copyWith(

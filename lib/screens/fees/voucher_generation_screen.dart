@@ -531,7 +531,10 @@ class _VoucherGenerationScreenState
         AND (? IS NULL OR vm.ClassID = ?)
         AND (? IS NULL OR vm.Student_Class_StuRegID = ?)
         $stuInFilter
-      ORDER BY sc.ClassRollNo ASC
+      ORDER BY COALESCE(sc.ClassID, vm.ClassID) ASC,
+               COALESCE(cs.SecName, '') ASC,
+               COALESCE(sc.ClassRollNo, 999999) ASC,
+               vm.Student_Class_StuRegID ASC
     ''',
       [
         filters.billingMonth,
@@ -595,7 +598,10 @@ class _VoucherGenerationScreenState
         SELECT MAX(VoucherMasID) FROM VoucharMas
         WHERE Student_Class_StuRegID IN ($ids)
       )
-      ORDER BY sc.ClassRollNo ASC
+      ORDER BY COALESCE(sc.ClassID, vm.ClassID) ASC,
+               COALESCE(cs.SecName, '') ASC,
+               COALESCE(sc.ClassRollNo, 999999) ASC,
+               vm.Student_Class_StuRegID ASC
     ''',
     );
 
