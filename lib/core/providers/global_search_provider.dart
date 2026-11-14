@@ -161,28 +161,41 @@ final globalSearchProvider = FutureProvider.autoDispose
       final pattern = '%${q.toLowerCase()}%';
 
       // 1. Students
+      // Shot 6k: a student can have multiple Student_Class rows (promotion
+      // history / re-enrollment across sessions). Joining Student_Class
+      // directly produced one result row per enrollment — `#4777 Aimal Khan`
+      // appeared twice in Global Omni-Search. Join only the single canonical
+      // enrollment row per student (Present=1 in the newest session first),
+      // and GROUP BY sr.Stu_RegID as a hard guarantee. Exact Reg-ID matches
+      // are ordered first.
       final studentRows = await db.rawQuery(
         '''
     SELECT sr.Stu_RegID, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name, sr.Mobile1,
            sc.ClassRollNo, sc.Present, c.CName, cs.SecName
     FROM Stu_Reg sr
-    LEFT JOIN Student_Class sc ON sc.Stu_RegID = sr.Stu_RegID 
-      AND sc.Present = 1 
-      AND sc.ClassID = (
-        SELECT MAX(sc2.ClassID) 
-        FROM Student_Class sc2 
-        WHERE sc2.Stu_RegID = sr.Stu_RegID AND sc2.Present = 1
-      )
+    LEFT JOIN Student_Class sc ON sc.rowid = (
+      SELECT sc2.rowid
+      FROM Student_Class sc2
+      WHERE sc2.Stu_RegID = sr.Stu_RegID
+      ORDER BY COALESCE(sc2.Present, 0) DESC, sc2.SessionYr DESC, sc2.rowid DESC
+      LIMIT 1
+    )
     LEFT JOIN Class c ON c.ClassID = sc.ClassID
     LEFT JOIN ClassSec cs ON cs.ClassSecID = sc.ClassSecID
     WHERE LOWER(TRIM(COALESCE(sr.NameFirst,'') || ' ' || COALESCE(sr.NameMiddle,'') || ' ' || COALESCE(sr.NameLast,''))) LIKE ?
        OR LOWER(COALESCE(sr.F_Name,'')) LIKE ?
        OR CAST(sr.Stu_RegID AS TEXT) LIKE ?
        OR LOWER(COALESCE(sr.Mobile1,'')) LIKE ?
-    ORDER BY COALESCE(sc.Present, 0) DESC, sr.Stu_RegID DESC
+    GROUP BY sr.Stu_RegID
+    ORDER BY CASE
+        WHEN CAST(sr.Stu_RegID AS TEXT) = ? THEN 0
+        WHEN CAST(sr.Stu_RegID AS TEXT) LIKE ? THEN 1
+        ELSE 2
+      END,
+      sr.Stu_RegID DESC
     LIMIT 25
     ''',
-        [pattern, pattern, pattern, pattern],
+        [pattern, pattern, pattern, pattern, q, pattern],
       );
 
       final students = studentRows.map((r) {
@@ -204,6 +217,8 @@ final globalSearchProvider = FutureProvider.autoDispose
       }).toList();
 
       // 2. Vouchers
+      // Shot 6k: GROUP BY vm.VoucherMasID guarantees one row per voucher even
+      // if the join graph ever fans out through multi-enrollment students.
       final voucherRows = await db.rawQuery(
         '''
     SELECT vm.VoucherMasID, vm.Student_Class_StuRegID AS StuRegID, vm.ForMonth, vm.SessionYr,
@@ -216,6 +231,7 @@ final globalSearchProvider = FutureProvider.autoDispose
        OR CAST(vm.Student_Class_StuRegID AS TEXT) LIKE ?
        OR LOWER(COALESCE(vm.ForMonth,'')) LIKE ?
        OR LOWER(TRIM(COALESCE(sr.NameFirst,'') || ' ' || COALESCE(sr.NameMiddle,'') || ' ' || COALESCE(sr.NameLast,''))) LIKE ?
+    GROUP BY vm.VoucherMasID
     ORDER BY SUBSTR(vm.VoucherMasID, 1, 4) DESC, vm.VoucherMasID DESC
     LIMIT 25
     ''',
