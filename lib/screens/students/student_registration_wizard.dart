@@ -19,6 +19,16 @@ import '../../core/utils/input_formatters.dart';
 import '../../core/utils/photo_picker.dart';
 import '../../models/school_class.dart';
 
+// Shot 1b — refined institutional palette for the admission wizard.
+const Color _kInkPrimary = Color(0xFF0F172A);
+const Color _kInputBorderRest = Color(0xFF94A3B8);
+const Color _kInputBorderFocus = Color(0xFF2563EB);
+const Color _kInputFillFocus = Color(0xFFEFF6FF);
+const Color _kEmerald = Color(0xFF047857);
+const Color _kEmeraldDeep = Color(0xFF064E3B);
+const Color _kEmeraldTint = Color(0xFFECFDF5);
+const Color _kEmeraldTintStrong = Color(0xFFD1FAE5);
+
 /// Production StudentRegistrationWizard screen hosted at `/students/new`.
 /// Adheres strictly to locked 4-step progressive wizard specifications.
 class StudentRegistrationWizard extends ConsumerStatefulWidget {
@@ -712,9 +722,10 @@ class _StudentRegistrationWizardState
   /// widgets (e.g. the Full Fee Waiver checkbox) keep a Material ancestor
   /// below the card's DecoratedBox.
   Widget _sectionCard(GlobalKey sectionKey, Widget child) {
+    // Shot 1b: card padding moved into the section builders so the
+    // numbered header band can run full-bleed across the top of the card.
     return Container(
       key: sectionKey,
-      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(AppRadius.lg),
@@ -722,7 +733,10 @@ class _StudentRegistrationWizardState
       ),
       child: Material(
         type: MaterialType.transparency,
-        child: child,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(AppRadius.lg - 1),
+          child: child,
+        ),
       ),
     );
   }
@@ -740,13 +754,13 @@ class _StudentRegistrationWizardState
         style: AppTypography.monospace.copyWith(
           color: AppColors.textPrimary,
         ),
-        decoration: InputDecoration(
-          isDense: true,
+        decoration: _wizardInputDecoration(
+          dense: true,
           prefixText: '#',
           prefixStyle: AppTypography.monospace.copyWith(
             color: AppColors.textSecondary,
           ),
-          hintText: _sequentialRegId?.toString() ?? '—',
+          hint: _sequentialRegId?.toString() ?? '—',
           hintStyle: AppTypography.monospace.copyWith(
             color: AppColors.textMuted,
           ),
@@ -754,7 +768,6 @@ class _StudentRegistrationWizardState
             horizontal: 8,
             vertical: 10,
           ),
-          border: const OutlineInputBorder(),
         ),
         onChanged: _onRegIdChanged,
       ),
@@ -780,16 +793,17 @@ class _StudentRegistrationWizardState
     final compactOutlined = OutlinedButton.styleFrom(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       minimumSize: const Size(0, 34),
-      foregroundColor: AppColors.textPrimary,
-      side: const BorderSide(color: AppColors.borderDefault),
+      foregroundColor: _kInkPrimary,
+      side: const BorderSide(color: _kInputBorderRest, width: 1.5),
     );
 
+    // Shot 1b: high-contrast registration ID cluster.
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
       ),
       child: Wrap(
         spacing: 8,
@@ -819,6 +833,9 @@ class _StudentRegistrationWizardState
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               minimumSize: const Size(0, 34),
+              backgroundColor: _kEmerald,
+              foregroundColor: Colors.white,
+              side: const BorderSide(color: _kEmeraldDeep, width: 1.5),
             ),
             child: const Text('GO'),
           ),
@@ -967,7 +984,9 @@ class _StudentRegistrationWizardState
                       Text(
                         'New Student Admission',
                         style: AppTypography.h2.copyWith(
-                          color: AppColors.textPrimary,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: _kInkPrimary,
                         ),
                       ),
                       const SizedBox(width: AppSpacing.md),
@@ -1389,59 +1408,97 @@ class _StudentRegistrationWizardState
   /// section title (the legacy step strings stay mounted in the
   /// zero-height compatibility strip so widget tests keep passing).
   Widget _buildSectionHeader({
+    required int number,
     required String cleanTitle,
     required String stepTitle,
     required String subtitle,
+    required Color bandTint,
+    required Color bandBorder,
+    required Color titleColor,
     Widget? trailing,
   }) {
     final isMobile = ResponsiveBreakpoints.isMobile(context);
     if (isMobile) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            stepTitle,
-            style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: AppTypography.bodySmall.copyWith(
-              color: AppColors.textMuted,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          const Divider(color: AppColors.borderDefault),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+      // Shot 1b: the section card no longer pads its child (the desktop
+      // numbered band must run full-bleed), so the mobile heading carries
+      // its own top/side padding here.
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          AppSpacing.md,
+          AppSpacing.md,
+          0,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                cleanTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.h3.copyWith(
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
+            Text(
+              stepTitle,
+              style: AppTypography.h2.copyWith(color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
               ),
             ),
-            if (trailing != null) ...[
-              const SizedBox(width: 8),
-              trailing,
-            ],
+            const SizedBox(height: AppSpacing.md),
+            const Divider(color: AppColors.borderDefault),
+            const SizedBox(height: AppSpacing.lg),
           ],
         ),
-        const SizedBox(height: 6),
-        const Divider(color: AppColors.borderDefault),
-        const SizedBox(height: AppSpacing.sm),
-      ],
+      );
+    }
+    // Shot 1b: full-bleed 38px numbered institutional header band with a
+    // 2.5px solid bottom accent border in the section's refined tint.
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: bandTint,
+        border: Border(bottom: BorderSide(color: bandBorder, width: 2.5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: bandBorder,
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '$number',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                height: 1.0,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              cleanTitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
+                color: titleColor,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+          if (trailing != null) ...[
+            const SizedBox(width: 8),
+            trailing,
+          ],
+        ],
+      ),
     );
   }
 
@@ -1604,25 +1661,34 @@ class _StudentRegistrationWizardState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(
+          number: 1,
           cleanTitle: 'Personal Information',
           stepTitle: 'Step 1 of 4: Personal Information',
           subtitle: 'Basic identity details for the new student',
+          bandTint: const Color(0xFFEFF6FF),
+          bandBorder: const Color(0xFF1E40AF),
+          titleColor: const Color(0xFF1E3A8A),
           trailing: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: AppColors.statusInfoBg,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: Border.all(color: AppColors.statusInfoBorder),
+              border: Border.all(color: const Color(0xFF1E40AF)),
             ),
             child: Text(
               'Draft',
               style: AppTypography.bodySmall.copyWith(
-                color: AppColors.statusInfoText,
+                color: const Color(0xFF1E3A8A),
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
 
         // Shot 6h: on desktop the photo picker is a compact 64px strip at
         // the TOP of the card, so the 2-column field grid below gets 100%
@@ -1642,6 +1708,9 @@ class _StudentRegistrationWizardState
           const SizedBox(height: AppSpacing.md),
           identityFieldsColumn,
         ],
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1837,11 +1906,19 @@ class _StudentRegistrationWizardState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(
+          number: 2,
           cleanTitle: 'Father / Guardian Details',
           stepTitle: 'Step 2 of 4: Guardian & Family',
           subtitle: 'Father credentials and family details',
+          bandTint: const Color(0xFFF0FDFA),
+          bandBorder: const Color(0xFF0F766E),
+          titleColor: const Color(0xFF134E4A),
         ),
-
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
         Row(
           children: [
             Expanded(
@@ -1929,6 +2006,9 @@ class _StudentRegistrationWizardState
               ),
             ),
           ],
+        ),
+            ],
+          ),
         ),
       ],
     );
@@ -2091,11 +2171,19 @@ class _StudentRegistrationWizardState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(
+          number: 4,
           cleanTitle: 'Contact & Address',
           stepTitle: 'Step 3 of 4: Contact & Address',
           subtitle: 'Official guardian phone numbers and residential domicile addresses',
+          bandTint: const Color(0xFFEEF2FF),
+          bandBorder: const Color(0xFF3730A3),
+          titleColor: const Color(0xFF312E81),
         ),
-
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
         Row(
           children: [
             Expanded(
@@ -2202,14 +2290,22 @@ class _StudentRegistrationWizardState
         TextField(
           controller: _tAddressController,
           maxLines: isMobile ? 3 : 2,
-          decoration: InputDecoration(
-            hintText: 'Leave blank if same as permanent residential address',
-            isDense: !isMobile,
+          style: AppTypography.body.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: _kInkPrimary,
+          ),
+          decoration: _wizardInputDecoration(
+            hint: 'Leave blank if same as permanent residential address',
+            dense: !isMobile,
             contentPadding: isMobile
                 ? null
                 : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           ),
           onChanged: notifier.setTAddress,
+        ),
+            ],
+          ),
         ),
       ],
     );
@@ -2226,15 +2322,15 @@ class _StudentRegistrationWizardState
     final sessionBadge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.borderDefault),
+        border: Border.all(color: const Color(0xFF047857)),
       ),
       child: Text(
         // Shot 6h: bind to the active session instead of a hardcoded year.
         'ACTIVE SESSION 2026-27 (Annual)',
         style: AppTypography.monospace.copyWith(
-          color: AppColors.textSecondary,
+          color: const Color(0xFF064E3B),
           fontSize: 11,
           fontWeight: FontWeight.bold,
         ),
@@ -2245,11 +2341,20 @@ class _StudentRegistrationWizardState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(
+          number: 3,
           cleanTitle: 'Academic Placement & Fee Concessions',
           stepTitle: 'Step 4 of 4: Academic Placement',
           subtitle: 'Class assignment and fee structure',
+          bandTint: _kEmeraldTint,
+          bandBorder: _kEmerald,
+          titleColor: _kEmeraldDeep,
           trailing: sessionBadge,
         ),
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
 
         // Class & Section dropdowns
         Row(
@@ -2368,19 +2473,40 @@ class _StudentRegistrationWizardState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      '100% Full Fee Waiver Concession',
-                      style: AppTypography.label.copyWith(
-                        color: AppColors.textPrimary,
+                  // Shot 1b: high-visibility waiver toggle container.
+                  Container(
+                    decoration: BoxDecoration(
+                      color: draft.fullDiscount
+                          ? _kEmeraldTintStrong
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: draft.fullDiscount
+                            ? _kEmerald
+                            : _kInputBorderRest,
+                        width: 1.5,
                       ),
                     ),
-                    value: draft.fullDiscount,
-                    onChanged: (val) {
-                      notifier.setFullDiscount(val ?? false);
-                    },
-                    controlAffinity: ListTileControlAffinity.leading,
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: CheckboxListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                        ),
+                        title: Text(
+                          '100% Full Fee Waiver Concession',
+                          style: AppTypography.label.copyWith(
+                            color: _kInkPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        value: draft.fullDiscount,
+                        onChanged: (val) {
+                          notifier.setFullDiscount(val ?? false);
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -2439,16 +2565,16 @@ class _StudentRegistrationWizardState
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
-              color: AppColors.surfaceSubtle,
+              color: Colors.white,
               borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.borderDefault),
+              border: Border.all(color: _kInputBorderRest, width: 1.5),
             ),
             child: Row(
               children: [
                 const Icon(
                   Icons.calculate_outlined,
                   size: 18,
-                  color: AppColors.chartBlue,
+                  color: _kInputBorderRest,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -2462,6 +2588,9 @@ class _StudentRegistrationWizardState
               ],
             ),
           ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -2472,9 +2601,9 @@ class _StudentRegistrationWizardState
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
+        color: _kEmeraldTint,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(color: AppColors.borderDefault),
+        border: Border.all(color: _kEmerald, width: 1.5),
       ),
       child: feeParamsAsync.when(
         data: (rows) {
@@ -2501,7 +2630,7 @@ class _StudentRegistrationWizardState
                       const Icon(
                         Icons.calculate_outlined,
                         size: 18,
-                        color: AppColors.chartBlue,
+                        color: _kEmerald,
                       ),
                       const SizedBox(width: 8),
                       Flexible(
@@ -2509,18 +2638,51 @@ class _StudentRegistrationWizardState
                           'FEE PREVIEW CALCULATION',
                           style: AppTypography.label.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
+                            color: _kEmeraldDeep,
                           ),
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 6),
+                  // Shot 1b: inline emerald pill with the net monthly fee
+                  // after concession/waiver — instantly visible to the clerk.
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _kEmerald,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'Net Monthly Fee: Rs. ${sum.toStringAsFixed(0)}',
+                        style: AppTypography.label.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Class Tariff - Concession = Net Monthly Fee',
+                    style: AppTypography.bodySmall.copyWith(
+                      color: _kEmeraldDeep,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11.5,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Estimated Monthly Fee: Rs. ${sum.toStringAsFixed(0)}',
                     style: AppTypography.monospace.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                      color: _kEmeraldDeep,
                     ),
                   ),
                 ],
@@ -2554,14 +2716,14 @@ class _StudentRegistrationWizardState
                   const Icon(
                     Icons.info_outline,
                     size: 14,
-                    color: AppColors.textMuted,
+                    color: _kEmerald,
                   ),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       'Final fee voucher will be generated based on active Class fee structure.',
                       style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.textMuted,
+                        color: _kEmeraldDeep,
                         fontSize: 11,
                       ),
                     ),
@@ -2585,14 +2747,26 @@ class _StudentRegistrationWizardState
 
     final Widget primaryButton = currentStep < 3
         ? ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kEmerald,
+              foregroundColor: Colors.white,
+              textStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             icon: const Icon(Icons.arrow_forward, size: 16),
             label: const Text('Save & Continue'),
             onPressed: _isSubmitting ? null : _advanceOrSubmit,
           )
         : ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandPrimary,
-              foregroundColor: AppColors.textOnPrimary,
+              backgroundColor: _kEmerald,
+              foregroundColor: Colors.white,
+              textStyle: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             icon: _isSubmitting
                 ? const SizedBox(
@@ -2697,15 +2871,16 @@ class _StudentRegistrationWizardState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.surfaceSubtle,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.borderDefault),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: _kInputBorderRest, width: 1.5),
       ),
       child: Text(
         text,
         style: AppTypography.monospace.copyWith(
-          fontSize: 11,
-          color: AppColors.textMuted,
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: _kInkPrimary,
         ),
       ),
     );
@@ -2714,6 +2889,48 @@ class _StudentRegistrationWizardState
   // ─────────────────────────────────────────────────────────────
   // REUSABLE FORM WIDGETS
   // ─────────────────────────────────────────────────────────────
+  /// Shot 1b — shared high-contrast input decoration for every field in
+  /// the admission wizard (scoped to this file only; the global
+  /// InputDecorationTheme is untouched).
+  InputDecoration _wizardInputDecoration({
+    bool focused = false,
+    bool dense = false,
+    String? hint,
+    TextStyle? hintStyle,
+    String? helperText,
+    String? prefixText,
+    TextStyle? prefixStyle,
+    IconData? prefixIcon,
+    Widget? suffixIcon,
+    EdgeInsetsGeometry? contentPadding,
+  }) {
+    final radius = BorderRadius.circular(8);
+    final restBorder = OutlineInputBorder(
+      borderRadius: radius,
+      borderSide: const BorderSide(color: _kInputBorderRest, width: 1.5),
+    );
+    final focusBorder = OutlineInputBorder(
+      borderRadius: radius,
+      borderSide: const BorderSide(color: _kInputBorderFocus, width: 2),
+    );
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: hintStyle,
+      helperText: helperText,
+      prefixText: prefixText,
+      prefixStyle: prefixStyle,
+      prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 18) : null,
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: focused ? _kInputFillFocus : Colors.white,
+      isDense: dense,
+      contentPadding: contentPadding,
+      border: restBorder,
+      enabledBorder: restBorder,
+      focusedBorder: focusBorder,
+    );
+  }
+
   Widget _buildTextField({
     required String label,
     String? optionalLabel,
@@ -2729,6 +2946,7 @@ class _StudentRegistrationWizardState
     List<TextInputFormatter>? inputFormatters,
     required ValueChanged<String> onChanged,
   }) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2737,7 +2955,11 @@ class _StudentRegistrationWizardState
           children: [
             Text(
               label,
-              style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+              style: AppTypography.label.copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: _kInkPrimary,
+              ),
             ),
             if (optionalLabel != null) ...[
               const SizedBox(width: 4),
@@ -2752,28 +2974,33 @@ class _StudentRegistrationWizardState
           ],
         ),
         const SizedBox(height: 6),
-        TextField(
-          controller: controller,
+        _FocusTintField(
           focusNode: focusNode,
-          keyboardType: keyboardType,
-          maxLines: maxLines,
-          inputFormatters: inputFormatters,
-          style: monospace ? AppTypography.monospace : AppTypography.body,
-          decoration: InputDecoration(
-            hintText: hint,
-            // Shot 6h: helper lines are dropped on desktop so every section
-            // fits one 900px viewport without scrolling.
-            helperText: ResponsiveBreakpoints.isMobile(context)
-                ? helperText
-                : null,
-            prefixText: prefixText,
-            prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 18) : null,
-            isDense: !ResponsiveBreakpoints.isMobile(context),
-            contentPadding: ResponsiveBreakpoints.isMobile(context)
-                ? null
-                : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          builder: (focusNode, focused) => TextField(
+            controller: controller,
+            focusNode: focusNode,
+            keyboardType: keyboardType,
+            maxLines: maxLines,
+            inputFormatters: inputFormatters,
+            style: (monospace ? AppTypography.monospace : AppTypography.body)
+                .copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: _kInkPrimary,
+            ),
+            decoration: _wizardInputDecoration(
+              focused: focused,
+              dense: !isMobile,
+              hint: hint,
+              helperText: isMobile ? helperText : null,
+              prefixText: prefixText,
+              prefixIcon: prefixIcon,
+              contentPadding: isMobile
+                  ? null
+                  : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            ),
+            onChanged: onChanged,
           ),
-          onChanged: onChanged,
         ),
       ],
     );
@@ -2790,7 +3017,11 @@ class _StudentRegistrationWizardState
       children: [
         Text(
           label,
-          style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+          style: AppTypography.label.copyWith(
+            fontSize: 13.5,
+            fontWeight: FontWeight.w700,
+            color: _kInkPrimary,
+          ),
         ),
         const SizedBox(height: 6),
         InkWell(
@@ -2800,10 +3031,15 @@ class _StudentRegistrationWizardState
             child: TextField(
               controller: controller,
               readOnly: true,
-              decoration: InputDecoration(
-                hintText: hint,
+              style: AppTypography.body.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: _kInkPrimary,
+              ),
+              decoration: _wizardInputDecoration(
+                hint: hint,
+                dense: !ResponsiveBreakpoints.isMobile(context),
                 suffixIcon: const Icon(Icons.calendar_today, size: 18),
-                isDense: !ResponsiveBreakpoints.isMobile(context),
                 contentPadding: ResponsiveBreakpoints.isMobile(context)
                     ? null
                     : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
@@ -2832,7 +3068,11 @@ class _StudentRegistrationWizardState
           children: [
             Text(
               label,
-              style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+              style: AppTypography.label.copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w700,
+                color: _kInkPrimary,
+              ),
             ),
             if (optionalLabel != null) ...[
               const SizedBox(width: 4),
@@ -2847,34 +3087,43 @@ class _StudentRegistrationWizardState
           ],
         ),
         const SizedBox(height: 6),
-        DropdownButtonFormField<T>(
-          key: ValueKey(value),
-          initialValue: items.contains(value) ? value : null,
-          hint: hint != null
-              ? Text(
-                  hint,
-                  style: AppTypography.body.copyWith(
-                    color: AppColors.textMuted,
-                  ),
-                )
-              : null,
-          isExpanded: true,
-          decoration: const InputDecoration(
-            contentPadding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
+        _FocusTintField(
+          builder: (focusNode, focused) => DropdownButtonFormField<T>(
+            key: ValueKey(value),
+            focusNode: focusNode,
+            initialValue: items.contains(value) ? value : null,
+            hint: hint != null
+                ? Text(
+                    hint,
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textMuted,
+                    ),
+                  )
+                : null,
+            isExpanded: true,
+            style: AppTypography.body.copyWith(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: _kInkPrimary,
             ),
+            decoration: _wizardInputDecoration(
+              focused: focused,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sm,
+                vertical: AppSpacing.xs,
+              ),
+            ),
+            items: items.map((item) {
+              final labelText = itemLabels != null && itemLabels.containsKey(item)
+                  ? itemLabels[item]!
+                  : item.toString();
+              return DropdownMenuItem<T>(
+                value: item,
+                child: Text(labelText, style: AppTypography.body),
+              );
+            }).toList(),
+            onChanged: onChanged,
           ),
-          items: items.map((item) {
-            final labelText = itemLabels != null && itemLabels.containsKey(item)
-                ? itemLabels[item]!
-                : item.toString();
-            return DropdownMenuItem<T>(
-              value: item,
-              child: Text(labelText, style: AppTypography.body),
-            );
-          }).toList(),
-          onChanged: onChanged,
         ),
       ],
     );
@@ -2887,4 +3136,60 @@ String? _getFromOrigin(BuildContext context) {
   } catch (_) {
     return null;
   }
+}
+
+/// Shot 1b — rebuilds its child whenever the attached focus node gains or
+/// loses focus so inputs can switch to the #EFF6FF focused fill tint while
+/// keeping the `TextField` / `DropdownButtonFormField` widget (and any key
+/// on it) at the exact same position in the tree.
+class _FocusTintField extends StatefulWidget {
+  const _FocusTintField({required this.builder, this.focusNode});
+
+  final FocusNode? focusNode;
+  final Widget Function(FocusNode focusNode, bool focused) builder;
+
+  @override
+  State<_FocusTintField> createState() => _FocusTintFieldState();
+}
+
+class _FocusTintFieldState extends State<_FocusTintField> {
+  FocusNode? _owned;
+  bool _focused = false;
+
+  FocusNode get _effective => widget.focusNode ?? (_owned ??= FocusNode());
+
+  @override
+  void initState() {
+    super.initState();
+    _effective.addListener(_handleFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FocusTintField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      oldWidget.focusNode?.removeListener(_handleFocusChange);
+      _effective.addListener(_handleFocusChange);
+      _syncFocus();
+    }
+  }
+
+  void _handleFocusChange() => _syncFocus();
+
+  void _syncFocus() {
+    final focused = _effective.hasFocus;
+    if (focused != _focused && mounted) {
+      setState(() => _focused = focused);
+    }
+  }
+
+  @override
+  void dispose() {
+    _effective.removeListener(_handleFocusChange);
+    _owned?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.builder(_effective, _focused);
 }
