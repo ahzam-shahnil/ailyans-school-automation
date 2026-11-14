@@ -1502,6 +1502,11 @@ class _StudentRegistrationWizardState
     );
   }
 
+  /// Shot 1d: tighter vertical rhythm on desktop so column 2 fits the
+  /// waiver toggle and emerald fee banner above the fold at 1440x900.
+  double get _wizardRowGap =>
+      ResponsiveBreakpoints.isDesktop(context) ? 6 : AppSpacing.md;
+
   Widget _buildStep1Personal(WizardDraft draft) {
     final notifier = ref.read(wizardDraftProvider.notifier);
     final isMobile = ResponsiveBreakpoints.isMobile(context);
@@ -1685,7 +1690,9 @@ class _StudentRegistrationWizardState
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: ResponsiveBreakpoints.isDesktop(context)
+              ? const EdgeInsets.all(10)
+              : const EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1915,7 +1922,9 @@ class _StudentRegistrationWizardState
           titleColor: const Color(0xFF134E4A),
         ),
         Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: ResponsiveBreakpoints.isDesktop(context)
+              ? const EdgeInsets.all(10)
+              : const EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1957,7 +1966,7 @@ class _StudentRegistrationWizardState
           error: (_, __) => const SizedBox.shrink(),
         ),
 
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: _wizardRowGap),
         Row(
           children: [
             Expanded(
@@ -1973,7 +1982,7 @@ class _StudentRegistrationWizardState
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _buildTextField(
-                label: 'Previous School Attended',
+                label: 'Previous School',
                 optionalLabel: '(Optional)',
                 controller: _pSchoolController,
                 hint: 'Name of last school attended, if any',
@@ -1983,12 +1992,12 @@ class _StudentRegistrationWizardState
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: _wizardRowGap),
         Row(
           children: [
             Expanded(
               child: _buildTextField(
-                label: 'Previous Class Completed',
+                label: 'Previous Class',
                 optionalLabel: '(Optional)',
                 controller: _pClassController,
                 hint: 'Highest class grade completed',
@@ -1998,7 +2007,7 @@ class _StudentRegistrationWizardState
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _buildTextField(
-                label: 'SLCertificate number',
+                label: 'SLC Certificate #',
                 optionalLabel: '(Optional)',
                 controller: _slCertificateController,
                 hint: 'Previous School Leaving Certificate ref',
@@ -2180,7 +2189,9 @@ class _StudentRegistrationWizardState
           titleColor: const Color(0xFF312E81),
         ),
         Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: ResponsiveBreakpoints.isDesktop(context)
+              ? const EdgeInsets.all(10)
+              : const EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2304,6 +2315,19 @@ class _StudentRegistrationWizardState
           ),
           onChanged: notifier.setTAddress,
         ),
+          // Shot 1d: on desktop the remarks field lives in the Contact card
+          // (column 3) to free vertical space in column 2.
+          if (ResponsiveBreakpoints.isDesktop(context)) ...[
+            const SizedBox(height: AppSpacing.md),
+            _buildTextField(
+              label: 'Administrative Remarks & Notes',
+              optionalLabel: '(Optional)',
+              controller: _remarksController,
+              hint: 'General administrative notes...',
+              maxLines: 2,
+              onChanged: notifier.setRemarks,
+            ),
+          ],
             ],
           ),
         ),
@@ -2327,8 +2351,8 @@ class _StudentRegistrationWizardState
         border: Border.all(color: const Color(0xFF047857)),
       ),
       child: Text(
-        // Shot 6h: bind to the active session instead of a hardcoded year.
-        'ACTIVE SESSION 2026-27 (Annual)',
+        // Shot 1d: compact pill keeps the section title from truncating.
+        '2026-27',
         style: AppTypography.monospace.copyWith(
           color: const Color(0xFF064E3B),
           fontSize: 11,
@@ -2351,7 +2375,9 @@ class _StudentRegistrationWizardState
           trailing: sessionBadge,
         ),
         Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
+          padding: ResponsiveBreakpoints.isDesktop(context)
+              ? const EdgeInsets.all(10)
+              : const EdgeInsets.all(AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2423,7 +2449,7 @@ class _StudentRegistrationWizardState
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: _wizardRowGap),
 
         Row(
           children: [
@@ -2438,7 +2464,7 @@ class _StudentRegistrationWizardState
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: _buildTextField(
-                label: 'Monthly Tuition Concession (Rs.)',
+                label: 'Tuition Concession (Rs.)',
                 controller: _discountController,
                 hint: '0',
                 keyboardType: TextInputType.number,
@@ -2451,13 +2477,13 @@ class _StudentRegistrationWizardState
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: _wizardRowGap),
 
         Row(
           children: [
             Expanded(
               child: _buildTextField(
-                label: 'Voucher Adjustment Concession (Rs.)',
+                label: 'Voucher Adjustment (Rs.)',
                 controller: _vmDiscountController,
                 hint: '0',
                 keyboardType: TextInputType.number,
@@ -2546,19 +2572,24 @@ class _StudentRegistrationWizardState
           ),
         ],
 
-        const SizedBox(height: AppSpacing.md),
-        _buildTextField(
-          label: 'Administrative Remarks & Notes',
-          optionalLabel: '(Optional)',
-          controller: _remarksController,
-          hint: 'General administrative notes...',
-          helperText: 'Max: 250 chars',
-          maxLines: ResponsiveBreakpoints.isMobile(context) ? 3 : 2,
-          onChanged: notifier.setRemarks,
-        ),
+        // Shot 1d: on desktop the remarks field moves to the Contact card
+        // (column 3) so the waiver toggle + emerald fee banner stay above
+        // the fold. Mobile keeps it inside the Academic Placement card.
+        if (!ResponsiveBreakpoints.isDesktop(context)) ...[
+          const SizedBox(height: AppSpacing.md),
+          _buildTextField(
+            label: 'Administrative Remarks & Notes',
+            optionalLabel: '(Optional)',
+            controller: _remarksController,
+            hint: 'General administrative notes...',
+            helperText: 'Max: 250 chars',
+            maxLines: ResponsiveBreakpoints.isMobile(context) ? 3 : 2,
+            onChanged: notifier.setRemarks,
+          ),
+        ],
 
         // Fee Preview Card
-        const SizedBox(height: AppSpacing.md),
+        SizedBox(height: _wizardRowGap),
         if (draft.admInClass != null)
           _buildFeePreviewCard(draft.admInClass!)
         else
@@ -2955,6 +2986,8 @@ class _StudentRegistrationWizardState
           children: [
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTypography.label.copyWith(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,
@@ -3068,6 +3101,8 @@ class _StudentRegistrationWizardState
           children: [
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTypography.label.copyWith(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,

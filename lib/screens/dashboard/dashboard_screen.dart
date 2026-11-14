@@ -21,7 +21,6 @@ import '../../widgets/reports/report_preview_modal.dart';
 // Disciplined 4-accent system on crisp white cards with a deep-slate ink.
 const Color _inkPrimary = Color(0xFF0F172A); // headings & metrics · w800
 const Color _inkSubtitle = Color(0xFF334155); // w600 secondary lines
-const Color _inkBody = Color(0xFF475569); // module descriptions
 const Color _cardBorder = Color(0xFFCBD5E1); // 1.5px card stroke
 const Color _bandSurface = Color(0xFFF8FAFC); // 40px header bands / footers
 const Color _bandBorder = Color(0xFFE2E8F0); // 1px footer top stroke
@@ -35,7 +34,6 @@ const Color _emeraldBright = Color(0xFF059669);
 const Color _emeraldBadge = Color(0xFFD1FAE5);
 // Institutional Indigo — monthly vouchers, exams & staff.
 const Color _indigoAccent = Color(0xFF3730A3);
-const Color _indigoBright = Color(0xFF4338CA);
 const Color _indigoBadge = Color(0xFFE0E7FF);
 // Amber / Crimson — attendance alerts & unpaid arrears.
 const Color _amberAccent = Color(0xFFB45309);
@@ -318,6 +316,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                     gap,
                     _buildStitchQuickOperations(
+                      metrics: metrics,
+                      currencyFormatter: currencyFormatter,
                       isDesktop: isDesktop,
                       isTablet: isTablet,
                       isMobile: isMobile,
@@ -328,14 +328,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                       isLoading: isLoading,
                       currencyFormatter: currencyFormatter,
                       isDesktop: isDesktop,
-                    ),
-                    gap,
-                    _buildDepartmentLaunchpad(
-                      metrics: metrics,
-                      currencyFormatter: currencyFormatter,
-                      isDesktop: isDesktop,
-                      isTablet: isTablet,
-                      isMobile: isMobile,
                     ),
                   ],
                 ),
@@ -1635,10 +1627,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   // ─────────────────────────────────────────────────────────────────────────
 
   Widget _buildStitchQuickOperations({
+    required DashboardMetrics? metrics,
+    required NumberFormat currencyFormatter,
     required bool isDesktop,
     required bool isTablet,
     required bool isMobile,
   }) {
+    // Shot 1d: the Department Launchpad was merged into this grid — each
+    // card now carries the module's live status pill and an Open →
+    // affordance instead of duplicating the same six routes below.
     final actions = [
       _QuickOpItem(
         title: '+ New Student Admission',
@@ -1647,6 +1644,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         icon: Icons.person_add_alt_1_outlined,
         accentColor: AppColors.accentStudents,
         softBg: AppColors.accentStudentsSoftBg,
+        pill: '${metrics?.activeEnrollment ?? 0} Enrolled',
         onTap: () => context.go('/students/new?from=/dashboard'),
       ),
       _QuickOpItem(
@@ -1656,6 +1654,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         icon: Icons.payments_outlined,
         accentColor: AppColors.accentFees,
         softBg: AppColors.accentFeesSoftBg,
+        pill:
+            'Rs. ${currencyFormatter.format(metrics?.monthlyCollected ?? 0)} Collected',
         onTap: () => context.go('/fees/receipts?from=/dashboard'),
       ),
       _QuickOpItem(
@@ -1665,6 +1665,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         icon: Icons.receipt_long_outlined,
         accentColor: AppColors.accentDashboard,
         softBg: AppColors.accentDashboardSoftBg,
+        pill: '${metrics?.pendingVouchers ?? 0} Unpaid',
         onTap: () => context.go('/fees/vouchers?from=/dashboard'),
       ),
       _QuickOpItem(
@@ -1674,6 +1675,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         icon: Icons.fact_check_outlined,
         accentColor: AppColors.accentAttendance,
         softBg: AppColors.accentAttendanceSoftBg,
+        pill:
+            '${(metrics?.attendancePercent ?? 0).toStringAsFixed(0)}% Present Today',
         onTap: () => context.go('/attendance?from=/dashboard'),
       ),
       _QuickOpItem(
@@ -1683,6 +1686,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         icon: Icons.menu_book_outlined,
         accentColor: AppColors.accentFees,
         softBg: AppColors.accentFeesSoftBg,
+        pill:
+            'Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)} Overdue',
         onTap: () => context.go('/fees/ledger?from=/dashboard'),
       ),
       _QuickOpItem(
@@ -1692,6 +1697,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         icon: Icons.edit_note_outlined,
         accentColor: AppColors.accentExams,
         softBg: AppColors.accentExamsSoftBg,
+        pill:
+            '${metrics?.classCount ?? 0} Cls · ${metrics?.sectionCount ?? 0} Secs',
         onTap: () => context.go('/exams/marks?from=/dashboard'),
       ),
     ];
@@ -1810,6 +1817,114 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   Widget _buildQuickOpCard(_QuickOpItem item, {required bool isCompact}) {
+    // Shot 1d: desktop cards carry the merged launchpad treatment — a 4px
+    // module accent stripe, tinted icon badge, live status pill bottom-left
+    // and an Open → affordance bottom-right.
+    if (!isCompact) {
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _cardBorder, width: 1.5),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(7),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: item.onTap,
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(width: 4, color: item.accentColor),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: item.softBg,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(
+                                    item.icon,
+                                    size: 17,
+                                    color: item.accentColor,
+                                  ),
+                                ),
+                                const Spacer(),
+                                _buildShortcutBadge(item.badge),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.label.copyWith(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.subtitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.bodySmall.copyWith(
+                                fontSize: 11.5,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: _buildStatusPill(
+                                    text: item.pill,
+                                    background: item.softBg,
+                                    foreground: item.accentColor,
+                                    border: item.accentColor.withValues(
+                                      alpha: 0.25,
+                                    ),
+                                  ),
+                                ),
+                                const Spacer(),
+                                Flexible(
+                                  child: Text(
+                                    'Open →',
+                                    maxLines: 1,
+                                    style: AppTypography.label.copyWith(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: item.accentColor,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return _SurfaceCard(
       onTap: item.onTap,
       tooltip: '${item.title} (${item.badge})',
@@ -1965,292 +2080,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // SECTION B2 — DEPARTMENT LAUNCHPAD (Shot 1a)
-  // ─────────────────────────────────────────────────────────────────────────
-
-  Widget _buildDepartmentLaunchpad({
-    required DashboardMetrics? metrics,
-    required NumberFormat currencyFormatter,
-    required bool isDesktop,
-    required bool isTablet,
-    required bool isMobile,
-  }) {
-    final modules = [
-      _LaunchpadModule(
-        title: 'Student Directory & Admissions',
-        description: 'Find, edit and admit students',
-        route: '/students',
-        icon: Icons.people_outline,
-        accent: _navyAccent,
-        badge: _navyBadge,
-        pill: '${metrics?.activeEnrollment ?? 0} Enrolled',
-      ),
-      _LaunchpadModule(
-        title: 'Fee Collection & Challan Print',
-        description: 'Receive fees and print challans',
-        route: '/fees/receipts',
-        icon: Icons.payments_outlined,
-        accent: _emeraldAccent,
-        badge: _emeraldBadge,
-        pill:
-            'Rs. ${currencyFormatter.format(metrics?.monthlyCollected ?? 0)} Collected',
-      ),
-      _LaunchpadModule(
-        title: 'Monthly Voucher Generation',
-        description: 'Create monthly vouchers for all classes',
-        route: '/fees/vouchers',
-        icon: Icons.receipt_long_outlined,
-        accent: _indigoAccent,
-        badge: _indigoBadge,
-        pill: '${metrics?.pendingVouchers ?? 0} Unpaid',
-      ),
-      _LaunchpadModule(
-        title: 'Daily Attendance Register',
-        description: 'Mark present / absent today',
-        route: '/attendance',
-        icon: Icons.fact_check_outlined,
-        accent: _amberAccent,
-        badge: _amberBadge,
-        pill:
-            '${(metrics?.attendancePercent ?? 0).toStringAsFixed(0)}% Present Today',
-      ),
-      _LaunchpadModule(
-        title: 'Examinations & Result Gazette',
-        description: 'Enter marks, print result cards',
-        route: '/exams',
-        icon: Icons.grading_outlined,
-        accent: _indigoBright,
-        badge: _indigoBadge,
-        pill:
-            '${metrics?.classCount ?? 0} Cls · ${metrics?.sectionCount ?? 0} Secs',
-      ),
-      _LaunchpadModule(
-        title: 'Financial & Defaulter Reports',
-        description: 'Recovery, arrears and summaries',
-        route: '/reports',
-        icon: Icons.assessment_outlined,
-        accent: _crimsonAccent,
-        badge: _crimsonBadge,
-        pill:
-            'Rs. ${currencyFormatter.format(metrics?.outstandingAmount ?? 0)} Overdue',
-      ),
-    ];
-
-    const gap = 10.0;
-    Widget body;
-    if (isDesktop) {
-      // 3 columns x 2 rows
-      body = Column(
-        children: [
-          Row(
-            children: [
-              Expanded(child: _buildLaunchpadCard(modules[0])),
-              const SizedBox(width: gap),
-              Expanded(child: _buildLaunchpadCard(modules[1])),
-              const SizedBox(width: gap),
-              Expanded(child: _buildLaunchpadCard(modules[2])),
-            ],
-          ),
-          const SizedBox(height: gap),
-          Row(
-            children: [
-              Expanded(child: _buildLaunchpadCard(modules[3])),
-              const SizedBox(width: gap),
-              Expanded(child: _buildLaunchpadCard(modules[4])),
-              const SizedBox(width: gap),
-              Expanded(child: _buildLaunchpadCard(modules[5])),
-            ],
-          ),
-        ],
-      );
-    } else if (isTablet) {
-      // 2 columns x 3 rows
-      body = Column(
-        children: [
-          Row(
-            children: [
-              Expanded(child: _buildLaunchpadCard(modules[0])),
-              const SizedBox(width: gap),
-              Expanded(child: _buildLaunchpadCard(modules[1])),
-            ],
-          ),
-          const SizedBox(height: gap),
-          Row(
-            children: [
-              Expanded(child: _buildLaunchpadCard(modules[2])),
-              const SizedBox(width: gap),
-              Expanded(child: _buildLaunchpadCard(modules[3])),
-            ],
-          ),
-          const SizedBox(height: gap),
-          Row(
-            children: [
-              Expanded(child: _buildLaunchpadCard(modules[4])),
-              const SizedBox(width: gap),
-              Expanded(child: _buildLaunchpadCard(modules[5])),
-            ],
-          ),
-        ],
-      );
-    } else {
-      // Mobile: single column of 6 module cards
-      body = Column(
-        children: [
-          for (int i = 0; i < modules.length; i++) ...[
-            _buildLaunchpadCard(modules[i]),
-            if (i < modules.length - 1) const SizedBox(height: gap),
-          ],
-        ],
-      );
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _cardBorder, width: 1.5),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 40px tinted header band with a 2.5px navy underline.
-          Container(
-            height: 40,
-            decoration: const BoxDecoration(
-              color: _bandSurface,
-              border: Border(bottom: BorderSide(color: _navyDeep, width: 2.5)),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            alignment: Alignment.centerLeft,
-            child: const Row(
-              children: [
-                Icon(Icons.account_balance_rounded, size: 18, color: _navyDeep),
-                SizedBox(width: 8),
-                Text(
-                  'Department Launchpad',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: _inkPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: body,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLaunchpadCard(_LaunchpadModule module) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _cardBorder, width: 1.5),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(7),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => context.go(module.route),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 4px left accent stripe.
-                  Container(width: 4, color: module.accent),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                module.icon,
-                                size: 18,
-                                color: module.accent,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  module.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                    color: _inkPrimary,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            module.description,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: _inkBody,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Flexible(
-                                child: _buildStatusPill(
-                                  text: module.pill,
-                                  background: module.badge,
-                                  foreground: module.accent,
-                                  border: module.accent.withValues(
-                                    alpha: 0.25,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Flexible(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    'Open Module →',
-                                    maxLines: 1,
-                                    style: AppTypography.label.copyWith(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w800,
-                                      color: module.accent,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildShortcutBadge(String shortcut) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -2302,8 +2131,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     }
 
     // Desktop: side-by-side with split handle
+    // Shot 1d: height trimmed 420 -> 372 to offset the taller QUICK
+    // OPERATIONS cards (merged launchpad affordances) so the split handle
+    // stays on-screen at 1440x1000.
     return SizedBox(
-      height: 420,
+      height: 372,
       child: LayoutBuilder(
         builder: (context, constraints) {
           const handleWidth = 12.0;
@@ -2889,6 +2721,7 @@ class _QuickOpItem {
   final IconData icon;
   final Color accentColor;
   final Color softBg;
+  final String pill;
   final VoidCallback onTap;
 
   const _QuickOpItem({
@@ -2898,30 +2731,11 @@ class _QuickOpItem {
     required this.icon,
     required this.accentColor,
     required this.softBg,
+    required this.pill,
     required this.onTap,
   });
 }
 
-/// Shot 1a: one interactive module card in the Department Launchpad grid.
-class _LaunchpadModule {
-  final String title;
-  final String description;
-  final String route;
-  final IconData icon;
-  final Color accent;
-  final Color badge;
-  final String pill;
-
-  const _LaunchpadModule({
-    required this.title,
-    required this.description,
-    required this.route,
-    required this.icon,
-    required this.accent,
-    required this.badge,
-    required this.pill,
-  });
-}
 
 /// Stitch KPI Card with a 4.5px colored accent bar on the top edge, an
 /// optional 30px clickable footer strip, hover lift, cursor feedback, and
