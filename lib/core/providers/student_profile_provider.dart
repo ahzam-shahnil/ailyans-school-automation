@@ -446,6 +446,45 @@ Future<void> addStudentAdvanceCredit({
   });
 }
 
+/// Shot 2c: updates an existing advance-credit row in `StuAdv`.
+Future<void> updateStudentAdvance({
+  required int stuAdvId,
+  required int stuRegId,
+  required int amount,
+  required DateTime date,
+  String depositedBy = 'Office',
+  String? remarks,
+}) async {
+  final db = await DatabaseService.instance.database;
+  await db.update(
+    'StuAdv',
+    {
+      'AdvAmount': amount,
+      'Date': DateFormat('yyyy-MM-dd').format(date),
+      'DepositedBy': depositedBy,
+      'Detail': (remarks == null || remarks.trim().isEmpty)
+          ? 'Advance fee credit updated from student profile'
+          : remarks.trim(),
+    },
+    where: 'StuAdvID = ? AND StuRegID = ?',
+    whereArgs: [stuAdvId, stuRegId],
+  );
+}
+
+/// Shot 2c: deletes an advance-credit row from `StuAdv`. AFTER DELETE
+/// triggers (Migration 009) capture the sync tombstone automatically.
+Future<void> deleteStudentAdvance({
+  required int stuAdvId,
+  required int stuRegId,
+}) async {
+  final db = await DatabaseService.instance.database;
+  await db.delete(
+    'StuAdv',
+    where: 'StuAdvID = ? AND StuRegID = ?',
+    whereArgs: [stuAdvId, stuRegId],
+  );
+}
+
 /// Permanently deletes a student and every dependent record inside one
 /// transaction: fee transactions, voucher details, voucher masters,
 /// attendance detail rows, school-leaving record, exam marks, advance

@@ -177,14 +177,18 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   }
 
   Future<Uint8List> _generateFeeVoucher(int mode) async {
-    const requiredKeys = ['bankName', 'bankBranch', 'bankAcctNo'];
-
-    for (final key in requiredKeys) {
-      if (!request.extraParams.containsKey(key) ||
-          (request.extraParams[key] as String?)?.isEmpty != false) {
-        throw ArgumentError('Missing required extraParam for feeVoucher: $key');
-      }
+    // Shot 2c fix: bank details are no longer hard-required. Missing or
+    // blank extraParams fall back to the school's standard bank block so
+    // voucher printing can never crash with 'Missing required extraParam'.
+    String safeExtra(String key, String fallback) {
+      final raw = request.extraParams[key]?.toString();
+      if (raw != null && raw.trim().isNotEmpty) return raw.trim();
+      return fallback;
     }
+
+    final bankName = safeExtra('bankName', 'Askari Bank Limited');
+    final bankBranch = safeExtra('bankBranch', 'Ballo Khel Road');
+    final bankAcctNo = safeExtra('bankAcctNo', '4528');
 
     final voucherList = request.vouchers;
     if (voucherList == null || voucherList.isEmpty) {
@@ -192,7 +196,6 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     }
 
     final vouchers = voucherList.cast<FeeReceiptView>();
-    final extra = request.extraParams;
     final branchName = _safeBranchName();
     final branchAddress = _safeBranchAddress();
 
@@ -202,9 +205,9 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         vouchers: vouchers,
         branchName: branchName,
         branchAddress: branchAddress,
-        bankName: extra['bankName'] as String,
-        bankBranch: extra['bankBranch'] as String,
-        bankAcctNo: extra['bankAcctNo'] as String,
+        bankName: bankName,
+        bankBranch: bankBranch,
+        bankAcctNo: bankAcctNo,
       );
     } else {
       // Cohort Ledger — summary table of all vouchers

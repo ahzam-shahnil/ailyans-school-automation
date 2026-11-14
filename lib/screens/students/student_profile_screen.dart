@@ -333,12 +333,20 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final branchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : '-';
+        : 'Ailyans Higher Secondary School';
     final branchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
         : '-';
-    return {'branchName': branchName, 'branchAddress': branchAddress};
+    // Shot 2c fix: the feeVoucher report needs the full bank block —
+    // missing keys used to crash with 'Missing required extraParam'.
+    return {
+      'branchName': branchName,
+      'branchAddress': branchAddress,
+      'bankName': 'Askari Bank Limited',
+      'bankBranch': 'Ballo Khel Road',
+      'bankAcctNo': '4528',
+    };
   }
 
   /// Shot 2a: prints ALL vouchers of this student as one fee-voucher report
@@ -4655,69 +4663,80 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       String? pill,
     }) {
       return Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: AppColors.surfaceRaised,
           borderRadius: BorderRadius.circular(AppRadius.lg),
-          border: Border.all(color: AppColors.borderDefault),
+          border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 26,
-                  height: 26,
-                  decoration: BoxDecoration(
-                    color: tint,
-                    borderRadius: BorderRadius.circular(6),
+            // Shot 2c: 4px top color bar.
+            Container(height: 4, color: accent),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: tint,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(icon, size: 15, color: accent),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.label.copyWith(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Icon(icon, size: 15, color: accent),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
+                  const SizedBox(height: 8),
+                  Text(
+                    value,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.label.copyWith(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
+                    style: AppTypography.h3.copyWith(
+                      color: accent,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.h3.copyWith(
-                color: accent,
-                fontWeight: FontWeight.w800,
+                  if (pill != null) ...[
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tint,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        pill,
+                        style: AppTypography.label.copyWith(
+                          fontSize: 10,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-            if (pill != null) ...[
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
-                decoration: BoxDecoration(
-                  color: tint,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  pill,
-                  style: AppTypography.label.copyWith(
-                    fontSize: 10,
-                    color: accent,
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       );
@@ -4725,14 +4744,14 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
     final summaryCards = [
       summaryCard(
-        'Available Advance Credit',
+        'Advance Credit Balance',
         'Rs. ${currencyFormat.format(totalAdvance)}.00',
         Icons.account_balance_wallet_outlined,
         const Color(0xFF047857),
         const Color(0xFFECFDF5),
       ),
       summaryCard(
-        'Tuition Concession',
+        'Monthly Tuition Concession',
         (bundle.student.discount ?? 0) == 0
             ? 'None'
             : 'Rs. ${currencyFormat.format(bundle.student.discount!.round())}.00',
@@ -4741,7 +4760,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         const Color(0xFFEFF6FF),
       ),
       summaryCard(
-        'Voucher Adjustment',
+        'Voucher Adjustment & Waiver',
         (bundle.student.vmDiscount ?? 0) == 0
             ? 'None'
             : 'Rs. ${currencyFormat.format(bundle.student.vmDiscount!)}.00',
@@ -4766,8 +4785,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             ],
           )
         else
+          // Shot 2c fix: CrossAxisAlignment.start — stretch on a Row inside
+          // the page-level SingleChildScrollView forces h=Infinity.
           Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (int i = 0; i < summaryCards.length; i++) ...[
                 Expanded(child: summaryCards[i]),
@@ -4777,11 +4798,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             ],
           ),
         const SizedBox(height: AppSpacing.md),
-        _buildConcessionFormCard(bundle),
-        const SizedBox(height: AppSpacing.md),
-        _buildAdvanceEntryCard(bundle),
-        const SizedBox(height: AppSpacing.md),
-        _buildAdvanceHistoryCard(advances, currencyFormat),
+        _buildAdvancesTwoColumnBody(bundle, advances, currencyFormat),
       ],
     );
   }
@@ -4821,10 +4838,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       isDense: true,
       filled: true,
       fillColor: Colors.white,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 12,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: const BorderSide(color: Color(0xFF94A3B8), width: 1.5),
@@ -4836,7 +4850,39 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     );
   }
 
-  /// Shot 2a: inline concession editor persisting Discount / VMDiscount /
+  /// Shot 2c: desktop 2-column advances body — concessions (flex 5) beside
+  /// the advance ledger (flex 7); stacked on mobile. Rows use
+  /// CrossAxisAlignment.start so nothing inside the page scroll ever gets
+  /// an infinite height constraint.
+  Widget _buildAdvancesTwoColumnBody(
+    StudentProfileBundle bundle,
+    List<Map<String, dynamic>> advances,
+    NumberFormat currencyFormat,
+  ) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
+    final leftCard = _buildConcessionFormCard(bundle);
+    final rightCard = _buildAdvanceLedgerCard(bundle, advances, currencyFormat);
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          leftCard,
+          const SizedBox(height: AppSpacing.md),
+          rightCard,
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(flex: 5, child: leftCard),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(flex: 7, child: rightCard),
+      ],
+    );
+  }
+
+  /// Shot 2c: inline concession editor persisting Discount / VMDiscount /
   /// FullDiscount to Stu_Reg.
   Widget _buildConcessionFormCard(StudentProfileBundle bundle) {
     return Container(
@@ -4844,13 +4890,13 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
+        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _advBandHeader(
-            'CONCESSIONS & WAIVERS',
+            '1. Monthly Fee Concessions & Waivers',
             Icons.percent_rounded,
             const Color(0xFF1E40AF),
             const Color(0xFFEFF6FF),
@@ -4886,50 +4932,65 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Switch(
+                const SizedBox(height: 12),
+                // Bordered waiver toggle — Material transparency wrapper is
+                // required for list tiles inside a plain Container.
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: const Color(0xFFCBD5E1),
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: SwitchListTile(
                       value: _advFullWaiver,
                       activeThumbColor: const Color(0xFF047857),
-                      onChanged: (v) => setState(() => _advFullWaiver = v),
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      title: Text(
                         'Full Fee Waiver (100%)',
                         style: AppTypography.label.copyWith(
-                          fontSize: 12.5,
-                          color: AppColors.textPrimary,
+                          fontSize: 13.5,
+                          color: const Color(0xFF0F172A),
                         ),
                       ),
-                    ),
-                    FilledButton.icon(
-                      icon: _advSaving
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.save_outlined, size: 15),
-                      label: const Text('Save Concessions'),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF1D4ED8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
+                      subtitle: Text(
+                        'Waives the entire monthly gross fee',
+                        style: AppTypography.bodySmall.copyWith(
+                          fontSize: 11.5,
+                          color: AppColors.textSecondary,
                         ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      onPressed: _advSaving
-                          ? null
-                          : () => _saveConcessions(bundle),
+                      onChanged: (v) => setState(() => _advFullWaiver = v),
                     ),
-                  ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon: _advSaving
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save_outlined, size: 15),
+                    label: const Text('Save Concessions'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF1D4ED8),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: _advSaving
+                        ? null
+                        : () => _saveConcessions(bundle),
+                  ),
                 ),
               ],
             ),
@@ -4960,25 +5021,94 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     if (!mounted) return;
     setState(() => _advSaving = false);
     ref.invalidate(studentProfileProvider(bundle.student.stuRegId));
+    ref.invalidate(dashboardMetricsProvider);
     _showSnackBar('Concessions saved for ${bundle.student.fullName}.');
   }
 
-  /// Shot 2a: inline advance entry persisting a positive StuAdv row.
-  Widget _buildAdvanceEntryCard(StudentProfileBundle bundle) {
+  /// Shot 2c: advance ledger card — compact entry bar on top and the
+  /// structured payment history table (with Edit / Delete actions) below.
+  Widget _buildAdvanceLedgerCard(
+    StudentProfileBundle bundle,
+    List<Map<String, dynamic>> advances,
+    NumberFormat currencyFormat,
+  ) {
+    final isMobile = ResponsiveBreakpoints.isMobile(context);
     final today = DateFormat('dd-MMM-yyyy').format(DateTime.now());
+    final entryBar = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 3,
+          child: TextField(
+            controller: _advAmountController,
+            keyboardType: TextInputType.number,
+            decoration: _advFieldDecoration('Advance Amount (Rs.)'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 4,
+          child: TextField(
+            controller: _advDepositedByController,
+            textInputAction: TextInputAction.done,
+            decoration: _advFieldDecoration('Deposited By / Remarks'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.event_outlined,
+                size: 14,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 5),
+              Text(
+                today,
+                style: AppTypography.label.copyWith(
+                  fontSize: 12,
+                  color: const Color(0xFF0F172A),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton.icon(
+          icon: const Icon(Icons.add, size: 14),
+          label: const Text('Add Advance'),
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF047857),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: () => _submitAdvance(bundle),
+        ),
+      ],
+    );
+
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
+        border: Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _advBandHeader(
-            'RECORD ADVANCE PAYMENT',
-            Icons.add_card_rounded,
+            '2. Student Advance Payments & Ledger',
+            Icons.savings_outlined,
             const Color(0xFF047857),
             const Color(0xFFECFDF5),
           ),
@@ -4987,79 +5117,46 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextField(
+                if (isMobile)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
                         controller: _advAmountController,
                         keyboardType: TextInputType.number,
                         decoration: _advFieldDecoration('Advance Amount (Rs.)'),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
+                      const SizedBox(height: 8),
+                      TextField(
                         controller: _advDepositedByController,
-                        textInputAction: TextInputAction.done,
-                        decoration: _advFieldDecoration('Deposited By'),
+                        decoration: _advFieldDecoration(
+                          'Deposited By / Remarks',
+                        ),
                       ),
-                    ),
-                    if (!ResponsiveBreakpoints.isMobile(context)) ...[
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: const Color(0xFFCBD5E1),
-                            width: 1.5,
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.icon(
+                          icon: const Icon(Icons.add, size: 14),
+                          label: const Text('Add Advance'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF047857),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.event_outlined,
-                              size: 15,
-                              color: AppColors.textSecondary,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              today,
-                              style: AppTypography.label.copyWith(
-                                fontSize: 12.5,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ],
+                          onPressed: () => _submitAdvance(bundle),
                         ),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: FilledButton.icon(
-                    icon: const Icon(Icons.add, size: 15),
-                    label: const Text('Add Advance'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF047857),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: () => _submitAdvance(bundle),
-                  ),
-                ),
+                  )
+                else
+                  entryBar,
+                const SizedBox(height: 12),
+                _buildAdvanceHistoryTable(advances, currencyFormat),
               ],
             ),
           ),
@@ -5092,110 +5189,340 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     _advAmountController.clear();
     _advDepositedByController.clear();
     ref.invalidate(studentProfileProvider(bundle.student.stuRegId));
+    ref.invalidate(dashboardMetricsProvider);
     _showSnackBar(
       'Advance of Rs. ${NumberFormat("#,##0").format(amount)} recorded.',
     );
   }
 
-  /// Shot 2a: advance payment history (natural height, page scrolls).
-  Widget _buildAdvanceHistoryCard(
+  /// Shot 2c: structured history table with per-row Edit / Delete actions.
+  Widget _buildAdvanceHistoryTable(
     List<Map<String, dynamic>> advances,
     NumberFormat currencyFormat,
   ) {
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _advBandHeader(
-            'ADVANCE PAYMENT HISTORY (${advances.length})',
-            Icons.history_rounded,
-            const Color(0xFF3730A3),
-            const Color(0xFFEEF2FF),
+    if (advances.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: _buildEmptyTabState(
+          icon: Icons.account_balance_wallet_outlined,
+          title: 'No advance payments recorded',
+          subtitle: 'Student has not deposited any advance fee credits.',
+        ),
+      );
+    }
+
+    Widget headerCell(String label, {int flex = 1, bool right = false}) {
+      return Expanded(
+        flex: flex,
+        child: Text(
+          label,
+          textAlign: right ? TextAlign.right : TextAlign.left,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.label.copyWith(
+            fontSize: 11,
+            letterSpacing: 0.4,
+            color: const Color(0xFF334155),
           ),
-          if (advances.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: _buildEmptyTabState(
-                icon: Icons.account_balance_wallet_outlined,
-                title: 'No advance payments recorded',
-                subtitle:
-                    'Student has not deposited any advance fee credits.',
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              child: Column(
-                children: [
-                  for (int i = 0; i < advances.length; i++) ...[
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: i.isEven
-                            ? Colors.white
-                            : const Color(0xFFF8FAFC),
-                        border: Border.all(
-                          color: const Color(0xFFE2E8F0),
-                          width: 1,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: const BoxDecoration(
+            color: Color(0xFFE2E8F0),
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(6),
+              topRight: Radius.circular(6),
+            ),
+          ),
+          child: Row(
+            children: [
+              headerCell('Date', flex: 3),
+              headerCell('Deposited By / Remarks', flex: 4),
+              headerCell('Amount (Rs.)', flex: 2, right: true),
+              const SizedBox(width: 8),
+              headerCell('Actions', flex: 4),
+            ],
+          ),
+        ),
+        for (int i = 0; i < advances.length; i++) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: i.isEven ? Colors.white : const Color(0xFFF8FAFC),
+              border: Border.all(color: const Color(0xFFE2E8F0), width: 1),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    (advances[i]['Date'] ?? '').toString(),
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: const Color(0xFF0F172A),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    ((advances[i]['DepositedBy'] ?? 'Office').toString()) +
+                        (((advances[i]['Detail'] as String?) ?? '')
+                                .trim()
+                                .isNotEmpty
+                            ? ' — ${(advances[i]['Detail'] as String).trim()}'
+                            : ''),
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'Rs. ${currencyFormat.format((advances[i]['AdvAmount'] as num?)?.toInt() ?? 0)}',
+                    textAlign: TextAlign.right,
+                    style: AppTypography.bodySmall.copyWith(
+                      color: const Color(0xFF047857),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 4,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.edit_outlined, size: 12),
+                        label: const Text(
+                          'Edit',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(8),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          minimumSize: const Size(0, 26),
+                          foregroundColor: const Color(0xFF1D4ED8),
+                          side: const BorderSide(color: Color(0xFF93C5FD)),
+                        ),
+                        onPressed: () => _editAdvanceDialog(advances[i]),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.savings_outlined,
-                            size: 15,
-                            color: Color(0xFF047857),
+                      const SizedBox(width: 6),
+                      OutlinedButton.icon(
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 12,
+                        ),
+                        label: const Text(
+                          'Delete',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              (advances[i]['AdvDate'] ?? '').toString(),
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
                           ),
-                          Expanded(
-                            flex: 2,
-                            child: Text(
-                              (advances[i]['DepositedBy'] ?? 'Office')
-                                  .toString(),
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.bodySmall.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
+                          minimumSize: const Size(0, 26),
+                          foregroundColor: AppColors.statusErrorText,
+                          side: const BorderSide(
+                            color: AppColors.statusErrorBorder,
                           ),
-                          Text(
-                            'Rs. ${currencyFormat.format((advances[i]['AdvAmount'] as int?) ?? 0)}.00',
-                            style: AppTypography.bodySmall.copyWith(
-                              color: const Color(0xFF047857),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
+                        ),
+                        onPressed: () => _deleteAdvanceDialog(advances[i]),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (i < advances.length - 1) const SizedBox(height: 4),
+        ],
+      ],
+    );
+  }
+
+  /// Shot 2c: clean edit dialog for one advance row (amount, remarks,
+  /// date) persisting through updateStudentAdvance.
+  Future<void> _editAdvanceDialog(Map<String, dynamic> advance) async {
+    final advId = (advance['StuAdvID'] as num?)?.toInt();
+    if (advId == null) return;
+    final stuRegId = (advance['StuRegID'] as num?)?.toInt() ?? 0;
+    final amountCtrl = TextEditingController(
+      text: '${(advance['AdvAmount'] as num?)?.toInt() ?? 0}',
+    );
+    final remarksCtrl = TextEditingController(
+      text: (advance['Detail'] as String?) ?? '',
+    );
+    DateTime picked =
+        DateTime.tryParse((advance['Date'] ?? '').toString()) ?? DateTime.now();
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: Text('Edit Advance #$advId'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  decoration: _advFieldDecoration('Advance Amount (Rs.)'),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: remarksCtrl,
+                  decoration: _advFieldDecoration('Deposited By / Remarks'),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.event_outlined,
+                      size: 15,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      DateFormat('dd-MMM-yyyy').format(picked),
+                      style: AppTypography.label.copyWith(
+                        fontSize: 13,
+                        color: const Color(0xFF0F172A),
                       ),
                     ),
-                    if (i < advances.length - 1)
-                      const SizedBox(height: 6),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () async {
+                        final pickedDate = await showDatePicker(
+                          context: dialogContext,
+                          initialDate: picked,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2100),
+                        );
+                        if (pickedDate != null) {
+                          setDialogState(() => picked = pickedDate);
+                        }
+                      },
+                      child: const Text('Change Date'),
+                    ),
                   ],
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF1D4ED8),
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Save Changes'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved != true || !mounted) return;
+
+    final amount = int.tryParse(amountCtrl.text.trim());
+    if (amount == null || amount <= 0) {
+      _showSnackBar('Enter a valid advance amount (Rs.).', isError: true);
+      return;
+    }
+    try {
+      await updateStudentAdvance(
+        stuAdvId: advId,
+        stuRegId: stuRegId,
+        amount: amount,
+        date: picked,
+        depositedBy: remarksCtrl.text.trim().isEmpty
+            ? 'Office'
+            : remarksCtrl.text.trim(),
+        remarks: remarksCtrl.text.trim(),
+      );
+    } catch (e) {
+      debugPrint('Update advance failed: $e');
+      if (!mounted) return;
+      _showSnackBar('Failed to update advance: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+    ref.invalidate(studentProfileProvider(stuRegId));
+    ref.invalidate(dashboardMetricsProvider);
+    _showSnackBar('Advance #$advId updated.');
+  }
+
+  /// Shot 2c: confirmation dialog + permanent deletion of one advance row.
+  Future<void> _deleteAdvanceDialog(Map<String, dynamic> advance) async {
+    final advId = (advance['StuAdvID'] as num?)?.toInt();
+    if (advId == null) return;
+    final stuRegId = (advance['StuRegID'] as num?)?.toInt() ?? 0;
+    final amount = (advance['AdvAmount'] as num?)?.toInt() ?? 0;
+    final dateStr = (advance['Date'] ?? '').toString();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Delete advance of Rs. $amount from $dateStr?'),
+        content: const Text(
+          'This will permanently remove the advance credit entry from the student ledger.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.statusErrorText,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete Advance'),
+          ),
         ],
       ),
     );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await deleteStudentAdvance(stuAdvId: advId, stuRegId: stuRegId);
+    } catch (e) {
+      debugPrint('Delete advance failed: $e');
+      if (!mounted) return;
+      _showSnackBar('Failed to delete advance: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+    ref.invalidate(studentProfileProvider(stuRegId));
+    ref.invalidate(dashboardMetricsProvider);
+    _showSnackBar('Advance #$advId deleted from the ledger.');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
