@@ -35,6 +35,10 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   // loading an existing SchLeaving record.
   final Set<int> _reconciledStuRegIds = <int>{};
 
+  // Shot 3a: admin Edit SLC mode — unlocks the date/reason/conduct/remarks
+  // fields on an existing SchLeaving record for in-place correction.
+  bool _editingSlc = false;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -82,6 +86,162 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
             : AppColors.statusSuccessBg,
         duration: const Duration(seconds: 3),
       ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHOT 3a — GHOST FILTERING, REASON NORMALIZATION, EDIT / DELETE SLC
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Legacy MS Access migrations left nameless rows ('0 - -', '1 - . .') in
+  /// Stu_Reg / SchLeaving. They are never selectable in the SLC workflow.
+  static bool _isGhostRow(LeavingStudentRow s) {
+    if (s.stuRegId <= 1) return true;
+    final name = s.studentName.replaceAll(RegExp(r'[-.\s]'), '');
+    return name.isEmpty;
+  }
+
+  /// The student list the selector shows — corrupted ghost rows removed.
+  List<LeavingStudentRow> _visibleStudents(SchoolLeavingState state) {
+    return state.students.where((s) => !_isGhostRow(s)).toList();
+  }
+
+  /// Legacy rows store the typo 'Compeletd Studies' in SchLeaving.Reason.
+  /// Normalize it everywhere it is displayed or matched against the
+  /// 'Completed Studies' radio option.
+  static String _normalizeReason(String? raw) {
+    final r = (raw ?? '').trim();
+    if (r.isEmpty) return r;
+    final lower = r.toLowerCase();
+    if (lower.contains('compeletd') ||
+        lower.contains('compeleted') ||
+        lower.contains('compleated')) {
+      return 'Completed Studies';
+    }
+    return r;
+  }
+
+  /// Shot 3a: admin edit — persist corrected SLC fields onto the existing
+  /// SchLeaving row (UPDATE ... WHERE StuRegID = ?).
+  Future<void> _updateSlcRecord() async {
+    final state = ref.read(schoolLeavingProvider);
+    final student = state.selectedStudent;
+    if (student == null) return;
+
+    try {
+      final db = await DatabaseService.instance.database;
+      await db.update(
+        'SchLeaving',
+        {
+          'LeftDate': DateFormat('yyyy-MM-dd').format(state.leavingDate),
+          'Charactor': (state.conduct ?? 'Good ').trim().isEmpty
+              ? 'Good'
+              : state.conduct!.trim(),
+          'TermOfLeavign': (state.reason ?? '').trim(),
+          'Remarks': state.remarks.trim().isEmpty
+              ? null
+              : state.remarks.trim(),
+        },
+        where: 'StuRegID = ?',
+        whereArgs: [student.stuRegId],
+      );
+    } catch (e) {
+      debugPrint('Update SLC failed: $e');
+      if (!mounted) return;
+      _showSnackBar('Failed to update SLC record: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+
+    setState(() => _editingSlc = false);
+    _invalidateDependentProviders();
+    await ref.read(schoolLeavingProvider.notifier).loadInitialData();
+    if (!mounted) return;
+    await ref
+        .read(schoolLeavingProvider.notifier)
+        .selectStudent(student.stuRegId);
+    if (!mounted) return;
+    _showSnackBar('SLC record updated for ${student.stuRegId}.');
+  }
+
+  /// Shot 3a: admin delete — removes a bogus/corrupted SLC entry. Ghost
+  /// students (Reg ID <= 1 or nameless) are purged entirely together with
+  /// their enrollment rows.
+  Future<void> _deleteSlcRecord() async {
+    final state = ref.read(schoolLeavingProvider);
+    final student = state.selectedStudent;
+    if (student == null) return;
+    final isGhost = _isGhostRow(student);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          isGhost
+              ? 'Delete corrupted student #${student.stuRegId} and its SLC record?'
+              : 'Delete the SLC record for ${student.stuRegId} - ${student.studentName}?',
+        ),
+        content: Text(
+          isGhost
+              ? 'This legacy ghost row (no valid student name) will be permanently removed together with its School Leaving record and enrollment rows.'
+              : 'This will permanently remove the School Leaving record for this student.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.statusErrorText,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete Record'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final db = await DatabaseService.instance.database;
+      await db.transaction((txn) async {
+        await txn.delete(
+          'SchLeaving',
+          where: 'StuRegID = ?',
+          whereArgs: [student.stuRegId],
+        );
+        if (isGhost) {
+          await txn.delete(
+            'Student_Class',
+            where: 'Stu_RegID = ?',
+            whereArgs: [student.stuRegId],
+          );
+          await txn.delete(
+            'Stu_Reg',
+            where: 'Stu_RegID = ?',
+            whereArgs: [student.stuRegId],
+          );
+        }
+      });
+    } catch (e) {
+      debugPrint('Delete SLC record failed: $e');
+      if (!mounted) return;
+      _showSnackBar('Failed to delete record: $e', isError: true);
+      return;
+    }
+    if (!mounted) return;
+
+    setState(() => _editingSlc = false);
+    _invalidateDependentProviders();
+    await ref.read(schoolLeavingProvider.notifier).loadInitialData();
+    if (!mounted) return;
+    _showSnackBar(
+      isGhost
+          ? 'Corrupted ghost record #${student.stuRegId} deleted.'
+          : 'SLC record deleted for ${student.stuRegId}.',
     );
   }
 
@@ -309,12 +469,12 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     if (slcState.committedSlc != null) {
       leavingDate = slcState.committedSlc!['LeftDate'] as String? ?? '';
       conduct = slcState.conduct?.trim() ?? '';
-      reason = slcState.reason?.trim() ?? '';
+      reason = _normalizeReason(slcState.reason);
       remarks = slcState.remarks;
     } else {
       leavingDate = student.existingSlcDate ?? '';
       conduct = student.existingSlcConduct?.trim() ?? '';
-      reason = student.existingSlcTerm?.trim() ?? '';
+      reason = _normalizeReason(student.existingSlcTerm);
       remarks = student.existingSlcRemarks ?? '';
     }
 
@@ -417,7 +577,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     final meta = ref.read(shellMetadataProvider).valueOrNull;
     final state = ref.read(schoolLeavingProvider);
 
-    final leavers = state.students
+    final leavers = _visibleStudents(state)
         .where((s) => s.hasSLC)
         .map(
           (s) => <String, dynamic>{
@@ -431,7 +591,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
             'classLeft': s.classSecDisplay,
             'dateLeft': s.existingSlcDate ?? '',
             'leavingDate': s.existingSlcDate ?? '',
-            'reason': s.existingSlcTerm ?? '',
+            'reason': _normalizeReason(s.existingSlcTerm),
           },
         )
         .toList();
@@ -708,7 +868,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                                         child: DropdownButton<int>(
                                           value:
                                               (student != null &&
-                                                  state.students.any(
+                                                  _visibleStudents(state).any(
                                                     (s) =>
                                                         s.stuRegId ==
                                                         student.stuRegId,
@@ -721,7 +881,10 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                                           hint: const Text(
                                             'Search by Reg ID or name',
                                           ),
-                                          items: state.students.map((s) {
+                                          // Shot 3a: ghost rows filtered out.
+                                          items: _visibleStudents(
+                                            state,
+                                          ).map((s) {
                                             return DropdownMenuItem<int>(
                                               value: s.stuRegId,
                                               child: Row(
@@ -1284,7 +1447,11 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
 
     if (state.hasExistingSlc) {
       final leftDate = state.selectedStudent?.existingSlcDate ?? '-';
-      final term = state.selectedStudent?.existingSlcTerm ?? '-';
+      // Shot 3a: normalize the legacy 'Compeletd Studies' typo on display.
+      final term = _normalizeReason(
+        state.selectedStudent?.existingSlcTerm,
+      );
+      final termLabel = term.isEmpty ? '-' : term;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -1292,7 +1459,10 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           borderRadius: BorderRadius.circular(AppRadius.md),
           border: Border.all(color: AppColors.statusInfoBorder),
         ),
-        child: Row(
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 2,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             const Icon(
               Icons.info_outline,
@@ -1300,13 +1470,71 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
               color: AppColors.statusInfoText,
             ),
             const SizedBox(width: 8),
-            Expanded(
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Text(
-                'A School Leaving record already exists for this student (left $leftDate, $term). Fields are read-only.',
+                _editingSlc
+                    ? 'Editing the existing School Leaving record (left $leftDate, $termLabel). Correct the fields below, then Update SLC Record.'
+                    : 'A School Leaving record already exists for this student (left $leftDate, $termLabel). Fields are read-only.',
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.statusInfoText,
                   fontWeight: FontWeight.w500,
                 ),
+              ),
+            ),
+            // Shot 3a: admin Edit SLC toggle.
+            TextButton.icon(
+              onPressed: () => setState(() => _editingSlc = !_editingSlc),
+              icon: Icon(
+                _editingSlc ? Icons.close_rounded : Icons.edit_outlined,
+                size: 14,
+              ),
+              label: Text(
+                _editingSlc ? 'Cancel Edit' : 'Edit SLC',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.statusInfoText,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 30),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            if (_editingSlc)
+              FilledButton.icon(
+                onPressed: _updateSlcRecord,
+                icon: const Icon(Icons.save_outlined, size: 14),
+                label: const Text(
+                  'Update SLC Record',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF1D4ED8),
+                  foregroundColor: Colors.white,
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            // Shot 3a: admin delete for corrupted / bogus entries.
+            TextButton.icon(
+              onPressed: _deleteSlcRecord,
+              icon: const Icon(Icons.delete_outline_rounded, size: 14),
+              label: const Text(
+                'Delete Record',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.statusErrorText,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 30),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
             // Shot 2b: escape hatch — an SLC issued by mistake can be
@@ -1392,7 +1620,8 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   }
 
   Widget _buildWithdrawalForm(SchoolLeavingState state) {
-    final enabled = state.isFormEditable;
+    // Shot 3a: Edit SLC mode unlocks the locked read-only form.
+    final enabled = state.isFormEditable || _editingSlc;
 
     return Tooltip(
       message: !enabled && state.hasDues
@@ -1472,7 +1701,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                     children: [
                       _buildRadioOption<String>(
                         value: 'Leaving',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'Leaving',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -1480,7 +1709,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'On Parent\'s Request',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'On Parent\'s Request',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -1488,7 +1717,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'Discharge',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'Discharge',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -1496,7 +1725,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'Completed Studies',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'Completed Studies',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -1504,7 +1733,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'Dismissed',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'Dismissed',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -1759,7 +1988,8 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
         Expanded(
           child: MobileKpiCard(
             label: 'ISSUED CERTIFICATES',
-            value: '${state.students.where((s) => s.hasSLC).length}',
+            value:
+                '${_visibleStudents(state).where((s) => s.hasSLC).length}',
             icon: Icons.history_edu,
             accentColor: AppColors.accentStudents,
             accentSoftBg: AppColors.accentStudentsSoftBg,
@@ -1829,11 +2059,14 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           MobileDropdownField<int>(
             label: 'Student',
             value: (student != null &&
-                    state.students.any((s) => s.stuRegId == student.stuRegId))
+                    _visibleStudents(
+                      state,
+                    ).any((s) => s.stuRegId == student.stuRegId))
                 ? student.stuRegId
                 : null,
             hintText: 'Search by Reg ID or name',
-            items: state.students.map((s) {
+            // Shot 3a: ghost rows filtered out.
+            items: _visibleStudents(state).map((s) {
               return DropdownMenuItem<int>(
                 value: s.stuRegId,
                 child: Text(
@@ -2158,7 +2391,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                     children: [
                       _buildRadioOption<String>(
                         value: 'Leaving',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'Leaving',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -2166,7 +2399,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'On Parent\'s Request',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'On Parent\'s Request',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -2174,7 +2407,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'Discharge',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'Discharge',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -2182,7 +2415,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'Completed Studies',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'Completed Studies',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -2190,7 +2423,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'Dismissed',
-                        groupValue: state.reason,
+                        groupValue: _normalizeReason(state.reason),
                         label: 'Dismissed',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)

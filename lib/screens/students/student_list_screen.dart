@@ -75,6 +75,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   @override
   void initState() {
     super.initState();
+    // Shot 3a: seed the visible search box from the persisted filter state so
+    // returning to this screen can never show a blank TextField while
+    // studentListFiltersProvider still filters by the old query.
+    _searchController.text = ref.read(studentListFiltersProvider).search;
     // Sync sessionYr to the app's active session (app_config.default_session_yr)
     // AFTER first frame so shellMetadataProvider resolves. In production, AppShell
     // pre-loads shellMetadataProvider before this screen mounts.
@@ -204,6 +208,17 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
         if (current != nextYear) {
           ref.read(studentListFiltersProvider.notifier).setSessionYr(nextYear);
         }
+      }
+    });
+
+    // Shot 3a: the TextField text and the provider's search filter must stay
+    // 100% synchronized. When the filter changes from OUTSIDE this field
+    // (Reset Filters, deep links, programmatic resets), mirror it back into
+    // the box — but never while the user is actively typing.
+    ref.listen<StudentListFilters>(studentListFiltersProvider, (previous, next) {
+      if (!_searchFocusNode.hasFocus &&
+          _searchController.text != next.search) {
+        _searchController.text = next.search;
       }
     });
 

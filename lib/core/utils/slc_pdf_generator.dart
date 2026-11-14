@@ -6,28 +6,14 @@ import 'package:pdf/widgets.dart' as pw;
 
 /// Generates the A4 School Leaving Certificate (SLC) PDF.
 ///
-/// Batch 1 (Ailyans): the layout matches the school's physical pre-printed
-/// certificate stationery — a ~90pt blank spacer at the top so text prints
-/// cleanly below the pre-printed school logo/header, followed by a centered
-/// underlined title, an affiliation subtitle, 12 left-aligned label +
-/// dotted-line value rows, and a solid bottom rule with the certification
-/// footer. The document deliberately draws NO header/border of its own.
+/// Shot 3a (Ailyans): the certificate is fully framed and centered on the
+/// A4 sheet — an institutional double-border frame (outer 2pt Oxford Blue
+/// + inner 0.8pt slate) with 24pt page margin and 24pt inner padding, a
+/// vertically distributed layout (centered header, striped particulars
+/// table, centered certification statement, signature block) so the
+/// content fills and centers the whole page instead of hugging the top.
 class SlcPdfGenerator {
   SlcPdfGenerator._();
-
-  /// Width (pt) of the left-hand row label column.
-  static const double kLabelWidth = 135;
-
-  /// Right-hand padding (pt) applied inside the dotted value area so the bold
-  /// value's optical centre aligns exactly with the page centre axis.
-  ///
-  /// Geometry: the value area is `pw.Expanded` inside a `pw.Row` whose left
-  /// label occupies [kLabelWidth]. Centre of the un-padded area therefore sits
-  /// `kLabelWidth / 2` pt right of the page axis; padding the RIGHT side by the
-  /// full label width pulls the centre back onto the axis
-  /// (offset = (kLabelWidth - pad) / 2), landing the value directly under the
-  /// centered 'SCHOOL LEAVING CERTIFICATE' heading.
-  static const double kValueOpticalOffset = kLabelWidth;
 
   // ---------------------------------------------------------------------------
   // Public API
@@ -109,16 +95,20 @@ class SlcPdfGenerator {
       'Charactor',
       'character',
     ]);
-    final reason = pick([
+    final reasonRaw = pick([
       'reason',
       'termOfLeaving',
       'TermOfLeavign',
       'term',
     ]);
+    // Shot 3a: normalize the legacy 'Compeletd Studies' typo.
+    final reason = _normalizeReason(reasonRaw);
     final remarks = pick(['remarks', 'slRemarks', 'Remarks']);
 
-    final sName = studentName.isEmpty ? '__________________' : studentName;
-    final fName = fatherName.isEmpty ? '__________________' : fatherName;
+    // Shot 3a: blank legacy fields print an em dash, never a blank line.
+    final sName = studentName.isEmpty ? '—' : studentName;
+    final fName = fatherName.isEmpty ? '—' : fatherName;
+    final addressOut = address.isEmpty ? '—' : address;
 
     // 12 pre-printed stationery rows (label -> dotted-line value).
     final rows = <(String, String)>[
@@ -126,7 +116,7 @@ class SlcPdfGenerator {
       ('Student Name:', sName),
       ('Father Name:', fName),
       ('Date of Birth:', _formatDate(dob)),
-      ('Address:', address),
+      ('Address:', addressOut),
       ('Admission Date:', _formatDate(admissionDate)),
       ('Class Admitted:', admittedClass.isNotEmpty ? admittedClass : className),
       ('Class At the Time of Leaving:', className),
@@ -139,71 +129,156 @@ class SlcPdfGenerator {
     doc.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.fromLTRB(48, 40, 48, 36),
+        // Shot 3a: 24pt page margin all around.
+        margin: const pw.EdgeInsets.all(24),
         build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: [
-              // ── Top blank letterhead spacer (~90pt) — the physical
-              // pre-printed school logo/header occupies this area. ──
-              pw.SizedBox(height: 90),
-
-              // ── Centered underlined title ──
-              pw.Center(
-                child: pw.Text(
-                  'SCHOOL LEAVING CERTIFICATE',
-                  style: pw.TextStyle(
-                    font: boldFont,
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    letterSpacing: 2,
-                    decoration: pw.TextDecoration.underline,
+          return pw.Container(
+            // Institutional double-border frame: outer 2pt Oxford Blue.
+            width: double.infinity,
+            height: double.infinity,
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.blue800, width: 2),
+            ),
+            padding: const pw.EdgeInsets.all(5),
+            child: pw.Container(
+              // Inner 0.8pt slate rule with 24pt breathing room.
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(
+                  color: PdfColors.blueGrey300,
+                  width: 0.8,
+                ),
+              ),
+              padding: const pw.EdgeInsets.all(24),
+              child: pw.Column(
+                // Vertically distribute the certificate across the full A4
+                // sheet and center every block horizontally.
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  // ── Centered header block ──
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Text(
+                        'SCHOOL LEAVING CERTIFICATE',
+                        style: pw.TextStyle(
+                          font: boldFont,
+                          fontSize: 16,
+                          fontWeight: pw.FontWeight.bold,
+                          letterSpacing: 2,
+                          decoration: pw.TextDecoration.underline,
+                        ),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                      pw.SizedBox(height: 6),
+                      pw.Text(
+                        'Recognized and affiliated with BISE Sargodha, AKU Karachi',
+                        style: pw.TextStyle(font: boldFont, fontSize: 11),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                      pw.SizedBox(height: 4),
+                      pw.Container(
+                        width: 120,
+                        height: 1.2,
+                        color: PdfColors.blue800,
+                      ),
+                    ],
                   ),
-                  textAlign: pw.TextAlign.center,
-                ),
-              ),
-              pw.SizedBox(height: 6),
 
-              // ── Affiliation subtitle ──
-              pw.Center(
-                child: pw.Text(
-                  'Recognized and affiliated with BISE Sargodha, AKU Karachi',
-                  style: pw.TextStyle(font: boldFont, fontSize: 11),
-                  textAlign: pw.TextAlign.center,
-                ),
-              ),
-
-              pw.SizedBox(height: 24),
-
-              // ── 12 Label + Dotted-Line Value Rows ──
-              for (final (label, value) in rows)
-                _buildFieldRow(
-                  label: label,
-                  value: value,
-                  regularFont: regularFont,
-                  boldFont: boldFont,
-                ),
-
-              // ── Bottom solid rule + centered italic footer ──
-              pw.Spacer(),
-              pw.Container(
-                height: 1.2,
-                color: PdfColors.black,
-                margin: const pw.EdgeInsets.only(bottom: 8),
-              ),
-              pw.Center(
-                child: pw.Text(
-                  'Certified that the above information is in accordance with school record.',
-                  style: pw.TextStyle(
-                    font: italicFont,
-                    fontSize: 10,
-                    fontStyle: pw.FontStyle.italic,
-                    color: PdfColors.grey800,
+                  // ── Bordered / striped particulars table ──
+                  pw.Container(
+                    width: double.infinity,
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(
+                        color: PdfColors.blueGrey300,
+                        width: 0.8,
+                      ),
+                    ),
+                    child: pw.Column(
+                      children: [
+                        for (int i = 0; i < rows.length; i++)
+                          _buildTableRow(
+                            label: rows[i].$1,
+                            value: rows[i].$2,
+                            striped: i.isOdd,
+                            regularFont: regularFont,
+                            boldFont: boldFont,
+                          ),
+                      ],
+                    ),
                   ),
-                  textAlign: pw.TextAlign.center,
-                ),
+
+                  // ── Centered certification statement ──
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.center,
+                    children: [
+                      pw.Container(
+                        width: 60,
+                        height: 1.2,
+                        color: PdfColors.blue800,
+                        margin: const pw.EdgeInsets.only(bottom: 10),
+                      ),
+                      pw.Text(
+                        'Certified that the above information is in accordance with school record.',
+                        style: pw.TextStyle(
+                          font: italicFont,
+                          fontSize: 10,
+                          fontStyle: pw.FontStyle.italic,
+                          color: PdfColors.grey800,
+                        ),
+                        textAlign: pw.TextAlign.center,
+                      ),
+                    ],
+                  ),
+
+                  // ── Bottom signature block ──
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Container(
+                            width: 140,
+                            height: 0.8,
+                            color: PdfColors.grey600,
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Text(
+                            'Class Teacher',
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: 10,
+                              color: PdfColors.grey800,
+                            ),
+                          ),
+                        ],
+                      ),
+                      pw.Column(
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Container(
+                            width: 140,
+                            height: 0.8,
+                            color: PdfColors.grey600,
+                          ),
+                          pw.SizedBox(height: 4),
+                          pw.Text(
+                            'Principal',
+                            style: pw.TextStyle(
+                              font: regularFont,
+                              fontSize: 10,
+                              color: PdfColors.grey800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           );
         },
       ),
@@ -251,63 +326,59 @@ class SlcPdfGenerator {
     return trimmed;
   }
 
-  /// One pre-printed stationery row: the [label] sits on the left, and the
-  /// bold [value] sits above a dotted rule on the right (so handwriting and
-  /// print both align to the pre-printed dotted line).
-  ///
-  /// Optical centering: the label column eats [kLabelWidth] pt on the left,
-  /// which pushes the naive centre of the right-hand `Expanded` region
-  /// (labelWidth / 2) pt to the right of the page's true centre axis. The
-  /// value text is therefore padded on the right by that same amount so its
-  /// optical centre lands directly under the centered
-  /// 'SCHOOL LEAVING CERTIFICATE' heading.
-  static pw.Widget _buildFieldRow({
+  /// One striped particulars-table row: label on the left, bold value on
+  /// the right, alternating background stripes and a hairline separator.
+  static pw.Widget _buildTableRow({
     required String label,
     required String value,
+    required bool striped,
     required pw.Font regularFont,
     required pw.Font boldFont,
   }) {
-    const dottedLine =
-        '........................................................';
-
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 10),
+    return pw.Container(
+      color: striped ? PdfColors.grey50 : null,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          pw.SizedBox(
-            width: kLabelWidth,
+          pw.Expanded(
+            flex: 2,
             child: pw.Text(
               label,
-              style: pw.TextStyle(font: regularFont, fontSize: 11),
+              style: pw.TextStyle(
+                font: regularFont,
+                fontSize: 10.5,
+                color: PdfColors.grey800,
+              ),
             ),
           ),
           pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Padding(
-                  padding: const pw.EdgeInsets.only(right: kValueOpticalOffset),
-                  child: pw.Center(
-                    child: pw.Text(
-                      value.isEmpty ? ' ' : value,
-                      style: pw.TextStyle(font: boldFont, fontSize: 11),
-                    ),
-                  ),
-                ),
-                pw.Text(
-                  dottedLine,
-                  style: pw.TextStyle(
-                    font: regularFont,
-                    fontSize: 10,
-                    color: PdfColors.grey600,
-                  ),
-                ),
-              ],
+            flex: 3,
+            child: pw.Text(
+              value.isEmpty ? '—' : value,
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 10.5,
+                color: PdfColors.black,
+              ),
+              textAlign: pw.TextAlign.right,
             ),
           ),
         ],
       ),
     );
+  }
+
+  /// Shot 3a: normalize the legacy 'Compeletd Studies' typo stored in
+  /// SchLeaving.TermOfLeavign by the MS Access migration.
+  static String _normalizeReason(String raw) {
+    final r = raw.trim();
+    final lower = r.toLowerCase();
+    if (lower.contains('compeletd') ||
+        lower.contains('compeleted') ||
+        lower.contains('compleated')) {
+      return 'Completed Studies';
+    }
+    return r;
   }
 }
