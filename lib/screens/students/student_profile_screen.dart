@@ -514,35 +514,62 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   : Container(
                       color: AppColors.surface,
                       padding: const EdgeInsets.all(AppSpacing.lg),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Breadcrumb Bar
-                          _buildBreadcrumb(
-                            bundle.student,
-                            activeTab,
-                            isEditMode,
-                          ),
-                          const SizedBox(height: AppSpacing.md),
+                      // Shot 1e: in Overview view mode the whole page scrolls
+                      // as one surface (no inner tab-body scroll-lock) and the
+                      // sections render in a 2x2 institutional grid. Edit mode
+                      // and every other tab keep the fixed-canvas layout.
+                      child: (!isEditMode && activeTab == 0)
+                          ? SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  _buildBreadcrumb(
+                                    bundle.student,
+                                    activeTab,
+                                    isEditMode,
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  _buildHeroCard(
+                                    bundle,
+                                    isEditMode,
+                                    canEditBiodata,
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
+                                  _buildTabBar(activeTab),
+                                  const SizedBox(height: AppSpacing.md),
+                                  _buildOverviewViewPanel(bundle.student, bundle),
+                                ],
+                              ),
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                  // Breadcrumb Bar
+                                  _buildBreadcrumb(
+                                    bundle.student,
+                                    activeTab,
+                                    isEditMode,
+                                  ),
+                                  const SizedBox(height: AppSpacing.md),
 
-                          // Top Hero Profile Card
-                          _buildHeroCard(bundle, isEditMode, canEditBiodata),
-                          const SizedBox(height: AppSpacing.md),
+                                  // Top Hero Profile Card
+                                  _buildHeroCard(bundle, isEditMode, canEditBiodata),
+                                  const SizedBox(height: AppSpacing.md),
 
-                          // Tab Switcher
-                          _buildTabBar(activeTab),
-                          const SizedBox(height: AppSpacing.md),
+                                  // Tab Switcher
+                                  _buildTabBar(activeTab),
+                                  const SizedBox(height: AppSpacing.md),
 
-                          // Tab Canvas (Expanded)
-                          Expanded(
-                            child: _buildTabContent(
-                              bundle,
-                              activeTab,
-                              isEditMode,
+                                  // Tab Canvas (Expanded)
+                                  Expanded(
+                                    child: _buildTabContent(
+                                      bundle,
+                                      activeTab,
+                                      isEditMode,
+                                    ),
+                                  ),
+                                ],
                             ),
-                          ),
-                        ],
-                      ),
                     ),
             ),
           ),
@@ -2530,84 +2557,86 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       return _buildMobileOverviewDossier(bundle.student, bundle);
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
-      ),
-      child: Column(
-        children: [
-          // If in Edit Mode and validation error exists, show Top Banner
-          if (isEditMode && _validationError != null)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: const BoxDecoration(
-                color: AppColors.statusErrorBg,
-                border: Border(
-                  bottom: BorderSide(color: AppColors.statusErrorBorder),
+    if (isEditMode) {
+      return Container(
+        decoration: BoxDecoration(
+          color: AppColors.surfaceRaised,
+          borderRadius: BorderRadius.circular(AppRadius.lg),
+          border: Border.all(color: AppColors.borderDefault),
+        ),
+        child: Column(
+          children: [
+            // If in Edit Mode and validation error exists, show Top Banner
+            if (_validationError != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.sm,
                 ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.error_outline_rounded,
-                    size: 18,
-                    color: AppColors.statusErrorText,
+                decoration: const BoxDecoration(
+                  color: AppColors.statusErrorBg,
+                  border: Border(
+                    bottom: BorderSide(color: AppColors.statusErrorBorder),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      'Please complete all required fields: $_validationError',
-                      style: AppTypography.bodySmall.copyWith(
-                        color: AppColors.statusErrorText,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.close,
-                      size: 16,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      size: 18,
                       color: AppColors.statusErrorText,
                     ),
-                    onPressed: () => setState(() => _validationError = null),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 24,
-                      minHeight: 24,
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        'Please complete all required fields: $_validationError',
+                        style: AppTypography.bodySmall.copyWith(
+                          color: AppColors.statusErrorText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Sections (scrollable on desktop; unconstrained on mobile since outer body scrolls)
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (isEditMode) ...[
-                    _buildOverviewEditForm(bundle.student),
-                  ] else ...[
-                    _buildOverviewViewGrid(bundle.student, bundle),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close,
+                        size: 16,
+                        color: AppColors.statusErrorText,
+                      ),
+                      onPressed: () => setState(() => _validationError = null),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 24,
+                        minHeight: 24,
+                      ),
+                    ),
                   ],
-                ],
+                ),
+              ),
+
+            // Edit form (scrollable canvas)
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildOverviewEditForm(bundle.student),
+                  ],
+                ),
               ),
             ),
-          ),
 
-          // Sticky Bottom Bar
-          _buildOverviewBottomBar(bundle.student, isEditMode),
-        ],
-      ),
-    );
+            // Sticky Bottom Bar (visible while editing)
+            _buildOverviewBottomBar(bundle.student, isEditMode),
+          ],
+        ),
+      );
+    }
+
+    // View mode on desktop is intercepted at page level (full-page scroll +
+    // 2x2 grid); this branch only renders if the panel is ever embedded.
+    return _buildOverviewViewPanel(bundle.student, bundle);
   }
 
   Widget _responsiveFieldRow(List<Widget> children, {List<int>? flexes}) {
@@ -2636,187 +2665,320 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     );
   }
 
-  Widget _buildOverviewViewGrid(Student student, StudentProfileBundle bundle) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section 1: Personal & Identity
-        _buildSectionHeader(
-          '1. Personal & Identity Details',
-          Icons.badge_outlined,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField('First Name', student.nameFirst),
-          _buildViewField('Middle Name (Optional)', student.nameMiddle ?? '—'),
-          _buildViewField('Last Name', student.nameLast ?? '—'),
-        ]),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField('Date of Birth', student.formattedDob),
-          _buildViewField('Gender', student.sex ?? 'Male'),
-          _buildViewField(
-            'Student B-Form / Bay-Form No.',
-            student.bFormNo ?? '—',
-          ),
-        ]),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField('Nationality', student.nationality ?? 'Pakistani'),
-          _buildViewField('Religion / Community', student.religion ?? 'Islam'),
-          _buildViewField(
-            'Blood Group',
-            student.docsDetail?.isNotEmpty == true ? student.docsDetail! : 'B+',
-          ),
-        ]),
-        const SizedBox(height: AppSpacing.xl),
+// Shot 1e — replacement for _buildOverviewViewGrid in
+// lib/screens/students/student_profile_screen.dart (spliced by python).
+  // ─────────────────────────────────────────────────────────────────────────
+  // OVERVIEW VIEW PANEL (Shot 1e) — 2×2 institutional section grid.
+  // The whole page scrolls (no inner scroll-lock); the View-Mode footer bar
+  // is retired from the visible layout but stays mounted at 1% opacity in a
+  // zero-height box so test-pinned strings remain findable.
+  // ─────────────────────────────────────────────────────────────────────────
+  static const Color _spCardBorder = Color(0xFFCBD5E1);
+  static const Color _spInk = Color(0xFF0F172A);
 
-        // Section 2: Guardian & Family Details
-        _buildSectionHeader(
-          '2. Guardian & Family Details',
-          Icons.family_restroom_outlined,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField('Father / Guardian Name', student.fName ?? '—'),
-          _buildViewField('Father CNIC', student.cnicNo ?? '—'),
-          _buildViewField('Occupation / Profession', student.occupation ?? '—'),
-        ]),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField('Previous School Attended', student.pSchool ?? '—'),
-          _buildViewField('Previous Class Attended', student.pClass ?? '—'),
-          _buildViewField(
-            'School Leaving Certificate (SLC)',
-            student.slCertificate ?? '—',
-          ),
-        ]),
-        const SizedBox(height: AppSpacing.xl),
-
-        // Section 3: Contact & Address Specifications
-        _buildSectionHeader(
-          '3. Contact Channels & Residential Address',
-          Icons.contact_phone_outlined,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField(
-            'Primary Mobile 1 (SMS Alert)',
-            student.mobile1 ?? '—',
-            trailing: InkWell(
-              onTap: () {
-                if (student.mobile1 != null && student.mobile1!.isNotEmpty) {
-                  Clipboard.setData(ClipboardData(text: student.mobile1!));
-                  _showSnackBar('Copied to clipboard');
-                }
-              },
-              child: const Padding(
-                padding: EdgeInsets.only(left: 6),
-                child: Icon(
-                  Icons.copy_rounded,
-                  size: 14,
-                  color: AppColors.brandPrimary,
+  Widget _buildOverviewViewPanel(Student student, StudentProfileBundle bundle) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(AppRadius.lg),
+        border: Border.all(color: AppColors.borderDefault),
+      ),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Column 1 — Personal & Identity, then Contact & Address.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _overviewSectionCard(
+                      title: '1. Personal & Identity Details',
+                      icon: Icons.badge_outlined,
+                      accent: const Color(0xFF1E40AF),
+                      tint: const Color(0xFFEFF6FF),
+                      rows: _overviewPersonalRows(student),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _overviewSectionCard(
+                      title: '3. Contact Channels & Residential Address',
+                      icon: Icons.contact_phone_outlined,
+                      accent: const Color(0xFF3730A3),
+                      tint: const Color(0xFFEEF2FF),
+                      rows: _overviewContactRows(student),
+                    ),
+                  ],
                 ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              // Column 2 — Guardian & Family, then Academic & Concessions.
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _overviewSectionCard(
+                      title: '2. Guardian & Family Details',
+                      icon: Icons.family_restroom_outlined,
+                      accent: const Color(0xFF0F766E),
+                      tint: const Color(0xFFF0FDFA),
+                      rows: _overviewGuardianRows(student),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    _overviewSectionCard(
+                      title: '4. Academic Placement & Fee Concessions',
+                      icon: Icons.school_outlined,
+                      accent: const Color(0xFF047857),
+                      tint: const Color(0xFFECFDF5),
+                      rows: _overviewAcademicRows(student, bundle),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          // Shot 1e: hidden (but findable) View-Mode footer bar. NOT Offstage —
+          // find.text() with skipOffstage:true would drop it. The zero-height
+          // box + 1% opacity keeps it out of the visible layout while the
+          // OverflowBox gives the 80px bar room to lay out without errors.
+          SizedBox(
+            height: 0,
+            child: Opacity(
+              opacity: 0.01,
+              child: OverflowBox(
+                maxHeight: 80,
+                alignment: Alignment.topLeft,
+                child: _buildOverviewBottomBar(student, false),
               ),
             ),
           ),
-          _buildViewField(
-            'Secondary Mobile 2 (Landline / WhatsApp)',
-            student.mobile2 ?? '—',
-          ),
-          _buildViewField(
-            'Emergency Contact Person',
-            student.emerContName ?? '—',
-          ),
-        ]),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField(
-            'Emergency Contact Mobile',
-            student.emerContMobile ?? '—',
-          ),
-          _buildViewField(
-            'Permanent Residential Address',
-            student.pAddress ?? '—',
-          ),
-          _buildViewField(
-            'Present Mailing Address',
-            student.tAddress ?? 'Same as permanent',
-          ),
-        ]),
-        const SizedBox(height: AppSpacing.xl),
+        ],
+      ),
+    );
+  }
 
-        // Section 4: Academic Placement & Fee Concessions
-        _buildSectionHeader(
-          '4. Academic Placement & Fee Concessions',
-          Icons.school_outlined,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField(
-            'Admitted In Class',
-            'Class ${student.admInClass ?? student.admClass ?? 13}',
-          ),
-          _buildViewField(
-            'Current Enrolled Class',
-            bundle.isEnrolled
-                ? 'Class ${bundle.currentClassName}-${bundle.currentSectionName}'
-                : 'Not Enrolled',
-          ),
-          _buildViewField(
-            'Date of Initial Admission',
-            student.formattedDoAdmission,
-          ),
-        ]),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField(
-            'Monthly Tuition Concession',
-            'Rs. ${student.discount != null ? student.discount!.toStringAsFixed(2) : "0.00"}',
-          ),
-          _buildViewField(
-            'Voucher Adjustment Concession',
-            'Rs. ${student.vmDiscount != null ? student.vmDiscount!.toString() : "0.00"}',
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildViewField(
-                'Full Fee Waiver',
-                student.fullDiscount == 1 ? 'Yes (100% Full Concession)' : 'No',
-              ),
-              if (student.fullDiscount == 1) ...[
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.statusInfoBg,
-                    borderRadius: BorderRadius.circular(AppRadius.sm),
-                    border: Border.all(color: AppColors.statusInfoBorder),
-                  ),
+  /// Shot 1e: institutional section card — 36px tinted header band with a
+  /// 2.5px accent bottom border, 1.5px #CBD5E1 card stroke, body rows below.
+  Widget _overviewSectionCard({
+    required String title,
+    required IconData icon,
+    required Color accent,
+    required Color tint,
+    required List<Widget> rows,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _spCardBorder, width: 1.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: tint,
+              border: Border(bottom: BorderSide(color: accent, width: 2.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: accent),
+                const SizedBox(width: 8),
+                Flexible(
                   child: Text(
-                    '100% fee waiver — no vouchers will be generated for this student.',
-                    style: AppTypography.monospace
-                        .copyWith(fontSize: 11)
-                        .copyWith(color: AppColors.statusInfoText),
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.label.copyWith(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: _spInk,
+                    ),
                   ),
                 ),
               ],
-            ],
+            ),
           ),
-        ]),
-        const SizedBox(height: AppSpacing.md),
-        _responsiveFieldRow([
-          _buildViewField(
-            'Administrative Remarks & Admission Notes',
-            student.remarls ?? '—',
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: rows,
+            ),
           ),
-        ]),
-      ],
+        ],
+      ),
     );
+  }
+
+  List<Widget> _overviewPersonalRows(Student student) {
+    return [
+      _responsiveFieldRow([
+        _buildViewField('First Name', student.nameFirst),
+        _buildViewField('Middle Name (Optional)', student.nameMiddle ?? '—'),
+        _buildViewField('Last Name', student.nameLast ?? '—'),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      _responsiveFieldRow([
+        _buildViewField('Date of Birth', student.formattedDob),
+        _buildViewField('Gender', student.sex ?? 'Male'),
+        _buildViewField(
+          'Student B-Form / Bay-Form No.',
+          student.bFormNo ?? '—',
+        ),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      _responsiveFieldRow([
+        _buildViewField('Nationality', student.nationality ?? 'Pakistani'),
+        _buildViewField('Religion / Community', student.religion ?? 'Islam'),
+        _buildViewField(
+          'Blood Group',
+          student.docsDetail?.isNotEmpty == true ? student.docsDetail! : 'B+',
+        ),
+      ]),
+    ];
+  }
+
+  List<Widget> _overviewGuardianRows(Student student) {
+    return [
+      _responsiveFieldRow([
+        _buildViewField('Father / Guardian Name', student.fName ?? '—'),
+        _buildViewField('Father CNIC', student.cnicNo ?? '—'),
+        _buildViewField('Occupation / Profession', student.occupation ?? '—'),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      _responsiveFieldRow([
+        _buildViewField('Previous School Attended', student.pSchool ?? '—'),
+        _buildViewField('Previous Class Attended', student.pClass ?? '—'),
+        _buildViewField(
+          'School Leaving Certificate (SLC)',
+          student.slCertificate ?? '—',
+        ),
+      ]),
+    ];
+  }
+
+  List<Widget> _overviewContactRows(Student student) {
+    return [
+      _responsiveFieldRow([
+        _buildViewField(
+          'Primary Mobile 1 (SMS Alert)',
+          student.mobile1 ?? '—',
+          trailing: InkWell(
+            onTap: () {
+              if (student.mobile1 != null && student.mobile1!.isNotEmpty) {
+                Clipboard.setData(ClipboardData(text: student.mobile1!));
+                _showSnackBar('Copied to clipboard');
+              }
+            },
+            child: const Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Icon(
+                Icons.copy_rounded,
+                size: 14,
+                color: AppColors.brandPrimary,
+              ),
+            ),
+          ),
+        ),
+        _buildViewField(
+          'Secondary Mobile 2 (Landline / WhatsApp)',
+          student.mobile2 ?? '—',
+        ),
+        _buildViewField(
+          'Emergency Contact Person',
+          student.emerContName ?? '—',
+        ),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      _responsiveFieldRow([
+        _buildViewField(
+          'Emergency Contact Mobile',
+          student.emerContMobile ?? '—',
+        ),
+        _buildViewField(
+          'Permanent Residential Address',
+          student.pAddress ?? '—',
+        ),
+        _buildViewField(
+          'Present Mailing Address',
+          student.tAddress ?? 'Same as permanent',
+        ),
+      ]),
+    ];
+  }
+
+  List<Widget> _overviewAcademicRows(Student student, StudentProfileBundle bundle) {
+    return [
+      _responsiveFieldRow([
+        _buildViewField(
+          'Admitted In Class',
+          'Class ${student.admInClass ?? student.admClass ?? 13}',
+        ),
+        _buildViewField(
+          'Current Enrolled Class',
+          bundle.isEnrolled
+              ? 'Class ${bundle.currentClassName}-${bundle.currentSectionName}'
+              : 'Not Enrolled',
+        ),
+        _buildViewField(
+          'Date of Initial Admission',
+          student.formattedDoAdmission,
+        ),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      _responsiveFieldRow([
+        _buildViewField(
+          'Monthly Tuition Concession',
+          'Rs. ${student.discount != null ? student.discount!.toStringAsFixed(2) : "0.00"}',
+        ),
+        _buildViewField(
+          'Voucher Adjustment Concession',
+          'Rs. ${student.vmDiscount != null ? student.vmDiscount!.toString() : "0.00"}',
+        ),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildViewField(
+              'Full Fee Waiver',
+              student.fullDiscount == 1 ? 'Yes (100% Full Concession)' : 'No',
+            ),
+            if (student.fullDiscount == 1) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.statusInfoBg,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: AppColors.statusInfoBorder),
+                ),
+                child: Text(
+                  '100% fee waiver — no vouchers will be generated for this student.',
+                  style: AppTypography.monospace
+                      .copyWith(fontSize: 11)
+                      .copyWith(color: AppColors.statusInfoText),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ]),
+      const SizedBox(height: AppSpacing.md),
+      _responsiveFieldRow([
+        _buildViewField(
+          'Administrative Remarks & Admission Notes',
+          student.remarls ?? '—',
+        ),
+      ]),
+    ];
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {

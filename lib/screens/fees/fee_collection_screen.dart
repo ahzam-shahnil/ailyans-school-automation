@@ -389,269 +389,340 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         child: Container(
           color: AppColors.surface,
           padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Origin back affordance (context-aware back button)
-              if (_originScreen != null &&
-                  _originConfig.containsKey(_originScreen!)) ...[
-                Row(
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: () => context.go(
-                        _customBackRoute ??
-                            _originConfig[_originScreen!]!.route,
-                      ),
-                      icon: const Icon(Icons.arrow_back, size: 16),
-                      label: Text(_originConfig[_originScreen!]!.label),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.brandPrimary,
-                        side: const BorderSide(color: AppColors.borderDefault),
-                        backgroundColor: AppColors.surfaceRaised,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.sm),
-              ],
-
-              // Top Search Bar (always visible)
-              _buildSearchBar(state),
-
-              // Search error banner if any
-              if (state.lookupError != null) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    state.lookupError!,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.statusErrorText,
-                      fontWeight: FontWeight.w600,
+          // Shot 1e: on short viewports (< 820px height) the entire screen
+          // scrolls as one page instead of locking the workspace into a
+          // fixed-height Expanded.
+          child: _fixedWorkspace(context)
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _desktopWorkspaceChildren(
+                    state,
+                    bankListAsync,
+                    receipt,
+                    fixed: true,
+                  ),
+                )
+              : SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: _desktopWorkspaceChildren(
+                      state,
+                      bankListAsync,
+                      receipt,
+                      fixed: false,
                     ),
                   ),
                 ),
-              ],
-
-              const SizedBox(height: AppSpacing.md),
-
-              // 55 / 45 Workspace Row inside Expanded (prevents page-level scroll)
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Left Pane (55% — Voucher Dossier)
-                    Expanded(flex: 55, child: _buildLeftPane(receipt, state)),
-
-                    const SizedBox(width: AppSpacing.md),
-
-                    // Right Pane (45% — Payment Terminal)
-                    Expanded(
-                      flex: 45,
-                      child: _buildRightPane(receipt, state, bankListAsync),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
+  }
+
+  /// Shot 1e: shared children for the fixed desktop workspace and the
+  /// single-page scrolling layout (< 820px tall viewports).
+  List<Widget> _desktopWorkspaceChildren(
+    FeeCollectionState state,
+    AsyncValue<List<BankRow>> bankListAsync,
+    FeeReceiptView? receipt, {
+    required bool fixed,
+  }) {
+    return [
+      // Origin back affordance (context-aware back button)
+      if (_originScreen != null &&
+          _originConfig.containsKey(_originScreen!)) ...[
+        Row(
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => context.go(
+                _customBackRoute ?? _originConfig[_originScreen!]!.route,
+              ),
+              icon: const Icon(Icons.arrow_back, size: 16),
+              label: Text(_originConfig[_originScreen!]!.label),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.brandPrimary,
+                side: const BorderSide(color: AppColors.borderDefault),
+                backgroundColor: AppColors.surfaceRaised,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+      ],
+
+      // Top Search Bar (always visible)
+      _buildSearchBar(state),
+
+      // Search error banner if any
+      if (state.lookupError != null) ...[
+        const SizedBox(height: AppSpacing.xs),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            state.lookupError!,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.statusErrorText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+
+      const SizedBox(height: AppSpacing.md),
+
+      // 55 / 45 Workspace Row: Expanded (fixed) or natural height (scroll).
+      if (fixed)
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Left Pane (55% - Voucher Dossier)
+              Expanded(flex: 55, child: _buildLeftPane(receipt, state)),
+              const SizedBox(width: AppSpacing.md),
+              // Right Pane (45% - Payment Terminal)
+              Expanded(
+                flex: 45,
+                child: _buildRightPane(receipt, state, bankListAsync),
+              ),
+            ],
+          ),
+        )
+      else
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(flex: 55, child: _buildLeftPane(receipt, state)),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              flex: 45,
+              child: _buildRightPane(receipt, state, bankListAsync),
+            ),
+          ],
+        ),
+    ];
   }
 
   // ---------------------------------------------------------------------------
   // SEARCH BAR
   // ---------------------------------------------------------------------------
 
-  Widget _buildSearchBar(FeeCollectionState state) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: AppColors.borderDefault),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 4,
-            offset: Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.qr_code_scanner_outlined,
-            color: AppColors.textMuted,
-            size: 22,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: TextField(
-              controller: _lookupController,
-              focusNode: _lookupFocusNode,
-              style: AppTypography.monospace.copyWith(fontSize: 14),
-              decoration: InputDecoration(
-                isDense: true,
-                border: InputBorder.none,
-                hintText: 'Scan barcode or enter Voucher ID / Reg ID (e.g. 1710-4411)',
-                hintStyle: AppTypography.monospace.copyWith(
-                  color: AppColors.textMuted,
-                  fontSize: 13,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-              ),
-              onSubmitted: (_) => _onLookup(),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSubtle,
-              borderRadius: BorderRadius.circular(AppRadius.sm),
-              border: Border.all(color: AppColors.borderSubtle),
-            ),
-            child: Text(
-              '[ENTER]',
-              style: AppTypography.monospace.copyWith(
-                fontSize: 10,
-                color: AppColors.textMuted,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          OutlinedButton(
-            onPressed: () => _onFilter('unpaid'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              minimumSize: const Size(0, 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-            ),
-            child: const Text(
-              'Load All Unpaid',
-              style: TextStyle(fontSize: 13),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          OutlinedButton(
-            onPressed: () => _onFilter('paid'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              minimumSize: const Size(0, 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.md),
-              ),
-            ),
-            child: const Text('Load All Paid', style: TextStyle(fontSize: 13)),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          OutlinedButton.icon(
-            onPressed: () async {
-              final notifier = ref.read(feeCollectionProvider.notifier);
-              final buildData = await notifier.buildDefaulterList();
-              final meta = ref.read(shellMetadataProvider).value;
-              final branchName =
-                  (meta?.branchName != null &&
-                      meta!.branchName.trim().isNotEmpty)
-                  ? meta.branchName.trim()
-                  : '-';
-              final branchAddress =
-                  (meta?.branchAddress != null &&
-                      meta!.branchAddress.trim().isNotEmpty)
-                  ? meta.branchAddress.trim()
-                  : '-';
-              final branchPhone = meta?.branchPhone ?? '03334449993';
-              final branchPrincipal = meta?.branchPrincipal ?? '-';
+  /// Shot 1e: fixed 55/45 workspace only on wide AND tall desktop viewports
+  /// (>= 1000px wide, >= 820px tall). Below either threshold the whole page
+  /// scrolls as a single surface — no inner scroll-lock anywhere.
+  bool _fixedWorkspace(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    return size.width >= 1000 && size.height >= 820;
+  }
 
-              if (!mounted) return;
-              await ReportPreviewModal.show(
-                context,
-                request: ReportRequest(
-                  type: ReportType.defaulterList,
-                  vouchers: buildData.groups,
-                  extraParams: {
-                    'summary': buildData.summary,
-                    'branchName': branchName,
-                    'branchAddress': branchAddress,
-                    'branchPhone': branchPhone,
-                    'branchPrincipal': branchPrincipal,
-                  },
+  Widget _buildSearchBar(FeeCollectionState state) {
+    // Shot 1e: the scan field gets the institutional 1.5px #94A3B8 resting /
+    // 2.0px #2563EB focused border (focus-driven via the lookup FocusNode).
+    return AnimatedBuilder(
+      animation: _lookupFocusNode,
+      builder: (innerContext, _) {
+        final focused = _lookupFocusNode.hasFocus;
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(AppRadius.lg),
+            border: Border.all(
+              color: focused
+                  ? const Color(0xFF2563EB)
+                  : const Color(0xFF94A3B8),
+              width: focused ? 2.0 : 1.5,
+            ),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A000000),
+                blurRadius: 4,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.qr_code_scanner_outlined,
+                color: AppColors.textMuted,
+                size: 22,
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: TextField(
+                  controller: _lookupController,
+                  focusNode: _lookupFocusNode,
+                  style: AppTypography.monospace.copyWith(fontSize: 14),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    hintText: 'Scan barcode or enter Voucher ID / Reg ID (e.g. 1710-4411)',
+                    hintStyle: AppTypography.monospace.copyWith(
+                      color: AppColors.textMuted,
+                      fontSize: 13,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onSubmitted: (_) => _onLookup(),
                 ),
-                headerControls: DefaulterFilterControls(
-                  initialClassId: null,
-                  initialMonth: null,
-                  onFiltersChanged: ({int? classId, String? month}) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Close preview and change filters on the screen to update the PDF.',
-                        ),
-                      ),
-                    );
-                  },
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceSubtle,
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
+                  border: Border.all(color: AppColors.borderSubtle),
                 ),
-              );
-            },
-            icon: const Icon(
-              Icons.assignment_late_outlined,
-              size: 16,
-              color: AppColors.statusErrorText,
-            ),
-            label: const Text(
-              'Defaulter Report',
-              style: TextStyle(fontSize: 13, color: AppColors.statusErrorText),
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              minimumSize: const Size(0, 40),
-              side: const BorderSide(color: AppColors.statusErrorBorder),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.md),
+                child: Text(
+                  '[ENTER]',
+                  style: AppTypography.monospace.copyWith(
+                    fontSize: 10,
+                    color: AppColors.textMuted,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          OutlinedButton.icon(
-            onPressed: () => context.go('/fees/ledger'),
-            icon: const Icon(Icons.assessment_outlined, size: 16),
-            label: const Text(
-              'View Full Ledger',
-              style: TextStyle(fontSize: 13),
-            ),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              minimumSize: const Size(0, 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.md),
+              const SizedBox(width: AppSpacing.sm),
+              OutlinedButton(
+                onPressed: () => _onFilter('unpaid'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+                child: const Text(
+                  'Load All Unpaid',
+                  style: TextStyle(fontSize: 13),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          ElevatedButton.icon(
-            onPressed: state.isLoadingLookup ? null : _onLookup,
-            icon: state.isLoadingLookup
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.search, size: 16),
-            label: const Text('Load Voucher', style: TextStyle(fontSize: 13)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandPrimary,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(0, 40),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.md),
+              const SizedBox(width: AppSpacing.xs),
+              OutlinedButton(
+                onPressed: () => _onFilter('paid'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+                child: const Text(
+                  'Load All Paid',
+                  style: TextStyle(fontSize: 13),
+                ),
               ),
-            ),
+              const SizedBox(width: AppSpacing.xs),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final notifier = ref.read(feeCollectionProvider.notifier);
+                  final buildData = await notifier.buildDefaulterList();
+                  final meta = ref.read(shellMetadataProvider).value;
+                  final branchName =
+                      (meta?.branchName != null &&
+                          meta!.branchName.trim().isNotEmpty)
+                      ? meta.branchName.trim()
+                      : '-';
+                  final branchAddress =
+                      (meta?.branchAddress != null &&
+                          meta!.branchAddress.trim().isNotEmpty)
+                      ? meta.branchAddress.trim()
+                      : '-';
+                  final branchPhone = meta?.branchPhone ?? '03334449993';
+                  final branchPrincipal = meta?.branchPrincipal ?? '-';
+
+                  if (!mounted) return;
+                  await ReportPreviewModal.show(
+                    context,
+                    request: ReportRequest(
+                      type: ReportType.defaulterList,
+                      vouchers: buildData.groups,
+                      extraParams: {
+                        'summary': buildData.summary,
+                        'branchName': branchName,
+                        'branchAddress': branchAddress,
+                        'branchPhone': branchPhone,
+                        'branchPrincipal': branchPrincipal,
+                      },
+                    ),
+                    headerControls: DefaulterFilterControls(
+                      initialClassId: null,
+                      initialMonth: null,
+                      onFiltersChanged: ({int? classId, String? month}) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Close preview and change filters on the screen to update the PDF.',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.assignment_late_outlined,
+                  size: 16,
+                  color: AppColors.statusErrorText,
+                ),
+                label: const Text(
+                  'Defaulter Report',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppColors.statusErrorText,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 40),
+                  side: const BorderSide(color: AppColors.statusErrorBorder),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.xs),
+              OutlinedButton.icon(
+                onPressed: () => context.go('/fees/ledger'),
+                icon: const Icon(Icons.assessment_outlined, size: 16),
+                label: const Text(
+                  'View Full Ledger',
+                  style: TextStyle(fontSize: 13),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  minimumSize: const Size(0, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              ElevatedButton.icon(
+                onPressed: state.isLoadingLookup ? null : _onLookup,
+                icon: state.isLoadingLookup
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.search, size: 16),
+                label: const Text(
+                  'Load Voucher',
+                  style: TextStyle(fontSize: 13),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brandPrimary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(0, 40),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -791,7 +862,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                         ),
                       // Directory mode: header + lazily virtualized voucher
                       // cards directly inside the page scroll view.
-                      if (receipt == null && state.directoryRows.isNotEmpty) ...[
+                      if (receipt == null &&
+                          state.directoryRows.isNotEmpty) ...[
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(
@@ -804,11 +876,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                           ),
                         ),
                         SliverPadding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
                           sliver: SliverList.builder(
-                            itemCount: _filteredMobileDirectoryRows(state).length,
+                            itemCount: _filteredMobileDirectoryRows(state)
+                                .length,
                             itemBuilder: (context, index) =>
                                 _buildMobileDirectoryCard(
                                   _filteredMobileDirectoryRows(state)[index],
@@ -1114,7 +1185,11 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.qr_code_scanner, size: 18, color: AppColors.accentFees),
+          const Icon(
+            Icons.qr_code_scanner,
+            size: 18,
+            color: AppColors.accentFees,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -1795,9 +1870,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Expanded(
-              child: Text('Net Payable', style: AppTypography.h3),
-            ),
+            const Expanded(child: Text('Net Payable', style: AppTypography.h3)),
             Text(
               'Rs. ${_currencyFormat.format(receipt.netPayable)}',
               style: AppTypography.monospace.copyWith(
@@ -1815,7 +1888,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Expanded(
-                child: Text('Amount Paid So Far', style: AppTypography.bodySmall),
+                child: Text(
+                  'Amount Paid So Far',
+                  style: AppTypography.bodySmall,
+                ),
               ),
               Text(
                 'Rs. ${_currencyFormat.format(receipt.paidAmount)}',
@@ -2087,8 +2163,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           data: (banks) {
             final currentBankId =
                 banks.any((b) => b.bankInfoId == state.selectedBankId)
-                    ? state.selectedBankId
-                    : (banks.isNotEmpty ? banks.first.bankInfoId : null);
+                ? state.selectedBankId
+                : (banks.isNotEmpty ? banks.first.bankInfoId : null);
             return DropdownButtonFormField<int>(
               key: ValueKey(currentBankId),
               initialValue: currentBankId,
@@ -2324,16 +2400,34 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       return _buildDirectoryGrid(state, notifier);
     }
 
-    // View mode 2: Voucher dossier (receipt loaded)
+    // View mode 2: Voucher dossier (receipt loaded) — 38px Oxford Blue
+    // institutional band (Shot 1e) with the body scrolling inside the card.
     if (receipt != null) {
       return Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: AppColors.surfaceRaised,
           borderRadius: BorderRadius.circular(AppRadius.lg),
           border: Border.all(color: AppColors.borderDefault),
         ),
-        child: _buildReceiptDossier(receipt, state),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildVoucherDossierBand(),
+            if (_fixedWorkspace(context))
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: _buildReceiptDossier(receipt, state),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: _buildReceiptDossier(receipt, state),
+              ),
+          ],
+        ),
       );
     }
 
@@ -2365,6 +2459,42 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     );
   }
 
+  /// Shot 1e: 38px Oxford Blue header band for the voucher dossier card.
+  Widget _buildVoucherDossierBand() {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFEFF6FF),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF1E3A8A), width: 2.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.receipt_long_outlined,
+            size: 16,
+            color: Color(0xFF1E3A8A),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'VOUCHER DOSSIER',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.label.copyWith(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF0F172A),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDirectoryGrid(
     FeeCollectionState state,
     FeeCollectionNotifier notifier,
@@ -2379,6 +2509,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     final filterLabel = state.activeDirectoryFilter == 'paid'
         ? 'Paid'
         : 'Unpaid';
+    final fixed = _fixedWorkspace(context);
 
     return Container(
       decoration: BoxDecoration(
@@ -2453,122 +2584,136 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             ),
           ),
           const Divider(height: 1),
-          // Row list
-          Expanded(
-            child: filtered.isEmpty
-                ? Center(
-                    child: Text(
-                      state.activeDirectoryFilter == 'paid'
-                          ? 'No Paid Vouchar' // Verbatim [Sic]
-                          : 'No unpaid vouchers found',
-                      style: AppTypography.body.copyWith(
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    itemExtent: 40,
-                    itemCount: filtered.length,
-                    itemBuilder: (ctx, i) {
-                      final r = filtered[i];
-                      return InkWell(
-                        onTap: () =>
-                            notifier.selectFromDirectory(r.voucherMasId),
-                        child: Container(
-                          color: i.isEven
-                              ? AppColors.surfaceRaised
-                              : AppColors.surface,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.sm,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  r.voucherMasId,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.monospace.copyWith(
-                                    fontSize: 11,
-                                    color: AppColors.brandPrimary,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 1,
-                                child: Text(
-                                  '${r.stuRegId}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.monospace.copyWith(
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  r.studentName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.body.copyWith(
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  r.classSecDisplay,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.body.copyWith(
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  r.forMonth,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.body.copyWith(
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Align(
-                                  alignment: Alignment.centerRight,
-                                  child: Text(
-                                    _currencyFormat.format(r.netPayable),
-                                    maxLines: 1,
-                                    style: AppTypography.monospace.copyWith(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 80,
-                                child: Center(
-                                  child: _buildSmallStatusBadge(r.statusLabel),
-                                ),
-                              ),
-                            ],
-                          ),
+          // Row list — Expanded inside the fixed workspace; natural height
+          // (page scroll) on short viewports (Shot 1e).
+          if (fixed)
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Text(
+                        state.activeDirectoryFilter == 'paid'
+                            ? 'No Paid Vouchar' // Verbatim [Sic]
+                            : 'No unpaid vouchers found',
+                        style: AppTypography.body.copyWith(
+                          color: AppColors.textMuted,
                         ),
-                      );
-                    },
+                      ),
+                    )
+                  : _dirRowList(filtered, notifier),
+            )
+          else if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Center(
+                child: Text(
+                  state.activeDirectoryFilter == 'paid'
+                      ? 'No Paid Vouchar' // Verbatim [Sic]
+                      : 'No unpaid vouchers found',
+                  style: AppTypography.body.copyWith(
+                    color: AppColors.textMuted,
                   ),
-          ),
+                ),
+              ),
+            )
+          else
+            _dirRowList(filtered, notifier),
         ],
       ),
+    );
+  }
+
+  /// Shot 1e: directory rows sized naturally when the page scrolls as a
+  /// single surface (short viewports).
+  Widget _dirRowList(
+    List<FeeReceiptSummaryRow> filtered,
+    FeeCollectionNotifier notifier,
+  ) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemExtent: 40,
+      itemCount: filtered.length,
+      itemBuilder: (ctx, i) {
+        final r = filtered[i];
+        return InkWell(
+          onTap: () => notifier.selectFromDirectory(r.voucherMasId),
+          child: Container(
+            color: i.isEven ? AppColors.surfaceRaised : AppColors.surface,
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    r.voucherMasId,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.monospace.copyWith(
+                      fontSize: 11,
+                      color: AppColors.brandPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Text(
+                    '${r.stuRegId}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.monospace.copyWith(fontSize: 11),
+                  ),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    r.studentName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body.copyWith(fontSize: 12),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    r.classSecDisplay,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body.copyWith(fontSize: 12),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    r.forMonth,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body.copyWith(fontSize: 12),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      _currencyFormat.format(r.netPayable),
+                      maxLines: 1,
+                      style: AppTypography.monospace.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 80,
+                  child: Center(child: _buildSmallStatusBadge(r.statusLabel)),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -2894,8 +3039,13 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
 
         const SizedBox(height: AppSpacing.md),
 
-        // Line items table (scrollable inside Expanded)
-        Expanded(child: _buildLineItemsTable(receipt.lineItems)),
+        // Line items table — sized naturally on desktop (Shot 1e removes
+        // the 180px dead void below short fee-head lists); scrollable inside
+        // Expanded only on the mobile stacked layout.
+        if (ResponsiveBreakpoints.isMobile(context))
+          Expanded(child: _buildLineItemsTable(receipt.lineItems))
+        else
+          _buildLineItemsTable(receipt.lineItems),
 
         const SizedBox(height: AppSpacing.sm),
         const Divider(height: 1, color: AppColors.borderDefault),
@@ -3140,67 +3290,71 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           ),
           const Divider(height: 1, color: AppColors.borderDefault),
 
-          // Scrollable item rows
-          Expanded(
-            child: ListView.builder(
-              itemExtent: 32,
-              itemCount: lineItems.length,
-              itemBuilder: (context, index) {
-                final item = lineItems[index];
-                return Container(
-                  color: index.isEven
-                      ? AppColors.surfaceRaised
-                      : AppColors.surface,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 1,
-                        child: Text(
-                          '#${item.feeParamId}',
-                          style: AppTypography.monospace.copyWith(fontSize: 12),
+          // Shot 1e: size the fee-head rows naturally on desktop so
+          // SubTotal / Net Payable / installment history sit directly below
+          // them (kills the dead void under short lists).
+          ListView.builder(
+            shrinkWrap: !ResponsiveBreakpoints.isMobile(context),
+            physics: ResponsiveBreakpoints.isMobile(context)
+                ? null
+                : const NeverScrollableScrollPhysics(),
+            itemExtent: 32,
+            itemCount: lineItems.length,
+            itemBuilder: (context, index) {
+              final item = lineItems[index];
+              return Container(
+                color: index.isEven
+                    ? AppColors.surfaceRaised
+                    : AppColors.surface,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 1,
+                      child: Text(
+                        '#${item.feeParamId}',
+                        style: AppTypography.monospace.copyWith(fontSize: 12),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 4,
+                      child: Text(
+                        item.headName, // Preserve 'Arears' typo verbatim
+                        style: AppTypography.bodySmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        _currencyFormat.format(item.amount),
+                        textAlign: TextAlign.right,
+                        style: AppTypography.monospace.copyWith(fontSize: 12),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        _currencyFormat.format(item.discount),
+                        textAlign: TextAlign.right,
+                        style: AppTypography.monospace.copyWith(fontSize: 12),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        _currencyFormat.format(item.net),
+                        textAlign: TextAlign.right,
+                        style: AppTypography.monospace.copyWith(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Expanded(
-                        flex: 4,
-                        child: Text(
-                          item.headName, // Preserve 'Arears' typo verbatim
-                          style: AppTypography.bodySmall,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          _currencyFormat.format(item.amount),
-                          textAlign: TextAlign.right,
-                          style: AppTypography.monospace.copyWith(fontSize: 12),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          _currencyFormat.format(item.discount),
-                          textAlign: TextAlign.right,
-                          style: AppTypography.monospace.copyWith(fontSize: 12),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          _currencyFormat.format(item.net),
-                          textAlign: TextAlign.right,
-                          style: AppTypography.monospace.copyWith(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ],
       ),
@@ -3362,13 +3516,14 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     FeeCollectionState state,
     AsyncValue<List<BankRow>> bankListAsync,
   ) {
+    final fixed = _fixedWorkspace(context);
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
         borderRadius: BorderRadius.circular(AppRadius.lg),
         border: Border.all(color: AppColors.borderDefault),
       ),
+      clipBehavior: Clip.antiAlias,
       child: receipt == null
           ? Center(
               child: Column(
@@ -3392,16 +3547,48 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: SingleChildScrollView(
+                // Shot 1e: 38px Forest Emerald institutional band.
+                _buildSettlementBand(),
+                if (fixed)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            receipt.isFullyPaid
+                                ? 'Voucher settled. Payment inputs are locked.'
+                                : 'Record teller collection and deposit account',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+
+                          // Form for Unpaid / Overdue voucher
+                          if (!receipt.isFullyPaid) ...[
+                            _buildUnpaidPaymentForm(
+                              receipt,
+                              state,
+                              bankListAsync,
+                            ),
+                          ],
+
+                          // Summary & Revoke for Paid voucher
+                          if (receipt.isFullyPaid) ...[
+                            _buildPaidSummary(receipt),
+                          ],
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text(
-                          'Payment Settlement',
-                          style: AppTypography.h2,
-                        ),
-                        const SizedBox(height: 2),
                         Text(
                           receipt.isFullyPaid
                               ? 'Voucher settled. Payment inputs are locked.'
@@ -3428,9 +3615,57 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                       ],
                     ),
                   ),
-                ),
               ],
             ),
+    );
+  }
+
+  /// Shot 1e: 38px Forest Emerald header band with the numbered settlement
+  /// badge for the Payment Terminal card.
+  Widget _buildSettlementBand() {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFECFDF5),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFF047857), width: 2.5),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 24,
+            height: 24,
+            decoration: const BoxDecoration(
+              color: Color(0xFF047857),
+              shape: BoxShape.circle,
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '2',
+              style: AppTypography.label.copyWith(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Payment Settlement',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.label.copyWith(
+                fontSize: 13.5,
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFF064E3B),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3446,6 +3681,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       0,
       effectivePayable,
     );
+    final fixed = _fixedWorkspace(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3517,103 +3753,23 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           const SizedBox(height: AppSpacing.md),
         ],
 
-        // 1. Payment Date selector
-        Text(
-          'Payment Date *',
-          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 4),
-        InkWell(
-          onTap: () async {
-            final now = ref.read(clockProvider)();
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: state.paymentDate ?? now,
-              firstDate: DateTime(2000),
-              lastDate: DateTime(2100),
-            );
-            if (picked != null) {
-              ref.read(feeCollectionProvider.notifier).setPaymentDate(picked);
-            }
-          },
-          child: Container(
-            height: 40,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.borderDefault),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.calendar_today,
-                  size: 16,
-                  color: AppColors.textMuted,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  _dateFormat.format(
-                    state.paymentDate ?? ref.read(clockProvider)(),
-                  ),
-                  style: AppTypography.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-
-        // 2. Receiving Bank Dropdown
-        Text(
-          'Receiving Bank *',
-          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 4),
-        bankListAsync.when(
-          data: (banks) {
-            final currentBankId =
-                banks.any((b) => b.bankInfoId == state.selectedBankId)
-                ? state.selectedBankId
-                : (banks.isNotEmpty ? banks.first.bankInfoId : null);
-            return DropdownButtonFormField<int>(
-              key: ValueKey(currentBankId),
-              initialValue: currentBankId,
-              isExpanded: true,
-              decoration: InputDecoration(
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppRadius.md),
-                ),
-                prefixIcon: const Icon(Icons.account_balance, size: 18),
-              ),
-              items: banks.map((b) {
-                return DropdownMenuItem<int>(
-                  value: b.bankInfoId,
-                  child: Text(
-                    b.displayName,
-                    style: const TextStyle(fontSize: 13),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                );
-              }).toList(),
-              onChanged: (val) {
-                if (val != null) {
-                  ref.read(feeCollectionProvider.notifier).setBankId(val);
-                }
-              },
-            );
-          },
-          loading: () => const SizedBox(
-            height: 40,
-            child: LinearProgressIndicator(value: 0.5),
-          ),
-          error: (_, __) => const Text('Error loading banks'),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+        // 1 + 2. Payment Date & Receiving Bank — side-by-side on desktop
+        // (Shot 1e), stacked on tablet/mobile.
+        if (fixed)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _buildPaymentDateSelector(state)),
+              const SizedBox(width: 12),
+              Expanded(child: _buildBankSelector(state, bankListAsync)),
+            ],
+          )
+        else ...[
+          _buildPaymentDateSelector(state),
+          const SizedBox(height: AppSpacing.sm),
+          _buildBankSelector(state, bankListAsync),
+          const SizedBox(height: AppSpacing.sm),
+        ],
 
         // 3. Payment Mode Segmented Buttons
         Text(
@@ -3666,132 +3822,44 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             );
           }).toList(),
         ),
-        const SizedBox(height: AppSpacing.sm),
+        SizedBox(height: fixed ? 10.0 : AppSpacing.sm),
 
-        // 4. Amount Tendered TextField
-        Text(
-          'Amount Tendered (Rs.) *',
-          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 4),
-        TextField(
-          controller: _amountController,
-          keyboardType: TextInputType.number,
-          style: AppTypography.monospace.copyWith(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-          decoration: InputDecoration(
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 10,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-            suffixText: 'PKR',
-          ),
-          onChanged: (val) {
-            final parsed = int.tryParse(val) ?? 0;
-            ref.read(feeCollectionProvider.notifier).setAmountTendered(parsed);
-          },
-        ),
-        const SizedBox(height: 4),
-        Text(
-          receipt.isPartiallyPaid
-              ? 'Pre-filled with remaining balance due: Rs. ${_currencyFormat.format(receipt.remainingBalance)}'
-              : 'Pre-filled with net payable${state.useAdvanceCredit ? " minus advance credit" : ""}',
-          style: AppTypography.bodySmall.copyWith(
-            color: AppColors.textMuted,
-            fontSize: 11,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-
-        // Settlement State callout
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: remainingBalance == 0
-                ? AppColors.statusSuccessBg
-                : AppColors.surfaceSubtle,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            border: Border.all(
-              color: remainingBalance == 0
-                  ? AppColors.statusSuccessBorder
-                  : AppColors.borderSubtle,
-            ),
-          ),
-          child: Row(
+        // 4. Amount Tendered + live balance badge — side-by-side on desktop.
+        if (fixed)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(
-                remainingBalance == 0
-                    ? Icons.check_circle_outline
-                    : Icons.info_outline,
-                size: 14,
-                color: remainingBalance == 0
-                    ? AppColors.statusSuccessText
-                    : AppColors.textSecondary,
+              Expanded(
+                flex: 3,
+                child: _buildAmountTenderedSection(receipt, state),
               ),
-              const SizedBox(width: 6),
-              Text(
-                'Balance After This Payment: Rs. ${_currencyFormat.format(remainingBalance)}',
-                style: AppTypography.bodySmall.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: remainingBalance == 0
-                      ? AppColors.statusSuccessText
-                      : AppColors.textSecondary,
-                ),
-              ),
+              const SizedBox(width: 10),
+              Expanded(flex: 2, child: _buildBalanceCallout(remainingBalance)),
             ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.sm),
+          )
+        else ...[
+          _buildAmountTenderedSection(receipt, state),
+          const SizedBox(height: AppSpacing.xs),
+          _buildBalanceCallout(remainingBalance),
+          const SizedBox(height: AppSpacing.sm),
+        ],
 
-        // 5. Remarks Field
-        Text(
-          'Remarks',
-          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
-        ),
-        const SizedBox(height: 4),
-        TextField(
-          controller: _remarksController,
-          maxLines: 2,
-          style: AppTypography.bodySmall,
-          decoration: InputDecoration(
-            isDense: true,
-            hintText: 'Teller settlement remarks or transaction note...',
-            contentPadding: const EdgeInsets.all(10),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(AppRadius.md),
-            ),
-          ),
-          onChanged: (val) {
-            ref.read(feeCollectionProvider.notifier).setRemarks(val);
-          },
-        ),
-        const SizedBox(height: AppSpacing.sm),
-
-        // 6. SMS Checkbox
-        Row(
-          children: [
-            Checkbox(
-              value: state.sendSms,
-              onChanged: (v) {
-                ref.read(feeCollectionProvider.notifier).toggleSms(v ?? true);
-              },
-            ),
-            const SizedBox(width: 4),
-            const Expanded(
-              child: Text(
-                'Send SMS payment confirmation',
-                style: AppTypography.bodySmall,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
+        // 5 + 6. Remarks with the SMS confirmation toggle inline on desktop.
+        if (fixed)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: _buildRemarksField()),
+              const SizedBox(width: 10),
+              SizedBox(width: 210, child: _buildSmsToggle(state)),
+            ],
+          )
+        else ...[
+          _buildRemarksField(),
+          const SizedBox(height: AppSpacing.sm),
+          _buildSmsToggle(state),
+          const SizedBox(height: AppSpacing.md),
+        ],
 
         // 7. Post Payment Button (Ctrl+Enter)
         ElevatedButton.icon(
@@ -3814,6 +3882,284 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Shot 1e: 1.5px #94A3B8 resting / 2.0px #2563EB focused input borders,
+  // scoped to this screen's fields (global InputDecorationTheme untouched).
+  static const Color _fcInputBorderRest = Color(0xFF94A3B8);
+  static const Color _fcInputBorderFocus = Color(0xFF2563EB);
+
+  OutlineInputBorder _fcOutlineBorder(Color color, double width) {
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide(color: color, width: width),
+    );
+  }
+
+  InputDecoration _fcFieldDecoration({
+    String? hintText,
+    TextStyle? hintStyle,
+    String? suffixText,
+    EdgeInsetsGeometry? contentPadding,
+  }) {
+    return InputDecoration(
+      isDense: true,
+      hintText: hintText,
+      hintStyle: hintStyle,
+      suffixText: suffixText,
+      contentPadding: contentPadding,
+      border: _fcOutlineBorder(_fcInputBorderRest, 1.5),
+      enabledBorder: _fcOutlineBorder(_fcInputBorderRest, 1.5),
+      focusedBorder: _fcOutlineBorder(_fcInputBorderFocus, 2.0),
+    );
+  }
+
+  /// 1. Payment Date selector (label + field).
+  Widget _buildPaymentDateSelector(FeeCollectionState state) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Payment Date *',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: () async {
+            final now = ref.read(clockProvider)();
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: state.paymentDate ?? now,
+              firstDate: DateTime(2000),
+              lastDate: DateTime(2100),
+            );
+            if (picked != null) {
+              ref.read(feeCollectionProvider.notifier).setPaymentDate(picked);
+            }
+          },
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppRadius.md),
+              border: Border.all(color: _fcInputBorderRest, width: 1.5),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.calendar_today,
+                  size: 16,
+                  color: AppColors.textMuted,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _dateFormat.format(
+                    state.paymentDate ?? ref.read(clockProvider)(),
+                  ),
+                  style: AppTypography.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 2. Receiving Bank dropdown (label + field).
+  Widget _buildBankSelector(
+    FeeCollectionState state,
+    AsyncValue<List<BankRow>> bankListAsync,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Receiving Bank *',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        bankListAsync.when(
+          data: (banks) {
+            final currentBankId =
+                banks.any((b) => b.bankInfoId == state.selectedBankId)
+                ? state.selectedBankId
+                : (banks.isNotEmpty ? banks.first.bankInfoId : null);
+            return DropdownButtonFormField<int>(
+              key: ValueKey(currentBankId),
+              initialValue: currentBankId,
+              isExpanded: true,
+              decoration:
+                  _fcFieldDecoration(
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                  ).copyWith(
+                    prefixIcon: const Icon(Icons.account_balance, size: 18),
+                  ),
+              items: banks.map((b) {
+                return DropdownMenuItem<int>(
+                  value: b.bankInfoId,
+                  child: Text(
+                    b.displayName,
+                    style: const TextStyle(fontSize: 13),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  ref.read(feeCollectionProvider.notifier).setBankId(val);
+                }
+              },
+            );
+          },
+          loading: () => const SizedBox(
+            height: 40,
+            child: LinearProgressIndicator(value: 0.5),
+          ),
+          error: (_, __) => const Text('Error loading banks'),
+        ),
+      ],
+    );
+  }
+
+  /// 4. Amount Tendered field (label + field + pre-fill hint).
+  Widget _buildAmountTenderedSection(
+    FeeReceiptView receipt,
+    FeeCollectionState state,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Amount Tendered (Rs.) *',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _amountController,
+          keyboardType: TextInputType.number,
+          style: AppTypography.monospace.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+          decoration: _fcFieldDecoration(
+            suffixText: 'PKR',
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+          ),
+          onChanged: (val) {
+            final parsed = int.tryParse(val) ?? 0;
+            ref.read(feeCollectionProvider.notifier).setAmountTendered(parsed);
+          },
+        ),
+        const SizedBox(height: 4),
+        Text(
+          receipt.isPartiallyPaid
+              ? 'Pre-filled with remaining balance due: Rs. ${_currencyFormat.format(receipt.remainingBalance)}'
+              : 'Pre-filled with net payable${state.useAdvanceCredit ? " minus advance credit" : ""}',
+          style: AppTypography.bodySmall.copyWith(
+            color: AppColors.textMuted,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Live settlement-state callout (also used inline beside the amount on
+  /// desktop).
+  Widget _buildBalanceCallout(int remainingBalance) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: remainingBalance == 0
+            ? AppColors.statusSuccessBg
+            : AppColors.surfaceSubtle,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(
+          color: remainingBalance == 0
+              ? AppColors.statusSuccessBorder
+              : AppColors.borderSubtle,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            remainingBalance == 0
+                ? Icons.check_circle_outline
+                : Icons.info_outline,
+            size: 14,
+            color: remainingBalance == 0
+                ? AppColors.statusSuccessText
+                : AppColors.textSecondary,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              'Balance After This Payment: Rs. ${_currencyFormat.format(remainingBalance)}',
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: FontWeight.w600,
+                color: remainingBalance == 0
+                    ? AppColors.statusSuccessText
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 5. Remarks field (label + field).
+  Widget _buildRemarksField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Remarks',
+          style: AppTypography.label.copyWith(color: AppColors.textSecondary),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _remarksController,
+          maxLines: 2,
+          style: AppTypography.bodySmall,
+          decoration: _fcFieldDecoration(
+            hintText: 'Teller settlement remarks or transaction note...',
+            contentPadding: const EdgeInsets.all(10),
+          ),
+          onChanged: (val) {
+            ref.read(feeCollectionProvider.notifier).setRemarks(val);
+          },
+        ),
+      ],
+    );
+  }
+
+  /// 6. SMS confirmation toggle.
+  Widget _buildSmsToggle(FeeCollectionState state) {
+    return Row(
+      children: [
+        Checkbox(
+          value: state.sendSms,
+          onChanged: (v) {
+            ref.read(feeCollectionProvider.notifier).toggleSms(v ?? true);
+          },
+        ),
+        const SizedBox(width: 4),
+        const Expanded(
+          child: Text(
+            'Send SMS payment confirmation',
+            style: AppTypography.bodySmall,
           ),
         ),
       ],
