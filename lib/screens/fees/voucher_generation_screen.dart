@@ -57,6 +57,11 @@ class _VoucherGenerationScreenState
   // Late Fine checkbox is re-checked.
   int? _lastNonZeroLateFine;
 
+  /// Shot 6j: true only while the initState post-frame callback applies the
+  /// open-time 'All Classes' default, so the filter-change listener does not
+  /// mistake it for a user cohort edit and dismiss the completion summary.
+  bool _applyingOpenDefault = false;
+
   // Layout constants for the preview table.
   static const double _kIdColWidth = 82;
   static const double _kStatusColWidth = 112;
@@ -75,6 +80,17 @@ class _VoucherGenerationScreenState
     // loaded — skip the sync rather than triggering a DB query that leaves a timer pending.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+
+      // 0. Shot 6j: opening the screen in batch mode defaults the cohort
+      // filter to 'All Classes' (classId == null) so every eligible student
+      // across the school shows immediately. Single-student deep-links
+      // (Student Profile '+ Generate Single Voucher') keep their payload.
+      final openFilters = ref.read(voucherGenFiltersProvider);
+      if (openFilters.mode == 'batch' && openFilters.classId != null) {
+        _applyingOpenDefault = true;
+        ref.read(voucherGenFiltersProvider.notifier).setClassId(null);
+        _applyingOpenDefault = false;
+      }
 
       // 1. Session year
       final metaAsync = ref.read(shellMetadataProvider);
@@ -595,7 +611,10 @@ class _VoucherGenerationScreenState
       }
     });
 
-    // Filter change listener: dismiss completion summary when cohort/filter changes
+    // Filter change listener: dismiss completion summary when cohort/filter
+    // changes. The Shot 6j open-time default (All Classes) is applied by the
+    // initState post-frame callback below and is NOT a user edit, so it must
+    // not dismiss an already-visible completion summary.
     ref.listen<VoucherGenFilters>(voucherGenFiltersProvider, (prev, next) {
       if (prev == null) return;
       if (prev.classId != next.classId ||
@@ -604,6 +623,7 @@ class _VoucherGenerationScreenState
           prev.sessionYr != next.sessionYr ||
           prev.mode != next.mode ||
           prev.selectedStuRegId != next.selectedStuRegId) {
+        if (_applyingOpenDefault) return;
         if (ref.read(voucherGenExecutionProvider).completionSummary != null) {
           ref.read(voucherGenExecutionProvider.notifier).clearSummary();
         }
@@ -3809,10 +3829,17 @@ class _VoucherGenerationScreenState
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Batch Generation Parameters',
-                      style: AppTypography.h3.copyWith(
-                        color: AppColors.textPrimary,
+                    Expanded(
+                      // Shot 6j: ellipsize on narrow phones — the sheet now
+                      // auto-opens on the compact tier (All Classes default)
+                      // and the unbounded H3 title overflowed a 360w screen.
+                      child: Text(
+                        'Batch Generation Parameters',
+                        style: AppTypography.h3.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(

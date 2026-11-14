@@ -1763,6 +1763,19 @@ class ThreeCopyVouchersPdf {
         .where((li) => li.headName.toLowerCase().contains('arrear'))
         .fold<int>(0, (sum, item) => sum + item.amount);
 
+    // Shot 6j: arrears already appears as its own '+ Arrears / Prior Balance'
+    // row in the financial summary, so it must NOT also be listed inside the
+    // Fee Particulars table (the user photo showed it printed twice).
+    // Gross Total therefore excludes the arrears line item so the printed
+    // math stays exact: Gross (excl. arrears) - Concession + Arrears = Net.
+    final hasArrearsSummaryRow = arrearsAmount > 0;
+    final particularsItems = hasArrearsSummaryRow
+        ? v.lineItems
+              .where((li) => !li.headName.toLowerCase().contains('arrear'))
+              .toList()
+        : v.lineItems;
+    final grossTotal = v.subtotal - (hasArrearsSummaryRow ? arrearsAmount : 0);
+
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 6),
       decoration: pw.BoxDecoration(
@@ -2123,7 +2136,7 @@ class ThreeCopyVouchersPdf {
                   ),
                 ],
               ),
-              ...v.lineItems.asMap().entries.map((entry) {
+              ...particularsItems.asMap().entries.map((entry) {
                 final idx = entry.key;
                 final li = entry.value;
                 final isEven = idx % 2 == 0;
@@ -2180,7 +2193,7 @@ class ThreeCopyVouchersPdf {
                       style: const pw.TextStyle(fontSize: 7.5),
                     ),
                     pw.Text(
-                      'Rs. ${ReportTheme.formatCurrency(v.subtotal)}',
+                      'Rs. ${ReportTheme.formatCurrency(grossTotal)}',
                       style: const pw.TextStyle(fontSize: 7.5),
                     ),
                   ],

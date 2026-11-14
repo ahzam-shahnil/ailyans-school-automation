@@ -525,6 +525,15 @@ void main() {
 
         await tester.pumpAndSettle();
 
+        // Shot 6j: the filters provider now defaults to 'All Classes'
+        // (classId == null). This test exercises the per-class confirm
+        // dialog, so select Class 10 explicitly.
+        final element =
+            tester.element(find.byType(VoucherGenerationScreen))
+                as ConsumerStatefulElement;
+        element.read(voucherGenFiltersProvider.notifier).setClassId(13);
+        await tester.pumpAndSettle();
+
         // 1. Click Generate in VoucherActionBar
         final generateBtn = find.widgetWithText(ElevatedButton, 'Generate');
         expect(generateBtn, findsOneWidget);
@@ -1248,6 +1257,14 @@ void main() {
         await File('$outDir/vouchers-generated-compact.png')
             .writeAsBytes(buffer);
       });
+
+      // Shot 6j: the filters provider now defaults to 'All Classes'
+      // (classId == null). This test exercises the per-class regenerate
+      // dialog, so select Class 10 explicitly.
+      final element = tester.element(find.byType(VoucherGenerationScreen))
+          as ConsumerStatefulElement;
+      element.read(voucherGenFiltersProvider.notifier).setClassId(13);
+      await tester.pumpAndSettle();
 
       // Verify post-generation KPI text is rendered
       expect(find.text('Cohort Total Billed'), findsOneWidget);

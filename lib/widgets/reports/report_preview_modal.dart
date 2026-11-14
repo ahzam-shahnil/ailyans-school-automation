@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:school_automation/core/providers/report_preview_provider.dart';
 import 'package:school_automation/core/sync/sync_provider.dart';
@@ -45,6 +46,26 @@ class ReportPreviewModal extends ConsumerStatefulWidget {
 
 class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   final FocusNode _focusNode = FocusNode();
+
+  // Shot 6j: cached PDF preview source. `PdfPreview` re-runs its internal
+  // rendering whenever its `build` callback changes identity, so we cache
+  // both the latest bytes and a per-bytes closure in State. Unrelated
+  // rebuilds (parent or provider ticks) reuse the same closure; only a real
+  // byte change (user-driven refresh / mode toggle) produces a new one.
+  Uint8List? _previewBytes;
+  Future<Uint8List> Function(PdfPageFormat)? _pdfPreviewBuilder;
+
+  void _syncPdfPreviewBuilder(Uint8List? bytes) {
+    if (bytes == null) {
+      _previewBytes = null;
+      _pdfPreviewBuilder = null;
+      return;
+    }
+    if (!identical(bytes, _previewBytes)) {
+      _previewBytes = bytes;
+      _pdfPreviewBuilder = (_) async => bytes;
+    }
+  }
 
   // Local mode selection — only used when request.type == feeVoucher.
   // 0 = Three-Copy Slips, 1 = Cohort Ledger.
@@ -143,14 +164,11 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   Widget build(BuildContext context) {
     final state = ref.watch(reportPreviewProvider(widget.request));
 
-    // Live refresh: if a background cloud sync pull completes while this
-    // preview is open (dbDataVersionProvider bumped), regenerate the report
-    // in-place with the fresh local SQLite data.
-    ref.listen<int>(dbDataVersionProvider, (prev, next) {
-      if (prev != next && !state.isLoading) {
-        ref.read(reportPreviewProvider(widget.request).notifier).generate();
-      }
-    });
+    // Shot 6j: background sync pulls (dbDataVersionProvider bumps) and parent
+    // provider rebuilds must NOT regenerate the open preview — the modal
+    // keeps showing the snapshot it was opened with. Regeneration happens
+    // only when the user explicitly taps the toolbar's Refresh Data button
+    // (_onRefreshData) or the voucher mode toggle.
 
     final shortcuts = <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.escape): _handleClose,
@@ -548,10 +566,15 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     }
 
     // PDF preview
+    _syncPdfPreviewBuilder(state.bytes);
+    final pdfPreviewBuilder = _pdfPreviewBuilder;
+    if (pdfPreviewBuilder == null) {
+      return Container(color: canvasColor);
+    }
     return Container(
       color: canvasColor,
       child: PdfPreview(
-        build: (_) async => state.bytes!,
+        build: pdfPreviewBuilder,
         allowPrinting: false,
         allowSharing: false,
         canChangeOrientation: false,
