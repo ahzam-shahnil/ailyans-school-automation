@@ -154,7 +154,12 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
       final rows = await db.rawQuery('''
         SELECT sr.Stu_RegID, sr.NameFirst, sr.NameMiddle, sr.NameLast, sr.F_Name, sr.DOAdmission,
                sc.ClassID, sc.ClassSecID, sc.SessionYr, sc.Present,
-               COALESCE(c.CName, (SELECT c2.CName FROM Student_Class sc2 JOIN Class c2 ON c2.ClassID = sc2.ClassID WHERE sc2.Stu_RegID = sr.Stu_RegID AND c2.CName IS NOT NULL ORDER BY sc2.Present DESC, sc2.SessionYr DESC LIMIT 1)) AS CName,
+               COALESCE(sl.LeftClass, sc.ClassID) AS EffectiveClassID,
+               COALESCE(
+                 cLeft.CName,
+                 c.CName,
+                 (SELECT c2.CName FROM Student_Class sc2 JOIN Class c2 ON c2.ClassID = sc2.ClassID WHERE sc2.Stu_RegID = sr.Stu_RegID AND c2.CName IS NOT NULL ORDER BY sc2.Present DESC, sc2.SessionYr DESC LIMIT 1)
+               ) AS CName,
                cs.SecName,
                sl.SLID, sl.LeftDate, sl.Charactor, sl.TermOfLeavign, sl.Remarks AS slRemarks
         FROM Stu_Reg sr
@@ -162,6 +167,7 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
         LEFT JOIN Class c ON c.ClassID = sc.ClassID
         LEFT JOIN ClassSec cs ON cs.ClassSecID = sc.ClassSecID
         LEFT JOIN SchLeaving sl ON sl.StuRegID = sr.Stu_RegID
+        LEFT JOIN Class cLeft ON cLeft.ClassID = sl.LeftClass
         ORDER BY sr.Stu_RegID ASC, sc.Present DESC, sc.SessionYr DESC
         ''');
 
@@ -189,7 +195,7 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
               regId,
             ),
             sectionName: (r['SecName'] as String?)?.trim(),
-            classId: (r['ClassID'] as num?)?.toInt(),
+            classId: (r['EffectiveClassID'] as num?)?.toInt(),
             classSecId: (r['ClassSecID'] as num?)?.toInt(),
             sessionYr: (r['SessionYr'] as String?)?.trim(),
             admissionDate: (r['DOAdmission'] as String?)?.trim(),
@@ -372,7 +378,26 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
       final classId = state.selectedStudent?.stuRegId == stuRegId
           ? state.selectedStudent?.classId
           : null;
-      if (classId != null) {
+
+      // Shot 3h: SchLeaving.LeftClass is the source of truth for any student
+      // with an existing SLC record — read it first, before the enrollment
+      // (Student_Class) and remarks fallbacks.
+      final slcLeftRows = await db.rawQuery(
+        '''
+        SELECT cLeft.CName AS leftCName
+        FROM SchLeaving sl
+        LEFT JOIN Class cLeft ON cLeft.ClassID = sl.LeftClass
+        WHERE sl.StuRegID = ?
+        LIMIT 1
+        ''',
+        [stuRegId],
+      );
+      if (slcLeftRows.isNotEmpty) {
+        final slcLeft = (slcLeftRows.first['leftCName'] as String?)?.trim() ?? '';
+        if (slcLeft.isNotEmpty) leftClassName = slcLeft;
+      }
+
+      if (leftClassName.isEmpty && classId != null) {
         final leftRows = await db.rawQuery(
           'SELECT CName FROM Class WHERE ClassID = ? LIMIT 1',
           [classId],
@@ -611,11 +636,13 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
         );
       }
 
-      // 2. Class at Leaving -> the student's most recent Student_Class row.
-      int? leavingClassId;
+      // 2. Class at Leaving -> resolve to a ClassID. Shot 3h: persist it to
+      // SchLeaving.LeftClass (the source of truth for alumni) and also onto
+      // the student's most recent Student_Class row.
+      int? resolvedLeftClassId;
       if (leaving.isNotEmpty) {
-        leavingClassId = await _lookupClassId(db, leaving);
-        if (leavingClassId != null) {
+        resolvedLeftClassId = await _lookupClassId(db, leaving);
+        if (resolvedLeftClassId != null) {
           await db.rawUpdate(
             '''
             UPDATE Student_Class
@@ -627,12 +654,14 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
               LIMIT 1
             )
             ''',
-            [leavingClassId, stuRegId],
+            [resolvedLeftClassId, stuRegId],
           );
         }
       }
 
-      // 3. Leaving fields onto the existing SchLeaving row (if any).
+      // 3. Leaving fields onto the existing SchLeaving row (if any). Shot 3h:
+      // the edited Class at Leaving persists permanently in
+      // SchLeaving.LeftClass.
       await db.update(
         'SchLeaving',
         {
@@ -642,6 +671,7 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
               : state.conduct!.trim(),
           'TermOfLeavign': (state.reason ?? '').trim(),
           'Remarks': state.remarks.trim().isEmpty ? null : state.remarks.trim(),
+          if (resolvedLeftClassId != null) 'LeftClass': resolvedLeftClassId,
         },
         where: 'StuRegID = ?',
         whereArgs: [stuRegId],
@@ -681,7 +711,7 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
           state = state.copyWith(
             selectedStudent: () => selected.copyWith(
               className: leaving,
-              classId: leavingClassId ?? selected.classId,
+              classId: resolvedLeftClassId ?? selected.classId,
             ),
           );
         }

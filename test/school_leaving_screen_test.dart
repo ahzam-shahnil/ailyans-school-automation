@@ -413,6 +413,55 @@ void main() {
       expect(selected.selectedStudent!.className, 'Eight');
       expect(selected.certificateFields['leftClass'], 'Eight');
     });
+
+    test('s) SchLeaving.LeftClass is the class source of truth for alumni and is persisted by updateSlcRecord', () async {
+      // Alumni 4415: a STALE Student_Class row points at 'Class 8' (ClassID 11)
+      // while the SchLeaving row records the true leaving class 'Class 7'
+      // (ClassID 10, named 'Seven' in the production DB). SchLeaving.LeftClass
+      // must win.
+      await db.rawInsert('''
+        INSERT INTO SchLeaving (SLID, StuRegID, LeftDate, LeftClass, Charactor, TermOfLeavign, SLCertificate, Remarks)
+        VALUES (105, 4415, '2018-05-31', 10, 'Good ', 'Completed Studies', 1, '')
+      ''');
+      await db.rawUpdate(
+        'UPDATE Student_Class SET ClassID = 11 WHERE Stu_RegID = 4415',
+      );
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(schoolLeavingProvider.notifier);
+      await notifier.loadInitialData();
+
+      final row = container
+          .read(schoolLeavingProvider)
+          .students
+          .firstWhere((s) => s.stuRegId == 4415);
+      expect(row.className, 'Class 7'); // from SchLeaving.LeftClass, NOT 'Class 8'
+      expect(row.classId, 10);
+
+      await notifier.selectStudent(4415);
+      expect(
+        container.read(schoolLeavingProvider).certificateFields['leftClass'],
+        'Class 7',
+      );
+
+      // Editing Class at Leaving persists into SchLeaving.LeftClass in SQLite.
+      final (ok, msg) = await notifier.updateSlcRecord(
+        stuRegId: 4415,
+        classAtLeaving: 'Class 9',
+      );
+      expect(ok, isTrue);
+      expect(msg, contains('SLC record updated'));
+
+      final sl = (await db.rawQuery(
+        'SELECT LeftClass FROM SchLeaving WHERE StuRegID = 4415',
+      )).first;
+      expect(sl['LeftClass'], 12); // 'Class 9'
+
+      final after = container.read(schoolLeavingProvider);
+      expect(after.selectedStudent!.className, 'Class 9');
+      expect(after.certificateFields['leftClass'], 'Class 9');
+    });
   });
 
   group('SchoolLeavingScreen UI & Widget Tests', () {
