@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -58,6 +59,12 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   // Shot 2b: students whose stale enrollment was already reconciled after
   // loading an existing SchLeaving record.
   final Set<int> _reconciledStuRegIds = <int>{};
+
+  // Shot 3i fix 6: the student whose certificateFields enrichment was last
+  // pushed into the controllers — a NEW selection always re-fills (the
+  // controllers were just cleared), the same student only re-fills when the
+  // enrichment CONTENT actually changed.
+  int? _lastEnrichedStuRegId;
 
   // Shot 3a: admin Edit SLC mode — unlocks the date/reason/conduct/remarks
   // fields on an existing SchLeaving record for in-place correction.
@@ -366,6 +373,23 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   /// clean dd-MMM-yyyy dates (DOB, address, admitted/leaving class and the
   /// dues-paid month arrive via the provider's certificateFields map).
   void _syncCertificateControllers(LeavingStudentRow student) {
+    // Shot 3i fix 5: clear ALL certificate controllers FIRST so nothing
+    // leaks over from the previously selected student; only then populate
+    // from the new student's data. Any field the new student's enrichment
+    // does not provide simply stays empty.
+    _studentNameController.clear();
+    _fatherNameController.clear();
+    _dobController.clear();
+    _addressController.clear();
+    _admissionDateController.clear();
+    _classAdmittedController.clear();
+    _classLeavingController.clear();
+    _duesPaidUpToController.clear();
+    _remarksController.clear();
+    // Administrative remarks live in provider state (synced at the top of
+    // the ref.listen handler) — restore the NEW student's remarks.
+    _remarksController.text = ref.read(schoolLeavingProvider).remarks;
+
     // Shot 3g: the provider's saved overrides (edited via Update SLC Record)
     // win over the raw student row for the identity fields.
     final cert = ref.read(schoolLeavingProvider).certificateFields;
@@ -804,9 +828,9 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       'address': live(_addressController.text, address),
       'admittedClass': liveClass(
         _classAdmittedController.text,
-        admittedClassName.isNotEmpty
-            ? admittedClassName
-            : student.classSecDisplay,
+        // Shot 3i fix 3: an empty admitted class prints '-' — never fall
+        // back to the leaving class on a legal document.
+        admittedClassName.isNotEmpty ? admittedClassName : '-',
       ),
       'leftClass': liveClass(
         _classLeavingController.text,
@@ -936,6 +960,13 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       // month enrichment arrives via the provider's certificateFields map
       // (computed inside selectStudent, like computeDues).
       if (isNewSelection) {
+        // Shot 3i fix 5: leaving Edit SLC mode on EVERY student selection
+        // change — otherwise the edit-mode unlock survives into the next
+        // student and defeats the arrears lock for a student with dues.
+        setState(() {
+          _editingSlc = false;
+        });
+        ref.read(schoolLeavingProvider.notifier).setEditingSlc(false);
         _syncCertificateControllers(loaded);
       }
 
@@ -947,9 +978,19 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       final enriched = next.certificateFields;
       final prevEnriched = prev?.certificateFields;
       final selectedNow = next.selectedStudent;
-      if (enriched != prevEnriched &&
-          enriched.isNotEmpty &&
-          selectedNow != null) {
+      // Shot 3i fix 6: compare enrichment CONTENT, not map identity. The
+      // certificateFields map is recreated on every SchoolLeavingState emit,
+      // so the old reference comparison fired on EVERY state change and
+      // wiped the admin's unsaved edits to DOB / address / classes / dues.
+      // Fill only when a NEW student was selected (the controllers were
+      // just cleared, so filling is safe) or when a value actually changed
+      // (enrichment for a new StuRegID arrives, or saved overrides landed
+      // after Update SLC Record).
+      final contentChanged =
+          !mapEquals(prevEnriched ?? const <String, String>{}, enriched);
+      if (enriched.isNotEmpty &&
+          selectedNow != null &&
+          (selectedNow.stuRegId != _lastEnrichedStuRegId || contentChanged)) {
         final sid = selectedNow.stuRegId;
         final duesRaw = enriched['duesPaidUpTo'] ?? '';
         final duesText = duesRaw.trim().isNotEmpty
@@ -960,6 +1001,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           final stillSelected =
               ref.read(schoolLeavingProvider).selectedStudent;
           if (stillSelected?.stuRegId != sid) return;
+          _lastEnrichedStuRegId = sid;
           setState(() {
             _dobController.text = _formatCertDate(enriched['dob']);
             final admCert = (enriched['admissionDate'] ?? '').trim();

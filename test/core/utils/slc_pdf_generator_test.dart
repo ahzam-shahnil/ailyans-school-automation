@@ -39,6 +39,20 @@ void main() {
       expect(SlcPdfGenerator.formatValue('15-Nov-2026'), '15-Nov-2026');
     });
 
+    // Shot 3i fix 2: only the actual Roman numerals I..XII are uppercased —
+    // the old '[ivxlc]+' pattern also matched ordinary words spelled from
+    // those letters and wrongly UPPERCASED them ('CIVIL Lines').
+    test('Does not uppercase Roman-lookalike words (CIVIL bug)', () {
+      expect(SlcPdfGenerator.formatValue('civil lines'), 'Civil Lines');
+      expect(SlcPdfGenerator.formatValue('civil'), 'Civil');
+      expect(SlcPdfGenerator.formatValue('ill'), 'Ill');
+      expect(SlcPdfGenerator.formatValue('lil'), 'Lil');
+      expect(SlcPdfGenerator.formatValue('liv'), 'Liv');
+      // Real Roman numerals still canonicalize.
+      expect(SlcPdfGenerator.formatValue('class xi'), 'Class XI');
+      expect(SlcPdfGenerator.formatValue('xii'), 'XII');
+    });
+
     test("Does not capitalize after apostrophes; ASCII '-' when empty", () {
       expect(
         SlcPdfGenerator.formatValue("on parent's request"),

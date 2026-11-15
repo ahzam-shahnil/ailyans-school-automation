@@ -140,12 +140,9 @@ class SlcPdfGenerator {
       ('Date of Birth:', formatValue(_formatDate(dobRaw))),
       ('Address:', addressRaw.isEmpty ? '-' : formatValue(addressRaw)),
       ('Admission Date:', formatValue(_formatDate(admissionDateRaw))),
-      (
-        'Class Admitted:',
-        admittedClassRaw.isNotEmpty
-            ? formatValue(admittedClassRaw)
-            : formatValue(classNameRaw),
-      ),
+      // Shot 3i: an empty admitted class must print '-' — falling back to
+      // the LEAVING class put a wrong class on a legal document.
+      ('Class Admitted:', admittedClassRaw.isEmpty ? '-' : formatValue(admittedClassRaw)),
       (
         'Class At the Time of Leaving:',
         classNameRaw.isEmpty ? '-' : formatValue(classNameRaw),
@@ -158,7 +155,9 @@ class SlcPdfGenerator {
             ? formatValue(duesPaidUpToRaw)
             : _formatDate(leavingDateRaw),
       ),
-      ('Remarks:', remarksRaw.isEmpty ? '-' : formatValue(remarksRaw)),
+      // Shot 3i: remarks are free text — print verbatim (trimmed), never
+      // Title-Cased ('left for abroad' must not become 'Left For Abroad').
+      ('Remarks:', remarksRaw.isEmpty ? '-' : remarksRaw.trim()),
     ];
 
     doc.addPage(
@@ -337,7 +336,13 @@ class SlcPdfGenerator {
       // stored them lowercase ('aku karachi' -> 'AKU Karachi').
       return segment.toUpperCase();
     }
-    if (RegExp(r'^[ivxlc]+$', caseSensitive: false).hasMatch(segment)) {
+    // Shot 3i: match ONLY the actual Roman numerals I..XII. The old
+    // '[ivxlc]+' pattern also matched ordinary words spelled from those
+    // letters ('civil', 'ill', 'lil', 'liv') and wrongly UPPERCASED them.
+    if (RegExp(
+      r'^(i|ii|iii|iv|v|vi|vii|viii|ix|x|xi|xii)$',
+      caseSensitive: false,
+    ).hasMatch(segment)) {
       // Roman numerals (Class XI / XII) canonicalize to UPPERCASE even
       // when the source data stored them lowercase ('class xii').
       return segment.toUpperCase();
@@ -381,21 +386,19 @@ class SlcPdfGenerator {
   }
 
   /// One pre-printed stationery row: the [label] sits on the left, and the
-  /// bold [value] sits above a dotted rule on the right (so handwriting and
-  /// print both align to the pre-printed dotted line). Shot 3a follow-up:
-  /// the value text is horizontally centered within the full dotted-line
-  /// area, with no rightward optical shift. Shot 3d: the value container
-  /// gains 3pt bottom padding so descenders (g, y, p, q) float cleanly
-  /// above the dots, and both styles gain letter spacing.
+  /// bold [value] sits centered ABOVE a dotted rule drawn as the bottom
+  /// border of the value container. Shot 3i: the dotted leader is a
+  /// container border (not a fixed-length dot string), so it fills the full
+  /// Expanded column width edge to edge — long values can no longer
+  /// overhang the dots and the right margin matches the 48pt left margin.
+  /// The 3pt bottom padding keeps descenders (g, y, p, q) floating cleanly
+  /// above the dots.
   static pw.Widget _buildFieldRow({
     required String label,
     required String value,
     required pw.Font regularFont,
     required pw.Font boldFont,
   }) {
-    const dottedLine =
-        '........................................................';
-
     return pw.Padding(
       padding: const pw.EdgeInsets.only(bottom: 10),
       child: pw.Row(
@@ -414,32 +417,27 @@ class SlcPdfGenerator {
             ),
           ),
           pw.Expanded(
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 3),
-                  child: pw.Center(
-                    child: pw.Text(
-                      value.isEmpty ? '-' : value,
-                      textAlign: pw.TextAlign.center,
-                      style: pw.TextStyle(
-                        font: boldFont,
-                        fontSize: 11,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ),
-                ),
-                pw.Text(
-                  dottedLine,
-                  style: pw.TextStyle(
-                    font: regularFont,
-                    fontSize: 10,
+            child: pw.Container(
+              alignment: pw.Alignment.center,
+              padding: const pw.EdgeInsets.only(bottom: 3),
+              decoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(
+                    width: 0.8,
                     color: PdfColors.grey600,
+                    style: pw.BorderStyle.dotted,
                   ),
                 ),
-              ],
+              ),
+              child: pw.Text(
+                value.isEmpty ? '-' : value,
+                textAlign: pw.TextAlign.center,
+                style: pw.TextStyle(
+                  font: boldFont,
+                  fontSize: 11,
+                  letterSpacing: 0.3,
+                ),
+              ),
             ),
           ),
         ],
