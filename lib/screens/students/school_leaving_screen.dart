@@ -30,6 +30,13 @@ class SchoolLeavingScreen extends ConsumerStatefulWidget {
 class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   final TextEditingController _remarksController = TextEditingController();
 
+  // Shot 3f: instant student search — live-filters the Student dropdown by
+  // Reg ID / student name / father name / class, shows quick-match chips,
+  // and auto-selects the best match on Enter.
+  final TextEditingController _studentSearchController =
+      TextEditingController();
+  String _studentSearchQuery = '';
+
   // Shot 3d: editable certificate particulars — pre-populated from the
   // selected student, live-edited before printing, and (for Name, Father
   // Name and Address) persisted back to Stu_Reg on Update SLC Record.
@@ -82,6 +89,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   @override
   void dispose() {
     _remarksController.dispose();
+    _studentSearchController.dispose();
     _studentNameController.dispose();
     _fatherNameController.dispose();
     _dobController.dispose();
@@ -129,6 +137,155 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   /// The student list the selector shows — corrupted ghost rows removed.
   List<LeavingStudentRow> _visibleStudents(SchoolLeavingState state) {
     return state.students.where((s) => !_isGhostRow(s)).toList();
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SHOT 3f — INSTANT STUDENT SEARCH
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Live-filters the visible students by the current search query,
+  /// matching Reg ID, student name, father name or class case-insensitively.
+  List<LeavingStudentRow> _searchFilteredStudents(SchoolLeavingState state) {
+    final all = _visibleStudents(state);
+    final q = _studentSearchQuery.trim().toLowerCase();
+    if (q.isEmpty) return all;
+    bool matches(LeavingStudentRow s) {
+      if (s.stuRegId.toString().contains(q)) return true;
+      if (s.studentName.toLowerCase().contains(q)) return true;
+      if ((s.fatherName ?? '').toLowerCase().contains(q)) return true;
+      if ((s.className ?? '').toLowerCase().contains(q)) return true;
+      if (s.classSecDisplay.toLowerCase().contains(q)) return true;
+      return false;
+    }
+
+    return all.where(matches).toList();
+  }
+
+  /// Shot 3f: Enter in the search box auto-selects the best match — an
+  /// exact Reg ID match wins; otherwise a single filtered match selects.
+  void _onStudentSearchSubmitted(String value) {
+    final q = value.trim().toLowerCase();
+    if (q.isEmpty) return;
+    final state = ref.read(schoolLeavingProvider);
+    final exact = _visibleStudents(
+      state,
+    ).where((s) => s.stuRegId.toString() == q).toList();
+    if (exact.isNotEmpty) {
+      _selectSearchedStudent(exact.first);
+      return;
+    }
+    final filtered = _searchFilteredStudents(state);
+    if (filtered.length == 1) {
+      _selectSearchedStudent(filtered.first);
+    }
+  }
+
+  /// Shot 3f: selecting from the search chips / Enter — clears the search
+  /// box so the full dropdown list is restored immediately.
+  void _selectSearchedStudent(LeavingStudentRow student) {
+    ref.read(schoolLeavingProvider.notifier).selectStudent(student.stuRegId);
+    _studentSearchController.clear();
+    if (mounted) {
+      setState(() => _studentSearchQuery = '');
+    }
+  }
+
+  /// Shot 3f: the compact high-contrast search / quick-filter input shown
+  /// right above the Student dropdown (desktop + mobile), with a clear
+  /// (✕) suffix and a live match counter badge.
+  Widget _buildStudentSearchField(SchoolLeavingState state) {
+    final queryActive = _studentSearchQuery.trim().isNotEmpty;
+    final matchCount = _searchFilteredStudents(state).length;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: TextField(
+            key: const Key('slcStudentSearchField'),
+            controller: _studentSearchController,
+            textInputAction: TextInputAction.done,
+            style: AppTypography.bodySmall,
+            decoration: InputDecoration(
+              hintText: 'Search by Reg #, student name, father name, or class...',
+              hintStyle: AppTypography.bodySmall.copyWith(
+                color: AppColors.textMuted,
+              ),
+              isDense: true,
+              prefixIcon: const Icon(Icons.search, size: 18),
+              suffixIcon: queryActive
+                  ? IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.close, size: 16),
+                      onPressed: () {
+                        _studentSearchController.clear();
+                        setState(() => _studentSearchQuery = '');
+                      },
+                    )
+                  : null,
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 8,
+              ),
+            ),
+            onChanged: (value) {
+              setState(() => _studentSearchQuery = value);
+            },
+            onSubmitted: _onStudentSearchSubmitted,
+          ),
+        ),
+        if (queryActive) ...[
+          const SizedBox(width: 8),
+          Text(
+            '$matchCount ${matchCount == 1 ? 'match' : 'matches'}',
+            maxLines: 1,
+            style: AppTypography.label.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Shot 3f: up to 5 quick-match chips shown while searching — one tap
+  /// selects the student without opening the dropdown.
+  Widget _buildStudentMatchChips(List<LeavingStudentRow> filtered) {
+    final top = filtered.take(5).toList();
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final s in top)
+          InkWell(
+            onTap: () => _selectSearchedStudent(s),
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(
+                  color: AppColors.brandPrimary.withValues(alpha: 0.4),
+                ),
+              ),
+              child: Text(
+                '${s.stuRegId} - ${s.studentName}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.label.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.brandPrimary,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   /// Shot 3d: normalize the legacy 'Compeletd Studies' typo stored in
@@ -1005,6 +1162,16 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.stretch,
                                   children: [
+                                    // Shot 3f: instant student search.
+                                    _buildStudentSearchField(state),
+                                    if (_studentSearchQuery.trim().isNotEmpty) ...[
+                                      const SizedBox(height: AppSpacing.sm),
+                                      _buildStudentMatchChips(
+                                        _searchFilteredStudents(state),
+                                      ),
+                                    ],
+                                    const SizedBox(height: AppSpacing.sm),
+
                                     // Student Selector
                                     InputDecorator(
                                       decoration: const InputDecoration(
@@ -1035,53 +1202,14 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                                             'Search by Reg ID or name',
                                           ),
                                           // Shot 3a: ghost rows filtered out.
-                                          items: _visibleStudents(
+                                          // Shot 3f: live search filter — the
+                                          // selected student is ALWAYS kept in
+                                          // the items so DropdownButton's
+                                          // value never fails to resolve.
+                                          items: _studentDropdownItems(
+                                            _searchFilteredStudents(state),
                                             state,
-                                          ).map((s) {
-                                            return DropdownMenuItem<int>(
-                                              value: s.stuRegId,
-                                              child: Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: Text(
-                                                      '${s.stuRegId} - ${s.studentName}',
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                                  if (s.hasExistingSlc)
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 6,
-                                                            vertical: 1,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors
-                                                            .statusInfoBg,
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              AppRadius.sm,
-                                                            ),
-                                                      ),
-                                                      child: Text(
-                                                        'SLC Issued',
-                                                        style: AppTypography
-                                                            .bodySmall
-                                                            .copyWith(
-                                                              fontSize: 10,
-                                                              color: AppColors
-                                                                  .statusInfoText,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600,
-                                                            ),
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            );
-                                          }).toList(),
+                                          ),
                                           onChanged: (val) {
                                             ref
                                                 .read(
@@ -2077,6 +2205,57 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     );
   }
 
+  /// Shot 3f: one desktop dropdown row — 'RegID - Name' + SLC badge.
+  DropdownMenuItem<int> _buildStudentDropdownItem(LeavingStudentRow s) {
+    return DropdownMenuItem<int>(
+      value: s.stuRegId,
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${s.stuRegId} - ${s.studentName}',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (s.hasExistingSlc)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: AppColors.statusInfoBg,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Text(
+                'SLC Issued',
+                style: AppTypography.bodySmall.copyWith(
+                  fontSize: 10,
+                  color: AppColors.statusInfoText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Shot 3f: dropdown items for the (possibly search-filtered) list, with
+  /// the currently selected student ALWAYS kept in the list even when the
+  /// query doesn't match it — so DropdownButton's `value` never throws the
+  /// "There should be exactly one item with [DropdownButton]'s value"
+  /// assertion error.
+  List<DropdownMenuItem<int>> _studentDropdownItems(
+    List<LeavingStudentRow> filtered,
+    SchoolLeavingState state,
+  ) {
+    final items = filtered.map(_buildStudentDropdownItem).toList();
+    final selected = state.selectedStudent;
+    if (selected != null &&
+        !filtered.any((s) => s.stuRegId == selected.stuRegId)) {
+      items.insert(0, _buildStudentDropdownItem(selected));
+    }
+    return items;
+  }
+
   Widget _buildRadioOption<T>({
     required T value,
     required T? groupValue,
@@ -2319,6 +2498,13 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
+          // Shot 3f: instant student search (mobile).
+          _buildStudentSearchField(state),
+          if (_studentSearchQuery.trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _buildStudentMatchChips(_searchFilteredStudents(state)),
+          ],
+          const SizedBox(height: AppSpacing.sm),
           MobileDropdownField<int>(
             label: 'Student',
             value: (student != null &&
@@ -2328,16 +2514,13 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                 ? student.stuRegId
                 : null,
             hintText: 'Search by Reg ID or name',
-            // Shot 3a: ghost rows filtered out.
-            items: _visibleStudents(state).map((s) {
-              return DropdownMenuItem<int>(
-                value: s.stuRegId,
-                child: Text(
-                  '${s.stuRegId} - ${s.studentName}',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
+            // Shot 3a: ghost rows filtered out. Shot 3f: live search
+            // filter — the selected student is ALWAYS kept in the items
+            // so the dropdown's value never fails to resolve.
+            items: _studentDropdownItems(
+              _searchFilteredStudents(state),
+              state,
+            ),
             onChanged: (val) {
               ref.read(schoolLeavingProvider.notifier).selectStudent(val);
             },

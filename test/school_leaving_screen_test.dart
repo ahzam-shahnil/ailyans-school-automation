@@ -525,5 +525,61 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+
+    testWidgets(
+      'o) student search: live filter + match counter + quick-match chip + Enter auto-select',
+      (tester) async {
+        late SchoolLeavingNotifier notifier;
+        await tester.runAsync(() async {
+          notifier = SchoolLeavingNotifier();
+          await notifier.loadInitialData();
+        });
+
+        await tester.binding.setSurfaceSize(const Size(1440, 900));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(buildTestScreen(notifier: notifier));
+        await tester.pumpAndSettle();
+
+        // No student selected yet -> right panel shows the empty state.
+        expect(find.text('Select Student First'), findsOneWidget);
+
+        // Type a Reg ID: dropdown live-filters, counter shows 1 match and a
+        // quick-match chip appears.
+        await tester.enterText(
+          find.byKey(const Key('slcStudentSearchField')),
+          '4413',
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('1 match'), findsOneWidget);
+        final chip = find.textContaining('4413 - ');
+        expect(chip, findsWidgets);
+
+        // One tap on the chip selects the student immediately.
+        await tester.tap(chip.first);
+        await tester.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        });
+        await tester.pumpAndSettle();
+
+        expect(find.text('Select Student First'), findsNothing);
+
+        // Enter-to-select: typing another Reg ID and submitting auto-selects
+        // the exact match (4411 -> dues BLOCKED gate appears).
+        await tester.enterText(
+          find.byKey(const Key('slcStudentSearchField')),
+          '4411',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.runAsync(() async {
+          await Future<void>.delayed(const Duration(milliseconds: 200));
+        });
+        await tester.pumpAndSettle();
+
+        expect(find.text('OUTSTANDING DUES BALANCE'), findsOneWidget);
+        expect(find.text('BLOCKED'), findsOneWidget);
+      },
+    );
   });
 }
