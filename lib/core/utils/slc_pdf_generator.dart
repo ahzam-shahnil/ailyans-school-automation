@@ -15,8 +15,20 @@ import 'package:pdf/widgets.dart' as pw;
 class SlcPdfGenerator {
   SlcPdfGenerator._();
 
-  /// Width (pt) of the left-hand row label column.
-  static const double kLabelWidth = 135;
+  /// Width (pt) of the left-hand row label column. Shot 3d: widened to
+  /// 190pt so 'Class At the Time of Leaving:' renders on ONE line.
+  static const double kLabelWidth = 190;
+
+  /// Shot 3d: tokens preserved verbatim by [formatValue] (built-in PDF
+  /// Helvetica fonts have no Unicode support — only ASCII is safe).
+  static const Set<String> _formatValueAcronyms = {
+    'bise',
+    'aku',
+    'cnic',
+    'slc',
+    'fbise',
+    'ibcc',
+  };
 
   // ---------------------------------------------------------------------------
   // Public API
@@ -64,20 +76,20 @@ class SlcPdfGenerator {
     }
 
     final admissionNo = pick(['admissionNo', 'Stu_RegID', 'stuRegId']);
-    final studentName = pick(
+    final studentNameRaw = pick(
       ['studentName', 'name', 'stuName', 'Stu_Name'],
     );
-    final fatherName = pick(['fatherName', 'father', 'fName', 'F_Name']);
-    final dob = pick(['dob', 'dateOfBirth', 'DOB']);
-    final address = pick(['address', 'pAddress', 'P_Address']);
-    final admissionDate = pick([
+    final fatherNameRaw = pick(['fatherName', 'father', 'fName', 'F_Name']);
+    final dobRaw = pick(['dob', 'dateOfBirth', 'DOB']);
+    final addressRaw = pick(['address', 'pAddress', 'P_Address']);
+    final admissionDateRaw = pick([
       'admissionDate',
       'admDate',
       'admission_date',
       'DOAdmission',
     ]);
-    final admittedClass = pick(['admittedClass', 'admInClassCName']);
-    final className = pick([
+    final admittedClassRaw = pick(['admittedClass', 'admInClassCName']);
+    final classNameRaw = pick([
       'className',
       'classLeft',
       'leftClass',
@@ -85,44 +97,63 @@ class SlcPdfGenerator {
       'cName',
       'CName',
     ]);
-    final leavingDate = pick([
+    final leavingDateRaw = pick([
       'leavingDate',
       'leftDate',
       'LeftDate',
       'dateLeft',
     ]);
-    final duesPaidUpTo = pick(['duesPaidUpTo', 'duesPaid']);
-    final conduct = pick([
+    final duesPaidUpToRaw = pick(['duesPaidUpTo', 'duesPaid']);
+    final conductRaw = pick([
       'conduct',
       'charactor',
       'Charactor',
       'character',
     ]);
-    final reason = _normalizeReason(pick([
+    final reason = normalizeReason(pick([
       'reason',
       'termOfLeaving',
       'TermOfLeavign',
       'term',
     ]));
-    final remarks = pick(['remarks', 'slRemarks', 'Remarks']);
+    final remarksRaw = pick(['remarks', 'slRemarks', 'Remarks']);
 
-    final sName = studentName.isEmpty ? '__________________' : studentName;
-    final fName = fatherName.isEmpty ? '__________________' : fatherName;
+    // Shot 3d: every printed value passes through formatValue so names,
+    // classes and addresses come out cleanly Title-Cased.
+    final sName = studentNameRaw.isEmpty
+        ? '__________________'
+        : formatValue(studentNameRaw);
+    final fName = fatherNameRaw.isEmpty
+        ? '__________________'
+        : formatValue(fatherNameRaw);
 
     // 12 pre-printed stationery rows (label -> dotted-line value).
     final rows = <(String, String)>[
-      ('Admission No:', admissionNo),
+      ('Admission No:', admissionNo.isEmpty ? '-' : admissionNo),
       ('Student Name:', sName),
       ('Father Name:', fName),
-      ('Date of Birth:', _formatDate(dob)),
-      ('Address:', address),
-      ('Admission Date:', _formatDate(admissionDate)),
-      ('Class Admitted:', admittedClass.isNotEmpty ? admittedClass : className),
-      ('Class At the Time of Leaving:', className),
-      ('Conduct:', conduct.isEmpty ? 'Good' : conduct),
-      ('Reason for Leaving', reason),
-      ('Dues Paid up to:', duesPaidUpTo.isNotEmpty ? duesPaidUpTo : _formatDate(leavingDate)),
-      ('Remarks:', remarks),
+      ('Date of Birth:', formatValue(_formatDate(dobRaw))),
+      ('Address:', addressRaw.isEmpty ? '-' : formatValue(addressRaw)),
+      ('Admission Date:', formatValue(_formatDate(admissionDateRaw))),
+      (
+        'Class Admitted:',
+        admittedClassRaw.isNotEmpty
+            ? formatValue(admittedClassRaw)
+            : formatValue(classNameRaw),
+      ),
+      (
+        'Class At the Time of Leaving:',
+        classNameRaw.isEmpty ? '-' : formatValue(classNameRaw),
+      ),
+      ('Conduct:', normalizeConduct(conductRaw)),
+      ('Reason for Leaving:', reason),
+      (
+        'Dues Paid up to:',
+        duesPaidUpToRaw.isNotEmpty
+            ? formatValue(duesPaidUpToRaw)
+            : _formatDate(leavingDateRaw),
+      ),
+      ('Remarks:', remarksRaw.isEmpty ? '-' : formatValue(remarksRaw)),
     ];
 
     doc.addPage(
@@ -137,18 +168,29 @@ class SlcPdfGenerator {
               // pre-printed school logo/header occupies this area. ──
               pw.SizedBox(height: 90),
 
-              // ── Centered underlined title ──
+              // ── Centered title with a crisp double underline ──
+              // Shot 3d: 1.5pt rule + 1.5pt gap + 0.5pt rule, and
+              // letterSpacing 1.4 on the title / 0.3 on the subtitle.
               pw.Center(
-                child: pw.Text(
-                  'SCHOOL LEAVING CERTIFICATE',
-                  style: pw.TextStyle(
-                    font: boldFont,
-                    fontSize: 16,
-                    fontWeight: pw.FontWeight.bold,
-                    letterSpacing: 2,
-                    decoration: pw.TextDecoration.underline,
-                  ),
-                  textAlign: pw.TextAlign.center,
+                child: pw.Column(
+                  mainAxisSize: pw.MainAxisSize.min,
+                  crossAxisAlignment: pw.CrossAxisAlignment.center,
+                  children: [
+                    pw.Text(
+                      'SCHOOL LEAVING CERTIFICATE',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                        letterSpacing: 1.4,
+                      ),
+                      textAlign: pw.TextAlign.center,
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Container(height: 1.5, width: 310, color: PdfColors.black),
+                    pw.SizedBox(height: 1.5),
+                    pw.Container(height: 0.5, width: 310, color: PdfColors.black),
+                  ],
                 ),
               ),
               pw.SizedBox(height: 6),
@@ -157,7 +199,11 @@ class SlcPdfGenerator {
               pw.Center(
                 child: pw.Text(
                   'Recognized and affiliated with BISE Sargodha, AKU Karachi',
-                  style: pw.TextStyle(font: boldFont, fontSize: 11),
+                  style: pw.TextStyle(
+                    font: boldFont,
+                    fontSize: 11,
+                    letterSpacing: 0.3,
+                  ),
                   textAlign: pw.TextAlign.center,
                 ),
               ),
@@ -207,8 +253,8 @@ class SlcPdfGenerator {
 
   /// Shot 3a: normalize the legacy 'Compeletd Studies' typo stored in
   /// SchLeaving.TermOfLeavign by the MS Access migration.
-  static String _normalizeReason(String raw) {
-    final r = raw.trim();
+  static String normalizeReason(String? raw) {
+    final r = (raw ?? '').trim();
     final lower = r.toLowerCase();
     if (lower.contains('compeletd') ||
         lower.contains('compeleted') ||
@@ -216,6 +262,54 @@ class SlcPdfGenerator {
       return 'Completed Studies';
     }
     return r;
+  }
+
+  /// Shot 3d: normalize legacy Charactor values case-insensitively
+  /// ('satisfactory' -> 'Satisfactory', 'bad' -> 'Bad'); empty or
+  /// unrecognized values default to 'Good'.
+  static String normalizeConduct(String? raw) {
+    switch ((raw ?? '').trim().toLowerCase()) {
+      case 'satisfactory':
+        return 'Satisfactory';
+      case 'bad':
+        return 'Bad';
+      default:
+        return 'Good';
+    }
+  }
+
+  /// Shot 3d: production typography for every printed certificate value —
+  /// trims, collapses runs of spaces, Title-Cases each word (including
+  /// sub-words after '-', '/', '('), and preserves acronym tokens (BISE,
+  /// AKU, CNIC, SLC, ...) plus formatted dates like '05-Sep-2010'.
+  /// Empty input renders the ASCII '-' placeholder (built-in Helvetica
+  /// fonts have NO Unicode support — never emit an em-dash here).
+  static String formatValue(String? raw) {
+    if (raw == null) return '-';
+    final s = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (s.isEmpty || s == '-') return '-';
+
+    // Preserve already-formatted dates (05-Sep-2010, 04/02/24, 2017-10-01).
+    if (RegExp(r'^\d{1,4}[-/.][0-9A-Za-z]{2,9}[-/.]\d{2,4}$').hasMatch(s)) {
+      return s;
+    }
+
+    return s
+        .splitMapJoin(
+          RegExp(r'[-/()]'),
+          onMatch: (m) => m[0]!,
+          onNonMatch: _formatValueSubToken,
+        );
+  }
+
+  /// Title-Cases one sub-token (a run of characters with no '-', '/' or
+  /// '(' inside). Acronym tokens and Roman numerals (Class XI) survive
+  /// verbatim; everything else becomes 'Word'.
+  static String _formatValueSubToken(String sub) {
+    if (sub.isEmpty) return sub;
+    if (_formatValueAcronyms.contains(sub.toLowerCase())) return sub;
+    if (RegExp(r'^[IVXLC]+$').hasMatch(sub)) return sub;
+    return sub[0].toUpperCase() + sub.substring(1).toLowerCase();
   }
 
   static String _formatDate(String raw) {
@@ -257,7 +351,9 @@ class SlcPdfGenerator {
   /// bold [value] sits above a dotted rule on the right (so handwriting and
   /// print both align to the pre-printed dotted line). Shot 3a follow-up:
   /// the value text is horizontally centered within the full dotted-line
-  /// area, with no rightward optical shift.
+  /// area, with no rightward optical shift. Shot 3d: the value container
+  /// gains 3pt bottom padding so descenders (g, y, p, q) float cleanly
+  /// above the dots, and both styles gain letter spacing.
   static pw.Widget _buildFieldRow({
     required String label,
     required String value,
@@ -276,17 +372,30 @@ class SlcPdfGenerator {
             width: kLabelWidth,
             child: pw.Text(
               label,
-              style: pw.TextStyle(font: regularFont, fontSize: 11),
+              maxLines: 1,
+              style: pw.TextStyle(
+                font: regularFont,
+                fontSize: 11,
+                letterSpacing: 0.2,
+              ),
             ),
           ),
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Center(
-                  child: pw.Text(
-                    value.isEmpty ? ' ' : value,
-                    style: pw.TextStyle(font: boldFont, fontSize: 11),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 3),
+                  child: pw.Center(
+                    child: pw.Text(
+                      value.isEmpty ? '-' : value,
+                      textAlign: pw.TextAlign.center,
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 11,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
                   ),
                 ),
                 pw.Text(

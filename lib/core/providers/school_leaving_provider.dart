@@ -22,6 +22,13 @@ class SchoolLeavingState {
   final String? errorMessage;
   final String? toast;
   final Map<String, dynamic>? committedSlc;
+  /// Shot 3d: admin Edit SLC mode — unlocks the leaving setters for an
+  /// existing SchLeaving record (the screen drives this via setEditingSlc).
+  final bool editingSlc;
+  /// Shot 3d: DB-enriched certificate particulars for the selected student
+  /// (dob, address, admittedClass, leftClass, duesPaidUpTo) — the source the
+  /// screen uses to pre-populate its editable certificate controllers.
+  final Map<String, String> certificateFields;
 
   const SchoolLeavingState({
     this.students = const [],
@@ -38,6 +45,8 @@ class SchoolLeavingState {
     this.errorMessage,
     this.toast,
     this.committedSlc,
+    this.editingSlc = false,
+    this.certificateFields = const {},
   });
 
   bool get hasExistingSlc => selectedStudent?.hasExistingSlc ?? false;
@@ -47,6 +56,22 @@ class SchoolLeavingState {
       !hasExistingSlc &&
       committedSlc == null &&
       !hasDues;
+
+  /// Shot 3d: normalize legacy SchLeaving.Charactor values
+  /// case-insensitively ('satisfactory' -> 'Satisfactory', 'bad' -> 'Bad');
+  /// empty or unrecognized values default to 'Good'. The raw state value
+  /// (e.g. the DB's 'Good ') is preserved — this is only for radio matching
+  /// and display.
+  static String normalizeConduct(String? raw) {
+    switch ((raw ?? '').trim().toLowerCase()) {
+      case 'satisfactory':
+        return 'Satisfactory';
+      case 'bad':
+        return 'Bad';
+      default:
+        return 'Good';
+    }
+  }
 
   SchoolLeavingState copyWith({
     List<LeavingStudentRow>? students,
@@ -63,6 +88,8 @@ class SchoolLeavingState {
     String? Function()? errorMessage,
     String? Function()? toast,
     Map<String, dynamic>? Function()? committedSlc,
+    bool? editingSlc,
+    Map<String, String>? certificateFields,
   }) {
     return SchoolLeavingState(
       students: students ?? this.students,
@@ -81,6 +108,8 @@ class SchoolLeavingState {
       errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
       toast: toast != null ? toast() : this.toast,
       committedSlc: committedSlc != null ? committedSlc() : this.committedSlc,
+      editingSlc: editingSlc ?? this.editingSlc,
+      certificateFields: certificateFields ?? this.certificateFields,
     );
   }
 }
@@ -236,9 +265,14 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
       conduct: () => initialConduct,
       remarks: initialRemarks,
       committedSlc: () => null,
+      certificateFields: const {},
     );
 
     await computeDues(stuRegId);
+    // Shot 3d: also enrich the editable certificate particulars (DOB,
+    // address, admitted/leaving class, dues-paid month) for the screen.
+    if (!mounted) return;
+    await computeCertificateFields(stuRegId);
   }
 
   Future<void> refreshSelectedStudent() async {
@@ -289,30 +323,116 @@ class SchoolLeavingNotifier extends StateNotifier<SchoolLeavingState> {
     }
   }
 
+  /// Shot 3d: best-effort DB enrichment for the editable certificate
+  /// particulars (DOB, address, admitted class, class at leaving, latest
+  /// paid voucher month for 'Dues Paid up to'). Failures never block the
+  /// workflow — the certificate prints with what is available.
+  Future<void> computeCertificateFields(int stuRegId) async {
+    try {
+      final db = await DatabaseService.instance.database;
+
+      String dob = '';
+      String address = '';
+      String admittedClassName = '';
+      String leftClassName = '';
+      String duesPaidUpTo = '';
+
+      final stuRows = await db.rawQuery(
+        '''
+        SELECT sr.DOB, sr.P_Address, sr.T_Address, sr.AdmInClass, sr.AdmClass,
+               cIn.CName AS admittedCName
+        FROM Stu_Reg sr
+        LEFT JOIN Class cIn ON cIn.ClassID = COALESCE(sr.AdmInClass, sr.AdmClass)
+        WHERE sr.Stu_RegID = ?
+        ''',
+        [stuRegId],
+      );
+      if (stuRows.isNotEmpty) {
+        final row = stuRows.first;
+        dob = (row['DOB'] as String?)?.trim() ?? '';
+        final pAddress = (row['P_Address'] as String?)?.trim() ?? '';
+        final tAddress = (row['T_Address'] as String?)?.trim() ?? '';
+        address = pAddress.isNotEmpty ? pAddress : tAddress;
+        admittedClassName = (row['admittedCName'] as String?)?.trim() ?? '';
+      }
+
+      final classId = state.selectedStudent?.stuRegId == stuRegId
+          ? state.selectedStudent?.classId
+          : null;
+      if (classId != null) {
+        final leftRows = await db.rawQuery(
+          'SELECT CName FROM Class WHERE ClassID = ? LIMIT 1',
+          [classId],
+        );
+        if (leftRows.isNotEmpty) {
+          leftClassName = (leftRows.first['CName'] as String?)?.trim() ?? '';
+        }
+      }
+
+      final paidRows = await db.rawQuery(
+        '''
+        SELECT ForMonth FROM VoucharMas
+        WHERE Student_Class_StuRegID = ? AND IsPaid = 'Y'
+        ORDER BY VoucherMasID DESC
+        LIMIT 1
+        ''',
+        [stuRegId],
+      );
+      if (paidRows.isNotEmpty) {
+        duesPaidUpTo = (paidRows.first['ForMonth'] as String?)?.trim() ?? '';
+      }
+
+      if (!mounted) return;
+      if (state.selectedStudent?.stuRegId != stuRegId) return;
+      state = state.copyWith(
+        certificateFields: {
+          'dob': dob,
+          'address': address,
+          'admittedClass': admittedClassName,
+          'leftClass': leftClassName,
+          'duesPaidUpTo': duesPaidUpTo,
+        },
+      );
+    } catch (_) {
+      // Enrichment is best-effort — keep whatever the screen already has.
+    }
+  }
+
+  void setEditingSlc(bool editing) {
+    state = state.copyWith(editingSlc: editing);
+  }
+
   void setLeavingDate(DateTime date) {
-    if (!state.isFormEditable) return;
+    if (!_canEditLeavingFields) return;
     state = state.copyWith(leavingDate: date);
   }
 
   void setTodayDate() {
-    if (!state.isFormEditable) return;
+    if (!_canEditLeavingFields) return;
     state = state.copyWith(leavingDate: _now());
   }
 
   void setReason(String? reason) {
-    if (!state.isFormEditable) return;
+    if (!_canEditLeavingFields) return;
     state = state.copyWith(reason: () => reason);
   }
 
   void setConduct(String? conduct) {
-    if (!state.isFormEditable) return;
+    if (!_canEditLeavingFields) return;
     state = state.copyWith(conduct: () => conduct);
   }
 
   void setRemarks(String remarks) {
-    if (!state.isFormEditable) return;
+    if (!_canEditLeavingFields) return;
     state = state.copyWith(remarks: remarks);
   }
+
+  /// Shot 3d: leaving fields are editable for a NEW SLC or while the admin
+  /// Edit SLC mode is active. Previously the setters silently no-op'd for
+  /// existing SLC records even when the screen's Edit SLC toggle was on —
+  /// which is why Character & Conduct taps never updated state.
+  bool get _canEditLeavingFields =>
+      state.isFormEditable || state.editingSlc;
 
   void clearMessages() {
     state = state.copyWith(errorMessage: () => null, toast: () => null);

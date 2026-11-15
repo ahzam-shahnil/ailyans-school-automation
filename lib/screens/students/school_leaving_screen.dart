@@ -29,6 +29,22 @@ class SchoolLeavingScreen extends ConsumerStatefulWidget {
 class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   final TextEditingController _remarksController = TextEditingController();
 
+  // Shot 3d: editable certificate particulars — pre-populated from the
+  // selected student, live-edited before printing, and (for Name, Father
+  // Name and Address) persisted back to Stu_Reg on Update SLC Record.
+  final TextEditingController _studentNameController = TextEditingController();
+  final TextEditingController _fatherNameController = TextEditingController();
+  final TextEditingController _dobController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _admissionDateController =
+      TextEditingController();
+  final TextEditingController _classAdmittedController =
+      TextEditingController();
+  final TextEditingController _classLeavingController =
+      TextEditingController();
+  final TextEditingController _duesPaidUpToController =
+      TextEditingController();
+
   String? _lastSyncedUri;
 
   // Shot 2b: students whose stale enrollment was already reconciled after
@@ -65,6 +81,14 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   @override
   void dispose() {
     _remarksController.dispose();
+    _studentNameController.dispose();
+    _fatherNameController.dispose();
+    _dobController.dispose();
+    _addressController.dispose();
+    _admissionDateController.dispose();
+    _classAdmittedController.dispose();
+    _classLeavingController.dispose();
+    _duesPaidUpToController.dispose();
     super.dispose();
   }
 
@@ -106,9 +130,9 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     return state.students.where((s) => !_isGhostRow(s)).toList();
   }
 
-  /// Legacy rows store the typo 'Compeletd Studies' in SchLeaving.Reason.
-  /// Normalize it everywhere it is displayed or matched against the
-  /// 'Completed Studies' radio option.
+  /// Shot 3d: normalize the legacy 'Compeletd Studies' typo stored in
+  /// SchLeaving.Reason. Normalize it everywhere it is displayed or matched
+  /// against the 'Completed Studies' radio option.
   static String _normalizeReason(String? raw) {
     final r = (raw ?? '').trim();
     if (r.isEmpty) return r;
@@ -121,8 +145,33 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     return r;
   }
 
-  /// Shot 3a: admin edit — persist corrected SLC fields onto the existing
-  /// SchLeaving row (UPDATE ... WHERE StuRegID = ?).
+  /// Shot 3d: map the raw Character & Conduct value (legacy DB casing like
+  /// 'good', 'GOOD', 'Good ', or empty) onto the exact radio option value
+  /// so the correct choice is always SELECTED and tappable.
+  static String _conductOptionValue(String? raw) {
+    switch (SchoolLeavingState.normalizeConduct(raw)) {
+      case 'Satisfactory':
+        return 'Satisfactory';
+      case 'Bad':
+        return 'Bad';
+      default:
+        return 'Good ';
+    }
+  }
+
+  /// Shot 3d: push the selected student's identity fields into the editable
+  /// certificate controllers (DOB, address, admitted/leaving class and the
+  /// dues-paid month arrive via the provider's certificateFields map).
+  void _syncCertificateControllers(LeavingStudentRow student) {
+    _studentNameController.text = student.studentName;
+    _fatherNameController.text = student.fatherName ?? '';
+    _admissionDateController.text = student.admissionDate ?? '';
+    _classLeavingController.text = student.classSecDisplay;
+  }
+
+  /// Shot 3d: admin edit — persist corrected SLC fields onto the existing
+  /// SchLeaving row (UPDATE ... WHERE StuRegID = ?). Edited Student Name,
+  /// Father Name and Address are also written back to Stu_Reg.
   Future<void> _updateSlcRecord() async {
     final state = ref.read(schoolLeavingProvider);
     final student = state.selectedStudent;
@@ -130,6 +179,37 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
 
     try {
       final db = await DatabaseService.instance.database;
+
+      // 1. Persist edited identity fields back to Stu_Reg.
+      final newName = _studentNameController.text.trim();
+      final newFather = _fatherNameController.text.trim();
+      final newAddress = _addressController.text.trim();
+      final stuUpdate = <String, dynamic>{};
+      if (newName.isNotEmpty && newName != student.studentName) {
+        final parts = newName.split(RegExp(r'\s+'));
+        stuUpdate['NameFirst'] = parts.first;
+        stuUpdate['NameMiddle'] = parts.length > 2
+            ? parts.sublist(1, parts.length - 1).join(' ')
+            : null;
+        stuUpdate['NameLast'] = parts.length > 1 ? parts.last : null;
+      }
+      if (newFather.isNotEmpty && newFather != (student.fatherName ?? '')) {
+        stuUpdate['F_Name'] = newFather;
+      }
+      if (newAddress.isNotEmpty) {
+        stuUpdate['P_Address'] = newAddress;
+        stuUpdate['T_Address'] = newAddress;
+      }
+      if (stuUpdate.isNotEmpty) {
+        await db.update(
+          'Stu_Reg',
+          stuUpdate,
+          where: 'Stu_RegID = ?',
+          whereArgs: [student.stuRegId],
+        );
+      }
+
+      // 2. Persist the leaving fields onto the existing SchLeaving row.
       await db.update(
         'SchLeaving',
         {
@@ -154,6 +234,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     if (!mounted) return;
 
     setState(() => _editingSlc = false);
+    ref.read(schoolLeavingProvider.notifier).setEditingSlc(false);
     _invalidateDependentProviders();
     await ref.read(schoolLeavingProvider.notifier).loadInitialData();
     if (!mounted) return;
@@ -235,6 +316,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     if (!mounted) return;
 
     setState(() => _editingSlc = false);
+    ref.read(schoolLeavingProvider.notifier).setEditingSlc(false);
     _invalidateDependentProviders();
     await ref.read(schoolLeavingProvider.notifier).loadInitialData();
     if (!mounted) return;
@@ -480,75 +562,42 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
 
     // Batch 1 (Ailyans): enrich the certificate from the DB — DOB, address,
     // admitted class (AdmInClass/AdmClass), class at the time of leaving, and
-    // the latest paid voucher month for 'Dues Paid up to'.
-    String dob = student.dob ?? '';
-    String address = '';
-    String admittedClassName = '';
-    String leftClassName = '';
-    String duesPaidUpTo = '';
-    try {
-      final db = await DatabaseService.instance.database;
+    // the latest paid voucher month for 'Dues Paid up to'. Shot 3d: the
+    // enrichment lives in provider state (certificateFields, computed on
+    // selection), and any field the admin corrected on-screen wins over the
+    // DB value so tweaks appear on the printed PDF immediately.
+    final enriched = slcState.certificateFields;
+    final dob = enriched['dob'] ?? '';
+    final address = enriched['address'] ?? '';
+    final admittedClassName = enriched['admittedClass'] ?? '';
+    final leftClassName = enriched['leftClass'] ?? '';
+    final duesPaidUpTo = enriched['duesPaidUpTo'] ?? '';
 
-      final stuRows = await db.rawQuery(
-        '''
-        SELECT sr.DOB, sr.P_Address, sr.T_Address, sr.AdmInClass, sr.AdmClass,
-               cIn.CName AS admittedCName
-        FROM Stu_Reg sr
-        LEFT JOIN Class cIn ON cIn.ClassID = COALESCE(sr.AdmInClass, sr.AdmClass)
-        WHERE sr.Stu_RegID = ?
-        ''',
-        [student.stuRegId],
-      );
-      if (stuRows.isNotEmpty) {
-        final row = stuRows.first;
-        dob = (row['DOB'] as String?)?.trim() ?? dob;
-        final pAddress = (row['P_Address'] as String?)?.trim() ?? '';
-        final tAddress = (row['T_Address'] as String?)?.trim() ?? '';
-        address = pAddress.isNotEmpty ? pAddress : tAddress;
-        admittedClassName = (row['admittedCName'] as String?)?.trim() ?? '';
-      }
-
-      final leftRows = student.classId != null
-          ? await db.rawQuery(
-              'SELECT CName FROM Class WHERE ClassID = ? LIMIT 1',
-              [student.classId],
-            )
-          : const <Map<String, dynamic>>[];
-      if (leftRows.isNotEmpty) {
-        leftClassName = (leftRows.first['CName'] as String?)?.trim() ?? '';
-      }
-
-      final paidRows = await db.rawQuery(
-        '''
-        SELECT ForMonth FROM VoucharMas
-        WHERE Student_Class_StuRegID = ? AND IsPaid = 'Y'
-        ORDER BY VoucherMasID DESC
-        LIMIT 1
-        ''',
-        [student.stuRegId],
-      );
-      if (paidRows.isNotEmpty) {
-        duesPaidUpTo = (paidRows.first['ForMonth'] as String?)?.trim() ?? '';
-      }
-    } catch (_) {
-      // Enrichment is best-effort — the certificate still prints with the
-      // base fields already collected from provider state.
-    }
+    String live(String controllerText, String fallback) =>
+        controllerText.trim().isNotEmpty ? controllerText.trim() : fallback;
 
     final slcData = <String, dynamic>{
       'admissionNo': '${student.stuRegId}',
-      'studentName': student.studentName,
-      'fatherName': student.fatherName ?? '',
+      'studentName': live(_studentNameController.text, student.studentName),
+      'fatherName': live(_fatherNameController.text, student.fatherName ?? ''),
       'className': student.classSecDisplay,
-      'dob': dob,
-      'admissionDate': student.admissionDate ?? '',
-      'address': address,
-      'admittedClass':
-          admittedClassName.isNotEmpty ? admittedClassName : student.classSecDisplay,
-      'leftClass': leftClassName.isNotEmpty
-          ? leftClassName
-          : student.classSecDisplay,
-      'duesPaidUpTo': duesPaidUpTo,
+      'dob': live(_dobController.text, dob),
+      'admissionDate': live(
+        _admissionDateController.text,
+        student.admissionDate ?? '',
+      ),
+      'address': live(_addressController.text, address),
+      'admittedClass': live(
+        _classAdmittedController.text,
+        admittedClassName.isNotEmpty
+            ? admittedClassName
+            : student.classSecDisplay,
+      ),
+      'leftClass': live(
+        _classLeavingController.text,
+        leftClassName.isNotEmpty ? leftClassName : student.classSecDisplay,
+      ),
+      'duesPaidUpTo': live(_duesPaidUpToController.text, duesPaidUpTo),
       'leavingDate': leavingDate,
       'conduct': conduct,
       'reason': reason,
@@ -618,7 +667,8 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
 
   Future<void> _selectLeavingDate() async {
     final state = ref.read(schoolLeavingProvider);
-    if (!state.isFormEditable) return;
+    // Shot 3d: also allow picking a date while admin Edit SLC mode is on.
+    if (!state.isFormEditable && !state.editingSlc) return;
 
     final picked = await showDatePicker(
       context: context,
@@ -663,6 +713,42 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
         _reconciledStuRegIds.add(loaded.stuRegId);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _reconcileEnrollment(loaded.stuRegId);
+        });
+      }
+
+      // Shot 3d: (re)populate the editable certificate particulars whenever
+      // a student is newly selected. The DOB / address / classes / dues-paid
+      // month enrichment arrives via the provider's certificateFields map
+      // (computed inside selectStudent, like computeDues).
+      if (isNewSelection) {
+        _syncCertificateControllers(loaded);
+      }
+
+      // Shot 3d: DB enrichment landed — fill the enrichment-only fields
+      // (leave any immediate identity fields untouched).
+      final enriched = next.certificateFields;
+      final prevEnriched = prev?.certificateFields;
+      final selectedNow = next.selectedStudent;
+      if (enriched != prevEnriched &&
+          enriched.isNotEmpty &&
+          selectedNow != null) {
+        final sid = selectedNow.stuRegId;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final stillSelected =
+              ref.read(schoolLeavingProvider).selectedStudent;
+          if (stillSelected?.stuRegId != sid) return;
+          setState(() {
+            _dobController.text = enriched['dob'] ?? '';
+            _addressController.text = enriched['address'] ?? '';
+            if ((enriched['admittedClass'] ?? '').isNotEmpty) {
+              _classAdmittedController.text = enriched['admittedClass']!;
+            }
+            if ((enriched['leftClass'] ?? '').isNotEmpty) {
+              _classLeavingController.text = enriched['leftClass']!;
+            }
+            _duesPaidUpToController.text = enriched['duesPaidUpTo'] ?? '';
+          });
         });
       }
     });
@@ -1482,9 +1568,15 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                 ),
               ),
             ),
-            // Shot 3a: admin Edit SLC toggle.
+            // Shot 3a: admin Edit SLC toggle. Shot 3d: also flips the
+            // provider's editingSlc flag so the leaving setters
+            // (date/reason/conduct/remarks) accept taps in edit mode.
             TextButton.icon(
-              onPressed: () => setState(() => _editingSlc = !_editingSlc),
+              onPressed: () {
+                final next = !_editingSlc;
+                setState(() => _editingSlc = next);
+                ref.read(schoolLeavingProvider.notifier).setEditingSlc(next);
+              },
               icon: Icon(
                 _editingSlc ? Icons.close_rounded : Icons.edit_outlined,
                 size: 14,
@@ -1634,6 +1726,12 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Shot 3d: editable certificate particulars — every field
+              // printed on the School Leaving Certificate can be corrected
+              // on-screen before printing (new SLC or Edit SLC mode).
+              _buildCertificateParticulars(enabled),
+              const SizedBox(height: AppSpacing.md),
+
               // Row 1: Effective Leaving Date + Today button
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -1761,7 +1859,10 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                     children: [
                       _buildRadioOption<String>(
                         value: 'Good ',
-                        groupValue: state.conduct,
+                        // Shot 3d: match normalized so legacy DB casing
+                        // ('good', 'GOOD', 'Good ') still SELECTS Good and
+                        // tapping any option always updates state.
+                        groupValue: _conductOptionValue(state.conduct),
                         label: 'Good',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -1770,7 +1871,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       const SizedBox(width: AppSpacing.md),
                       _buildRadioOption<String>(
                         value: 'Satisfactory',
-                        groupValue: state.conduct,
+                        groupValue: _conductOptionValue(state.conduct),
                         label: 'Satisfactory',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -1779,7 +1880,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       const SizedBox(width: AppSpacing.md),
                       _buildRadioOption<String>(
                         value: 'Bad',
-                        groupValue: state.conduct,
+                        groupValue: _conductOptionValue(state.conduct),
                         label: 'Bad',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -1811,6 +1912,93 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Shot 3d: the 8 pre-printed certificate particulars as a clean
+  /// 2-column grid of compact editable text fields, pre-populated from the
+  /// selected student. Values are read live by [_handlePrintCertificate]
+  /// so any on-screen tweak shows up on the printed PDF immediately.
+  Widget _buildCertificateParticulars(bool enabled) {
+    Widget field(String label, TextEditingController controller) {
+      return TextField(
+        controller: controller,
+        enabled: enabled,
+        maxLines: 1,
+        style: AppTypography.bodySmall,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
+        ),
+      );
+    }
+
+    Widget row(Widget left, Widget right) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: right),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 3.5,
+              height: 14,
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'CERTIFICATE PARTICULARS (editable before print)',
+                style: AppTypography.label.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  color: AppColors.textPrimary,
+                  letterSpacing: 0.5,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        row(
+          field('Student Name', _studentNameController),
+          field('Father Name', _fatherNameController),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        row(
+          field('Date of Birth', _dobController),
+          field('Admission Date', _admissionDateController),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        row(
+          field('Class Admitted', _classAdmittedController),
+          field('Class at Leaving', _classLeavingController),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        row(
+          field('Dues Paid Up To', _duesPaidUpToController),
+          field('Address', _addressController),
+        ),
+      ],
     );
   }
 
@@ -2448,7 +2636,8 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                     children: [
                       _buildRadioOption<String>(
                         value: 'Good ',
-                        groupValue: state.conduct,
+                        // Shot 3d: normalized matching (see desktop form).
+                        groupValue: _conductOptionValue(state.conduct),
                         label: 'Good',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -2456,7 +2645,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'Satisfactory',
-                        groupValue: state.conduct,
+                        groupValue: _conductOptionValue(state.conduct),
                         label: 'Satisfactory',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -2464,7 +2653,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                       ),
                       _buildRadioOption<String>(
                         value: 'Bad',
-                        groupValue: state.conduct,
+                        groupValue: _conductOptionValue(state.conduct),
                         label: 'Bad',
                         onChanged: (val) => ref
                             .read(schoolLeavingProvider.notifier)
@@ -2577,8 +2766,4 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       ),
     );
   }
-}
-
-extension on LeavingStudentRow {
-  String? get dob => null;
 }

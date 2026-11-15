@@ -506,13 +506,27 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   // SEARCH BAR
   // ---------------------------------------------------------------------------
 
-  /// Shot 1e: fixed 55/45 workspace only on wide AND tall desktop viewports
-  /// (>= 1000px wide, >= 820px tall). Below either threshold the whole page
-  /// scrolls as a single surface — no inner scroll-lock anywhere.
+  /// Shot 1e: fixed 55/45 workspace on wide AND tall desktop viewports
+  /// (>= 960px wide, >= 720px tall). Shot 3d: the height threshold drops
+  /// from 820 to 720 so smaller laptop windows (1366x768, 1440x780) STAY
+  /// in the clean fixed single-screen workspace (55/45 panes with internal
+  /// card scrolling) instead of flipping to a taller single-page layout.
   bool _fixedWorkspace(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    return size.width >= 1000 && size.height >= 820;
+    return size.width >= 960 && size.height >= 720;
   }
+
+  /// Shot 3d: compact vertical rhythm on short desktop viewports (< 840px)
+  /// — 8-10px row gaps, 36-38px controls and tighter card padding — so the
+  /// whole settlement card (including 'Post Payment (Ctrl+Enter)') fits
+  /// 100% in one view without scrolling at 1366x768 / 1440x780.
+  bool get _compactHeight => MediaQuery.sizeOf(context).height < 840;
+
+  /// Shot 3d: on ALL desktop widths (>= 900px) the payment form always
+  /// uses the compact 2-column horizontal rows — never the tall
+  /// single-column stacked layout that pushed 'Post Payment' off-screen
+  /// on smaller laptop windows.
+  bool get _isDesktopWidth => MediaQuery.sizeOf(context).width >= 900;
 
   Widget _buildSearchBar(FeeCollectionState state) {
     // Shot 1e: the scan field gets the institutional 1.5px #94A3B8 resting /
@@ -2441,7 +2455,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               Expanded(
                 child: SingleChildScrollView(
                   // Shot 2d: comfortable 16px top / 20px side-bottom rhythm.
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  // Shot 3d: compact card body padding on short viewports.
+                  padding: _compactHeight
+                      ? const EdgeInsets.fromLTRB(16, 10, 16, 12)
+                      : const EdgeInsets.fromLTRB(20, 16, 20, 20),
                   child: _buildReceiptDossier(receipt, state),
                 ),
               )
@@ -3695,8 +3712,13 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                 if (fixed)
                   Expanded(
                     child: SingleChildScrollView(
-                      // Shot 2d: comfortable 16px top / 20px side-bottom rhythm.
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                      // Shot 2d: comfortable 16px top / 20px side-bottom
+                      // rhythm. Shot 3d: compact body padding on short
+                      // viewports so 'Post Payment (Ctrl+Enter)' stays
+                      // 100% visible at 1366x768 / 1440x780.
+                      padding: _compactHeight
+                          ? const EdgeInsets.fromLTRB(16, 10, 16, 12)
+                          : const EdgeInsets.fromLTRB(20, 16, 20, 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -3825,7 +3847,10 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       0,
       effectivePayable,
     );
-    final fixed = _fixedWorkspace(context);
+    // Shot 3d: 2-column rows on ALL desktop widths; compact heights/gaps on
+    // short viewports (< 840px) so nothing pushes below the fold.
+    final desktop = _isDesktopWidth;
+    final compact = _compactHeight;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3897,9 +3922,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           const SizedBox(height: AppSpacing.md),
         ],
 
-        // 1 + 2. Payment Date & Receiving Bank — side-by-side on desktop
-        // (Shot 1e), stacked on tablet/mobile.
-        if (fixed)
+        // 1 + 2. Payment Date & Receiving Bank — side-by-side on ALL
+        // desktop widths (Shot 3d), stacked only on tablet/mobile.
+        if (desktop)
           // Shot 2d: 4:6 split so 'Askari Bank — Ballo Khel Road' fits.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3914,9 +3939,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           )
         else ...[
           _buildPaymentDateSelector(state),
-          const SizedBox(height: AppSpacing.sm),
+          SizedBox(height: compact ? 6.0 : AppSpacing.sm),
           _buildBankSelector(state, bankListAsync),
-          const SizedBox(height: AppSpacing.sm),
+          SizedBox(height: compact ? 6.0 : AppSpacing.sm),
         ],
 
         // 3. Payment Mode Segmented Buttons
@@ -3924,7 +3949,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           'Payment Mode *',
           style: AppTypography.label.copyWith(color: AppColors.textSecondary),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: compact ? 6.0 : 8),
         Row(
           children: ['Cash', 'Bank Slip', 'Cheque'].map((mode) {
             final isSelected = state.paymentMode == mode;
@@ -3938,7 +3963,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                         .setPaymentMode(mode);
                   },
                   child: Container(
-                    height: 40,
+                    height: compact ? 36.0 : 40,
                     decoration: BoxDecoration(
                       color: isSelected
                           ? AppColors.brandPrimary.withValues(alpha: 0.1)
@@ -3970,10 +3995,11 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             );
           }).toList(),
         ),
-        SizedBox(height: fixed ? 14.0 : AppSpacing.sm),
+        SizedBox(height: compact ? 8.0 : 14.0),
 
-        // 4. Amount Tendered + live balance badge — side-by-side on desktop.
-        if (fixed)
+        // 4. Amount Tendered + live balance badge — side-by-side on ALL
+        // desktop widths (Shot 3d).
+        if (desktop)
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -3989,21 +4015,21 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           _buildAmountTenderedSection(receipt, state),
           const SizedBox(height: AppSpacing.xs),
           _buildBalanceCallout(remainingBalance),
-          const SizedBox(height: AppSpacing.sm),
+          SizedBox(height: compact ? 6.0 : AppSpacing.sm),
         ],
 
         // 5. Remarks — full horizontal width on desktop (Shot 2d).
         _buildRemarksField(),
 
         // 6. SMS confirmation toggle on its own clean row (desktop).
-        if (fixed) ...[
-          const SizedBox(height: 14),
+        if (desktop) ...[
+          SizedBox(height: compact ? 8.0 : 14.0),
           _buildSmsToggle(state),
-          const SizedBox(height: 14),
+          SizedBox(height: compact ? 8.0 : 14.0),
         ] else ...[
-          const SizedBox(height: AppSpacing.sm),
+          SizedBox(height: compact ? 6.0 : AppSpacing.sm),
           _buildSmsToggle(state),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: compact ? 8.0 : AppSpacing.md),
         ],
 
         // 7. Post Payment Button (Ctrl+Enter)
@@ -4023,7 +4049,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.brandPrimary,
             foregroundColor: Colors.white,
-            minimumSize: const Size.fromHeight(46),
+            minimumSize: Size.fromHeight(compact ? 38.0 : 46),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadius.md),
             ),
@@ -4087,7 +4113,7 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
             }
           },
           child: Container(
-            height: 40,
+            height: _compactHeight ? 36.0 : 40,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(AppRadius.md),
@@ -4164,9 +4190,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
               },
             );
           },
-          loading: () => const SizedBox(
-            height: 40,
-            child: LinearProgressIndicator(value: 0.5),
+          loading: () => SizedBox(
+            height: _compactHeight ? 36.0 : 40,
+            child: const LinearProgressIndicator(value: 0.5),
           ),
           error: (_, __) => const Text('Error loading banks'),
         ),
@@ -4219,9 +4245,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           ),
           decoration: _fcFieldDecoration(
             suffixText: 'PKR',
-            contentPadding: const EdgeInsets.symmetric(
+            contentPadding: EdgeInsets.symmetric(
               horizontal: 12,
-              vertical: 12,
+              vertical: _compactHeight ? 8.0 : 12,
             ),
           ),
           onChanged: (val) {
@@ -4298,9 +4324,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
           style: AppTypography.bodySmall,
           decoration: _fcFieldDecoration(
             hintText: 'Teller settlement remarks or transaction note...',
-            contentPadding: const EdgeInsets.symmetric(
+            contentPadding: EdgeInsets.symmetric(
               horizontal: 10,
-              vertical: 12,
+              vertical: _compactHeight ? 8.0 : 12,
             ),
           ),
           onChanged: (val) {
@@ -4317,6 +4343,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       children: [
         Checkbox(
           value: state.sendSms,
+          // Shot 3d: compact tap target keeps the settlement card short.
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           onChanged: (v) {
             ref.read(feeCollectionProvider.notifier).toggleSms(v ?? true);
           },
