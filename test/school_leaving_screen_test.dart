@@ -306,6 +306,113 @@ void main() {
         expect(state.conduct, 'Good ');
       },
     );
+
+    test('p) inferClassFromRemarks infers the leaving class from SLC remarks', () {
+      expect(
+        SchoolLeavingNotifier.inferClassFromRemarks(
+          'Passing out from 8 class . 718.5 / 850',
+        ),
+        'Eight',
+      );
+      expect(
+        SchoolLeavingNotifier.inferClassFromRemarks('class 9 completed'),
+        'Nine',
+      );
+      expect(
+        SchoolLeavingNotifier.inferClassFromRemarks('passed 10th class'),
+        'Ten',
+      );
+      expect(
+        SchoolLeavingNotifier.inferClassFromRemarks('went to nursery then left'),
+        'Nursery',
+      );
+      expect(
+        SchoolLeavingNotifier.inferClassFromRemarks('family relocating'),
+        isNull,
+      );
+      expect(SchoolLeavingNotifier.inferClassFromRemarks(null), isNull);
+      expect(SchoolLeavingNotifier.inferClassFromRemarks(''), isNull);
+    });
+
+    test('q) updateSlcRecord persists Class at Leaving + all certificate particulars and honors overrides', () async {
+      // Seed an existing SLC for 4413 (currently enrolled in Class 10).
+      await db.rawInsert('''
+        INSERT INTO SchLeaving (SLID, StuRegID, LeftDate, LeftClass, Charactor, TermOfLeavign, SLCertificate, Remarks)
+        VALUES (103, 4413, '2018-05-31', 13, 'Good ', 'Completed Studies', 1, 'Completed studies')
+      ''');
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(schoolLeavingProvider.notifier);
+      await notifier.loadInitialData();
+      await notifier.selectStudent(4413);
+
+      final (ok, msg) = await notifier.updateSlcRecord(
+        stuRegId: 4413,
+        studentName: 'New Student Name',
+        fatherName: 'New Father Name',
+        address: '12 New Street',
+        dob: '05-Sep-2010',
+        admissionDate: '01-Apr-2010',
+        classAdmitted: 'Class 3',
+        classAtLeaving: 'Class 8',
+        duesPaidUpTo: 'October',
+      );
+      expect(ok, isTrue);
+      expect(msg, contains('SLC record updated'));
+
+      final state = container.read(schoolLeavingProvider);
+      expect(state.selectedStudent, isNotNull);
+      expect(state.selectedStudent!.stuRegId, 4413);
+      // Displayed class follows the edited Class at Leaving (never reverts
+      // to the old class or 'Unassigned').
+      expect(state.selectedStudent!.className, 'Class 8');
+      expect(state.certificateFields['leftClass'], 'Class 8');
+      expect(state.certificateFields['admittedClass'], 'Class 3');
+      expect(state.certificateFields['dob'], '05-Sep-2010');
+      expect(state.certificateFields['admissionDate'], '01-Apr-2010');
+      expect(state.certificateFields['address'], '12 New Street');
+      expect(state.certificateFields['duesPaidUpTo'], 'October');
+
+      // DB writes landed: Stu_Reg particulars + most recent Student_Class.
+      final reg = (await db.rawQuery(
+        'SELECT DOB, P_Address, AdmInClass FROM Stu_Reg WHERE Stu_RegID = 4413',
+      )).first;
+      expect(reg['DOB'], '2010-09-05');
+      expect(reg['P_Address'], '12 New Street');
+      expect(reg['AdmInClass'], 6); // 'Class 3'
+
+      final sc = (await db.rawQuery(
+        'SELECT ClassID FROM Student_Class WHERE Stu_RegID = 4413 ORDER BY Present DESC, SessionYr DESC LIMIT 1',
+      )).first;
+      expect(sc['ClassID'], 11); // 'Class 8'
+    });
+
+    test('r) alumni with unassigned active class resolve class from SLC remarks', () async {
+      // Give student 4414 an SLC whose remarks name the class they left.
+      await db.rawInsert('''
+        INSERT INTO SchLeaving (SLID, StuRegID, LeftDate, LeftClass, Charactor, TermOfLeavign, SLCertificate, Remarks)
+        VALUES (104, 4414, '2018-05-31', 0, 'Good ', 'Completed Studies', 1, 'Passing out from 8 class . 718.5 / 850')
+      ''');
+      // Break the active enrollment so CName would otherwise be NULL.
+      await db.rawUpdate(
+        'UPDATE Student_Class SET ClassID = 0 WHERE Stu_RegID = 4414',
+      );
+
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final notifier = container.read(schoolLeavingProvider.notifier);
+      await notifier.loadInitialData();
+
+      final state = container.read(schoolLeavingProvider);
+      final row = state.students.firstWhere((s) => s.stuRegId == 4414);
+      expect(row.className, 'Eight');
+
+      await notifier.selectStudent(4414);
+      final selected = container.read(schoolLeavingProvider);
+      expect(selected.selectedStudent!.className, 'Eight');
+      expect(selected.certificateFields['leftClass'], 'Eight');
+    });
   });
 
   group('SchoolLeavingScreen UI & Widget Tests', () {

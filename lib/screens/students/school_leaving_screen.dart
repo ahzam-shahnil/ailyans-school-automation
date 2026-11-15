@@ -366,92 +366,89 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
   /// clean dd-MMM-yyyy dates (DOB, address, admitted/leaving class and the
   /// dues-paid month arrive via the provider's certificateFields map).
   void _syncCertificateControllers(LeavingStudentRow student) {
+    // Shot 3g: the provider's saved overrides (edited via Update SLC Record)
+    // win over the raw student row for the identity fields.
+    final cert = ref.read(schoolLeavingProvider).certificateFields;
+    final certName = (cert['studentName'] ?? '').trim();
     _studentNameController.text = SlcPdfGenerator.formatValue(
-      student.studentName,
+      certName.isNotEmpty ? certName : student.studentName,
     );
+    final certFather = (cert['fatherName'] ?? '').trim();
     _fatherNameController.text = SlcPdfGenerator.formatValue(
-      student.fatherName ?? '',
+      certFather.isNotEmpty ? certFather : (student.fatherName ?? ''),
     );
-    _admissionDateController.text = _formatCertDate(student.admissionDate);
-    _classLeavingController.text = SlcPdfGenerator.formatValue(
-      student.classSecDisplay,
+    final certAdmission = (cert['admissionDate'] ?? '').trim();
+    _admissionDateController.text = _formatCertDate(
+      certAdmission.isNotEmpty ? certAdmission : student.admissionDate,
     );
+    _setLeavingClassController(student, cert);
   }
 
-  /// Shot 3d: admin edit — persist corrected SLC fields onto the existing
-  /// SchLeaving row (UPDATE ... WHERE StuRegID = ?). Edited Student Name,
-  /// Father Name and Address are also written back to Stu_Reg.
+  /// Shot 3g fix 1: keep the 'Class at Leaving' box meaningful for alumni
+  /// whose active class row is unassigned — fall back to the SLC remarks
+  /// inference, and never overwrite a non-empty controller value with
+  /// 'Unassigned'.
+  void _setLeavingClassController(
+    LeavingStudentRow student,
+    Map<String, String> cert,
+  ) {
+    final display = student.classSecDisplay.trim();
+    final isUnassigned =
+        display.isEmpty || display.toLowerCase() == 'unassigned';
+    if (!isUnassigned) {
+      _classLeavingController.text = SlcPdfGenerator.formatValue(display);
+      return;
+    }
+    final certLeft = (cert['leftClass'] ?? '').trim();
+    final inferred =
+        SchoolLeavingNotifier.inferClassFromRemarks(student.existingSlcRemarks) ??
+        '';
+    final effective = certLeft.isNotEmpty ? certLeft : inferred;
+    if (effective.isNotEmpty) {
+      _classLeavingController.text = SlcPdfGenerator.formatValue(effective);
+    } else if (_classLeavingController.text.trim().isEmpty) {
+      _classLeavingController.text = SlcPdfGenerator.formatValue(display);
+    }
+  }
+
+  /// Shot 3g fix 2: admin edit — persist ALL edited certificate particulars
+  /// (Student Name, Father Name, Address, DOB, Admission Date, Class
+  /// Admitted, Class at Leaving, Dues Paid Up To) through the provider's
+  /// updateSlcRecord, which writes Stu_Reg / SchLeaving / Student_Class and
+  /// keeps the edited values in saved overrides so the screen and the
+  /// printed PDF never revert them.
   Future<void> _updateSlcRecord() async {
     final state = ref.read(schoolLeavingProvider);
     final student = state.selectedStudent;
     if (student == null) return;
 
-    try {
-      final db = await DatabaseService.instance.database;
-
-      // 1. Persist edited identity fields back to Stu_Reg.
-      final newName = _studentNameController.text.trim();
-      final newFather = _fatherNameController.text.trim();
-      final newAddress = _addressController.text.trim();
-      final stuUpdate = <String, dynamic>{};
-      if (newName.isNotEmpty && newName != student.studentName) {
-        final parts = newName.split(RegExp(r'\s+'));
-        stuUpdate['NameFirst'] = parts.first;
-        stuUpdate['NameMiddle'] = parts.length > 2
-            ? parts.sublist(1, parts.length - 1).join(' ')
-            : null;
-        stuUpdate['NameLast'] = parts.length > 1 ? parts.last : null;
-      }
-      if (newFather.isNotEmpty && newFather != (student.fatherName ?? '')) {
-        stuUpdate['F_Name'] = newFather;
-      }
-      if (newAddress.isNotEmpty) {
-        stuUpdate['P_Address'] = newAddress;
-        stuUpdate['T_Address'] = newAddress;
-      }
-      if (stuUpdate.isNotEmpty) {
-        await db.update(
-          'Stu_Reg',
-          stuUpdate,
-          where: 'Stu_RegID = ?',
-          whereArgs: [student.stuRegId],
+    final (ok, msg) = await ref
+        .read(schoolLeavingProvider.notifier)
+        .updateSlcRecord(
+          stuRegId: student.stuRegId,
+          studentName: _studentNameController.text,
+          fatherName: _fatherNameController.text,
+          address: _addressController.text,
+          dob: _dobController.text,
+          admissionDate: _admissionDateController.text,
+          classAdmitted: _classAdmittedController.text,
+          classAtLeaving: _classLeavingController.text,
+          duesPaidUpTo: _duesPaidUpToController.text,
         );
-      }
-
-      // 2. Persist the leaving fields onto the existing SchLeaving row.
-      await db.update(
-        'SchLeaving',
-        {
-          'LeftDate': DateFormat('yyyy-MM-dd').format(state.leavingDate),
-          'Charactor': (state.conduct ?? 'Good ').trim().isEmpty
-              ? 'Good'
-              : state.conduct!.trim(),
-          'TermOfLeavign': (state.reason ?? '').trim(),
-          'Remarks': state.remarks.trim().isEmpty
-              ? null
-              : state.remarks.trim(),
-        },
-        where: 'StuRegID = ?',
-        whereArgs: [student.stuRegId],
-      );
-    } catch (e) {
-      debugPrint('Update SLC failed: $e');
-      if (!mounted) return;
-      _showSnackBar('Failed to update SLC record: $e', isError: true);
+    if (!mounted) return;
+    if (!ok) {
+      _showSnackBar(msg, isError: true);
       return;
     }
-    if (!mounted) return;
 
     setState(() => _editingSlc = false);
     ref.read(schoolLeavingProvider.notifier).setEditingSlc(false);
     _invalidateDependentProviders();
-    await ref.read(schoolLeavingProvider.notifier).loadInitialData();
-    if (!mounted) return;
     await ref
         .read(schoolLeavingProvider.notifier)
         .selectStudent(student.stuRegId);
     if (!mounted) return;
-    _showSnackBar('SLC record updated for ${student.stuRegId}.');
+    _showSnackBar(msg);
   }
 
   /// Shot 3a: admin delete — removes a bogus/corrupted SLC entry. Ghost
@@ -785,6 +782,15 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     String live(String controllerText, String fallback) =>
         controllerText.trim().isNotEmpty ? controllerText.trim() : fallback;
 
+    // Shot 3g fix 2: treat the 'Unassigned' placeholder as empty for the
+    // class fields so the printed PDF always reflects what is in the
+    // Class Admitted / Class at Leaving text boxes.
+    String liveClass(String controllerText, String fallback) {
+      final t = controllerText.trim();
+      if (t.isEmpty || t.toLowerCase() == 'unassigned') return fallback;
+      return t;
+    }
+
     final slcData = <String, dynamic>{
       'admissionNo': '${student.stuRegId}',
       'studentName': live(_studentNameController.text, student.studentName),
@@ -796,13 +802,13 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
         student.admissionDate ?? '',
       ),
       'address': live(_addressController.text, address),
-      'admittedClass': live(
+      'admittedClass': liveClass(
         _classAdmittedController.text,
         admittedClassName.isNotEmpty
             ? admittedClassName
             : student.classSecDisplay,
       ),
-      'leftClass': live(
+      'leftClass': liveClass(
         _classLeavingController.text,
         leftClassName.isNotEmpty ? leftClassName : student.classSecDisplay,
       ),
@@ -956,6 +962,11 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           if (stillSelected?.stuRegId != sid) return;
           setState(() {
             _dobController.text = _formatCertDate(enriched['dob']);
+            final admCert = (enriched['admissionDate'] ?? '').trim();
+            if (admCert.isNotEmpty &&
+                _admissionDateController.text.trim().isEmpty) {
+              _admissionDateController.text = _formatCertDate(admCert);
+            }
             _addressController.text = SlcPdfGenerator.formatValue(
               enriched['address'] ?? '',
             );
