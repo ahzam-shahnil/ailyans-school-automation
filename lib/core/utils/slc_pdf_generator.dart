@@ -19,7 +19,7 @@ class SlcPdfGenerator {
   /// 190pt so 'Class At the Time of Leaving:' renders on ONE line.
   static const double kLabelWidth = 190;
 
-  /// Shot 3d: tokens preserved verbatim by [formatValue] (built-in PDF
+  /// Shot 3d/3e: tokens preserved verbatim by [formatValue] (built-in PDF
   /// Helvetica fonts have no Unicode support — only ASCII is safe).
   static const Set<String> _formatValueAcronyms = {
     'bise',
@@ -28,6 +28,9 @@ class SlcPdfGenerator {
     'slc',
     'fbise',
     'ibcc',
+    'noc',
+    'ssc',
+    'hssc',
   };
 
   // ---------------------------------------------------------------------------
@@ -110,12 +113,14 @@ class SlcPdfGenerator {
       'Charactor',
       'character',
     ]);
-    final reason = normalizeReason(pick([
-      'reason',
-      'termOfLeaving',
-      'TermOfLeavign',
-      'term',
-    ]));
+    final reason = formatValue(
+      normalizeReason(pick([
+        'reason',
+        'termOfLeaving',
+        'TermOfLeavign',
+        'term',
+      ])),
+    );
     final remarksRaw = pick(['remarks', 'slRemarks', 'Remarks']);
 
     // Shot 3d: every printed value passes through formatValue so names,
@@ -278,12 +283,17 @@ class SlcPdfGenerator {
     }
   }
 
-  /// Shot 3d: production typography for every printed certificate value —
-  /// trims, collapses runs of spaces, Title-Cases each word (including
-  /// sub-words after '-', '/', '('), and preserves acronym tokens (BISE,
-  /// AKU, CNIC, SLC, ...) plus formatted dates like '05-Sep-2010'.
-  /// Empty input renders the ASCII '-' placeholder (built-in Helvetica
-  /// fonts have NO Unicode support — never emit an em-dash here).
+  /// Shot 3e: production typography for every printed certificate value —
+  /// trims, collapses runs of spaces, and Title-Cases EVERY space-separated
+  /// word AND every segment after '-', '/', '.' or '(' so
+  /// 'muhammad mashir iqbal' -> 'Muhammad Mashir Iqbal' and
+  /// 'h/no. l/132 mohallah miana mianwali' -> 'H/No. L/132 Mohallah Miana
+  /// Mianwali'. Apostrophes are NOT segment boundaries, so "Parent's"
+  /// keeps its lowercase 's. Acronym tokens (BISE, AKU, CNIC, SLC, NOC,
+  /// SSC, HSSC, ...), Roman numerals (I..XII) and formatted dates
+  /// ('05-Sep-2010') survive verbatim. Empty input renders the ASCII '-'
+  /// placeholder (built-in Helvetica fonts have NO Unicode support — never
+  /// emit an em-dash here).
   static String formatValue(String? raw) {
     if (raw == null) return '-';
     final s = raw.replaceAll(RegExp(r'\s+'), ' ').trim();
@@ -294,22 +304,45 @@ class SlcPdfGenerator {
       return s;
     }
 
-    return s
-        .splitMapJoin(
-          RegExp(r'[-/()]'),
-          onMatch: (m) => m[0]!,
-          onNonMatch: _formatValueSubToken,
-        );
+    // Title-Case every space-separated word...
+    final words = s.split(' ');
+    final out = <String>[];
+    for (final word in words) {
+      out.add(_formatValueWord(word));
+    }
+    return out.join(' ');
   }
 
-  /// Title-Cases one sub-token (a run of characters with no '-', '/' or
-  /// '(' inside). Acronym tokens and Roman numerals (Class XI) survive
-  /// verbatim; everything else becomes 'Word'.
-  static String _formatValueSubToken(String sub) {
-    if (sub.isEmpty) return sub;
-    if (_formatValueAcronyms.contains(sub.toLowerCase())) return sub;
-    if (RegExp(r'^[IVXLC]+$').hasMatch(sub)) return sub;
-    return sub[0].toUpperCase() + sub.substring(1).toLowerCase();
+  /// Title-Cases one space-separated [word]: the first letter of the word
+  /// AND of every segment after '-', '/', '.' or '(' is capitalized, the
+  /// rest is lowercased. Acronym segments ('BISE', 'NOC', ...) and Roman
+  /// numerals ('XI') survive verbatim.
+  static String _formatValueWord(String word) {
+    if (word.isEmpty) return word;
+    // Note: the apostrophe is deliberately NOT a separator, so "Parent's"
+    // becomes 'P' upper + 'arent's' lower — never "Parent'S".
+    return word.splitMapJoin(
+      RegExp(r'[-/.(]'),
+      onMatch: (m) => m[0]!,
+      onNonMatch: _formatValueSegment,
+    );
+  }
+
+  /// Title-Cases one segment (a run of characters with no '-', '/', '.'
+  /// or '(' inside) of a formatted word.
+  static String _formatValueSegment(String segment) {
+    if (segment.isEmpty) return segment;
+    if (_formatValueAcronyms.contains(segment.toLowerCase())) {
+      // Acronyms are canonicalized to UPPERCASE even when the source data
+      // stored them lowercase ('aku karachi' -> 'AKU Karachi').
+      return segment.toUpperCase();
+    }
+    if (RegExp(r'^[ivxlc]+$', caseSensitive: false).hasMatch(segment)) {
+      // Roman numerals (Class XI / XII) canonicalize to UPPERCASE even
+      // when the source data stored them lowercase ('class xii').
+      return segment.toUpperCase();
+    }
+    return segment[0].toUpperCase() + segment.substring(1).toLowerCase();
   }
 
   static String _formatDate(String raw) {

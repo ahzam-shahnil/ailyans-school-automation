@@ -5,6 +5,51 @@ import 'package:school_automation/core/utils/slc_pdf_generator.dart';
 import 'package:school_automation/core/utils/slc_register_pdf_generator.dart';
 
 void main() {
+  group('SlcPdfGenerator.formatValue Title-Case tests', () {
+    // Shot 3e: EVERY word must be Title-Cased, not just the sentence.
+    test('Title-Cases every word of multi-word names', () {
+      expect(
+        SlcPdfGenerator.formatValue('muhammad mashir iqbal'),
+        'Muhammad Mashir Iqbal',
+      );
+      expect(SlcPdfGenerator.formatValue('Aamir ali shah'), 'Aamir Ali Shah');
+      // Already Title-Cased input must round-trip unchanged.
+      expect(
+        SlcPdfGenerator.formatValue('Muhammad Mashir Iqbal'),
+        'Muhammad Mashir Iqbal',
+      );
+    });
+
+    test('Title-Cases every segment of hyphenated / slashed / dotted words', () {
+      expect(
+        SlcPdfGenerator.formatValue('h/no. l/132 mohallah miana mianwali'),
+        'H/No. L/132 Mohallah Miana Mianwali',
+      );
+      expect(SlcPdfGenerator.formatValue('eight-a'), 'Eight-A');
+      expect(SlcPdfGenerator.formatValue('Class 10-a'), 'Class 10-A');
+    });
+
+    test('Preserves acronyms, Roman numerals and formatted dates', () {
+      expect(
+        SlcPdfGenerator.formatValue('BISE sargodha aku karachi'),
+        'BISE Sargodha AKU Karachi',
+      );
+      expect(SlcPdfGenerator.formatValue('class xii'), 'Class XII');
+      expect(SlcPdfGenerator.formatValue('05-Sep-2010'), '05-Sep-2010');
+      expect(SlcPdfGenerator.formatValue('15-Nov-2026'), '15-Nov-2026');
+    });
+
+    test("Does not capitalize after apostrophes; ASCII '-' when empty", () {
+      expect(
+        SlcPdfGenerator.formatValue("on parent's request"),
+        "On Parent's Request",
+      );
+      expect(SlcPdfGenerator.formatValue(null), '-');
+      expect(SlcPdfGenerator.formatValue('   '), '-');
+      expect(SlcPdfGenerator.formatValue(''), '-');
+    });
+  });
+
   group('SlcPdfGenerator & SlcRegisterPdfGenerator Tests', () {
     test(
       'SlcPdfGenerator.generate produces valid A4 PDF without Flex exception',

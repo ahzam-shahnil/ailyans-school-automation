@@ -12,6 +12,7 @@ import '../../core/sync/sync_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
+import '../../core/utils/slc_pdf_generator.dart';
 import '../../models/leaving_student_row.dart';
 import '../../widgets/mobile/mobile_dropdown_field.dart';
 import '../../widgets/mobile/mobile_kpi_card.dart';
@@ -145,6 +146,13 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     return r;
   }
 
+  /// Shot 3e: left-card 'Admitted:' display — clean dd-MMM-yyyy, '-' when
+  /// the DB has no admission date.
+  String _admittedDisplay(LeavingStudentRow student) {
+    final formatted = _formatCertDate(student.admissionDate);
+    return formatted.isEmpty ? '-' : formatted;
+  }
+
   /// Shot 3d: map the raw Character & Conduct value (legacy DB casing like
   /// 'good', 'GOOD', 'Good ', or empty) onto the exact radio option value
   /// so the correct choice is always SELECTED and tappable.
@@ -159,14 +167,58 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     }
   }
 
-  /// Shot 3d: push the selected student's identity fields into the editable
-  /// certificate controllers (DOB, address, admitted/leaving class and the
+  /// Shot 3e: clean dd-MMM-yyyy rendering for raw SQLite date values
+  /// ('2010-09-05 00:00:00', '09/05/10 00:00:00', '04/02/24 00:00:00') —
+  /// strips any '00:00:00' timestamp tail. Returns '' for empty input and
+  /// passes through values it cannot parse (e.g. '15-Nov-2026').
+  static String _formatCertDate(String? raw) {
+    final trimmed = (raw ?? '').trim();
+    if (trimmed.isEmpty || trimmed == '-') return '';
+
+    DateTime? dt = DateTime.tryParse(trimmed);
+    if (dt == null) {
+      final datePart = trimmed.split(' ').first;
+      final slashParts = datePart.split('/');
+      if (slashParts.length == 3) {
+        final p0 = int.tryParse(slashParts[0]);
+        final p1 = int.tryParse(slashParts[1]);
+        var p2 = int.tryParse(slashParts[2]);
+        if (p0 != null && p1 != null && p2 != null) {
+          if (p2 < 100) p2 += 2000;
+          if (p0 > 12) {
+            // dd/MM/yyyy
+            dt = DateTime(p2, p1, p0);
+          } else {
+            // MM/dd/yy (e.g. 09/05/10 -> 05-Sep-2010)
+            dt = DateTime(p2, p0, p1);
+          }
+        }
+      }
+    }
+
+    if (dt != null) {
+      try {
+        return DateFormat('dd-MMM-yyyy').format(dt);
+      } catch (_) {}
+    }
+    return trimmed;
+  }
+
+  /// Shot 3d/3e: push the selected student's identity fields into the
+  /// editable certificate controllers — Title-Cased names/classes and
+  /// clean dd-MMM-yyyy dates (DOB, address, admitted/leaving class and the
   /// dues-paid month arrive via the provider's certificateFields map).
   void _syncCertificateControllers(LeavingStudentRow student) {
-    _studentNameController.text = student.studentName;
-    _fatherNameController.text = student.fatherName ?? '';
-    _admissionDateController.text = student.admissionDate ?? '';
-    _classLeavingController.text = student.classSecDisplay;
+    _studentNameController.text = SlcPdfGenerator.formatValue(
+      student.studentName,
+    );
+    _fatherNameController.text = SlcPdfGenerator.formatValue(
+      student.fatherName ?? '',
+    );
+    _admissionDateController.text = _formatCertDate(student.admissionDate);
+    _classLeavingController.text = SlcPdfGenerator.formatValue(
+      student.classSecDisplay,
+    );
   }
 
   /// Shot 3d: admin edit — persist corrected SLC fields onto the existing
@@ -725,7 +777,10 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
       }
 
       // Shot 3d: DB enrichment landed — fill the enrichment-only fields
-      // (leave any immediate identity fields untouched).
+      // (leave any immediate identity fields untouched). Shot 3e: dates
+      // render as clean dd-MMM-yyyy (no '00:00:00' tails), text fields are
+      // Title-Cased, and 'Dues Paid Up To' falls back to the formatted
+      // leaving date when no paid voucher exists (matching the PDF).
       final enriched = next.certificateFields;
       final prevEnriched = prev?.certificateFields;
       final selectedNow = next.selectedStudent;
@@ -733,21 +788,33 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
           enriched.isNotEmpty &&
           selectedNow != null) {
         final sid = selectedNow.stuRegId;
+        final duesRaw = enriched['duesPaidUpTo'] ?? '';
+        final duesText = duesRaw.trim().isNotEmpty
+            ? _formatCertDate(duesRaw)
+            : DateFormat('dd-MMM-yyyy').format(next.leavingDate);
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           final stillSelected =
               ref.read(schoolLeavingProvider).selectedStudent;
           if (stillSelected?.stuRegId != sid) return;
           setState(() {
-            _dobController.text = enriched['dob'] ?? '';
-            _addressController.text = enriched['address'] ?? '';
-            if ((enriched['admittedClass'] ?? '').isNotEmpty) {
-              _classAdmittedController.text = enriched['admittedClass']!;
+            _dobController.text = _formatCertDate(enriched['dob']);
+            _addressController.text = SlcPdfGenerator.formatValue(
+              enriched['address'] ?? '',
+            );
+            final admittedRaw = enriched['admittedClass'] ?? '';
+            if (admittedRaw.trim().isNotEmpty) {
+              _classAdmittedController.text = SlcPdfGenerator.formatValue(
+                admittedRaw,
+              );
             }
-            if ((enriched['leftClass'] ?? '').isNotEmpty) {
-              _classLeavingController.text = enriched['leftClass']!;
+            final leftRaw = enriched['leftClass'] ?? '';
+            if (leftRaw.trim().isNotEmpty) {
+              _classLeavingController.text = SlcPdfGenerator.formatValue(
+                leftRaw,
+              );
             }
-            _duesPaidUpToController.text = enriched['duesPaidUpTo'] ?? '';
+            _duesPaidUpToController.text = duesText;
           });
         });
       }
@@ -1114,7 +1181,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                                                   ),
                                                   const SizedBox(height: 2),
                                                   Text(
-                                                    'Admitted: ${student.admissionDate ?? '-'}',
+                                                      'Admitted: ${_admittedDisplay(student)}',
                                                     style: AppTypography
                                                         .bodySmall
                                                         .copyWith(
@@ -1501,7 +1568,11 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
 
   Widget _buildStatusBanner(SchoolLeavingState state) {
     if (state.committedSlc != null) {
-      final dateStr = state.committedSlc!['LeftDate'] ?? '';
+      // Shot 3e: clean dd-MMM-yyyy (strip any raw '2026-11-15' / timestamp).
+      final dateStr = _formatCertDate(
+        state.committedSlc!['LeftDate']?.toString(),
+      );
+      final bannerDate = dateStr.isEmpty ? '-' : dateStr;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
@@ -1519,7 +1590,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'School leaving committed on $dateStr. Certificate is ready to print.',
+                'School leaving committed on $bannerDate. Certificate is ready to print.',
                 style: AppTypography.bodySmall.copyWith(
                   color: AppColors.statusSuccessText,
                   fontWeight: FontWeight.w600,
@@ -1532,7 +1603,11 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
     }
 
     if (state.hasExistingSlc) {
-      final leftDate = state.selectedStudent?.existingSlcDate ?? '-';
+      // Shot 3e: clean dd-MMM-yyyy left date in the banner.
+      final formattedLeft = _formatCertDate(
+        state.selectedStudent?.existingSlcDate,
+      );
+      final leftDate = formattedLeft.isEmpty ? '-' : formattedLeft;
       // Shot 3a: normalize the legacy 'Compeletd Studies' typo on display.
       final term = _normalizeReason(
         state.selectedStudent?.existingSlcTerm,
@@ -2332,7 +2407,7 @@ class _SchoolLeavingScreenState extends ConsumerState<SchoolLeavingScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Admitted: ${student.admissionDate ?? '-'}',
+                    'Admitted: ${_admittedDisplay(student)}',
                   style: AppTypography.bodySmall.copyWith(
                     color: AppColors.textMuted,
                   ),
