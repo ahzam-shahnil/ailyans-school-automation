@@ -110,24 +110,47 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
   // ---------------------------------------------------------------------------
 
   List<String> _billingMonthsFor(String sessionYr, String selected) {
-    final out = <String>[];
     final parts = sessionYr.split('-');
     final startYear = int.tryParse(parts.isNotEmpty ? parts[0] : '') ??
         DateTime.now().year;
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
-    // Academic year: July (start) through June (end).
+    final months = <DateTime>[];
+    // Academic year: July of startYear through June of startYear+1.
     for (int i = 0; i < 12; i++) {
-      final monthIndex = (6 + i) % 12; // July == index 6
+      final monthIndex = (6 + i) % 12; // July == 6
       final year = monthIndex >= 6 ? startYear : startYear + 1;
-      out.add('${monthNames[monthIndex]} $year');
+      months.add(DateTime(year, monthIndex + 1, 1));
     }
+    // Phase K Shot 6: newest first, so the dropdown opens on the months the
+    // user is most likely billing right now.
+    months.sort((a, b) => b.compareTo(a));
+    final out = months.map((d) => DateFormat('MMMM yyyy').format(d)).toList();
+    // Ensure the current calendar month is present (even if the session is
+    // the current one).
+    final currentMonth = currentBillingMonth();
+    if (!out.contains(currentMonth) &&
+        _sessionContainsMonth(sessionYr, currentMonth)) {
+      out.insert(0, currentMonth);
+    }
+    // Ensure the currently-selected month is present for the dropdown to
+    // validate.
     if (!out.contains(selected)) {
       out.add(selected);
     }
     return out;
+  }
+
+  /// True when [monthStr] ('MMMM yyyy') falls inside the academic session
+  /// [sessionYr] ('July startYear .. June startYear+1').
+  bool _sessionContainsMonth(String sessionYr, String monthStr) {
+    try {
+      final parts = sessionYr.split('-');
+      final startYear = int.parse(parts[0]);
+      final dt = DateFormat('MMMM yyyy').parse(monthStr);
+      if (dt.month >= 7) return dt.year == startYear;
+      return dt.year == startYear + 1;
+    } catch (_) {
+      return false;
+    }
   }
 
   BoxDecoration _cardDecoration() {
@@ -151,10 +174,13 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
     final metaAsync = ref.watch(shellMetadataProvider);
 
     final sessions = sessionsAsync.valueOrNull ?? const <String>[];
-    final effectiveSessions = <String>{
+    // Phase K Shot 6: default to the dynamically-computed current academic
+    // session (July–June) instead of a hardcoded '2017-2018'.
+    final currentSession = currentSessionYr();
+    final allSessions = <String>{
       filters.sessionYr,
       ...sessions,
-      '2017-2018',
+      currentSession,
     }.toList()..sort((a, b) => b.compareTo(a));
 
     final classList = classesAsync.valueOrNull ?? const <SchoolClass>[];
@@ -188,7 +214,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
               const SizedBox(height: AppSpacing.md),
               _buildFilterCard(
                 filters: filters,
-                sessions: effectiveSessions,
+                sessions: allSessions,
                 classList: classList,
                 sections: filteredSections,
                 dateLabel: dateLabel,
@@ -249,6 +275,22 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
       );
     }
 
+    // Phase K Shot 6: validate dropdown values against their items so the
+    // form fields and the filter state can never desync (a stale selection
+    // would otherwise crash Flutter's DropdownButton assert).
+    final availableMonths =
+        _billingMonthsFor(filters.sessionYr, filters.billingMonth);
+    final validMonth = availableMonths.contains(filters.billingMonth)
+        ? filters.billingMonth
+        : (availableMonths.isNotEmpty ? availableMonths.first : null);
+    final validClassId = classList.any((c) => c.classId == filters.classId)
+        ? filters.classId
+        : null;
+    final validSectionId =
+        sections.any((s) => s.classSecId == filters.sectionId)
+            ? filters.sectionId
+            : null;
+
     return Container(
       decoration: _cardDecoration(),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -259,7 +301,12 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
           field(
             label: 'Session Year',
             child: DropdownButtonFormField<String>(
-              initialValue: filters.sessionYr,
+              // Flutter 3.33+ renamed `value` to `initialValue` (the old
+              // `value` is deprecated); the desync protection is the
+              // validation below, not the parameter name.
+              initialValue: sessions.contains(filters.sessionYr)
+                  ? filters.sessionYr
+                  : currentSessionYr(),
               isDense: true,
               items: sessions
                   .map(
@@ -280,9 +327,9 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
           field(
             label: 'Billing Month',
             child: DropdownButtonFormField<String>(
-              initialValue: filters.billingMonth,
+              initialValue: validMonth,
               isDense: true,
-              items: _billingMonthsFor(filters.sessionYr, filters.billingMonth)
+              items: availableMonths
                   .map(
                     (m) => DropdownMenuItem<String>(value: m, child: Text(m)),
                   )
@@ -323,7 +370,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
           field(
             label: 'Class',
             child: DropdownButtonFormField<int?>(
-              initialValue: filters.classId,
+              initialValue: validClassId,
               isDense: true,
               items: [
                 const DropdownMenuItem<int?>(
@@ -348,7 +395,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
           field(
             label: 'Section',
             child: DropdownButtonFormField<int?>(
-              initialValue: filters.sectionId,
+              initialValue: validSectionId,
               isDense: true,
               items: [
                 const DropdownMenuItem<int?>(
@@ -368,6 +415,18 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
                 border: OutlineInputBorder(),
                 isDense: true,
               ),
+            ),
+          ),
+          // Phase K Shot 6: manual refresh — re-emits the filter state so
+          // every watched report query re-runs against fresh data.
+          Padding(
+            padding: const EdgeInsets.only(top: 20), // align with labeled dropdowns
+            child: IconButton(
+              tooltip: 'Refresh reports data',
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
+                ref.read(reportsHubFiltersProvider.notifier).refresh();
+              },
             ),
           ),
         ],

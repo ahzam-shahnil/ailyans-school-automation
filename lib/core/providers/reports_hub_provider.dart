@@ -13,6 +13,22 @@ import 'voucher_generation_provider.dart' show normalizeBillingMonthForStorage;
 // Filter state (VB6 top filter bar)
 // ---------------------------------------------------------------------------
 
+/// Current academic session (July–June): 2026-11 -> '2026-27', 2026-03 -> '2025-26'.
+String currentSessionYr([DateTime? now]) {
+  final n = now ?? DateTime.now();
+  if (n.month >= 7) {
+    return '${n.year}-${(n.year + 1).toString().substring(2)}';
+  }
+  return '${n.year - 1}-${n.year.toString().substring(2)}';
+}
+
+/// Current calendar month in the display format used by the Reports Hub
+/// Billing Month dropdown (e.g. 'November 2026').
+String currentBillingMonth([DateTime? now]) {
+  final n = now ?? DateTime.now();
+  return DateFormat('MMMM yyyy').format(n);
+}
+
 /// Top filter bar state for the VB6 Reports Hub: Session Year, Billing Month,
 /// Date, Class and Section.
 class ReportsHubFilters {
@@ -22,13 +38,18 @@ class ReportsHubFilters {
   final int? classId;
   final int? sectionId;
 
-  const ReportsHubFilters({
-    this.sessionYr = '2017-2018',
-    this.billingMonth = 'October 2017',
+  /// Defaults are computed dynamically: the current academic session and the
+  /// current calendar month (Phase K Shot 6). The old hardcoded
+  /// `2017-2018` / `October 2017` defaults made the Reports Hub show empty
+  /// data on every fresh install.
+  ReportsHubFilters({
+    String? sessionYr,
+    String? billingMonth,
     this.date,
     this.classId,
     this.sectionId,
-  });
+  })  : sessionYr = sessionYr ?? currentSessionYr(),
+        billingMonth = billingMonth ?? currentBillingMonth();
 
   ReportsHubFilters copyWith({
     String? sessionYr,
@@ -51,7 +72,7 @@ class ReportsHubFilters {
 }
 
 class ReportsHubFiltersNotifier extends StateNotifier<ReportsHubFilters> {
-  ReportsHubFiltersNotifier() : super(const ReportsHubFilters());
+  ReportsHubFiltersNotifier() : super(ReportsHubFilters());
 
   void setSessionYr(String sessionYr) =>
       state = state.copyWith(sessionYr: sessionYr);
@@ -71,6 +92,21 @@ class ReportsHubFiltersNotifier extends StateNotifier<ReportsHubFilters> {
         sectionId: sectionId,
         clearSectionId: sectionId == null,
       );
+
+  /// Phase K Shot 6: manual refresh. Re-emits the filter state so every
+  /// `ref.watch(reportsHubFiltersProvider)` listener (report card builders,
+  /// previews) re-queries with fresh data. If the session still is the
+  /// current one, an out-of-range billing month is reset to the current
+  /// calendar month; for a historical session the selection is preserved.
+  void refresh() {
+    final current = currentBillingMonth();
+    if (state.sessionYr == currentSessionYr() &&
+        state.billingMonth != current) {
+      state = state.copyWith(billingMonth: current);
+    } else {
+      state = state.copyWith();
+    }
+  }
 }
 
 final reportsHubFiltersProvider =
