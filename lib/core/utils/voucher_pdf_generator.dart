@@ -401,7 +401,7 @@ class ClassSectionListGenerator {
   });
 
   Future<Uint8List> generatePdf({
-    PdfPageFormat pageFormat = PdfPageFormat.a4,
+    PdfPageFormat? pageFormat,
   }) async {
     final doc = pw.Document(title: reportTitle, author: institutionName);
 
@@ -413,7 +413,7 @@ class ClassSectionListGenerator {
 
     doc.addPage(
       pw.MultiPage(
-        pageFormat: pageFormat,
+        pageFormat: pageFormat ?? PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
         header: (context) => _buildHeader(context),
         footer: (context) => ReportTheme.buildStandardFooter(
@@ -870,7 +870,7 @@ class FeeLedgerVoucherGenerator {
   });
 
   Future<Uint8List> generatePdf({
-    PdfPageFormat pageFormat = PdfPageFormat.a4,
+    PdfPageFormat? pageFormat,
   }) async {
     final doc = pw.Document(title: ledgerPeriodTitle, author: institutionName);
 
@@ -898,7 +898,7 @@ class FeeLedgerVoucherGenerator {
 
     doc.addPage(
       pw.MultiPage(
-        pageFormat: pageFormat,
+        pageFormat: pageFormat ?? PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(24),
         header: (context) =>
             _buildLedgerHeader(paidCount: paidCount, unpaidCount: unpaidCount),
@@ -1387,7 +1387,7 @@ class ClassFeeParamGenerator {
   });
 
   Future<Uint8List> generatePdf({
-    PdfPageFormat pageFormat = PdfPageFormat.a4,
+    PdfPageFormat? pageFormat,
   }) async {
     final doc = pw.Document(
       title: 'Class Parameter Fees Matrix - ${branchProfile.branchName}',
@@ -1408,7 +1408,7 @@ class ClassFeeParamGenerator {
 
     doc.addPage(
       pw.MultiPage(
-        pageFormat: pageFormat,
+        pageFormat: pageFormat ?? PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
         header: (context) => _buildBranchHeader(),
         footer: (context) => ReportTheme.buildStandardFooter(
@@ -1678,6 +1678,7 @@ class ThreeCopyVouchersPdf {
     required String bankName,
     required String bankBranch,
     required String bankAcctNo,
+    PdfPageFormat? pageFormat,
   }) async {
     final doc = pw.Document(
       title: 'Fee Vouchers - $branchName',
@@ -1686,7 +1687,7 @@ class ThreeCopyVouchersPdf {
     for (final v in vouchers) {
       doc.addPage(
         pw.Page(
-          pageFormat: PdfPageFormat.a4.landscape,
+          pageFormat: pageFormat ?? PdfPageFormat.a4.landscape,
           margin: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           build: (ctx) => pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,

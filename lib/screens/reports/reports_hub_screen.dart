@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
 
 import '../../core/config/build_config.dart';
 import '../../core/providers/available_sessions_provider.dart';
@@ -94,12 +95,14 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
           'branchName': branchName,
           'branchAddress': branchAddress,
         },
-        customBytesBuilder: () => buildVb6ReportPdf(
+        customBytesBuilderWithFormat: (PdfPageFormat? pageFormat) =>
+            buildVb6ReportPdf(
           reportId: def.id,
           title: def.title,
           filters: filters,
           branchName: branchName,
           branchAddress: branchAddress,
+          pageFormat: pageFormat,
         ),
       ),
     );

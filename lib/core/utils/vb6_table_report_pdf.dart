@@ -37,12 +37,20 @@ class Vb6TableReportPdf {
     /// sharing pages with neighbouring bands. Only enabled for the
     /// `student_class_sec_wise` roster report.
     bool breakPerGroup = false,
+    /// Phase K Shot 3b-vb6: explicit page format from the preview modal's
+    /// Portrait/Landscape toggle. Null falls back to the `landscape` flag.
+    PdfPageFormat? pageFormat,
   }) async {
     final doc = pw.Document();
     final boldFont = pw.Font.helveticaBold();
     final regularFont = pw.Font.helvetica();
     final aligns = columnAligns ??
         List<Vb6ColumnAlign>.filled(headers.length, Vb6ColumnAlign.left);
+
+    // Phase K Shot 3b-vb6: the modal's orientation override wins; otherwise
+    // the report's own `landscape` flag decides the format.
+    final activeFormat = pageFormat ??
+        (landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4);
 
     // ---- Phase K Shot 4: strict empty-column stripping ----------------------
     // A column is dropped ONLY when its header trims to empty AND every data
@@ -347,7 +355,7 @@ class Vb6TableReportPdf {
       // Current behavior: no grouping. Single MultiPage with all rows.
       doc.addPage(
         pw.MultiPage(
-          pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
+          pageFormat: activeFormat,
           margin: const pw.EdgeInsets.all(32),
           // Whole-school rosters legitimately span many pages; the package
           // default of 20 pages is far too low for institutional reports.
@@ -366,7 +374,7 @@ class Vb6TableReportPdf {
       // Current behavior: all groups on shared pages.
       doc.addPage(
         pw.MultiPage(
-          pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
+          pageFormat: activeFormat,
           margin: const pw.EdgeInsets.all(32),
           // Whole-school rosters legitimately span many pages; the package
           // default of 20 pages is far too low for institutional reports.
@@ -382,8 +390,7 @@ class Vb6TableReportPdf {
       for (final group in keptGroups) {
         doc.addPage(
           pw.MultiPage(
-            pageFormat:
-                landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
+            pageFormat: activeFormat,
             margin: const pw.EdgeInsets.all(32),
             // Whole-school rosters legitimately span many pages; the package
             // default of 20 pages is far too low for institutional reports.

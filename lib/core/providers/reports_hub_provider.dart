@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart' show Icons, IconData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
 
 import '../../models/student.dart';
 import '../db/database.dart';
@@ -1013,6 +1014,9 @@ Future<Uint8List> buildVb6ReportPdf({
   required ReportsHubFilters filters,
   required String branchName,
   required String branchAddress,
+  /// Phase K Shot 3b-vb6: page format from the preview modal's
+  /// Portrait/Landscape toggle. Null = the report's own landscape flag.
+  PdfPageFormat? pageFormat,
 }) async {
   final data = await fetchVb6ReportRows(reportId, filters);
   return Vb6TableReportPdf.generate(
@@ -1020,6 +1024,7 @@ Future<Uint8List> buildVb6ReportPdf({
     subtitle: vb6ReportSubtitle(filters),
     branchName: branchName,
     branchAddress: branchAddress,
+    pageFormat: pageFormat,
     headers: data.headers,
     rows: data.rows,
     groups: data.groups,
