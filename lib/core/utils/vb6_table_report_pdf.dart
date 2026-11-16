@@ -33,6 +33,11 @@ class Vb6TableReportPdf {
     List<Vb6ReportGroup>? groups,
     List<Vb6ColumnAlign>? columnAligns,
     bool landscape = false,
+    /// Phase K Shot 3: when true and [groups] is non-empty, each group
+    /// (e.g. each Class/Section band) starts on its own fresh page instead of
+    /// sharing pages with neighbouring bands. Only enabled for the
+    /// `student_class_sec_wise` roster report.
+    bool breakPerGroup = false,
   }) async {
     final doc = pw.Document();
     final boldFont = pw.Font.helveticaBold();
@@ -74,14 +79,9 @@ class Vb6TableReportPdf {
           oddRowDecoration: const pw.BoxDecoration(color: PdfColors.white),
         );
 
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        // Whole-school rosters legitimately span many pages; the package default
-        // of 20 pages is far too low for institutional reports.
-        maxPages: 2000,
-        header: (context) => pw.Column(
+    // Header closure — extracted verbatim so every page (single-MultiPage or
+    // per-group MultiPage) renders the identical school header + title banner.
+    pw.Widget buildHeader(pw.Context context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
             pw.Text(
@@ -149,53 +149,109 @@ class Vb6TableReportPdf {
             ),
             pw.SizedBox(height: 8),
           ],
-        ),
-        footer: (context) => ReportTheme.buildStandardFooter(
+        );
+
+    // Footer closure — identical on every page.
+    pw.Widget buildFooter(pw.Context context) => ReportTheme.buildStandardFooter(
           context,
           branchName: branchName,
-        ),
-        build: (context) {
-          final bandGroups = groups;
-          if (bandGroups == null || bandGroups.isEmpty) {
+        );
+
+    // Body builder — extracted verbatim from the previous `build:` closure.
+    // [groupsForPage] scopes which group bands render on this page: all
+    // groups for shared-page mode, exactly one group for break-per-group mode.
+    List<pw.Widget> buildBody(List<Vb6ReportGroup> groupsForPage) {
+      if (groupsForPage.isEmpty) {
+        return [
+          tableFor(rows),
+          pw.SizedBox(height: 8),
+        ];
+      }
+      return [
+        for (final group in groupsForPage) ...[
+          pw.Container(
+            alignment: pw.Alignment.centerLeft,
+            padding: const pw.EdgeInsets.symmetric(
+              vertical: 3,
+              horizontal: 6,
+            ),
+            decoration: const pw.BoxDecoration(
+              color: ReportTheme.bannerBgColor,
+              border: pw.Border(
+                bottom: pw.BorderSide(
+                  color: ReportTheme.primaryColor,
+                  width: 0.8,
+                ),
+              ),
+            ),
+            child: pw.Text(
+              group.bandTitle,
+              style: pw.TextStyle(
+                font: boldFont,
+                fontSize: 9,
+                color: ReportTheme.primaryColor,
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 3),
+          tableFor(group.rows),
+          pw.SizedBox(height: 10),
+        ],
+      ];
+    }
+
+    if (groups == null || groups.isEmpty) {
+      // Current behavior: no grouping. Single MultiPage with all rows.
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          // Whole-school rosters legitimately span many pages; the package
+          // default of 20 pages is far too low for institutional reports.
+          maxPages: 2000,
+          header: buildHeader,
+          footer: buildFooter,
+          build: (context) {
             return [
               tableFor(rows),
               pw.SizedBox(height: 8),
             ];
-          }
-          return [
-            for (final group in bandGroups) ...[
-              pw.Container(
-                alignment: pw.Alignment.centerLeft,
-                padding: const pw.EdgeInsets.symmetric(
-                  vertical: 3,
-                  horizontal: 6,
-                ),
-                decoration: const pw.BoxDecoration(
-                  color: ReportTheme.bannerBgColor,
-                  border: pw.Border(
-                    bottom: pw.BorderSide(
-                      color: ReportTheme.primaryColor,
-                      width: 0.8,
-                    ),
-                  ),
-                ),
-                child: pw.Text(
-                  group.bandTitle,
-                  style: pw.TextStyle(
-                    font: boldFont,
-                    fontSize: 9,
-                    color: ReportTheme.primaryColor,
-                  ),
-                ),
-              ),
-              pw.SizedBox(height: 3),
-              tableFor(group.rows),
-              pw.SizedBox(height: 10),
-            ],
-          ];
-        },
-      ),
-    );
+          },
+        ),
+      );
+    } else if (!breakPerGroup) {
+      // Current behavior: all groups on shared pages.
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(32),
+          // Whole-school rosters legitimately span many pages; the package
+          // default of 20 pages is far too low for institutional reports.
+          maxPages: 2000,
+          header: buildHeader,
+          footer: buildFooter,
+          build: (context) => buildBody(groups),
+        ),
+      );
+    } else {
+      // NEW (Phase K Shot 3): one MultiPage per group — each class/section
+      // band starts on a fresh page.
+      for (final group in groups) {
+        doc.addPage(
+          pw.MultiPage(
+            pageFormat:
+                landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(32),
+            // Whole-school rosters legitimately span many pages; the package
+            // default of 20 pages is far too low for institutional reports.
+            maxPages: 2000,
+            header: buildHeader,
+            footer: buildFooter,
+            build: (context) => buildBody([group]),
+          ),
+        );
+      }
+    }
 
     return doc.save();
   }

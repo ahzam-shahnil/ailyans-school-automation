@@ -989,5 +989,8 @@ Future<Uint8List> buildVb6ReportPdf({
     groups: data.groups,
     columnAligns: data.columnAligns,
     landscape: data.landscape,
+    // Phase K Shot 3: strict class-wise page breaks — each Class/Section band
+    // starts on a fresh page in the "All Student Class/Sec Wise" roster.
+    breakPerGroup: reportId == 'student_class_sec_wise',
   );
 }
