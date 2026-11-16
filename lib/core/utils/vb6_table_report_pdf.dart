@@ -40,17 +40,64 @@ class Vb6TableReportPdf {
     /// Phase K Shot 3b-vb6: explicit page format from the preview modal's
     /// Portrait/Landscape toggle. Null falls back to the `landscape` flag.
     PdfPageFormat? pageFormat,
+    /// Phase K Shot 3c-columns: indices into headers/rows that may be
+    /// dropped when rendering in portrait with more columns than fit.
+    List<int> optionalColumnIndices = const [],
   }) async {
+    // Rebind to local mutable variables so the optional-column stripping
+    // block can reassign them.
+    var headersL = headers;
+    var rowsL = rows;
+    var groupsL = groups;
+    var columnAlignsL = columnAligns;
+
     final doc = pw.Document();
     final boldFont = pw.Font.helveticaBold();
     final regularFont = pw.Font.helvetica();
-    final aligns = columnAligns ??
-        List<Vb6ColumnAlign>.filled(headers.length, Vb6ColumnAlign.left);
+    final aligns = columnAlignsL ??
+        List<Vb6ColumnAlign>.filled(headersL.length, Vb6ColumnAlign.left);
 
     // Phase K Shot 3b-vb6: the modal's orientation override wins; otherwise
     // the report's own `landscape` flag decides the format.
     final activeFormat = pageFormat ??
         (landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4);
+
+    // ---- Phase K Shot 3c-columns: portrait-mode optional-column stripping --
+    // When the report is being rendered in portrait and has more columns
+    // than fit comfortably, drop the declared optional columns (e.g.
+    // Emergency No + Permanent Address on the class/section roster) so no
+    // cell wraps onto multiple lines. (pdf 3.13.x PdfPageFormat has no
+    // isLandscape getter — compare width/height.)
+    final isLandscapeFormat = activeFormat.width > activeFormat.height;
+    if (!isLandscapeFormat &&
+        headersL.length > 7 &&
+        optionalColumnIndices.isNotEmpty) {
+      final optionalSet = optionalColumnIndices.toSet();
+      final kept = List<int>.generate(headersL.length, (i) => i)
+          .where((i) => !optionalSet.contains(i))
+          .toList();
+      final sourceAligns = columnAlignsL;
+      headersL = kept.map((i) => headersL[i]).toList();
+      rowsL = [
+        for (final r in rowsL) [for (final i in kept) i < r.length ? r[i] : ''],
+      ];
+      groupsL = groupsL
+          ?.map(
+            (g) => Vb6ReportGroup(
+              bandTitle: g.bandTitle,
+              rows: [
+                for (final r in g.rows)
+                  [for (final i in kept) i < r.length ? r[i] : ''],
+              ],
+            ),
+          )
+          .toList();
+      columnAlignsL = kept
+          .map((i) => (sourceAligns != null && i < sourceAligns.length)
+              ? sourceAligns[i]
+              : Vb6ColumnAlign.left)
+          .toList();
+    }
 
     // ---- Phase K Shot 4: strict empty-column stripping ----------------------
     // A column is dropped ONLY when its header trims to empty AND every data
@@ -61,10 +108,10 @@ class Vb6TableReportPdf {
         data.any((r) => c < r.length && r[c].trim().isNotEmpty);
 
     final keptIndices = <int>[];
-    for (var c = 0; c < headers.length; c++) {
-      if (headers[c].trim().isNotEmpty ||
-          cellHasData(rows, c) ||
-          (groups?.any((g) => cellHasData(g.rows, c)) ?? false)) {
+    for (var c = 0; c < headersL.length; c++) {
+      if (headersL[c].trim().isNotEmpty ||
+          cellHasData(rowsL, c) ||
+          (groupsL?.any((g) => cellHasData(g.rows, c)) ?? false)) {
         keptIndices.add(c);
       }
     }
@@ -80,19 +127,19 @@ class Vb6TableReportPdf {
       if (kDebugMode) {
         debugPrint(
           'Vb6TableReportPdf: $source row has $actual cells but the report '
-          'defines ${headers.length} headers — padded/truncated to match.',
+          'defines ${headersL.length} headers — padded/truncated to match.',
         );
       }
     }
 
     List<String> normalizeRow(List<String> row, String source) {
-      if (row.length == headers.length) return row;
+      if (row.length == headersL.length) return row;
       warnShapeMismatch(source, row.length);
       final fixed = List<String>.of(row);
-      if (fixed.length < headers.length) {
-        fixed.addAll(List<String>.filled(headers.length - fixed.length, ''));
+      if (fixed.length < headersL.length) {
+        fixed.addAll(List<String>.filled(headersL.length - fixed.length, ''));
       } else {
-        fixed.length = headers.length;
+        fixed.length = headersL.length;
       }
       return fixed;
     }
@@ -105,18 +152,18 @@ class Vb6TableReportPdf {
         v.replaceAll(RegExp(r'[ T]00:00:00$'), '');
 
     final normalizedRows = [
-      for (var i = 0; i < rows.length; i++)
-        normalizeRow(rows[i], 'row $i (rows[$i])'),
+      for (var i = 0; i < rowsL.length; i++)
+        normalizeRow(rowsL[i], 'row $i (rows[$i])'),
     ];
     final normalizedGroups = [
-      if (groups != null)
-        for (var gi = 0; gi < groups.length; gi++)
+      if (groupsL != null)
+        for (var gi = 0; gi < groupsL.length; gi++)
           Vb6ReportGroup(
-            bandTitle: groups[gi].bandTitle,
+            bandTitle: groupsL[gi].bandTitle,
             rows: [
-              for (var i = 0; i < groups[gi].rows.length; i++)
+              for (var i = 0; i < groupsL[gi].rows.length; i++)
                 normalizeRow(
-                    groups[gi].rows[i], 'group $gi row $i (groups[$gi])'),
+                    groupsL[gi].rows[i], 'group $gi row $i (groups[$gi])'),
             ],
           ),
     ];
@@ -139,19 +186,19 @@ class Vb6TableReportPdf {
         ),
     ];
     final keptHeaders = useFiltering
-        ? [for (final c in keptIndices) headers[c]]
-        : headers;
+        ? [for (final c in keptIndices) headersL[c]]
+        : headersL;
     final keptAligns = [
       for (final c in useFiltering
           ? keptIndices
-          : List<int>.generate(headers.length, (i) => i))
+          : List<int>.generate(headersL.length, (i) => i))
         c < aligns.length ? aligns[c] : Vb6ColumnAlign.left,
     ];
 
     // Column-count integrity assertions (debug builds only; release code
     // above already pads/truncates so these hold by construction).
     assert(keptHeaders.length ==
-        (useFiltering ? keptIndices.length : headers.length));
+        (useFiltering ? keptIndices.length : headersL.length));
     for (final row in keptRows) {
       assert(row.length == keptHeaders.length);
     }
@@ -314,7 +361,7 @@ class Vb6TableReportPdf {
     List<pw.Widget> buildBody(List<Vb6ReportGroup> groupsForPage) {
       if (groupsForPage.isEmpty) {
         return [
-          tableFor(rows),
+          tableFor(rowsL),
           pw.SizedBox(height: 8),
         ];
       }
@@ -351,7 +398,7 @@ class Vb6TableReportPdf {
       ];
     }
 
-    if (groups == null || groups.isEmpty) {
+    if (groupsL == null || groupsL.isEmpty) {
       // Current behavior: no grouping. Single MultiPage with all rows.
       doc.addPage(
         pw.MultiPage(

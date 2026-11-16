@@ -268,12 +268,19 @@ class Vb6ReportData {
   final List<Vb6ColumnAlign> columnAligns;
   final bool landscape;
 
+  /// Phase K Shot 3c-columns: indices into headers/rows that can be safely
+  /// dropped when rendering in portrait mode (when the report has more
+  /// columns than fit comfortably). Only applied when the active format is
+  /// portrait AND `headers.length > 7`.
+  final List<int> optionalColumnIndices;
+
   const Vb6ReportData({
     required this.headers,
     required this.rows,
     this.groups,
     this.columnAligns = const [],
     this.landscape = false,
+    this.optionalColumnIndices = const [],
   });
 }
 
@@ -384,6 +391,9 @@ Future<Vb6ReportData> fetchVb6ReportRows(
         rows: rows,
         groups: groups,
         landscape: true,
+        // K-3c-columns: in portrait, drop Emergency No + Permanent Address
+        // so the 8-column roster fits without cell wrapping.
+        optionalColumnIndices: const [6, 7],
       );
     }
 
@@ -1033,5 +1043,8 @@ Future<Uint8List> buildVb6ReportPdf({
     // Phase K Shot 3: strict class-wise page breaks — each Class/Section band
     // starts on a fresh page in the "All Student Class/Sec Wise" roster.
     breakPerGroup: reportId == 'student_class_sec_wise',
+    // Phase K Shot 3c-columns: per-report optional columns dropped in
+    // portrait when the table is too wide.
+    optionalColumnIndices: data.optionalColumnIndices,
   );
 }
