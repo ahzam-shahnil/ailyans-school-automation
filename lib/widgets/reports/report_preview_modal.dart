@@ -9,6 +9,10 @@ import 'package:school_automation/core/sync/sync_provider.dart';
 import 'package:school_automation/core/theme/app_theme_tokens.dart';
 import 'package:school_automation/widgets/reports/report_definition.dart';
 
+/// Orientation choices for the preview modal's desktop toolbar toggle
+/// (Phase K Shot 3b-core). pdf 3.13.x has no built-in orientation enum.
+enum _PdfOrientation { portrait, landscape }
+
 // ---------------------------------------------------------------------------
 // Public entry-point
 // ---------------------------------------------------------------------------
@@ -70,6 +74,28 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   // Local mode selection — only used when request.type == feeVoucher.
   // 0 = Three-Copy Slips, 1 = Cohort Ledger.
   int _selectedFeeMode = 0;
+
+  // Phase K Shot 3b-core: local mirror of the orientation override so the
+  // segmented button reflects the active selection immediately.
+  PdfPageFormat? _pageFormatOverride;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageFormatOverride = widget.request.pageFormatOverride;
+  }
+
+  /// Current orientation: the modal override wins, else the request's
+  /// natural page format decides portrait vs landscape.
+  ///
+  /// pdf 3.13.x ships no `PdfPageOrientation` enum, so a local one mirrors
+  /// the spec's segmented-button value type.
+  _PdfOrientation get _currentOrientation {
+    final fmt = _pageFormatOverride ?? widget.request.naturalPageFormat;
+    return fmt.height > fmt.width
+        ? _PdfOrientation.portrait
+        : _PdfOrientation.landscape;
+  }
 
   @override
   void dispose() {
@@ -275,6 +301,38 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
     final hasBytes = state.bytes != null;
 
+    // Title area: kept OUTSIDE the trailing scroll view so its Expanded
+    // sizing (with ellipsis) stays valid.
+    final Widget titleArea = Expanded(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.request.effectiveTitle,
+            style: AppTypography.h3.copyWith(
+              color: AppColors.textPrimary,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (widget.request.subtitle != null &&
+              widget.request.subtitle!.isNotEmpty)
+            Text(
+              widget.request.subtitle!,
+              style: AppTypography.bodySmall.copyWith(
+                color: AppColors.textSecondary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
+      ),
+    );
+
+    // Trailing controls: wrapped in a horizontal scroll view so the toolbar
+    // (PDF icon, count pill, orientation toggle, voucher mode toggle, action
+    // buttons) can never RenderFlex-overflow, even when every optional
+    // control is present at once (Phase K Shot 3b-core fallback). The title
+    // column above keeps its Expanded sizing outside the scroll view.
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -286,110 +344,128 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
       ),
       child: Row(
         children: [
-          // --- PDF icon + title -----------------------------------------------
           const Icon(
             Icons.picture_as_pdf_outlined,
             color: AppColors.brandPrimary,
             size: 20,
           ),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.request.effectiveTitle,
-                  style: AppTypography.h3.copyWith(
-                    color: AppColors.textPrimary,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (widget.request.subtitle != null &&
-                    widget.request.subtitle!.isNotEmpty)
-                  Text(
-                    widget.request.subtitle!,
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
+          titleArea,
+          Flexible(
+            fit: FlexFit.loose,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  // --- Shot 3b: N Vouchers · N Pages count pill --------------
+                  if (_buildCountBadge() != null) ...[
+                    _buildCountBadge()!,
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
+
+                  // --- K Shot 3b-core: orientation toggle (desktop only) -----
+                  SegmentedButton<_PdfOrientation>(
+                    style: SegmentedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: AppTypography.bodySmall,
                     ),
-                    overflow: TextOverflow.ellipsis,
+                    segments: const [
+                      ButtonSegment(
+                        value: _PdfOrientation.portrait,
+                        label: Text('Portrait'),
+                        icon: Icon(Icons.crop_portrait, size: 14),
+                      ),
+                      ButtonSegment(
+                        value: _PdfOrientation.landscape,
+                        label: Text('Landscape'),
+                        icon: Icon(Icons.crop_landscape, size: 14),
+                      ),
+                    ],
+                    selected: {_currentOrientation},
+                    onSelectionChanged: (s) {
+                      final chosen = s.first;
+                      final override = chosen == _PdfOrientation.landscape
+                          ? PdfPageFormat.a4.landscape
+                          : PdfPageFormat.a4;
+                      setState(() => _pageFormatOverride = override);
+                      ref
+                          .read(reportPreviewProvider(widget.request).notifier)
+                          .setPageFormat(override);
+                    },
                   ),
-              ],
-            ),
-          ),
+                  const SizedBox(width: AppSpacing.sm),
 
-          // --- Shot 3b: N Vouchers · N Pages count pill ------------------------
-          if (_buildCountBadge() != null) ...[
-            _buildCountBadge()!,
-            const SizedBox(width: AppSpacing.sm),
-          ],
+                  // --- Optional caller-supplied controls ----------------------
+                  if (widget.headerControls != null) ...[
+                    widget.headerControls!,
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
 
-          // --- Optional caller-supplied controls ------------------------------
-          if (widget.headerControls != null) ...[
-            widget.headerControls!,
-            const SizedBox(width: AppSpacing.sm),
-          ],
+                  // --- Voucher mode toggle (feeVoucher only) ------------------
+                  if (widget.request.type == ReportType.feeVoucher) ...[
+                    _buildVoucherModeToggle(),
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
 
-          // --- Voucher mode toggle (feeVoucher only) --------------------------
-          if (widget.request.type == ReportType.feeVoucher) ...[
-            _buildVoucherModeToggle(),
-            const SizedBox(width: AppSpacing.sm),
-          ],
+                  // --- Refresh Data (re-query + background sync) --------------
+                  IconButton(
+                    key: const Key('report_preview_refresh_btn'),
+                    icon: const Icon(Icons.refresh_rounded),
+                    tooltip: 'Refresh Data',
+                    iconSize: 20,
+                    onPressed: state.isLoading ? null : _onRefreshData,
+                  ),
 
-          // --- Refresh Data (re-query + background sync) ----------------------
-          IconButton(
-            key: const Key('report_preview_refresh_btn'),
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh Data',
-            iconSize: 20,
-            onPressed: state.isLoading ? null : _onRefreshData,
-          ),
+                  const SizedBox(width: AppSpacing.xs),
 
-          const SizedBox(width: AppSpacing.xs),
+                  // --- Export PDF button --------------------------------------
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.download_outlined, size: 16),
+                    label: const Text('Export PDF'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.borderDefault),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed:
+                        hasBytes ? () => _handleSavePdf(state.bytes!) : null,
+                  ),
 
-          // --- Export PDF button ----------------------------------------------
-          OutlinedButton.icon(
-            icon: const Icon(Icons.download_outlined, size: 16),
-            label: const Text('Export PDF'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.textPrimary,
-              side: const BorderSide(color: AppColors.borderDefault),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
+                  const SizedBox(width: AppSpacing.xs),
+
+                  // --- Print / Export PDF button ------------------------------
+                  ElevatedButton.icon(
+                    key: const Key('report_preview_print_btn'),
+                    icon: const Icon(Icons.print_outlined, size: 16),
+                    label: const Text('Print / Export PDF'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brandPrimary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
+                  ),
+
+                  const SizedBox(width: AppSpacing.sm),
+
+                  // --- Close --------------------------------------------------
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    tooltip: 'Close (Esc)',
+                    iconSize: 20,
+                    onPressed: _handleClose,
+                  ),
+                ],
               ),
-              visualDensity: VisualDensity.compact,
             ),
-            onPressed: hasBytes ? () => _handleSavePdf(state.bytes!) : null,
-          ),
-
-          const SizedBox(width: AppSpacing.xs),
-
-          // --- Print / Export PDF button --------------------------------------
-          ElevatedButton.icon(
-            key: const Key('report_preview_print_btn'),
-            icon: const Icon(Icons.print_outlined, size: 16),
-            label: const Text('Print / Export PDF'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.brandPrimary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
-              ),
-              visualDensity: VisualDensity.compact,
-            ),
-            onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
-          ),
-
-          const SizedBox(width: AppSpacing.sm),
-
-          // --- Close ----------------------------------------------------------
-          IconButton(
-            icon: const Icon(Icons.close_rounded),
-            tooltip: 'Close (Esc)',
-            iconSize: 20,
-            onPressed: _handleClose,
           ),
         ],
       ),

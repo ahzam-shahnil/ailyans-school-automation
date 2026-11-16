@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:pdf/pdf.dart';
+
 enum ReportType {
   feeVoucher,
   feeReceipt,
@@ -97,7 +99,28 @@ class ReportRequest {
   final String? fileNameOverride;
   final List<dynamic>? vouchers;
   final Map<String, dynamic> extraParams;
+
+  /// Builds the PDF bytes for this request (legacy zero-argument shape).
+  ///
+  /// For format-aware builders (e.g. the VB6 report path) prefer
+  /// [customBytesBuilderWithFormat], which receives the active page format
+  /// (user orientation override, if any).
   final Future<Uint8List> Function()? customBytesBuilder;
+
+  /// Phase K Shot 3b-core: format-aware custom builder. Receives the active
+  /// [PdfPageFormat] — the user's Portrait/Landscape override when set — so
+  /// the builder can honor the preview's orientation toggle.
+  final Future<Uint8List> Function(PdfPageFormat? pageFormat)?
+      customBytesBuilderWithFormat;
+
+  /// Phase K Shot 3b-core: explicit page format override chosen in the
+  /// preview modal (Portrait/Landscape). Null = use [naturalPageFormat].
+  final PdfPageFormat? pageFormatOverride;
+
+  /// The page format this report naturally renders in (its shipped default,
+  /// e.g. A4 for a biodata, A4-landscape for a wide ledger). Used as the
+  /// orientation fallback when no override is set.
+  final PdfPageFormat naturalPageFormat;
 
   const ReportRequest({
     required this.type,
@@ -108,7 +131,35 @@ class ReportRequest {
     this.vouchers,
     this.extraParams = const {},
     this.customBytesBuilder,
+    this.customBytesBuilderWithFormat,
+    this.pageFormatOverride,
+    this.naturalPageFormat = PdfPageFormat.a4,
   });
+
+  ReportRequest copyWith({
+    Future<Uint8List> Function()? customBytesBuilder,
+    Future<Uint8List> Function(PdfPageFormat?)? customBytesBuilderWithFormat,
+    PdfPageFormat? pageFormatOverride,
+    bool clearPageFormatOverride = false,
+    PdfPageFormat? naturalPageFormat,
+  }) {
+    return ReportRequest(
+      type: type,
+      id: id,
+      titleOverride: titleOverride,
+      subtitle: subtitle,
+      fileNameOverride: fileNameOverride,
+      vouchers: vouchers,
+      extraParams: extraParams,
+      customBytesBuilder: customBytesBuilder ?? this.customBytesBuilder,
+      customBytesBuilderWithFormat:
+          customBytesBuilderWithFormat ?? this.customBytesBuilderWithFormat,
+      pageFormatOverride: clearPageFormatOverride
+          ? null
+          : (pageFormatOverride ?? this.pageFormatOverride),
+      naturalPageFormat: naturalPageFormat ?? this.naturalPageFormat,
+    );
+  }
 
   String get effectiveTitle => titleOverride ?? type.displayName;
 

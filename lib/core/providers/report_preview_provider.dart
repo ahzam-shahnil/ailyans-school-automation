@@ -61,8 +61,25 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   // Only meaningful when request.type == ReportType.feeVoucher.
   int _feeVoucherMode = 0;
 
+  // Phase K Shot 3b-core: user-selected page format override from the preview
+  // modal's Portrait/Landscape segmented button. Null = use the request's own
+  // pageFormatOverride (falls back to naturalPageFormat at the call sites).
+  PdfPageFormat? _pageFormatOverride;
+
   ReportPreviewNotifier(this.request)
     : super(const ReportPreviewState(isLoading: true)) {
+    generate();
+  }
+
+  /// Effective page format for the current generation: the modal override
+  /// wins, then the request's own override, else null (natural format).
+  PdfPageFormat? get activePageFormat =>
+      _pageFormatOverride ?? request.pageFormatOverride;
+
+  /// Sets the page-format override and re-generates the PDF. Passing null
+  /// clears the modal override (back to the request's natural format).
+  void setPageFormat(PdfPageFormat? fmt) {
+    _pageFormatOverride = fmt;
     generate();
   }
 
@@ -71,7 +88,9 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     try {
       final Uint8List bytes;
 
-      if (request.customBytesBuilder != null) {
+      if (request.customBytesBuilderWithFormat != null) {
+        bytes = await request.customBytesBuilderWithFormat!(activePageFormat);
+      } else if (request.customBytesBuilder != null) {
         bytes = await request.customBytesBuilder!();
       } else {
         bytes = await _generateByType();
