@@ -55,7 +55,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     'status': 100,
     // Two pill action buttons ("View" + "Edit") sit side-by-side here, so the
     // column needs more room than a single text link.
-    'actions': 180,
+    'actions': 220,
   };
 
   /// Right-edge drag handle that resizes [columnId] horizontally.
