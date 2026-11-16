@@ -3229,7 +3229,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       _responsiveFieldRow([
         _buildViewField(
           'Admitted In Class',
-          'Class ${student.admInClass ?? student.admClass ?? 13}',
+          bundle.admittedClassName ?? 'Class ${student.admInClass ?? student.admClass ?? 13}',
         ),
         _buildViewField(
           'Current Enrolled Class',

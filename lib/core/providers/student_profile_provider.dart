@@ -22,6 +22,10 @@ class StudentProfileBundle {
   final String fatherName;
   final String mobile1;
   final String feeBalanceSummary;
+  /// Human-readable admission class name (e.g. `Play Group`, `Nursery`),
+  /// resolved from Class.CName via COALESCE(sr.AdmInClass, sr.AdmClass) so the
+  /// Biodossier never shows the raw numeric foreign key.
+  final String? admittedClassName;
   final List<Map<String, dynamic>> advances;
   final List<Map<String, dynamic>> exams;
   final List<Map<String, dynamic>> attendance;
@@ -45,6 +49,7 @@ class StudentProfileBundle {
     required this.fatherName,
     required this.mobile1,
     required this.feeBalanceSummary,
+    this.admittedClassName,
     required this.advances,
     required this.exams,
     required this.attendance,
@@ -71,12 +76,19 @@ final studentProfileProvider =
   (ref, stuRegId) async {
     final db = await DatabaseService.instance.database;
 
-    // 1. Fetch student demographic record
-    final studentRows = await db.query(
-      'Stu_Reg',
-      where: 'Stu_RegID = ?',
-      whereArgs: [stuRegId],
-      limit: 1,
+    // 1. Fetch student demographic record, joining the admission class name.
+    // `AdmInClass` (falling back to legacy `AdmClass`) is a foreign key into
+    // Class; the LEFT JOIN resolves CName (e.g. `Play Group`) in one query so
+    // the Biodossier shows the class name, never the raw ClassID.
+    final studentRows = await db.rawQuery(
+      '''
+    SELECT sr.*, cAdm.CName AS AdmClassName
+    FROM Stu_Reg sr
+    LEFT JOIN Class cAdm ON cAdm.ClassID = COALESCE(sr.AdmInClass, sr.AdmClass)
+    WHERE sr.Stu_RegID = ?
+    LIMIT 1
+    ''',
+      [stuRegId],
     );
 
     if (studentRows.isEmpty) {
@@ -84,6 +96,7 @@ final studentProfileProvider =
     }
 
     final student = Student.fromMap(studentRows.first);
+    final admittedClassName = studentRows.first['AdmClassName'] as String?;
 
     // 2. Fetch academic enrollment history
     final enrollmentRows = await db.rawQuery(
@@ -242,6 +255,7 @@ final studentProfileProvider =
       fatherName: student.fName ?? '—',
       mobile1: student.mobile1 ?? '—',
       feeBalanceSummary: feeBalanceSummary,
+      admittedClassName: admittedClassName,
       advances: advanceRows,
       exams: examRows,
       attendance: attendanceRows,
@@ -295,17 +309,10 @@ Future<StudentBiodataPrintData> buildBiodataPrintData(
   final feeTotalPaid = (feeRows.first['total_paid'] as int?) ?? 0;
   final feeBalance = feeTotalBilled - feeTotalPaid;
 
-  // Resolve admClassName if admInClass is set
-  String? admClassName;
-  if (student.admInClass != null) {
-    final clsRows = await db.rawQuery(
-      'SELECT CName FROM Class WHERE ClassID = ? LIMIT 1',
-      [student.admInClass],
-    );
-    if (clsRows.isNotEmpty) {
-      admClassName = clsRows.first['CName'] as String?;
-    }
-  }
+  // Admission class name already resolved by the bundle's
+  // `LEFT JOIN Class cAdm ON cAdm.ClassID = COALESCE(sr.AdmInClass, sr.AdmClass)`
+  // query — same source the SLC/report generator uses.
+  final admClassName = bundle.admittedClassName;
 
   // Resolve currentClassSection (active enrollment)
   String currentClassSection = 'Not Enrolled';
