@@ -341,7 +341,7 @@ void main() {
       expect(find.text('Showing 0-0 of 0 students'), findsOneWidget);
     });
 
-    testWidgets('Click row or "View →" navigates to /students/4411', (
+    testWidgets('Click row or "View" pill navigates to /students/4411', (
       WidgetTester tester,
     ) async {
       tester.view.physicalSize = const Size(1440, 1000);
@@ -353,8 +353,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      // Tap "View →" on the first student row (4411)
-      await tester.tap(find.text('View →').first);
+      // Tap "View" pill on the first student row (4411)
+      await tester.tap(find.text('View').first);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
