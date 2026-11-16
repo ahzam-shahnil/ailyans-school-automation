@@ -356,7 +356,7 @@ class Vb6TableReportPdf {
       doc.addPage(
         pw.MultiPage(
           pageFormat: activeFormat,
-          margin: const pw.EdgeInsets.all(32),
+          margin: const pw.EdgeInsets.fromLTRB(40, 30, 24, 30),
           // Whole-school rosters legitimately span many pages; the package
           // default of 20 pages is far too low for institutional reports.
           maxPages: 2000,
@@ -375,7 +375,7 @@ class Vb6TableReportPdf {
       doc.addPage(
         pw.MultiPage(
           pageFormat: activeFormat,
-          margin: const pw.EdgeInsets.all(32),
+          margin: const pw.EdgeInsets.fromLTRB(40, 30, 24, 30),
           // Whole-school rosters legitimately span many pages; the package
           // default of 20 pages is far too low for institutional reports.
           maxPages: 2000,
@@ -391,7 +391,7 @@ class Vb6TableReportPdf {
         doc.addPage(
           pw.MultiPage(
             pageFormat: activeFormat,
-            margin: const pw.EdgeInsets.all(32),
+            margin: const pw.EdgeInsets.fromLTRB(40, 30, 24, 30),
             // Whole-school rosters legitimately span many pages; the package
             // default of 20 pages is far too low for institutional reports.
             maxPages: 2000,
