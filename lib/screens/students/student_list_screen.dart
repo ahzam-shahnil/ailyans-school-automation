@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
+import '../../core/providers/student_registration_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
@@ -52,7 +53,9 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     'classSec': 130,
     'contact': 140,
     'status': 100,
-    'actions': 120,
+    // Two pill action buttons ("View" + "Edit") sit side-by-side here, so the
+    // column needs more room than a single text link.
+    'actions': 180,
   };
 
   /// Right-edge drag handle that resizes [columnId] horizontally.
@@ -119,6 +122,118 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     _selectedStuRegIds.clear();
     ref.read(studentListFiltersProvider.notifier).reset();
     ref.invalidate(studentListProvider);
+  }
+
+  /// Opens the student's profile directly from the directory table.
+  void _openStudentProfile(int stuRegId) {
+    context.go('/students/$stuRegId');
+  }
+
+  /// Loads the student into the admissions wizard draft (edit mode) and
+  /// navigates to `/students/new`, so the user can update details directly
+  /// without copying a Reg ID into admissions by hand. Falls back to the
+  /// profile screen when the record cannot be loaded into the draft.
+  Future<void> _openStudentEdit(StudentListRow student) async {
+    final loaded = await ref
+        .read(wizardDraftProvider.notifier)
+        .loadExistingStudentByRegId(student.stuRegId);
+    if (!mounted) return;
+    // Always land on Step 1 with the loaded student's data filled in.
+    ref.read(wizardStepProvider.notifier).state = 0;
+    if (loaded) {
+      context.go('/students/new');
+    } else {
+      context.go('/students/${student.stuRegId}');
+    }
+  }
+
+  /// Instruction banner above the directory table: teaches the direct
+  /// name-click and Edit-button paths for updating student details.
+  Widget _buildTableTipBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: 10.0,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.statusInfoBg,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(color: AppColors.statusInfoBorder),
+      ),
+      child: Text.rich(
+        const TextSpan(
+          children: [
+            TextSpan(text: '💡 Tip: Click any student name or click '),
+            TextSpan(
+              text: 'Edit',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            TextSpan(
+              text: ' in the Actions column to update student details directly.',
+            ),
+          ],
+        ),
+        style: AppTypography.bodySmall.copyWith(
+          fontSize: 13.0,
+          color: AppColors.statusInfoText,
+        ),
+      ),
+    );
+  }
+
+  /// Pill-shaped row action button used in the Actions column ("View" and
+  /// "Edit"). Large-enough touch target with high-contrast label for older
+  /// users; [isPrimary] renders the filled brand pill, otherwise a grey
+  /// outlined pill.
+  Widget _buildRowActionPill(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required bool isPrimary,
+    required VoidCallback onTap,
+  }) {
+    final Color foreground = isPrimary
+        ? AppColors.brandPrimary
+        : AppColors.textSecondary;
+    return Container(
+      height: 30.0,
+      decoration: BoxDecoration(
+        color: isPrimary
+            ? AppColors.brandPrimary.withValues(alpha: 0.10)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        border: Border.all(
+          color: isPrimary
+              ? AppColors.brandPrimary.withValues(alpha: 0.25)
+              : AppColors.borderDefault,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10.0),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 13.0, color: foreground),
+                const SizedBox(width: 4.0),
+                Text(
+                  label,
+                  style: AppTypography.label.copyWith(
+                    fontSize: 12.0,
+                    color: foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// G-10 Shot 9: two-phase offline-first refresh for the Student Directory
@@ -910,6 +1025,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                 ),
                 const SizedBox(height: AppSpacing.md),
 
+                // ── 2b. INSTRUCTION BANNER ──
+                _buildTableTipBanner(),
+                const SizedBox(height: AppSpacing.md),
+
                 // ── 3. DATA TABLE CARD ──
                 Expanded(
                   child: Container(
@@ -1273,18 +1392,19 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                             ),
                                           ),
 
-                                          // Reg ID (plain integer, monospace)
+                                          // Reg ID (link-styled, opens profile)
                                           SizedBox(
                                             width: _colWidths['regId'],
-                                            child: Text(
-                                              '${student.stuRegId}',
+                                            child: _StudentLinkText(
+                                              text: '${student.stuRegId}',
+                                              onTap: () =>
+                                                  _openStudentProfile(
+                                                      student.stuRegId),
                                               style: AppTypography.monospace
                                                   .copyWith(
-                                                    fontSize: 13.0,
-                                                    color:
-                                                        AppColors.textPrimary,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                                                fontSize: 13.0,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
 
@@ -1296,20 +1416,19 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                             ),
                                           ),
 
-                                          // Student Full Name
+                                          // Student Full Name (link-styled)
                                           SizedBox(
                                             width:
                                                 _colWidths['studentName'],
-                                            child: Text(
-                                              student.fullName,
+                                            child: _StudentLinkText(
+                                              text: student.fullName,
+                                              onTap: () =>
+                                                  _openStudentProfile(
+                                                      student.stuRegId),
                                               style: AppTypography.body
                                                   .copyWith(
-                                                    color:
-                                                        AppColors.textPrimary,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                              overflow: TextOverflow.ellipsis,
-                                              maxLines: 2,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
 
@@ -1403,33 +1522,36 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                             ),
                                           ),
 
-                                          // Actions Button
+                                          // Actions: View + Edit pill buttons
                                           SizedBox(
                                             width: _colWidths['actions'],
                                             child: Align(
                                               alignment: Alignment.centerRight,
-                                              child: TextButton(
-                                                onPressed: () => context.go(
-                                                  '/students/${student.stuRegId}',
-                                                ),
-                                                style: TextButton.styleFrom(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal:
-                                                            AppSpacing.sm,
-                                                        vertical: 4.0,
-                                                      ),
-                                                ),
-                                                child: Text(
-                                                  'View →',
-                                                  style: AppTypography.label
-                                                      .copyWith(
-                                                        color: AppColors
-                                                            .brandPrimary,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  _buildRowActionPill(
+                                                    context,
+                                                    label: 'View',
+                                                    icon: Icons
+                                                        .visibility_outlined,
+                                                    isPrimary: true,
+                                                    onTap: () =>
+                                                        _openStudentProfile(
+                                                            student.stuRegId),
+                                                  ),
+                                                  const SizedBox(width: 6.0),
+                                                  if (canNewAdmission)
+                                                    _buildRowActionPill(
+                                                      context,
+                                                      label: 'Edit',
+                                                      icon: Icons.edit_outlined,
+                                                      isPrimary: false,
+                                                      onTap: () =>
+                                                          _openStudentEdit(
+                                                              student),
+                                                    ),
+                                                ],
                                               ),
                                             ),
                                           ),
@@ -2856,6 +2978,54 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Link-styled table cell text for student names and Reg IDs: always primary
+/// colored, underlined while hovered, with a hand cursor, and tapping opens
+/// the student profile directly.
+class _StudentLinkText extends StatefulWidget {
+  const _StudentLinkText({
+    required this.text,
+    required this.onTap,
+    required this.style,
+  });
+
+  final String text;
+  final VoidCallback onTap;
+  final TextStyle style;
+
+  @override
+  State<_StudentLinkText> createState() => _StudentLinkTextState();
+}
+
+class _StudentLinkTextState extends State<_StudentLinkText> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: Text(
+          widget.text,
+          style: widget.style.copyWith(
+            color: AppColors.brandPrimary,
+            decoration: _hovering
+                ? TextDecoration.underline
+                : TextDecoration.none,
+            decorationColor: AppColors.brandPrimary,
+            decorationThickness: 1.5,
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 2,
+        ),
+      ),
     );
   }
 }
