@@ -66,6 +66,38 @@ Future<Uint8List> buildAttendancePdf(AttendancePdfData data) async {
       pageFormat: PdfPageFormat.a4.landscape,
       margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       theme: pw.ThemeData.withFont(base: baseFont, bold: boldFont),
+      // Phase K Shot 5: page-level footer so every page of a multi-page
+      // roll-call carries `Page X of Y` numbering (left: generated stamp).
+      footer: (pw.Context context) => pw.Container(
+        margin: const pw.EdgeInsets.only(top: 8),
+        padding: const pw.EdgeInsets.only(top: 4),
+        decoration: pw.BoxDecoration(
+          border: pw.Border(
+            top: pw.BorderSide(color: borderColor, width: 0.5),
+          ),
+        ),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(
+              'Generated: $dateFormatted',
+              style: pw.TextStyle(
+                font: baseFont,
+                fontSize: 8,
+                color: PdfColor.fromHex('64748B'),
+              ),
+            ),
+            pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: pw.TextStyle(
+                font: baseFont,
+                fontSize: 8,
+                color: PdfColor.fromHex('64748B'),
+              ),
+            ),
+          ],
+        ),
+      ),
       build: (pw.Context context) {
         return [
           // 1. Institutional Header
