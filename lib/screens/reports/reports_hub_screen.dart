@@ -91,6 +91,11 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
         titleOverride: def.title,
         subtitle: vb6ReportSubtitle(filters),
         fileNameOverride: 'vb6_${def.id}.pdf',
+        // Phase K Shot 3b-fix: the toggle's initial state must match the
+        // report's actual render orientation.
+        naturalPageFormat: def.landscape
+            ? PdfPageFormat.a4.landscape
+            : PdfPageFormat.a4,
         extraParams: {
           'branchName': branchName,
           'branchAddress': branchAddress,

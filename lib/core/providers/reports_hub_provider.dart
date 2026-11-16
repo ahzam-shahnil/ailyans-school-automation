@@ -134,12 +134,18 @@ class Vb6ReportDef {
 
   final IconData icon;
 
+  /// True when the report's natural PDF orientation is landscape.
+  /// Mirrors the corresponding `Vb6ReportData.landscape` flag returned by
+  /// `fetchVb6ReportRows` for the same report id.
+  final bool landscape;
+
   const Vb6ReportDef({
     required this.id,
     required this.title,
     required this.key,
     required this.category,
     required this.icon,
+    this.landscape = false,
   });
 }
 
@@ -155,6 +161,7 @@ const List<Vb6ReportDef> kVb6Reports = [
     key: 'student_class_sec_wise',
     category: kReportsCategoryStudents,
     icon: Icons.class_outlined,
+    landscape: true,
   ),
   Vb6ReportDef(
     id: 'student_blank_sheet',
@@ -162,6 +169,7 @@ const List<Vb6ReportDef> kVb6Reports = [
     key: 'student_blank_sheet',
     category: kReportsCategoryStudents,
     icon: Icons.grid_on_outlined,
+    landscape: true,
   ),
   Vb6ReportDef(
     id: 'school_leaving_all',
@@ -169,6 +177,7 @@ const List<Vb6ReportDef> kVb6Reports = [
     key: 'school_leaving_all',
     category: kReportsCategoryStudents,
     icon: Icons.exit_to_app_outlined,
+    landscape: true,
   ),
   Vb6ReportDef(
     id: 'classwise_payments',
@@ -197,6 +206,7 @@ const List<Vb6ReportDef> kVb6Reports = [
     key: 'classwise_paid_detail',
     category: kReportsCategoryPayments,
     icon: Icons.fact_check_outlined,
+    landscape: true,
   ),
   Vb6ReportDef(
     id: 'classwise_paid_summary',
@@ -211,6 +221,7 @@ const List<Vb6ReportDef> kVb6Reports = [
     key: 'vouchers_with_discount',
     category: kReportsCategoryPayments,
     icon: Icons.percent_outlined,
+    landscape: true,
   ),
   Vb6ReportDef(
     id: 'bank_tally',
@@ -232,6 +243,7 @@ const List<Vb6ReportDef> kVb6Reports = [
     key: 'classwise_defaulters',
     category: kReportsCategoryDefaulters,
     icon: Icons.warning_amber_outlined,
+    landscape: true,
   ),
   Vb6ReportDef(
     id: 'defaulter_summary',
@@ -246,6 +258,7 @@ const List<Vb6ReportDef> kVb6Reports = [
     key: 'defaulter_detail',
     category: kReportsCategoryDefaulters,
     icon: Icons.person_search_outlined,
+    landscape: true,
   ),
 ];
 
