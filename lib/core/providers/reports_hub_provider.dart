@@ -260,6 +260,20 @@ const List<Vb6ReportDef> kVb6Reports = [
     icon: Icons.person_search_outlined,
     landscape: true,
   ),
+  // Phase K-6 Run 2b: the full Fee Defaulter List roster (the dedicated
+  // DefaulterListPdfGenerator layout — same PDF as the dashboard / fee
+  // screens). NOT a generic VB6 flex-table report: ReportsHubScreen
+  // special-cases this id in _openReport and routes it through the shared
+  // buildDefaulterListData builder with ReportType.defaulterList and a
+  // LOCKED A4-landscape orientation.
+  Vb6ReportDef(
+    id: 'fee_defaulter_list',
+    title: 'Fee Defaulter List',
+    key: 'fee_defaulter_list',
+    category: kReportsCategoryDefaulters,
+    icon: Icons.receipt_long_outlined,
+    landscape: true,
+  ),
 ];
 
 /// Categories in launcher display order.
@@ -1012,6 +1026,18 @@ Future<Vb6ReportData> fetchVb6ReportRows(
         ],
       );
     }
+
+    // Phase K-6 Run 2b: the Fee Defaulter List roster is NOT a generic VB6
+    // flex-table report — it renders through the dedicated
+    // DefaulterListPdfGenerator with LOCKED A4-landscape orientation (see
+    // ReportsHubScreen._openReport). Guarded here so nothing routes it
+    // through the generic renderer by mistake.
+    case 'fee_defaulter_list':
+      throw StateError(
+        'fee_defaulter_list renders via the dedicated Fee Defaulter List '
+        'roster path (ReportsHubScreen._openReport -> buildDefaulterListData '
+        '+ DefaulterListPdfGenerator), not the generic VB6 table renderer.',
+      );
   }
 
   throw StateError('Unknown VB6 report id: $reportId');

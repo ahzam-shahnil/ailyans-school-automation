@@ -338,30 +338,37 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     final hasBytes = state.bytes != null;
 
     // Title area: kept OUTSIDE the trailing scroll view so its Expanded
-    // sizing (with ellipsis) stays valid.
-    final Widget titleArea = Expanded(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.request.effectiveTitle,
-            style: AppTypography.h3.copyWith(
-              color: AppColors.textPrimary,
-            ),
-            overflow: TextOverflow.ellipsis,
+    // sizing (with ellipsis) stays valid. NB: bare Column here — the Row
+    // wraps it in ONE Expanded (see below). Phase K-6 Run 2b: the count
+    // pill lives HERE (under the title) instead of inside the action row —
+    // ~140px of intrinsic width leaves the toolbar, which is the primary
+    // lever that lets the whole action set fit a 1024px-wide dialog
+    // without scrolling.
+    final Widget titleArea = Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.request.effectiveTitle,
+          style: AppTypography.h3.copyWith(
+            color: AppColors.textPrimary,
           ),
-          if (widget.request.subtitle != null &&
-              widget.request.subtitle!.isNotEmpty)
-            Text(
-              widget.request.subtitle!,
-              style: AppTypography.bodySmall.copyWith(
-                color: AppColors.textSecondary,
-              ),
-              overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (widget.request.subtitle != null &&
+            widget.request.subtitle!.isNotEmpty)
+          Text(
+            widget.request.subtitle!,
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textSecondary,
             ),
-        ],
-      ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          )
+        else if (_buildCountBadge() != null)
+          _buildCountBadge()!,
+      ],
     );
 
     // Trailing controls: wrapped in a horizontal scroll view so the toolbar
@@ -372,6 +379,13 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     // Argon Rule 13: the inner Row is sized to its INTRINSIC content width
     // (mainAxisSize.min) and contains no Expanded/Flexible/Spacer, so the
     // horizontal scroll extent is exactly the content width.
+    //
+    // Phase K-6 Run 2b compression (the count pill moved to the title
+    // column and the Print label shortened) targets the whole action set
+    // fitting a 1024px-wide dialog (942px) WITHOUT scrolling — K-1 lesson:
+    // leave >=10% slack on Windows font metrics rather than an exact fit.
+    // The scroll view stays as the overflow safety net.
+    final compactActions = MediaQuery.sizeOf(context).width < 1280;
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -389,54 +403,70 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             size: 20,
           ),
           const SizedBox(width: AppSpacing.sm),
-          titleArea,
+          // Title: 1 flex share (it can ellipsize); the trailing controls
+          // get the remaining 4 — Run 2's 50/50 split let the title's
+          // unused allocation starve the scroll viewport at 1024px and
+          // push Print out of the dialog (the Windows client report).
+          Expanded(flex: 1, child: titleArea),
           Flexible(
+            flex: 4,
             fit: FlexFit.loose,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // --- Shot 3b: N Vouchers · N Pages count pill --------------
-                  if (_buildCountBadge() != null) ...[
-                    _buildCountBadge()!,
-                    const SizedBox(width: AppSpacing.sm),
-                  ],
-
                   // --- K Shot 3b-core: orientation toggle (desktop only) -----
-                  SegmentedButton<_PdfOrientation>(
-                    key: const ValueKey('report_toolbar_orientation'),
-                    style: SegmentedButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      textStyle: AppTypography.bodySmall,
+                  // Phase K-6 Run 2b: reports whose column layout is
+                  // designed for their natural format (lockedOrientation)
+                  // render the toggle DISABLED — the segment still shows
+                  // the natural format, but the user cannot re-orient
+                  // (a portrait 10-column defaulter roster garbles with
+                  // mid-token breaks and merged cells).
+                  Tooltip(
+                    message: widget.request.locksOrientation
+                        ? 'This report is designed for A4 landscape '
+                            'and cannot be re-oriented.'
+                        : '',
+                    child: SegmentedButton<_PdfOrientation>(
+                      key: const ValueKey('report_toolbar_orientation'),
+                      style: SegmentedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        textStyle: AppTypography.bodySmall,
+                      ),
+                      segments: const [
+                        ButtonSegment(
+                          value: _PdfOrientation.portrait,
+                          label: Text('Portrait'),
+                          icon: Icon(Icons.crop_portrait, size: 14),
+                        ),
+                        ButtonSegment(
+                          value: _PdfOrientation.landscape,
+                          label: Text('Landscape'),
+                          icon: Icon(Icons.crop_landscape, size: 14),
+                        ),
+                      ],
+                      selected: {_currentOrientation},
+                      onSelectionChanged: widget.request.locksOrientation
+                          ? null
+                          : (s) {
+                              final chosen = s.first;
+                              final override =
+                                  chosen == _PdfOrientation.landscape
+                                      ? PdfPageFormat.a4.landscape
+                                      : PdfPageFormat.a4;
+                              // Phase K-6 Run 1: state first, then
+                              // invalidation. The setState updates the local
+                              // mirror; the NEXT build's watch key
+                              // (_previewKey) then carries the new
+                              // orientation as an explicit family argument,
+                              // rotating to a fresh notifier whose bytes are
+                              // generated FOR that orientation. Single click
+                              // re-renders — no second click, no data
+                              // refresh required.
+                              setState(() => _pageFormatOverride = override);
+                            },
                     ),
-                    segments: const [
-                      ButtonSegment(
-                        value: _PdfOrientation.portrait,
-                        label: Text('Portrait'),
-                        icon: Icon(Icons.crop_portrait, size: 14),
-                      ),
-                      ButtonSegment(
-                        value: _PdfOrientation.landscape,
-                        label: Text('Landscape'),
-                        icon: Icon(Icons.crop_landscape, size: 14),
-                      ),
-                    ],
-                    selected: {_currentOrientation},
-                    onSelectionChanged: (s) {
-                      final chosen = s.first;
-                      final override = chosen == _PdfOrientation.landscape
-                          ? PdfPageFormat.a4.landscape
-                          : PdfPageFormat.a4;
-                      // Phase K-6 Run 1: state first, then invalidation.
-                      // The setState updates the local mirror; the NEXT
-                      // build's watch key (_previewKey) then carries the new
-                      // orientation as an explicit family argument, rotating
-                      // to a fresh notifier whose bytes are generated FOR
-                      // that orientation. Single click re-renders — no
-                      // second click, no data refresh required.
-                      setState(() => _pageFormatOverride = override);
-                    },
                   ),
                   const SizedBox(width: AppSpacing.sm),
 
@@ -464,30 +494,47 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                   const SizedBox(width: AppSpacing.xs),
 
                   // --- Export PDF button --------------------------------------
-                  OutlinedButton.icon(
-                    key: const ValueKey('report_toolbar_export'),
-                    icon: const Icon(Icons.download_outlined, size: 16),
-                    label: const Text('Export PDF'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.borderDefault),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: AppSpacing.xs,
+                  // Phase K-6 Run 2b: below 1280px the label collapses to an
+                  // icon-only button (stable key retained) — at 1024px the
+                  // labeled button is the second-largest fixed width in the
+                  // row and pushed Print out of the dialog on Windows.
+                  if (compactActions)
+                    IconButton(
+                      key: const ValueKey('report_toolbar_export'),
+                      icon: const Icon(Icons.download_outlined, size: 20),
+                      tooltip: 'Export PDF',
+                      onPressed:
+                          hasBytes ? () => _handleSavePdf(state.bytes!) : null,
+                    )
+                  else
+                    OutlinedButton.icon(
+                      key: const ValueKey('report_toolbar_export'),
+                      icon: const Icon(Icons.download_outlined, size: 16),
+                      label: const Text('Export PDF'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.borderDefault),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: AppSpacing.xs,
+                        ),
+                        visualDensity: VisualDensity.compact,
                       ),
-                      visualDensity: VisualDensity.compact,
+                      onPressed:
+                          hasBytes ? () => _handleSavePdf(state.bytes!) : null,
                     ),
-                    onPressed:
-                        hasBytes ? () => _handleSavePdf(state.bytes!) : null,
-                  ),
 
                   const SizedBox(width: AppSpacing.xs),
 
-                  // --- Print / Export PDF button ------------------------------
+                  // --- Print button -------------------------------------------
+                  // Phase K-6 Run 2b: label shortened to 'Print' — the
+                  // adjacent Export PDF button already covers the save path,
+                  // and the long label was the last fixed width that kept
+                  // this button outside a 1024px dialog's viewport.
                   ElevatedButton.icon(
                     key: const ValueKey('report_toolbar_print'),
                     icon: const Icon(Icons.print_outlined, size: 16),
-                    label: const Text('Print / Export PDF'),
+                    label: const Text('Print'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.brandPrimary,
                       foregroundColor: Colors.white,
@@ -577,35 +624,46 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.xs,
             children: [
-              SegmentedButton<_PdfOrientation>(
-                key: const ValueKey('report_toolbar_orientation'),
-                style: SegmentedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  textStyle: AppTypography.bodySmall,
+              // Phase K-6 Run 2b: locked-orientation reports render the
+              // toggle disabled (same contract as the desktop toolbar).
+              Tooltip(
+                message: widget.request.locksOrientation
+                    ? 'This report is designed for A4 landscape '
+                        'and cannot be re-oriented.'
+                    : '',
+                child: SegmentedButton<_PdfOrientation>(
+                  key: const ValueKey('report_toolbar_orientation'),
+                  style: SegmentedButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    textStyle: AppTypography.bodySmall,
+                  ),
+                  segments: const [
+                    ButtonSegment(
+                      value: _PdfOrientation.portrait,
+                      label: Text('Portrait'),
+                      icon: Icon(Icons.crop_portrait, size: 14),
+                    ),
+                    ButtonSegment(
+                      value: _PdfOrientation.landscape,
+                      label: Text('Landscape'),
+                      icon: Icon(Icons.crop_landscape, size: 14),
+                    ),
+                  ],
+                  selected: {_currentOrientation},
+                  onSelectionChanged: widget.request.locksOrientation
+                      ? null
+                      : (s) {
+                          final chosen = s.first;
+                          final override = chosen == _PdfOrientation.landscape
+                              ? PdfPageFormat.a4.landscape
+                              : PdfPageFormat.a4;
+                          // Phase K-6 Run 1: state first, then invalidation —
+                          // the next build's watch key carries the new
+                          // orientation as an explicit family argument
+                          // (fresh bytes generation).
+                          setState(() => _pageFormatOverride = override);
+                        },
                 ),
-                segments: const [
-                  ButtonSegment(
-                    value: _PdfOrientation.portrait,
-                    label: Text('Portrait'),
-                    icon: Icon(Icons.crop_portrait, size: 14),
-                  ),
-                  ButtonSegment(
-                    value: _PdfOrientation.landscape,
-                    label: Text('Landscape'),
-                    icon: Icon(Icons.crop_landscape, size: 14),
-                  ),
-                ],
-                selected: {_currentOrientation},
-                onSelectionChanged: (s) {
-                  final chosen = s.first;
-                  final override = chosen == _PdfOrientation.landscape
-                      ? PdfPageFormat.a4.landscape
-                      : PdfPageFormat.a4;
-                  // Phase K-6 Run 1: state first, then invalidation — the
-                  // next build's watch key carries the new orientation as an
-                  // explicit family argument (fresh bytes generation).
-                  setState(() => _pageFormatOverride = override);
-                },
               ),
               if (widget.headerControls != null) widget.headerControls!,
               IconButton(
@@ -630,10 +688,12 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                 ),
                 onPressed: hasBytes ? () => _handleSavePdf(state.bytes!) : null,
               ),
+              // Phase K-6 Run 2b: label shortened to 'Print' (the Export
+              // PDF button beside it covers the save path).
               ElevatedButton.icon(
                 key: const ValueKey('report_toolbar_print'),
                 icon: const Icon(Icons.print_outlined, size: 16),
-                label: const Text('Print / Export PDF'),
+                label: const Text('Print'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.brandPrimary,
                   foregroundColor: Colors.white,

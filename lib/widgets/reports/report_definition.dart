@@ -122,6 +122,14 @@ class ReportRequest {
   /// orientation fallback when no override is set.
   final PdfPageFormat naturalPageFormat;
 
+  /// Phase K-6 Run 2b: when true, the preview modal's Portrait/Landscape
+  /// toggle renders DISABLED (the report's column layout is designed for
+  /// its natural format and garbles in the other orientation — e.g. the
+  /// 10-column defaulter roster in A4 portrait). The generator also pins
+  /// the page format belt-and-braces. Default false: every other report
+  /// type keeps its honor-override behavior.
+  final bool locksOrientation;
+
   const ReportRequest({
     required this.type,
     this.id,
@@ -134,6 +142,7 @@ class ReportRequest {
     this.customBytesBuilderWithFormat,
     this.pageFormatOverride,
     this.naturalPageFormat = PdfPageFormat.a4,
+    this.locksOrientation = false,
   });
 
   ReportRequest copyWith({
@@ -142,6 +151,7 @@ class ReportRequest {
     PdfPageFormat? pageFormatOverride,
     bool clearPageFormatOverride = false,
     PdfPageFormat? naturalPageFormat,
+    bool? locksOrientation,
   }) {
     return ReportRequest(
       type: type,
@@ -158,6 +168,7 @@ class ReportRequest {
           ? null
           : (pageFormatOverride ?? this.pageFormatOverride),
       naturalPageFormat: naturalPageFormat ?? this.naturalPageFormat,
+      locksOrientation: locksOrientation ?? this.locksOrientation,
     );
   }
 

@@ -353,8 +353,12 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       branchAddress: _safeBranchAddress(),
       branchPhone: request.extraParams['branchPhone'] as String?,
       branchPrincipal: request.extraParams['branchPrincipal'] as String?,
-      // Phase K-6 Run 2: honor the modal's orientation override.
-      pageFormat: activePageFormat,
+      // Phase K-6 Run 2b: belt-and-braces — a locked request ALWAYS renders
+      // A4 landscape, even if a stale pageFormat override reached the
+      // provider (the 10-column roster garbles in portrait).
+      pageFormat: request.locksOrientation
+          ? PdfPageFormat.a4.landscape
+          : activePageFormat,
     );
   }
 
@@ -1181,8 +1185,12 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       branchAddress: _safeBranchAddress(),
       branchPhone: request.extraParams['branchPhone'] as String?,
       branchPrincipal: request.extraParams['branchPrincipal'] as String?,
-      // Phase K-6 Run 2: honor the modal's orientation override.
-      pageFormat: activePageFormat,
+      // Phase K-6 Run 2b: belt-and-braces — a locked request ALWAYS renders
+      // A4 landscape, even if a stale pageFormat override reached the
+      // provider (the 10-column roster garbles in portrait).
+      pageFormat: request.locksOrientation
+          ? PdfPageFormat.a4.landscape
+          : activePageFormat,
     );
   }
 

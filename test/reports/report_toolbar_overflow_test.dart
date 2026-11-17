@@ -25,6 +25,10 @@ ReportRequest _defaulterRequest() => ReportRequest(
   naturalPageFormat: PdfPageFormat.a4.landscape,
   type: ReportType.defaulterList,
   titleOverride: 'Fee Defaulter List',
+  // Phase K-6 Run 2b: the 10-column roster garbles in A4 portrait
+  // (three-line wrapped names, mid-token breaks) — the modal's orientation
+  // toggle renders DISABLED for locked requests.
+  locksOrientation: true,
   customBytesBuilder: () async => Uint8List.fromList([0x25, 0x50, 0x44, 0x46]),
   // DefaulterFilterControls is the caller-supplied header control the real
   // screens attach — include it so the toolbar is tested at its densest.
@@ -109,6 +113,19 @@ void main() {
           find.byKey(const ValueKey('report_toolbar_orientation')).evaluate(),
           isNotEmpty,
         );
+
+        // Phase K-6 Run 2b: locked request — the toggle renders DISABLED
+        // (onSelectionChanged null) while still showing the natural
+        // landscape segment. NB: dynamic cast — reading onSelectionChanged
+        // through a downcast generic fails on non-null callbacks.
+        final toggle = tester.widget(
+          find.byKey(const ValueKey('report_toolbar_orientation')),
+        ) as dynamic;
+        expect(
+          toggle.onSelectionChanged,
+          isNull,
+          reason: 'Orientation toggle must be disabled for locked reports',
+        );
       } else {
         // Mobile: secondary actions live in the overflow menu — verify the
         // menu opens and exposes Export PDF (reachable, not hidden).
@@ -130,6 +147,49 @@ void main() {
       }
 
       expect(tester.takeException(), isNull);
+    });
+  }
+
+  // Phase K-6 Run 2b: Run 2 asserted only that Print exists in the widget
+  // tree — the Windows client still saw it clipped because a scrollable
+  // ancestor keeps off-viewport children in the tree. These assertions pin
+  // the button's RENDERED RECTANGLE inside the modal's bounds.
+  for (final size in const [
+    Size(1024, 768),
+    Size(1440, 900),
+    Size(1920, 1080),
+  ]) {
+    testWidgets('Print button fully visible inside the dialog at '
+        '${size.width.round()}x${size.height.round()}', (tester) async {
+      await _pumpModal(tester, size);
+      expect(tester.takeException(), isNull);
+
+      final printRect = tester.getRect(
+        find.byKey(const ValueKey('report_toolbar_print')),
+      );
+      final dialogRect = tester.getRect(find.byType(ReportPreviewModal));
+      expect(
+        printRect.left >= dialogRect.left &&
+            printRect.right <= dialogRect.right,
+        isTrue,
+        reason: 'Print button must be fully inside the dialog horizontally '
+            'at ${size.width.round()}px — got $printRect in $dialogRect',
+      );
+      // Every action button's rect must be inside the dialog too.
+      for (final key in const [
+        'report_toolbar_close',
+        'report_toolbar_refresh',
+        'report_toolbar_export',
+        'report_toolbar_orientation',
+      ]) {
+        final rect = tester.getRect(find.byKey(ValueKey<String>(key)));
+        expect(
+          rect.left >= dialogRect.left && rect.right <= dialogRect.right,
+          isTrue,
+          reason: '$key must be fully inside the dialog at '
+              '${size.width.round()}px — got $rect in $dialogRect',
+        );
+      }
     });
   }
 }

@@ -154,6 +154,9 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
       // Phase K-6 Run 2: the generator's natural format is A4 landscape —
       // the modal's orientation toggle must reflect it (K-3b contract).
       naturalPageFormat: PdfPageFormat.a4.landscape,
+      // Phase K-6 Run 2b: the 10-column roster garbles in portrait — the
+      // orientation toggle is disabled.
+      locksOrientation: true,
       vouchers: defaulterData.groups,
       extraParams: {
         'summary': defaulterData.summary,

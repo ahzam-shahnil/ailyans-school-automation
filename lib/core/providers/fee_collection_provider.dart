@@ -928,6 +928,11 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
 
   /// Builds the fee defaulters list grouped by class & section with executive summary.
   /// Used by FeeCollectionScreen to render the institutional defaulter roster PDF.
+  ///
+  /// Phase K-6 Run 2b: the query + grouping core lives in the shared
+  /// top-level [buildDefaulterListData] so the Reports Hub entry and the
+  /// bundled-DB smoke test exercise the EXACT same code path as this
+  /// screen (no duplicated query).
   Future<
     ({List<DefaulterClassGroup> groups, DefaulterListFilterSummary summary})
   >
@@ -935,14 +940,45 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
     String? classFilter,
     String? monthFilter,
     String? sessionYr,
+    int? sectionIdFilter,
   }) async {
+    final meta = _ref?.read(shellMetadataProvider).value;
+    return buildDefaulterListData(
+      sessionYr: sessionYr,
+      metaSessionYr: meta?.sessionYear,
+      classFilter: classFilter,
+      monthFilter: monthFilter,
+      sectionIdFilter: sectionIdFilter,
+      nowFn: _now,
+    );
+  }
+}
+
+/// Phase K-6 Run 2b: shared defaulter-roster builder — the single source of
+/// the unpaid-voucher query + class/section grouping + executive summary.
+/// Consumed by [FeeCollectionNotifier.buildDefaulterList] (dashboard / fee
+/// screens) and by the Reports Hub's `fee_defaulter_list` entry, so every
+/// entry point renders the identical PDF for identical params.
+DateTime _defaultClock() => DateTime.now();
+
+Future<
+  ({List<DefaulterClassGroup> groups, DefaulterListFilterSummary summary})
+>
+buildDefaulterListData({
+  String? sessionYr,
+  String? metaSessionYr,
+  String? classFilter,
+  String? monthFilter,
+  int? sectionIdFilter,
+  DateTime Function()? nowFn,
+}) async {
+  {
     final db = await DatabaseService.instance.database;
 
     String effectiveSessionYr = sessionYr?.trim() ?? '';
     if (effectiveSessionYr.isEmpty) {
-      final meta = _ref?.read(shellMetadataProvider).value;
-      if (meta != null && meta.sessionYear.trim().isNotEmpty) {
-        effectiveSessionYr = meta.sessionYear.trim();
+      if (metaSessionYr != null && metaSessionYr.trim().isNotEmpty) {
+        effectiveSessionYr = metaSessionYr.trim();
       } else {
         final confRows = await db.rawQuery(
           "SELECT config_value FROM app_config WHERE config_key = 'default_session_yr' LIMIT 1",
@@ -982,6 +1018,12 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       whereArgs.add(monthFilter.trim());
     }
 
+    // Phase K-6 Run 2b: optional section narrowing (Reports Hub filter).
+    if (sectionIdFilter != null) {
+      whereConditions.add('cs.ClassSecID = ?');
+      whereArgs.add(sectionIdFilter);
+    }
+
     final whereClause = whereConditions.join(' AND ');
 
     final rows = await db.rawQuery('''
@@ -1001,7 +1043,9 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
       ORDER BY c.ClassID ASC, cs.ClassSecID ASC, sc.ClassRollNo ASC, vm.VoucherMasID DESC
     ''', whereArgs);
 
-    final now = _now();
+    // Clock injection: callers pass the app clock (never DateTime.now()
+    // directly in lib/); the null fallback mirrors _now()'s own fallback.
+    final now = (nowFn ?? _defaultClock)();
     final allRows = <DefaulterListRow>[];
 
     for (final r in rows) {

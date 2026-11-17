@@ -6,9 +6,12 @@ import 'package:pdf/pdf.dart';
 import '../../core/config/build_config.dart';
 import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/clock_provider.dart';
+import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/reports_hub_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
+import '../../core/providers/voucher_generation_provider.dart'
+    show normalizeBillingMonthForStorage;
 import '../../core/theme/app_theme_tokens.dart';
 import '../../models/school_class.dart';
 import '../../widgets/reports/report_definition.dart';
@@ -81,6 +84,62 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
             ? "Ailyan's Higher Secondary School Mianwali"
             : '-');
     final branchAddress = dbBranchAddress;
+
+    // Phase K-6 Run 2b: the Fee Defaulter List roster renders through the
+    // DEDICATED defaulter path — the exact same code path as the dashboard
+    // / fee screens (feeCollectionProvider.notifier.buildDefaulterList →
+    // DefaulterListPdfGenerator), NOT the generic VB6 flex-table renderer.
+    // The request locks the A4-landscape orientation (10-column roster).
+    if (def.id == 'fee_defaulter_list') {
+      final classList = ref.read(classesProvider).valueOrNull ??
+          const <SchoolClass>[];
+      final sectionList = ref.read(sectionsProvider).valueOrNull ??
+          const <ClassSec>[];
+      // Map the hub's class/section IDs to the filters the shared builder
+      // consumes (CName string / ClassSecID int); unresolvable selections
+      // degrade to All — never an empty roster from a stale dropdown.
+      final classFilter = filters.classId == null
+          ? null
+          : classList
+              .where((c) => c.classId == filters.classId)
+              .map((c) => c.cName)
+              .firstOrNull;
+      final sectionIdFilter = (filters.sectionId != null &&
+              sectionList.any((s) => s.classSecId == filters.sectionId))
+          ? filters.sectionId
+          : null;
+
+      final buildData = await ref
+          .read(feeCollectionProvider.notifier)
+          .buildDefaulterList(
+            sessionYr: filters.sessionYr,
+            classFilter: classFilter,
+            monthFilter: filters.billingMonth.isEmpty
+                ? null
+                : normalizeBillingMonthForStorage(filters.billingMonth),
+            sectionIdFilter: sectionIdFilter,
+          );
+      if (!mounted) return;
+
+      await ReportPreviewModal.show(
+        context,
+        request: ReportRequest(
+          type: ReportType.defaulterList,
+          titleOverride: def.title,
+          // The roster's designed format; the toggle renders disabled.
+          naturalPageFormat: PdfPageFormat.a4.landscape,
+          locksOrientation: true,
+          vouchers: buildData.groups,
+          extraParams: {
+            'summary': buildData.summary,
+            'branchName': branchName,
+            'branchAddress': branchAddress,
+            'sessionYr': filters.sessionYr,
+          },
+        ),
+      );
+      return;
+    }
 
     await ReportPreviewModal.show(
       context,
