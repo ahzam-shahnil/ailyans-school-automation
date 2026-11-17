@@ -32,9 +32,12 @@ class ReportPreviewModal extends ConsumerStatefulWidget {
     required ReportRequest request,
     Widget? headerControls,
   }) {
+    // Phase K-6 Item 3: the dialog is barrier-dismissible so an outside
+    // click/tap dismisses it on Windows touch/mouse (ESC already works via
+    // the modal's CallbackShortcuts; there is no PopScope blocking pop).
     return showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (_) =>
           ReportPreviewModal(request: request, headerControls: headerControls),
     );
@@ -71,13 +74,26 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     }
   }
 
+  // Phase K Shot 3b-core, extended in K-6 Run 1: local mirror of the
+  // orientation override so the segmented button reflects the active
+  // selection immediately, AND an explicit argument of the preview provider
+  // family key (see _previewKey) so toggling orientation rotates to a fresh
+  // bytes generation instead of mutating a long-lived notifier.
+  PdfPageFormat? _pageFormatOverride;
+
   // Local mode selection — only used when request.type == feeVoucher.
   // 0 = Three-Copy Slips, 1 = Cohort Ledger.
   int _selectedFeeMode = 0;
 
-  // Phase K Shot 3b-core: local mirror of the orientation override so the
-  // segmented button reflects the active selection immediately.
-  PdfPageFormat? _pageFormatOverride;
+  /// Phase K-6 Run 1: composite provider family key. Orientation and voucher
+  /// mode are explicit arguments of the bytes generation; changing either
+  /// key invalidates by construction (fresh notifier, fresh loading → bytes
+  /// lifecycle, previous notifier auto-disposed).
+  ReportPreviewKey get _previewKey => ReportPreviewKey(
+    request: widget.request,
+    pageFormat: _pageFormatOverride,
+    feeVoucherMode: _selectedFeeMode,
+  );
 
   @override
   void initState() {
@@ -134,11 +150,11 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     await Printing.sharePdf(bytes: bytes, filename: filename);
   }
 
+  /// Phase K-6 Run 1: mode is an explicit argument of the provider family
+  /// key — the setState alone drives regeneration (the watch key changes,
+  /// creating a fresh notifier seeded with the new mode).
   void _setVoucherMode(int mode) {
     setState(() => _selectedFeeMode = mode);
-    ref
-        .read(reportPreviewProvider(widget.request).notifier)
-        .regenerateWithMode(mode);
   }
 
   void _handleClose() => Navigator.of(context).pop();
@@ -149,7 +165,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   /// background cloud sync. The sync trigger is guarded so widget tests never
   /// hang on network I/O.
   Future<void> _onRefreshData() async {
-    await ref.read(reportPreviewProvider(widget.request).notifier).generate();
+    await ref.read(reportPreviewProvider(_previewKey).notifier).generate();
     if (!const bool.fromEnvironment('FLUTTER_TEST')) {
       try {
         ref.read(syncPushProvider.notifier).triggerManualSync();
@@ -202,11 +218,9 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
       ],
       selected: {_selectedFeeMode},
       onSelectionChanged: (s) {
-        final newMode = s.first;
-        setState(() => _selectedFeeMode = newMode);
-        ref
-            .read(reportPreviewProvider(widget.request).notifier)
-            .regenerateWithMode(newMode);
+        // Phase K-6 Run 1: mode is part of the provider family key —
+        // setState alone rotates to a fresh bytes generation.
+        setState(() => _selectedFeeMode = s.first);
       },
     );
   }
@@ -217,7 +231,13 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(reportPreviewProvider(widget.request));
+    // Phase K-6 Run 1: the watched family key carries the orientation and
+    // voucher mode — changing either rotates to a fresh notifier instance
+    // (fresh loading → bytes lifecycle) after the local state change, which
+    // is the invalidation point. The previous notifier is auto-disposed, so
+    // its in-flight generation can never publish stale bytes over the new
+    // render.
+    final state = ref.watch(reportPreviewProvider(_previewKey));
 
     // Shot 6j: background sync pulls (dbDataVersionProvider bumps) and parent
     // provider rebuilds must NOT regenerate the open preview — the modal
@@ -387,10 +407,14 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                       final override = chosen == _PdfOrientation.landscape
                           ? PdfPageFormat.a4.landscape
                           : PdfPageFormat.a4;
+                      // Phase K-6 Run 1: state first, then invalidation.
+                      // The setState updates the local mirror; the NEXT
+                      // build's watch key (_previewKey) then carries the new
+                      // orientation as an explicit family argument, rotating
+                      // to a fresh notifier whose bytes are generated FOR
+                      // that orientation. Single click re-renders — no
+                      // second click, no data refresh required.
                       setState(() => _pageFormatOverride = override);
-                      ref
-                          .read(reportPreviewProvider(widget.request).notifier)
-                          .setPageFormat(override);
                     },
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -453,19 +477,23 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                     ),
                     onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
                   ),
-
-                  const SizedBox(width: AppSpacing.sm),
-
-                  // --- Close --------------------------------------------------
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    tooltip: 'Close (Esc)',
-                    iconSize: 20,
-                    onPressed: _handleClose,
-                  ),
                 ],
               ),
             ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+
+          // --- Close (Phase K-6 Item 3) --------------------------------
+          // Fixed trailing position OUTSIDE the horizontal scroll view so
+          // the close button is always visible at tablet + desktop widths,
+          // even when every optional toolbar control is present and the
+          // scrollable row overflows.
+          IconButton(
+            key: const Key('report_preview_close_btn'),
+            icon: const Icon(Icons.close),
+            tooltip: 'Close',
+            iconSize: 20,
+            onPressed: _handleClose,
           ),
         ],
       ),
@@ -491,12 +519,6 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
       ),
       child: Row(
         children: [
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            tooltip: 'Close',
-            onPressed: () => _handleClose(),
-          ),
-          const SizedBox(width: AppSpacing.xs),
           Expanded(
             child: Text(
               widget.request.effectiveTitle,
@@ -585,6 +607,16 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
               ],
             ],
           ),
+
+          // --- Close (Phase K-6 Item 3) --------------------------------
+          // Top-right fixed trailing position so the close affordance is
+          // always visible on mobile, mirroring the desktop toolbar.
+          IconButton(
+            key: const Key('report_preview_close_btn'),
+            icon: const Icon(Icons.close, size: 20),
+            tooltip: 'Close',
+            onPressed: _handleClose,
+          ),
         ],
       ),
     );
@@ -660,7 +692,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                       side: const BorderSide(color: Colors.white24),
                     ),
                     onPressed: () => ref
-                        .read(reportPreviewProvider(widget.request).notifier)
+                        .read(reportPreviewProvider(_previewKey).notifier)
                         .generate(),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -690,6 +722,16 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     return Container(
       color: canvasColor,
       child: PdfPreview(
+        // Phase K-6 Run 1: key the viewer on the bytes instance. When the
+        // provider hands over new bytes (orientation toggle, mode toggle,
+        // Refresh Data), the whole PdfPreview subtree remounts with a fresh
+        // internal raster state. printing 5.15.x silently DROPS a re-raster
+        // requested while a previous raster is still in flight
+        // (PdfPreviewRaster._raster() starts with `if (_rastering) return;`
+        // behind a 300ms debounce), which is the classic "first click does
+        // nothing, second click works" symptom. A fresh State can never be
+        // mid-raster, so the first re-render always rasterizes.
+        key: ValueKey<Uint8List?>(state.bytes),
         build: pdfPreviewBuilder,
         allowPrinting: false,
         allowSharing: false,

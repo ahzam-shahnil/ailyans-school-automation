@@ -25,6 +25,51 @@ import 'package:school_automation/models/fee_receipt_view.dart';
 import 'package:school_automation/widgets/reports/report_definition.dart';
 
 // ---------------------------------------------------------------------------
+// Family key
+// ---------------------------------------------------------------------------
+
+/// Phase K-6 Run 1: composite family key for the report preview.
+///
+/// The PDF bytes generation depends on the page format (orientation) and the
+/// feeVoucher layout mode, so BOTH are explicit arguments of the provider
+/// family. Changing either rotates to a fresh notifier instance with a fresh
+/// loading → bytes lifecycle instead of mutating a long-lived notifier whose
+/// bytes may already be on screen — a slow in-flight generation of the old
+/// inputs can then never overwrite the new render (the first-click
+/// orientation staleness bug). The request is compared by identity, matching
+/// the previous `ReportRequest` family-key semantics; [PdfPageFormat]
+/// carries structural ==.
+class ReportPreviewKey {
+  final ReportRequest request;
+
+  /// The user's Portrait/Landscape override chosen in the preview modal.
+  /// Null = natural orientation: the request's own pageFormatOverride, else
+  /// the report's natural format (K-3b-fix, commit 86d70b8 — NOT changed
+  /// here; landscape-natural reports still open landscape).
+  final PdfPageFormat? pageFormat;
+
+  /// Voucher layout mode: 0 = Three-Copy Slips, 1 = Cohort Ledger.
+  final int feeVoucherMode;
+
+  const ReportPreviewKey({
+    required this.request,
+    this.pageFormat,
+    this.feeVoucherMode = 0,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      other is ReportPreviewKey &&
+      identical(other.request, request) &&
+      other.pageFormat == pageFormat &&
+      other.feeVoucherMode == feeVoucherMode;
+
+  @override
+  int get hashCode =>
+      Object.hash(identityHashCode(request), pageFormat, feeVoucherMode);
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -57,33 +102,36 @@ class ReportPreviewState {
 class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
   final ReportRequest request;
 
-  // Tracks the selected voucher mode: 0 = Three-Copy Slips, 1 = Cohort Ledger.
-  // Only meaningful when request.type == ReportType.feeVoucher.
-  int _feeVoucherMode = 0;
+  /// Phase K-6 Run 1: explicit orientation input, carried by
+  /// [ReportPreviewKey.pageFormat]. Null = natural orientation (the request's
+  /// own override, else the report's natural format — K-3b-fix preserved).
+  final PdfPageFormat? pageFormatOverride;
 
-  // Phase K Shot 3b-core: user-selected page format override from the preview
-  // modal's Portrait/Landscape segmented button. Null = use the request's own
-  // pageFormatOverride (falls back to naturalPageFormat at the call sites).
-  PdfPageFormat? _pageFormatOverride;
+  // Voucher layout mode: 0 = Three-Copy Slips, 1 = Cohort Ledger.
+  // Only meaningful when request.type == ReportType.feeVoucher. Carried as an
+  // explicit constructor input (part of [ReportPreviewKey]) so a mode change
+  // rotates to a fresh notifier instead of mutating bytes in place.
+  final int _feeVoucherMode;
 
-  ReportPreviewNotifier(this.request)
+  // Phase K-6 Run 1: monotonic generation token. Only the most recently
+  // STARTED generation may publish bytes/error — a slow in-flight generation
+  // (e.g. the one kicked off at modal open) can never complete after and
+  // overwrite a newer generation's result with stale bytes.
+  int _generation = 0;
+
+  ReportPreviewNotifier(this.request, this.pageFormatOverride, this._feeVoucherMode)
     : super(const ReportPreviewState(isLoading: true)) {
     generate();
   }
 
   /// Effective page format for the current generation: the modal override
-  /// wins, then the request's own override, else null (natural format).
+  /// (explicit family argument) wins, then the request's own override, else
+  /// null (natural format — the VB6 builder falls back to its landscape flag).
   PdfPageFormat? get activePageFormat =>
-      _pageFormatOverride ?? request.pageFormatOverride;
-
-  /// Sets the page-format override and re-generates the PDF. Passing null
-  /// clears the modal override (back to the request's natural format).
-  void setPageFormat(PdfPageFormat? fmt) {
-    _pageFormatOverride = fmt;
-    generate();
-  }
+      pageFormatOverride ?? request.pageFormatOverride;
 
   Future<void> generate() async {
+    final token = ++_generation;
     state = const ReportPreviewState(isLoading: true);
     try {
       final Uint8List bytes;
@@ -96,13 +144,12 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         bytes = await _generateByType();
       }
 
-      if (mounted) {
-        state = ReportPreviewState(bytes: bytes);
-      }
+      // Drop stale completions: a newer generation superseded this one.
+      if (!mounted || token != _generation) return;
+      state = ReportPreviewState(bytes: bytes);
     } catch (e, st) {
-      if (mounted) {
-        state = ReportPreviewState(error: 'Failed to generate PDF: $e\n$st');
-      }
+      if (!mounted || token != _generation) return;
+      state = ReportPreviewState(error: 'Failed to generate PDF: $e\n$st');
     }
   }
 
@@ -156,26 +203,6 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         return _generateExamStatus();
       case ReportType.classCollectionSummary:
         return _generateClassCollectionSummary();
-    }
-  }
-
-  /// Switches the voucher layout mode and re-generates the PDF.
-  /// mode 0 = Three-Copy Slips, mode 1 = Cohort Ledger.
-  /// No-op for non-feeVoucher request types.
-  Future<void> regenerateWithMode(int mode) async {
-    if (mode != 0 && mode != 1) return;
-    _feeVoucherMode = mode;
-    if (!mounted) return;
-    state = const ReportPreviewState(isLoading: true);
-    try {
-      final bytes = await _generateFeeVoucher(mode);
-      if (mounted) {
-        state = ReportPreviewState(bytes: bytes);
-      }
-    } catch (e, st) {
-      if (mounted) {
-        state = ReportPreviewState(error: 'Failed to generate PDF: $e\n$st');
-      }
     }
   }
 
@@ -1325,7 +1352,18 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
 // Provider
 // ---------------------------------------------------------------------------
 
+/// Phase K-6 Run 1: the bytes-producing provider family is keyed on
+/// [ReportPreviewKey] — the request identity PLUS the orientation override
+/// PLUS the voucher mode. Orientation is therefore an explicit argument of
+/// the bytes generation: toggling Portrait/Landscape changes the family key,
+/// which rotates to a fresh notifier (fresh loading → bytes lifecycle) and
+/// auto-disposes the previous one. No in-place byte mutation, no stale-input
+/// capture.
 final reportPreviewProvider = StateNotifierProvider.autoDispose
-    .family<ReportPreviewNotifier, ReportPreviewState, ReportRequest>(
-      (ref, request) => ReportPreviewNotifier(request),
+    .family<ReportPreviewNotifier, ReportPreviewState, ReportPreviewKey>(
+      (ref, key) => ReportPreviewNotifier(
+        key.request,
+        key.pageFormat,
+        key.feeVoucherMode,
+      ),
     );
