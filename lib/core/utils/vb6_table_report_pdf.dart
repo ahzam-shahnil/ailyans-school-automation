@@ -22,6 +22,21 @@ enum Vb6ColumnAlign { left, right, center }
 /// subtitle, optional `Class / Section / No of students` band headers, zebra
 /// table, and the standard report footer.
 class Vb6TableReportPdf {
+  // Phase K-6 Run 2 (Part 10 invariant 12): binding-gutter page margins.
+  // 40pt left gutter (invariant — unchanged); the right margin is bumped
+  // 24 -> 30pt so right-edge amount/status columns never sit on the trim
+  // edge. All tables are FlexColumnWidth-based and therefore always fill
+  // exactly the printable width below — they can never overflow the page.
+  static const double kMarginLeft = 40;
+  static const double kMarginTop = 30;
+  static const double kMarginRight = 30;
+  static const double kMarginBottom = 30;
+
+  /// Printable content width for [format] under this generator's page
+  /// margins: `pageFormat.width − marginLeft − marginRight`. Exposed so
+  /// tests can assert the per-report width budget.
+  static double printableWidth(PdfPageFormat format) =>
+      format.width - kMarginLeft - kMarginRight;
   static Future<Uint8List> generate({
     required String title,
     required String subtitle,
@@ -323,23 +338,31 @@ class Vb6TableReportPdf {
                 ),
               ),
               child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                // Phase K-6 Run 2: Expanded-wrapped — the title + filter
+                // subtitle measured ~95% of the portrait printable width
+                // (within the K-1 5% cross-platform danger zone), so they
+                // wrap instead of overflowing the right page edge.
                 children: [
-                  pw.Text(
-                    title.toUpperCase(),
-                    style: pw.TextStyle(
-                      font: boldFont,
-                      fontSize: 10,
-                      color: ReportTheme.primaryColor,
+                  pw.Expanded(
+                    child: pw.Text(
+                      title.toUpperCase(),
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 10,
+                        color: ReportTheme.primaryColor,
+                      ),
                     ),
                   ),
                   if (subtitle.isNotEmpty)
-                    pw.Text(
-                      subtitle,
-                      style: pw.TextStyle(
-                        font: boldFont,
-                        fontSize: 9,
-                        color: ReportTheme.secondaryColor,
+                    pw.Expanded(
+                      child: pw.Text(
+                        subtitle,
+                        style: pw.TextStyle(
+                          font: boldFont,
+                          fontSize: 9,
+                          color: ReportTheme.secondaryColor,
+                        ),
+                        textAlign: pw.TextAlign.right,
                       ),
                     ),
                 ],
@@ -403,7 +426,12 @@ class Vb6TableReportPdf {
       doc.addPage(
         pw.MultiPage(
           pageFormat: activeFormat,
-          margin: const pw.EdgeInsets.fromLTRB(40, 30, 24, 30),
+          margin: const pw.EdgeInsets.fromLTRB(
+            kMarginLeft,
+            kMarginTop,
+            kMarginRight,
+            kMarginBottom,
+          ),
           // Whole-school rosters legitimately span many pages; the package
           // default of 20 pages is far too low for institutional reports.
           maxPages: 2000,
@@ -422,7 +450,12 @@ class Vb6TableReportPdf {
       doc.addPage(
         pw.MultiPage(
           pageFormat: activeFormat,
-          margin: const pw.EdgeInsets.fromLTRB(40, 30, 24, 30),
+          margin: const pw.EdgeInsets.fromLTRB(
+            kMarginLeft,
+            kMarginTop,
+            kMarginRight,
+            kMarginBottom,
+          ),
           // Whole-school rosters legitimately span many pages; the package
           // default of 20 pages is far too low for institutional reports.
           maxPages: 2000,
@@ -438,7 +471,12 @@ class Vb6TableReportPdf {
         doc.addPage(
           pw.MultiPage(
             pageFormat: activeFormat,
-            margin: const pw.EdgeInsets.fromLTRB(40, 30, 24, 30),
+            margin: const pw.EdgeInsets.fromLTRB(
+            kMarginLeft,
+            kMarginTop,
+            kMarginRight,
+            kMarginBottom,
+          ),
             // Whole-school rosters legitimately span many pages; the package
             // default of 20 pages is far too low for institutional reports.
             maxPages: 2000,

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
 
 import '../../core/db/database.dart';
 import '../../core/providers/clock_provider.dart';
@@ -661,6 +662,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
                       context,
                       request: ReportRequest(
                         type: ReportType.defaulterList,
+                        // Phase K-6 Run 2: natural format is A4 landscape.
+                        naturalPageFormat: PdfPageFormat.a4.landscape,
                         vouchers: buildData.groups,
                         extraParams: {
                           'summary': buildData.summary,
@@ -1066,6 +1069,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
       context,
       request: ReportRequest(
         type: ReportType.defaulterList,
+        // Phase K-6 Run 2: natural format is A4 landscape.
+        naturalPageFormat: PdfPageFormat.a4.landscape,
         vouchers: buildData.groups,
         extraParams: {
           'summary': buildData.summary,

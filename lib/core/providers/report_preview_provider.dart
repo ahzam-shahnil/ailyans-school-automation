@@ -353,6 +353,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       branchAddress: _safeBranchAddress(),
       branchPhone: request.extraParams['branchPhone'] as String?,
       branchPrincipal: request.extraParams['branchPrincipal'] as String?,
+      // Phase K-6 Run 2: honor the modal's orientation override.
+      pageFormat: activePageFormat,
     );
   }
 
@@ -631,22 +633,30 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
                 ),
               ),
               child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                // Phase K-6 Run 2: Expanded-wrapped — long student/class
+                // names wrap instead of overflowing the right page edge
+                // (worst case measured at ~94% of the printable width on
+                // macOS metrics; the same class as the totals-row fix).
                 children: [
-                  pw.Text(
-                    'STUDENT MARKSHEET - $examName',
-                    style: pw.TextStyle(
-                      font: boldFont,
-                      fontSize: 10,
-                      color: ReportTheme.primaryColor,
+                  pw.Expanded(
+                    child: pw.Text(
+                      'STUDENT MARKSHEET - $examName',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 10,
+                        color: ReportTheme.primaryColor,
+                      ),
                     ),
                   ),
-                  pw.Text(
-                    'Student: $studentName | Class: $className',
-                    style: pw.TextStyle(
-                      font: boldFont,
-                      fontSize: 9,
-                      color: ReportTheme.secondaryColor,
+                  pw.Expanded(
+                    child: pw.Text(
+                      'Student: $studentName | Class: $className',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 9,
+                        color: ReportTheme.secondaryColor,
+                      ),
+                      textAlign: pw.TextAlign.right,
                     ),
                   ),
                 ],
@@ -739,7 +749,9 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
 
     doc.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
+        // Phase K-6 Run 2: honor the modal's orientation override; the
+        // natural default stays A4 landscape.
+        pageFormat: activePageFormat ?? PdfPageFormat.a4.landscape,
         margin: const pw.EdgeInsets.all(32),
         header: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -930,7 +942,6 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     num totalDisc = 0;
     num totalColl = 0;
     num totalDues = 0;
-
     for (final r in rows) {
       totalBilled += (r['billedCount'] as num?)?.toInt() ??
           (r['totalBilled'] as num?)?.toInt() ??
@@ -954,8 +965,17 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
 
     doc.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
+        // Phase K-6 Run 2: honor the modal's orientation override; the
+        // natural default stays A4 portrait. Margins follow Part 10
+        // invariant 12's binding gutter (40pt left, >=30pt right) so the
+        // Dues / Recovery % columns never sit on the trim edge.
+        pageFormat: activePageFormat ?? PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(
+          DefaulterListPdfGenerator.kMarginLeft,
+          DefaulterListPdfGenerator.kMarginTop,
+          DefaulterListPdfGenerator.kMarginRight,
+          DefaulterListPdfGenerator.kMarginBottom,
+        ),
         header: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
@@ -1099,22 +1119,31 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
                 border: pw.Border.all(color: ReportTheme.borderRuleColor, width: 0.5),
               ),
               child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                // Phase K-6 Run 2: both texts are Expanded-wrapped so long
+                // school-scale totals WRAP inside the printable width
+                // instead of overflowing the right page edge (the client's
+                // 'Dues / Recovery %' clipping). Unwrapped intrinsic widths
+                // need ~598-640pt vs a 525-531pt printable width.
                 children: [
-                  pw.Text(
-                    'TOTALS: Billed: $totalBilled | Gross: Rs. ${ReportTheme.formatCurrency(totalGross)} | Discounts: Rs. ${ReportTheme.formatCurrency(totalDisc)}',
-                    style: pw.TextStyle(
-                      font: boldFont,
-                      fontSize: 8.5,
-                      color: ReportTheme.primaryColor,
+                  pw.Expanded(
+                    child: pw.Text(
+                      'TOTALS: Billed: $totalBilled | Gross: Rs. ${ReportTheme.formatCurrency(totalGross)} | Discounts: Rs. ${ReportTheme.formatCurrency(totalDisc)}',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 8.5,
+                        color: ReportTheme.primaryColor,
+                      ),
                     ),
                   ),
-                  pw.Text(
-                    'Collected: Rs. ${ReportTheme.formatCurrency(totalColl)} | Dues: Rs. ${ReportTheme.formatCurrency(totalDues)} | Recovery: $overallPct%',
-                    style: pw.TextStyle(
-                      font: boldFont,
-                      fontSize: 8.5,
-                      color: ReportTheme.successTextColor,
+                  pw.Expanded(
+                    child: pw.Text(
+                      'Collected: Rs. ${ReportTheme.formatCurrency(totalColl)} | Dues: Rs. ${ReportTheme.formatCurrency(totalDues)} | Recovery: $overallPct%',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 8.5,
+                        color: ReportTheme.successTextColor,
+                      ),
+                      textAlign: pw.TextAlign.right,
                     ),
                   ),
                 ],
@@ -1152,6 +1181,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
       branchAddress: _safeBranchAddress(),
       branchPhone: request.extraParams['branchPhone'] as String?,
       branchPrincipal: request.extraParams['branchPrincipal'] as String?,
+      // Phase K-6 Run 2: honor the modal's orientation override.
+      pageFormat: activePageFormat,
     );
   }
 
@@ -1318,22 +1349,30 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
                 border: pw.Border.all(color: ReportTheme.borderRuleColor, width: 0.5),
               ),
               child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                // Phase K-6 Run 2: Expanded-wrapped so the totals line wraps
+                // inside the printable width instead of overflowing the
+                // right page edge (same bug class as the class-summary
+                // TOTALS row).
                 children: [
-                  pw.Text(
-                    'Overall Totals:',
-                    style: pw.TextStyle(
-                      font: boldFont,
-                      fontSize: 9,
-                      color: ReportTheme.primaryColor,
+                  pw.Expanded(
+                    child: pw.Text(
+                      'Overall Totals:',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 9,
+                        color: ReportTheme.primaryColor,
+                      ),
                     ),
                   ),
-                  pw.Text(
-                    'Enrolled: $totalEnrolled  |  Appeared: $totalAppeared  |  Passed: $totalPassed  |  Failed: $totalFailed  |  Pass: $overallPassPct%',
-                    style: pw.TextStyle(
-                      font: boldFont,
-                      fontSize: 9,
-                      color: ReportTheme.primaryColor,
+                  pw.Expanded(
+                    child: pw.Text(
+                      'Enrolled: $totalEnrolled  |  Appeared: $totalAppeared  |  Passed: $totalPassed  |  Failed: $totalFailed  |  Pass: $overallPassPct%',
+                      style: pw.TextStyle(
+                        font: boldFont,
+                        fontSize: 9,
+                        color: ReportTheme.primaryColor,
+                      ),
+                      textAlign: pw.TextAlign.right,
                     ),
                   ),
                 ],

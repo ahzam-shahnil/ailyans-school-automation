@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:pdf/pdf.dart';
 
 import '../../core/db/database.dart';
 import '../../core/providers/fee_collection_provider.dart';
@@ -150,6 +151,9 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
         : '-';
     final request = ReportRequest(
       type: ReportType.defaulterList,
+      // Phase K-6 Run 2: the generator's natural format is A4 landscape —
+      // the modal's orientation toggle must reflect it (K-3b contract).
+      naturalPageFormat: PdfPageFormat.a4.landscape,
       vouchers: defaulterData.groups,
       extraParams: {
         'summary': defaulterData.summary,
@@ -255,6 +259,8 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
       context,
       request: ReportRequest(
         type: ReportType.feeCollectionRegister,
+        // Phase K-6 Run 2: natural format is A4 landscape.
+        naturalPageFormat: PdfPageFormat.a4.landscape,
         titleOverride: 'Daily Collection Ledger',
         extraParams: {
           'date': state.selectedMonth ?? '',

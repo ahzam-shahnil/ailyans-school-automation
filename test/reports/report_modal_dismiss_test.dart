@@ -70,12 +70,12 @@ void main() {
       // The close button must be present and OUTSIDE the toolbar's
       // horizontal scroll viewport (always visible, never clipped).
       expect(
-        find.byKey(const Key('report_preview_close_btn')),
+        find.byKey(const ValueKey('report_toolbar_close')),
         findsOneWidget,
       );
       expect(find.byTooltip('Close'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('report_preview_close_btn')));
+      await tester.tap(find.byKey(const ValueKey('report_toolbar_close')));
       await _pumpDismissed(tester);
 
       expect(find.byType(ReportPreviewModal), findsNothing);

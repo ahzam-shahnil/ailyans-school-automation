@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import 'package:school_automation/core/providers/report_preview_provider.dart';
 import 'package:school_automation/core/sync/sync_provider.dart';
 import 'package:school_automation/core/theme/app_theme_tokens.dart';
+import 'package:school_automation/core/utils/responsive_breakpoints.dart';
 import 'package:school_automation/widgets/reports/report_definition.dart';
 
 /// Orientation choices for the preview modal's desktop toolbar toggle
@@ -262,7 +263,8 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     };
 
     final size = MediaQuery.sizeOf(context);
-    final isMobile = size.width < 600;
+    final isMobile = size.width < ResponsiveBreakpoints.mobileMax;
+    final isDesktop = size.width >= ResponsiveBreakpoints.tabletMax;
     final dialogWidth = isMobile ? size.width : size.width * 0.92;
     final dialogHeight = isMobile ? size.height : size.height * 0.92;
 
@@ -298,7 +300,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _buildToolbar(state, isMobile),
+                    _buildToolbar(state, isMobile, isDesktop),
                     Expanded(child: _buildBody(state)),
                   ],
                 ),
@@ -314,9 +316,23 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   // Toolbar
   // ---------------------------------------------------------------------------
 
-  Widget _buildToolbar(ReportPreviewState state, bool isMobile) {
+  /// Phase K-6 Run 2: three toolbar shapes so every applicable action is
+  /// reachable at every width and no button is ever clipped off the right
+  /// edge:
+  /// - desktop (>= 1024): single fixed-height row; trailing controls live in
+  ///   a horizontal SingleChildScrollView whose inner Row is sized to its
+  ///   intrinsic content width (no Expanded/Flexible inside the scroll —
+  ///   Argon Rule 13), with the Close button fixed OUTSIDE the scroll.
+  /// - tablet (600..1023): Wrap(alignment: end) — buttons flow onto multiple
+  ///   lines instead of scrolling out of view.
+  /// - mobile (< 600): minimal row; secondary actions live in the overflow
+  ///   PopupMenuButton (never a hiding conditional).
+  Widget _buildToolbar(ReportPreviewState state, bool isMobile, bool isDesktop) {
     if (isMobile) {
       return _buildMobileToolbar(state);
+    }
+    if (!isDesktop) {
+      return _buildTabletToolbar(state);
     }
 
     final hasBytes = state.bytes != null;
@@ -353,6 +369,9 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
     // buttons) can never RenderFlex-overflow, even when every optional
     // control is present at once (Phase K Shot 3b-core fallback). The title
     // column above keeps its Expanded sizing outside the scroll view.
+    // Argon Rule 13: the inner Row is sized to its INTRINSIC content width
+    // (mainAxisSize.min) and contains no Expanded/Flexible/Spacer, so the
+    // horizontal scroll extent is exactly the content width.
     return Container(
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
@@ -376,6 +395,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // --- Shot 3b: N Vouchers · N Pages count pill --------------
                   if (_buildCountBadge() != null) ...[
@@ -385,6 +405,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
                   // --- K Shot 3b-core: orientation toggle (desktop only) -----
                   SegmentedButton<_PdfOrientation>(
+                    key: const ValueKey('report_toolbar_orientation'),
                     style: SegmentedButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       textStyle: AppTypography.bodySmall,
@@ -433,7 +454,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
                   // --- Refresh Data (re-query + background sync) --------------
                   IconButton(
-                    key: const Key('report_preview_refresh_btn'),
+                    key: const ValueKey('report_toolbar_refresh'),
                     icon: const Icon(Icons.refresh_rounded),
                     tooltip: 'Refresh Data',
                     iconSize: 20,
@@ -444,6 +465,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
                   // --- Export PDF button --------------------------------------
                   OutlinedButton.icon(
+                    key: const ValueKey('report_toolbar_export'),
                     icon: const Icon(Icons.download_outlined, size: 16),
                     label: const Text('Export PDF'),
                     style: OutlinedButton.styleFrom(
@@ -463,7 +485,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
                   // --- Print / Export PDF button ------------------------------
                   ElevatedButton.icon(
-                    key: const Key('report_preview_print_btn'),
+                    key: const ValueKey('report_toolbar_print'),
                     icon: const Icon(Icons.print_outlined, size: 16),
                     label: const Text('Print / Export PDF'),
                     style: ElevatedButton.styleFrom(
@@ -483,17 +505,154 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
           ),
           const SizedBox(width: AppSpacing.sm),
 
-          // --- Close (Phase K-6 Item 3) --------------------------------
+          // --- Close (Phase K-6 Item 3 / Run 2 stable key) --------------
           // Fixed trailing position OUTSIDE the horizontal scroll view so
           // the close button is always visible at tablet + desktop widths,
           // even when every optional toolbar control is present and the
           // scrollable row overflows.
           IconButton(
-            key: const Key('report_preview_close_btn'),
+            key: const ValueKey('report_toolbar_close'),
             icon: const Icon(Icons.close),
             tooltip: 'Close',
             iconSize: 20,
             onPressed: _handleClose,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tablet toolbar (600..1023): Wrap — buttons flow onto multiple lines
+  // ---------------------------------------------------------------------------
+
+  /// Phase K-6 Run 2: below desktop width the toolbar wraps onto multiple
+  /// lines instead of scrolling buttons out of view. Argon Rule 13: no
+  /// horizontal scroll view, so the title's Expanded lives in a plain Row
+  /// inside a vertically-stacked Column (no vertical scroll view here).
+  Widget _buildTabletToolbar(ReportPreviewState state) {
+    final hasBytes = state.bytes != null;
+    final countBadge = _buildCountBadge();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: const BoxDecoration(
+        color: AppColors.surfaceRaised,
+        border: Border(
+          bottom: BorderSide(color: AppColors.borderDefault, width: 1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.picture_as_pdf_outlined,
+                color: AppColors.brandPrimary,
+                size: 20,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  widget.request.effectiveTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.h3.copyWith(color: AppColors.textPrimary),
+                ),
+              ),
+              if (countBadge != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                countBadge,
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              SegmentedButton<_PdfOrientation>(
+                key: const ValueKey('report_toolbar_orientation'),
+                style: SegmentedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  textStyle: AppTypography.bodySmall,
+                ),
+                segments: const [
+                  ButtonSegment(
+                    value: _PdfOrientation.portrait,
+                    label: Text('Portrait'),
+                    icon: Icon(Icons.crop_portrait, size: 14),
+                  ),
+                  ButtonSegment(
+                    value: _PdfOrientation.landscape,
+                    label: Text('Landscape'),
+                    icon: Icon(Icons.crop_landscape, size: 14),
+                  ),
+                ],
+                selected: {_currentOrientation},
+                onSelectionChanged: (s) {
+                  final chosen = s.first;
+                  final override = chosen == _PdfOrientation.landscape
+                      ? PdfPageFormat.a4.landscape
+                      : PdfPageFormat.a4;
+                  // Phase K-6 Run 1: state first, then invalidation — the
+                  // next build's watch key carries the new orientation as an
+                  // explicit family argument (fresh bytes generation).
+                  setState(() => _pageFormatOverride = override);
+                },
+              ),
+              if (widget.headerControls != null) widget.headerControls!,
+              IconButton(
+                key: const ValueKey('report_toolbar_refresh'),
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+                tooltip: 'Refresh Data',
+                visualDensity: VisualDensity.compact,
+                onPressed: state.isLoading ? null : _onRefreshData,
+              ),
+              OutlinedButton.icon(
+                key: const ValueKey('report_toolbar_export'),
+                icon: const Icon(Icons.download_outlined, size: 16),
+                label: const Text('Export PDF'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.textPrimary,
+                  side: const BorderSide(color: AppColors.borderDefault),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: hasBytes ? () => _handleSavePdf(state.bytes!) : null,
+              ),
+              ElevatedButton.icon(
+                key: const ValueKey('report_toolbar_print'),
+                icon: const Icon(Icons.print_outlined, size: 16),
+                label: const Text('Print / Export PDF'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brandPrimary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                    vertical: AppSpacing.xs,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
+              ),
+              IconButton(
+                key: const ValueKey('report_toolbar_close'),
+                icon: const Icon(Icons.close),
+                tooltip: 'Close',
+                visualDensity: VisualDensity.compact,
+                onPressed: _handleClose,
+              ),
+            ],
           ),
         ],
       ),
@@ -533,7 +692,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             const SizedBox(width: AppSpacing.xs),
           ],
           IconButton(
-            key: const Key('report_preview_refresh_btn'),
+            key: const ValueKey('report_toolbar_refresh'),
             icon: const Icon(Icons.refresh_rounded, size: 20),
             tooltip: 'Refresh Data',
             onPressed: state.isLoading ? null : _onRefreshData,
@@ -549,7 +708,7 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                 : null,
           ),
           IconButton(
-            key: const Key('report_preview_print_btn'),
+            key: const ValueKey('report_toolbar_print'),
             icon: const Icon(Icons.print_outlined, size: 20),
             tooltip: 'Print',
             onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
@@ -608,11 +767,11 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             ],
           ),
 
-          // --- Close (Phase K-6 Item 3) --------------------------------
+          // --- Close (Phase K-6 Item 3 / Run 2 stable key) --------------
           // Top-right fixed trailing position so the close affordance is
           // always visible on mobile, mirroring the desktop toolbar.
           IconButton(
-            key: const Key('report_preview_close_btn'),
+            key: const ValueKey('report_toolbar_close'),
             icon: const Icon(Icons.close, size: 20),
             tooltip: 'Close',
             onPressed: _handleClose,

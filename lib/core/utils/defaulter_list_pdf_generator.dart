@@ -93,6 +93,20 @@ class DefaulterClassGroup {
 
 class DefaulterListPdfGenerator {
   static const PdfColor _navy = PdfColor.fromInt(0xFF1E3A8A);
+
+  // Phase K-6 Run 2 (Part 10 invariant 12): uniform binding-gutter margins
+  // across the preview reports — 40pt left gutter, right margin at least
+  // 30pt so right-edge total/balance columns never sit on the trim edge.
+  static const double kMarginLeft = 40;
+  static const double kMarginTop = 30;
+  static const double kMarginRight = 30;
+  static const double kMarginBottom = 30;
+
+  /// Printable content width for [format] under this generator's page
+  /// margins: `pageFormat.width − marginLeft − marginRight`. Exposed so
+  /// tests can assert every table's column budget stays inside it.
+  static double printableWidth(PdfPageFormat format) =>
+      format.width - kMarginLeft - kMarginRight;
   static const PdfColor _lightBg = PdfColor.fromInt(0xFFF8FAFC);
   static const PdfColor _headerBg = PdfColor.fromInt(0xFFF1F5F9);
   static const PdfColor _borderColor = PdfColor.fromInt(0xFFCBD5E1);
@@ -111,13 +125,23 @@ class DefaulterListPdfGenerator {
     required String branchAddress,
     String? branchPhone,
     String? branchPrincipal,
+    /// Phase K-6 Run 2: page format from the preview modal's
+    /// Portrait/Landscape override. Null = the report's natural A4
+    /// landscape (K-3b contract — the default render is unchanged).
+    PdfPageFormat? pageFormat,
   }) async {
     final doc = pw.Document();
+    final activeFormat = pageFormat ?? PdfPageFormat.a4.landscape;
 
     doc.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(18),
+        pageFormat: activeFormat,
+        margin: const pw.EdgeInsets.fromLTRB(
+          kMarginLeft,
+          kMarginTop,
+          kMarginRight,
+          kMarginBottom,
+        ),
         header: (context) => _buildHeader(
           summary: summary,
           branchName: branchName,
