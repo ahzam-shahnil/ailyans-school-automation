@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/db/database.dart';
+import '../../core/db/delete_audit.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../core/providers/fee_collection_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
@@ -523,8 +524,31 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     );
     if (confirmed != true || !mounted) return;
 
+    // Phase K-6-c item 4: record the CONFIRMED attempt BEFORE the handler
+    // runs (a cancelled dialog returned above and writes nothing).
+    // attempted_by = the session user's Users.ID — readily available here
+    // via sessionProvider (already imported by this screen; no new
+    // plumbing). The insert is GUARDED: if the audit write throws, the
+    // delete still proceeds (audit must never block the delete).
+    int? auditAttemptId;
     try {
-      await permanentlyDeleteStudent(student.stuRegId);
+      final db = await DatabaseService.instance.database;
+      auditAttemptId = await recordDeleteConfirmed(
+        db,
+        stuRegId: student.stuRegId,
+        attemptedBy: ref.read(sessionProvider)?.user.id,
+      );
+    } catch (e) {
+      debugPrint(
+        '[delete-audit] confirmed insert failed (delete proceeds): $e',
+      );
+    }
+
+    try {
+      await permanentlyDeleteStudent(
+        student.stuRegId,
+        auditAttemptId: auditAttemptId,
+      );
     } catch (e) {
       debugPrint('Delete student failed: $e');
       if (!mounted) return;

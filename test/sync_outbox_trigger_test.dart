@@ -36,11 +36,11 @@ void main() {
   });
 
   test(
-    'Migrations 009+010 set PRAGMA user_version = 10 and seed _sync_state '
+    'Migrations 009+010+011 set PRAGMA user_version = 11 and seed _sync_state '
     '(__global__ and __node__)',
     () async {
       final versionRows = await db.rawQuery('PRAGMA user_version');
-      expect(versionRows.first.values.first, 10);
+      expect(versionRows.first.values.first, 11);
 
       final stateRows = await db.query('_sync_state');
       expect(stateRows.length, 2);

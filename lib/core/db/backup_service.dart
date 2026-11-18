@@ -240,12 +240,16 @@ class BackupService {
         // h. version
         final versionResult = await candDb.rawQuery('PRAGMA user_version');
         final version = (versionResult.first.values.first as int?) ?? 0;
-        if (version > 10) {
+        // Phase K-6-c item 4: Migration 011 (_delete_audit) bumps the app
+        // schema to 11 — this gate must accept the app's OWN post-011
+        // backups or every backup taken after the upgrade would be
+        // permanently unrestorable.
+        if (version > 11) {
           return RestoreValidation(
             ok: false,
             candidatePath: filePath,
             failureReason:
-                'Backup is from a newer app version (schema $version > 10)',
+                'Backup is from a newer app version (schema $version > 11)',
           );
         }
 

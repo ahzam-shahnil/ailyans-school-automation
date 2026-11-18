@@ -276,12 +276,12 @@ void main() {
       expect(result.failureReason, 'No SuperAdmin user (UserLvl=1) in backup');
     });
 
-    test('9. rejects user_version > 10', () async {
+    test('9. rejects user_version > 11', () async {
       final service = createService();
-      final v11Path = p.join(tempDir.path, 'v11.db');
-      await seedValidTestDb(v11Path, userVersion: 11);
+      final v12Path = p.join(tempDir.path, 'v12.db');
+      await seedValidTestDb(v12Path, userVersion: 12);
 
-      final result = await service.validateCandidate(v11Path);
+      final result = await service.validateCandidate(v12Path);
       expect(result.ok, isFalse);
       expect(
         result.failureReason,
@@ -289,7 +289,7 @@ void main() {
       );
       expect(
         result.failureReason,
-        'Backup is from a newer app version (schema 11 > 10)',
+        'Backup is from a newer app version (schema 12 > 11)',
       );
     });
 

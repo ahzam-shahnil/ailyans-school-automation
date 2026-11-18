@@ -47,7 +47,7 @@ void main() {
           final version = (await freshDb.rawQuery(
             'PRAGMA user_version',
           )).first.values.first;
-          expect(version, 10);
+          expect(version, 11);
 
           final node = await freshDb.query(
             '_sync_state',
@@ -101,7 +101,7 @@ void main() {
           final version = (await legacyDb.rawQuery(
             'PRAGMA user_version',
           )).first.values.first;
-          expect(version, 10);
+          expect(version, 11);
 
           final node = await legacyDb.query(
             '_sync_state',

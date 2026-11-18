@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -5,6 +6,7 @@ import '../../models/student.dart';
 import '../../models/student_enrollment.dart';
 import '../../models/student_voucher.dart';
 import '../db/database.dart';
+import '../db/delete_audit.dart';
 import '../sync/node_id_allocator.dart';
 import '../utils/biodata_pdf_generator.dart';
 
@@ -496,68 +498,112 @@ Future<void> deleteStudentAdvance({
 /// transaction: fee transactions, voucher details, voucher masters,
 /// attendance detail rows, school-leaving record, exam marks, advance
 /// credits, enrollments, and finally the `Stu_Reg` demographic row.
-Future<void> permanentlyDeleteStudent(int stuRegId) async {
+///
+/// Phase K-6-c item 4: additive audit instrumentation. [auditAttemptId] is
+/// the `_delete_audit` row the call site recorded after the type-DELETE
+/// dialog; direct invocations (null) self-record a 'confirmed' row at
+/// entry. The DELETE statements and their order are UNCHANGED. Outcome
+/// marks run OUTSIDE the delete transaction (a 'failed' record survives
+/// the ROLLBACK) and every audit call is wrapped in its own swallowing
+/// try/catch — an audit failure must never alter the delete outcome.
+/// Error propagation is unchanged: exceptions rethrow to the caller.
+Future<void> permanentlyDeleteStudent(
+  int stuRegId, {
+  int? auditAttemptId,
+}) async {
   final db = await DatabaseService.instance.database;
-  await db.transaction((txn) async {
-    final voucherRows = await txn.rawQuery(
-      'SELECT VoucherMasID FROM VoucharMas WHERE Student_Class_StuRegID = ?',
-      [stuRegId],
-    );
-    final voucherIds = voucherRows
-        .map((r) => r['VoucherMasID'] as String)
-        .toList(growable: false);
-    if (voucherIds.isNotEmpty) {
-      final placeholders = List.filled(voucherIds.length, '?').join(',');
-      await txn.rawDelete(
-        'DELETE FROM FeeTransaction WHERE VoucharNo IN ($placeholders)',
-        voucherIds,
-      );
-      await txn.rawDelete(
-        'DELETE FROM VoucharDet WHERE VoucharMasID IN ($placeholders)',
-        voucherIds,
-      );
+
+  int? attemptId = auditAttemptId;
+  if (attemptId == null) {
+    try {
+      attemptId = await recordDeleteConfirmed(db, stuRegId: stuRegId);
+    } catch (e) {
+      debugPrint('[delete-audit] self-confirm insert failed: $e');
     }
-    await txn.rawDelete(
-      'DELETE FROM VoucharMas WHERE Student_Class_StuRegID = ?',
-      [stuRegId],
-    );
-    await txn.rawDelete(
-      'DELETE FROM AttDet WHERE Stu_RegID = ?',
-      [stuRegId],
-    );
-    await txn.rawDelete(
-      'DELETE FROM SchLeaving WHERE StuRegID = ?',
-      [stuRegId],
-    );
-    final examRows = await txn.rawQuery(
-      'SELECT ExamMasID FROM ExamMas WHERE Stu_RegID = ?',
-      [stuRegId],
-    );
-    final examIds = examRows
-        .map((r) => r['ExamMasID'] as num)
-        .toList(growable: false);
-    if (examIds.isNotEmpty) {
-      final placeholders = List.filled(examIds.length, '?').join(',');
-      await txn.rawDelete(
-        'DELETE FROM ExamDet WHERE ExamMasID IN ($placeholders)',
-        examIds,
+  }
+
+  try {
+    await db.transaction((txn) async {
+      final voucherRows = await txn.rawQuery(
+        'SELECT VoucherMasID FROM VoucharMas WHERE Student_Class_StuRegID = ?',
+        [stuRegId],
       );
+      final voucherIds = voucherRows
+          .map((r) => r['VoucherMasID'] as String)
+          .toList(growable: false);
+      if (voucherIds.isNotEmpty) {
+        final placeholders = List.filled(voucherIds.length, '?').join(',');
+        await txn.rawDelete(
+          'DELETE FROM FeeTransaction WHERE VoucharNo IN ($placeholders)',
+          voucherIds,
+        );
+        await txn.rawDelete(
+          'DELETE FROM VoucharDet WHERE VoucharMasID IN ($placeholders)',
+          voucherIds,
+        );
+      }
+      await txn.rawDelete(
+        'DELETE FROM VoucharMas WHERE Student_Class_StuRegID = ?',
+        [stuRegId],
+      );
+      await txn.rawDelete(
+        'DELETE FROM AttDet WHERE Stu_RegID = ?',
+        [stuRegId],
+      );
+      await txn.rawDelete(
+        'DELETE FROM SchLeaving WHERE StuRegID = ?',
+        [stuRegId],
+      );
+      final examRows = await txn.rawQuery(
+        'SELECT ExamMasID FROM ExamMas WHERE Stu_RegID = ?',
+        [stuRegId],
+      );
+      final examIds = examRows
+          .map((r) => r['ExamMasID'] as num)
+          .toList(growable: false);
+      if (examIds.isNotEmpty) {
+        final placeholders = List.filled(examIds.length, '?').join(',');
+        await txn.rawDelete(
+          'DELETE FROM ExamDet WHERE ExamMasID IN ($placeholders)',
+          examIds,
+        );
+      }
+      await txn.rawDelete(
+        'DELETE FROM ExamMas WHERE Stu_RegID = ?',
+        [stuRegId],
+      );
+      await txn.rawDelete(
+        'DELETE FROM StuAdv WHERE StuRegID = ?',
+        [stuRegId],
+      );
+      await txn.rawDelete(
+        'DELETE FROM Student_Class WHERE Stu_RegID = ?',
+        [stuRegId],
+      );
+      await txn.rawDelete(
+        'DELETE FROM Stu_Reg WHERE Stu_RegID = ?',
+        [stuRegId],
+      );
+    });
+    // Outcome writes happen AFTER the transaction committed (outside it).
+    if (attemptId != null) {
+      try {
+        await markDeleteSuccess(db, attemptId);
+      } catch (e) {
+        debugPrint('[delete-audit] success mark failed: $e');
+      }
     }
-    await txn.rawDelete(
-      'DELETE FROM ExamMas WHERE Stu_RegID = ?',
-      [stuRegId],
-    );
-    await txn.rawDelete(
-      'DELETE FROM StuAdv WHERE StuRegID = ?',
-      [stuRegId],
-    );
-    await txn.rawDelete(
-      'DELETE FROM Student_Class WHERE Stu_RegID = ?',
-      [stuRegId],
-    );
-    await txn.rawDelete(
-      'DELETE FROM Stu_Reg WHERE Stu_RegID = ?',
-      [stuRegId],
-    );
-  });
+  } catch (e) {
+    // Outcome writes happen OUTSIDE the rolled-back delete transaction, so
+    // the 'failed' record survives the ROLLBACK. The original error still
+    // rethrows — the screen's catch/SnackBar behavior is untouched.
+    if (attemptId != null) {
+      try {
+        await markDeleteFailed(db, attemptId, e);
+      } catch (e2) {
+        debugPrint('[delete-audit] failure mark failed: $e2');
+      }
+    }
+    rethrow;
+  }
 }

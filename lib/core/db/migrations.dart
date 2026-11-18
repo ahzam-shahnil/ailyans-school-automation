@@ -146,6 +146,17 @@ class SchemaMigrations {
       currentVersion = 10;
     }
 
+    // Migration 011 (Phase K-6-c item 4): local-only delete-attempt audit
+    // log. NEVER synced: not a kSyncedTables member, so ensureSyncTriggers
+    // installs zero trg_sync_* capture triggers on it and audit writes can
+    // never enqueue _sync_outbox rows. Pure device-local forensics for the
+    // "delete never ran on the device" class of field reports.
+    if (currentVersion < 11) {
+      await applyMigration011(db);
+      await db.execute('PRAGMA user_version = 11');
+      currentVersion = 11;
+    }
+
     // Phase F-3a: converge _sync_state on every boot, including existing v9
     // databases that predate next_allocated_id. user_version stays at its
     // current value; F-3c-1 bumps it to 10 above.
@@ -545,6 +556,27 @@ class SchemaMigrations {
         ),
       );
     }
+  }
+
+  /// Migration 011 (Phase K-6-c item 4): creates the local-only
+  /// `_delete_audit` table. DDL is idempotent (`IF NOT EXISTS`).
+  ///
+  /// `status` vocabulary: 'confirmed' (attempt recorded before the handler
+  /// runs) | 'success' | 'failed'. `created_at` mirrors the `_sync_outbox`
+  /// trigger format (strftime('%Y-%m-%dT%H:%M:%fZ','now'), migrations.dart
+  /// trigger SQL). No index, no triggers, no sync registration.
+  static Future<void> applyMigration011(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS _delete_audit (
+        id INTEGER PRIMARY KEY,
+        stu_reg_id INTEGER NOT NULL,
+        attempted_by INTEGER,
+        status TEXT NOT NULL,
+        error TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+      )
+    ''');
   }
 
   /// Phase F-3a: idempotently ensures `_sync_state.next_allocated_id` exists

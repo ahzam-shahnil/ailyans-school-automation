@@ -31,14 +31,16 @@ void main() {
   });
 
   test(
-    'Database has 53 active tables, app_config, and IsActive column on Users',
+    'Database has 54 active tables, app_config, and IsActive column on Users',
     () async {
       final tables = await db.rawQuery(
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
       );
-      expect(tables.length, 53);
+      expect(tables.length, 54);
 
       final tableNames = tables.map((t) => t['name'] as String).toList();
+      // Migration 011 (K-6-c item 4): local-only delete-attempt audit table.
+      expect(tableNames.contains('_delete_audit'), isTrue);
       expect(tableNames.contains('app_config'), isTrue);
 
       final columns = await db.rawQuery('PRAGMA table_info(Users)');
