@@ -1,8 +1,115 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
 import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
+
+int? _extractPageCount(List<int> bytes) {
+  final text = latin1.decode(bytes);
+  final r1 = RegExp(r'/Type\s*/Pages[^>]*?/Count\s+(\d+)');
+  final m1 = r1.firstMatch(text);
+  if (m1 != null) return int.parse(m1.group(1)!);
+  final r2 = RegExp(r'/Count\s+(\d+)[^>]*?/Type\s*/Pages');
+  final m2 = r2.firstMatch(text);
+  if (m2 != null) return int.parse(m2.group(1)!);
+  return null;
+}
+
+(List<DefaulterClassGroup>, DefaulterListFilterSummary) _build75RowFixture() {
+  final groups = <DefaulterClassGroup>[];
+  var totalOutstanding = 0;
+  for (var g = 1; g <= 3; g++) {
+    final rows = <DefaulterListRow>[];
+    for (var r = 1; r <= 25; r++) {
+      final idx = (g - 1) * 25 + r;
+      final sub = 2000 + idx * 50;
+      const disc = 100;
+      const paid = 500;
+      final net = sub - disc - paid;
+      totalOutstanding += net;
+      rows.add(
+        DefaulterListRow(
+          voucherMasId: '1710-${1000 + idx}',
+          stuRegId: 1000 + idx,
+          studentName: 'Student Name $idx',
+          fatherName: 'Father Name $idx',
+          mobile1: '0300-${1000000 + idx}',
+          className: 'Class $g',
+          sectionName: 'A',
+          rollNo: r,
+          forMonth: 'October 2017',
+          subtotal: sub,
+          discount: disc,
+          paidAmt: paid,
+          netPayable: net,
+          isPaid: 'N',
+          dueDate: DateTime(2017, 10, 10),
+          daysOverdue: 14 + (idx % 30),
+        ),
+      );
+    }
+    groups.add(
+      DefaulterClassGroup(
+        classLabel: 'Class $g - Section A',
+        rows: rows,
+        subtotal: rows.fold<int>(0, (sum, row) => sum + row.balance),
+      ),
+    );
+  }
+  final summary = DefaulterListFilterSummary(
+    sessionYr: '2017-2018',
+    classFilter: null,
+    totalDefaulters: 75,
+    uniqueStudents: 75,
+    totalOutstanding: totalOutstanding,
+    reportMonth: 'October 2017',
+    generatedAt: DateTime(2026, 10, 24),
+  );
+  return (groups, summary);
+}
+
+(List<DefaulterClassGroup>, DefaulterListFilterSummary) _build20RowFixture() {
+  final rows = <DefaulterListRow>[];
+  for (var i = 1; i <= 20; i++) {
+    rows.add(
+      DefaulterListRow(
+        voucherMasId: '1710-${1000 + i}',
+        stuRegId: 1000 + i,
+        studentName: 'Student Name $i',
+        fatherName: 'Father Name $i',
+        mobile1: '0300-${1000000 + i}',
+        className: 'Class 1',
+        sectionName: 'A',
+        rollNo: i,
+        forMonth: 'October 2017',
+        subtotal: 2000,
+        discount: 100,
+        paidAmt: 500,
+        netPayable: 1400,
+        isPaid: 'N',
+        dueDate: DateTime(2017, 10, 10),
+        daysOverdue: 14,
+      ),
+    );
+  }
+  final group = DefaulterClassGroup(
+    classLabel: 'Class 1 - Section A',
+    rows: rows,
+    subtotal: rows.fold<int>(0, (sum, r) => sum + r.balance),
+  );
+  final summary = DefaulterListFilterSummary(
+    sessionYr: '2017-2018',
+    classFilter: 'Class 1',
+    totalDefaulters: 20,
+    uniqueStudents: 20,
+    totalOutstanding: group.subtotal,
+    reportMonth: 'October 2017',
+    generatedAt: DateTime(2026, 10, 24),
+  );
+  return ([group], summary);
+}
 
 void main() {
   test(
@@ -232,4 +339,99 @@ void main() {
       expect(bytes.length, greaterThan(4000));
     },
   );
+
+  test('T1 determinism: multi-page fixture generates identical byte length', () async {
+    final (groups, summary) = _build75RowFixture();
+    final bytes1 = await DefaulterListPdfGenerator.generate(
+      groups: groups,
+      summary: summary,
+      branchName: "Ailyans's Higher Secondary School Mianwali",
+      branchAddress: 'Muslim Bazar Mianwali',
+      branchPhone: '0459-234567',
+      branchPrincipal: 'Prof. Tariq Mehmood',
+    );
+    final bytes2 = await DefaulterListPdfGenerator.generate(
+      groups: groups,
+      summary: summary,
+      branchName: "Ailyans's Higher Secondary School Mianwali",
+      branchAddress: 'Muslim Bazar Mianwali',
+      branchPhone: '0459-234567',
+      branchPrincipal: 'Prof. Tariq Mehmood',
+    );
+    expect(bytes1.length, equals(bytes2.length));
+    expect(String.fromCharCodes(bytes1.take(5)), '%PDF-');
+  });
+
+  test('T2 page-count pin: 75-row fixture yields bounded page count', () async {
+    final (groups, summary) = _build75RowFixture();
+    final bytes = await DefaulterListPdfGenerator.generate(
+      groups: groups,
+      summary: summary,
+      branchName: "Ailyans's Higher Secondary School Mianwali",
+      branchAddress: 'Muslim Bazar Mianwali',
+      branchPhone: '0459-234567',
+      branchPrincipal: 'Prof. Tariq Mehmood',
+    );
+    final pageCount = _extractPageCount(bytes);
+    expect(pageCount, isNotNull);
+    expect(pageCount!, greaterThanOrEqualTo(2));
+    expect(pageCount, lessThanOrEqualTo(4));
+  });
+
+  test('T3 portrait fit: multi-page portrait renders without overflow or exception', () async {
+    final (groups, summary) = _build20RowFixture();
+    final bytes = await DefaulterListPdfGenerator.generate(
+      groups: groups,
+      summary: summary,
+      branchName: "Ailyans's Higher Secondary School Mianwali",
+      branchAddress: 'Muslim Bazar Mianwali',
+      pageFormat: PdfPageFormat.a4,
+    );
+    expect(bytes, isNotEmpty);
+    expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+  });
+
+  test('T4 single-page: small fixture yields pageCount == 1', () async {
+    final summary = DefaulterListFilterSummary(
+      sessionYr: '2017-2018',
+      classFilter: 'Class 10',
+      totalDefaulters: 1,
+      uniqueStudents: 1,
+      totalOutstanding: 1920,
+      reportMonth: 'October 2017',
+      generatedAt: DateTime(2026, 10, 24),
+    );
+    final group = DefaulterClassGroup(
+      classLabel: 'Class 10 - Section A',
+      rows: [
+        DefaulterListRow(
+          voucherMasId: '1710-4411',
+          stuRegId: 4411,
+          studentName: 'Muhammad Ali Khan',
+          fatherName: 'Khan Muhammad',
+          mobile1: '0300-1234567',
+          className: 'Class 10',
+          sectionName: 'A',
+          rollNo: 1,
+          forMonth: 'October 2017',
+          subtotal: 1920,
+          discount: 0,
+          paidAmt: 0,
+          netPayable: 1920,
+          isPaid: 'N',
+          dueDate: DateTime(2017, 10, 10),
+          daysOverdue: 14,
+        ),
+      ],
+      subtotal: 1920,
+    );
+    final bytes = await DefaulterListPdfGenerator.generate(
+      groups: [group],
+      summary: summary,
+      branchName: "Ailyans's Higher Secondary School Mianwali",
+      branchAddress: 'Muslim Bazar Mianwali',
+    );
+    final pageCount = _extractPageCount(bytes);
+    expect(pageCount, equals(1));
+  });
 }

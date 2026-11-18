@@ -142,13 +142,15 @@ class DefaulterListPdfGenerator {
           kMarginRight,
           kMarginBottom,
         ),
-        header: (context) => _buildHeader(
-          summary: summary,
-          branchName: branchName,
-          branchAddress: branchAddress,
-          branchPhone: branchPhone,
-          branchPrincipal: branchPrincipal,
-        ),
+        header: (context) => context.pageNumber == 1
+            ? _buildHeader(
+                summary: summary,
+                branchName: branchName,
+                branchAddress: branchAddress,
+                branchPhone: branchPhone,
+                branchPrincipal: branchPrincipal,
+              )
+            : _buildContinuationHeader(summary: summary),
         footer: (context) =>
             ReportTheme.buildStandardFooter(context, branchName: branchName),
         build: (context) => [
@@ -181,6 +183,28 @@ class DefaulterListPdfGenerator {
     );
 
     return doc.save();
+  }
+
+  static pw.Widget _buildContinuationHeader({
+    required DefaulterListFilterSummary summary,
+  }) {
+    final scope = summary.classFilter ?? 'All Classes';
+    return pw.Container(
+      width: double.infinity,
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: _navy, width: 1)),
+      ),
+      padding: const pw.EdgeInsets.only(bottom: 3),
+      margin: const pw.EdgeInsets.only(bottom: 4),
+      child: pw.Text(
+        'FEE DEFAULTERS ROSTER  |  Session: ${summary.sessionYr}  |  '
+        'Scope: $scope (${summary.reportMonth})  |  '
+        '${summary.totalDefaulters} Vouchers / ${summary.uniqueStudents} Stu',
+        style: const pw.TextStyle(fontSize: 7.5, color: _slate900),
+        maxLines: 1,
+        softWrap: false,
+      ),
+    );
   }
 
   static pw.Widget _buildHeader({
