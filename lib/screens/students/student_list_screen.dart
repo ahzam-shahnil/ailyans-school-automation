@@ -191,10 +191,48 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
     required IconData icon,
     required bool isPrimary,
     required VoidCallback onTap,
+    bool compact = false,
   }) {
     final Color foreground = isPrimary
         ? AppColors.brandPrimary
         : AppColors.textSecondary;
+    // Phase K-6-d item 5: compact (narrow-viewport) variant — icon-only,
+    // fixed 30x30, no text, no horizontal padding. Tooltip preserves the
+    // label affordance; KeyedSubtree gives tests a stable handle without
+    // relying on label text (which no longer renders here).
+    if (compact) {
+      return Tooltip(
+        message: label,
+        child: KeyedSubtree(
+          key: ValueKey('student_row_${label.toLowerCase()}'),
+          child: Container(
+            width: 30.0,
+            height: 30.0,
+            decoration: BoxDecoration(
+              color: isPrimary
+                  ? AppColors.brandPrimary.withValues(alpha: 0.10)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(AppRadius.full),
+              border: Border.all(
+                color: isPrimary
+                    ? AppColors.brandPrimary.withValues(alpha: 0.25)
+                    : AppColors.borderDefault,
+              ),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(AppRadius.full),
+                child: Center(
+                  child: Icon(icon, size: 13.0, color: foreground),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Container(
       height: 30.0,
       decoration: BoxDecoration(
@@ -1065,11 +1103,51 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                             (_colWidths['status'] ?? 0) +
                             (_colWidths['actions'] ?? 0) +
                             2 * AppSpacing.md;
+
+                        // Phase K-6-d item 5: width-triggered compact
+                        // directory mode. When the available width cannot
+                        // fit the FULL column floor (1300 with default
+                        // widths), switch to icon-only action pills and
+                        // trimmed name columns so View/Edit stay on-screen
+                        // on 1366x768 / 1280x720 laptops. The trigger ALWAYS
+                        // compares against the FULL floor — never the
+                        // compacted floor — so compacting (which shrinks the
+                        // floor below available) can never flip the mode
+                        // back and oscillate.
+                        final bool compact =
+                            constraints.maxWidth < columnsFloor;
+                        final double cellInset =
+                            compact ? AppSpacing.xs : AppSpacing.md;
+                        // Effective widths are DERIVED per build; _colWidths
+                        // is never mutated, so drag-resize keeps working and
+                        // wide mode is byte-identical to the defaults map.
+                        final Map<String, double> effWidths = compact
+                            ? <String, double>{
+                                ..._colWidths,
+                                'studentName': 200.0,
+                                'fatherName': 160.0,
+                                'actions': 96.0,
+                              }
+                            : _colWidths;
+                        // Intrinsic floor of the CURRENT mode's rendered
+                        // row: fixed columns (checkbox 40 + photo 56 +
+                        // siblings 80) + the two 6px resize handles + the
+                        // effective columns + the mode's row insets.
+                        final double effectiveFloor =
+                            40.0 + 56.0 + 80.0 + 12.0 +
+                                (effWidths['regId'] ?? 0) +
+                                (effWidths['rollNo'] ?? 0) +
+                                (effWidths['studentName'] ?? 0) +
+                                (effWidths['fatherName'] ?? 0) +
+                                (effWidths['classSec'] ?? 0) +
+                                (effWidths['status'] ?? 0) +
+                                (effWidths['actions'] ?? 0) +
+                                2 * cellInset;
                         var tableWidth = constraints.maxWidth > minTableWidth
                             ? constraints.maxWidth
                             : minTableWidth;
-                        if (columnsFloor > tableWidth) {
-                          tableWidth = columnsFloor;
+                        if (effectiveFloor > tableWidth) {
+                          tableWidth = effectiveFloor;
                         }
                         return Scrollbar(
                           controller: _tableHorizontalScroll,
@@ -1090,8 +1168,8 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                         // Table Header Row
                         Container(
                           height: 40.0,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: cellInset,
                           ),
                           decoration: const BoxDecoration(
                             color: AppColors.surfaceSubtle,
@@ -1133,7 +1211,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: _colWidths['regId'],
+                                width: effWidths['regId'],
                                 child: _buildSortableHeader(
                                   'REG ID',
                                   StudentSortColumn.regId,
@@ -1154,7 +1232,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: _colWidths['studentName'],
+                                width: effWidths['studentName'],
                                 child: Row(
                                   children: [
                                     Expanded(
@@ -1169,7 +1247,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: _colWidths['fatherName'],
+                                width: effWidths['fatherName'],
                                 child: Row(
                                   children: [
                                     Expanded(
@@ -1189,7 +1267,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: _colWidths['classSec'],
+                                width: effWidths['classSec'],
                                 child: Text(
                                   'CLASS-SEC',
                                   style: AppTypography.label.copyWith(
@@ -1200,7 +1278,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: _colWidths['rollNo'],
+                                width: effWidths['rollNo'],
                                 child: _buildSortableHeader(
                                   'ROLL NO',
                                   StudentSortColumn.rollNo,
@@ -1209,7 +1287,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: _colWidths['status'],
+                                width: effWidths['status'],
                                 child: Center(
                                   child: Text(
                                     'STATUS',
@@ -1235,7 +1313,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                 ),
                               ),
                               SizedBox(
-                                width: _colWidths['actions'],
+                                width: effWidths['actions'],
                                 child: Align(
                                   alignment: Alignment.centerRight,
                                   child: Text(
@@ -1366,8 +1444,8 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                         .withValues(alpha: 0.04),
                                     child: Container(
                                       height: 48.0,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: AppSpacing.md,
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: cellInset,
                                       ),
                                       child: Row(
                                         children: [
@@ -1394,7 +1472,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Reg ID (link-styled, opens profile)
                                           SizedBox(
-                                            width: _colWidths['regId'],
+                                            width: effWidths['regId'],
                                             child: _StudentLinkText(
                                               text: '${student.stuRegId}',
                                               onTap: () =>
@@ -1419,7 +1497,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                           // Student Full Name (link-styled)
                                           SizedBox(
                                             width:
-                                                _colWidths['studentName'],
+                                                effWidths['studentName'],
                                             child: _StudentLinkText(
                                               text: student.fullName,
                                               onTap: () =>
@@ -1434,7 +1512,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Father Name
                                           SizedBox(
-                                            width: _colWidths['fatherName'],
+                                            width: effWidths['fatherName'],
                                             child: Text(
                                               student.fatherName ?? '-',
                                               style: AppTypography.body
@@ -1449,7 +1527,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Class-Sec Badge
                                           SizedBox(
-                                            width: _colWidths['classSec'],
+                                            width: effWidths['classSec'],
                                             child: Align(
                                               alignment: Alignment.centerLeft,
                                               child: Container(
@@ -1485,7 +1563,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Roll No
                                           SizedBox(
-                                            width: _colWidths['rollNo'],
+                                            width: effWidths['rollNo'],
                                             child: Align(
                                               alignment: Alignment.centerRight,
                                               child: Text(
@@ -1504,7 +1582,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Status Badge
                                           SizedBox(
-                                            width: _colWidths['status'],
+                                            width: effWidths['status'],
                                             child: Center(
                                               child: _buildStatusBadge(
                                                 student.status,
@@ -1524,7 +1602,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
 
                                           // Actions: View + Edit pill buttons
                                           SizedBox(
-                                            width: _colWidths['actions'],
+                                            width: effWidths['actions'],
                                             child: Align(
                                               alignment: Alignment.centerRight,
                                               child: Row(
@@ -1536,6 +1614,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                                     icon: Icons
                                                         .visibility_outlined,
                                                     isPrimary: true,
+                                                    compact: compact,
                                                     onTap: () =>
                                                         _openStudentProfile(
                                                             student.stuRegId),
@@ -1547,6 +1626,7 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
                                                       label: 'Edit',
                                                       icon: Icons.edit_outlined,
                                                       isPrimary: false,
+                                                      compact: compact,
                                                       onTap: () =>
                                                           _openStudentEdit(
                                                               student),
