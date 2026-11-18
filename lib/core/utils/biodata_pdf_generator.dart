@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../repositories/logo_repository.dart';
 import 'voucher_pdf_generator.dart';
 
 // ============================================================================
@@ -124,6 +125,7 @@ class BiodataPdfGenerator {
     String? branchPhone,
     String? branchPrincipal,
   }) async {
+    final logoBytes = await LogoRepository.loadLogoBytes();
     final doc = pw.Document();
 
     Uint8List? photoBytes;
@@ -157,25 +159,35 @@ class BiodataPdfGenerator {
                   child: pw.Row(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Container(
-                        width: 28,
-                        height: 28,
-                        decoration: const pw.BoxDecoration(
-                          color: _navy,
-                          borderRadius: pw.BorderRadius.all(
-                            pw.Radius.circular(2),
-                          ),
-                        ),
-                        alignment: pw.Alignment.center,
-                        child: pw.Text(
-                          'AH',
-                          style: const pw.TextStyle(
-                            fontSize: 12,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.white,
-                          ),
-                        ),
-                      ),
+                      logoBytes != null
+                          ? pw.Container(
+                              width: 26,
+                              height: 26,
+                              alignment: pw.Alignment.center,
+                              child: pw.Image(
+                                pw.MemoryImage(logoBytes),
+                                fit: pw.BoxFit.contain,
+                              ),
+                            )
+                          : pw.Container(
+                              width: 28,
+                              height: 28,
+                              decoration: const pw.BoxDecoration(
+                                color: _navy,
+                                borderRadius: pw.BorderRadius.all(
+                                  pw.Radius.circular(2),
+                                ),
+                              ),
+                              alignment: pw.Alignment.center,
+                              child: pw.Text(
+                                'AH',
+                                style: const pw.TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.white,
+                                ),
+                              ),
+                            ),
                       pw.SizedBox(width: 8),
                       pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,

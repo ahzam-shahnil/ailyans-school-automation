@@ -28,6 +28,9 @@ class DatabaseService {
 
   Database? _database;
 
+  /// Returns true if an active database instance is currently open.
+  bool get isOpen => _database != null && _database!.isOpen;
+
   /// Exposes the open and fully migrated SQLite Database instance.
   Future<Database> get database async {
     if (_database != null && _database!.isOpen) {

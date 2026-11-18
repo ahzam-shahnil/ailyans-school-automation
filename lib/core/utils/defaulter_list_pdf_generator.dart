@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../core/theme/app_theme_tokens.dart';
+import '../../repositories/logo_repository.dart';
 import 'voucher_pdf_generator.dart';
 
 // ============================================================================
@@ -130,6 +131,7 @@ class DefaulterListPdfGenerator {
     /// landscape (K-3b contract — the default render is unchanged).
     PdfPageFormat? pageFormat,
   }) async {
+    final logoBytes = await LogoRepository.loadLogoBytes();
     final doc = pw.Document();
     final activeFormat = pageFormat ?? PdfPageFormat.a4.landscape;
 
@@ -149,6 +151,7 @@ class DefaulterListPdfGenerator {
                 branchAddress: branchAddress,
                 branchPhone: branchPhone,
                 branchPrincipal: branchPrincipal,
+                logoBytes: logoBytes,
               )
             : _buildContinuationHeader(summary: summary),
         footer: (context) =>
@@ -213,6 +216,7 @@ class DefaulterListPdfGenerator {
     required String branchAddress,
     String? branchPhone,
     String? branchPrincipal,
+    Uint8List? logoBytes,
   }) {
     final phone = (branchPhone != null && branchPhone.trim().isNotEmpty)
         ? branchPhone.trim()
@@ -237,23 +241,34 @@ class DefaulterListPdfGenerator {
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Container(
-                  width: 26,
-                  height: 26,
-                  decoration: const pw.BoxDecoration(
-                    color: _navy,
-                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
-                  ),
-                  alignment: pw.Alignment.center,
-                  child: pw.Text(
-                    'AH',
-                    style: const pw.TextStyle(
-                      fontSize: 10,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.white,
-                    ),
-                  ),
-                ),
+                logoBytes != null
+                    ? pw.Container(
+                        width: 26,
+                        height: 26,
+                        alignment: pw.Alignment.center,
+                        child: pw.Image(
+                          pw.MemoryImage(logoBytes),
+                          fit: pw.BoxFit.contain,
+                        ),
+                      )
+                    : pw.Container(
+                        width: 26,
+                        height: 26,
+                        decoration: const pw.BoxDecoration(
+                          color: _navy,
+                          borderRadius:
+                              pw.BorderRadius.all(pw.Radius.circular(2)),
+                        ),
+                        alignment: pw.Alignment.center,
+                        child: pw.Text(
+                          'AH',
+                          style: const pw.TextStyle(
+                            fontSize: 10,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.white,
+                          ),
+                        ),
+                      ),
                 pw.SizedBox(width: 8),
                 pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,

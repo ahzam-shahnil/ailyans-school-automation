@@ -6,6 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../models/attendance_roster_row.dart';
+import '../../repositories/logo_repository.dart';
 
 /// Data bundle passed to the institutional attendance roll-call PDF generator.
 class AttendancePdfData {
@@ -46,6 +47,7 @@ class AttendancePdfData {
 
 /// Generates the institutional A4 landscape attendance register PDF document.
 Future<Uint8List> buildAttendancePdf(AttendancePdfData data) async {
+  final logoBytes = await LogoRepository.loadLogoBytes();
   final doc = pw.Document(
     title: 'Attendance Register - ${data.className} ${data.sectionName}',
     author: data.branchName,
@@ -112,25 +114,35 @@ Future<Uint8List> buildAttendancePdf(AttendancePdfData data) async {
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
                 // Crest badge
-                pw.Container(
-                  width: 44,
-                  height: 44,
-                  decoration: pw.BoxDecoration(
-                    color: PdfColor.fromHex('1E3A8A'),
-                    borderRadius: const pw.BorderRadius.all(
-                      pw.Radius.circular(6),
-                    ),
-                  ),
-                  alignment: pw.Alignment.center,
-                  child: pw.Text(
-                    'AH',
-                    style: pw.TextStyle(
-                      color: PdfColors.white,
-                      font: boldFont,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
+                logoBytes != null
+                    ? pw.Container(
+                        width: 26,
+                        height: 26,
+                        alignment: pw.Alignment.center,
+                        child: pw.Image(
+                          pw.MemoryImage(logoBytes),
+                          fit: pw.BoxFit.contain,
+                        ),
+                      )
+                    : pw.Container(
+                        width: 44,
+                        height: 44,
+                        decoration: pw.BoxDecoration(
+                          color: PdfColor.fromHex('1E3A8A'),
+                          borderRadius: const pw.BorderRadius.all(
+                            pw.Radius.circular(6),
+                          ),
+                        ),
+                        alignment: pw.Alignment.center,
+                        child: pw.Text(
+                          'AH',
+                          style: pw.TextStyle(
+                            color: PdfColors.white,
+                            font: boldFont,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
                 pw.SizedBox(width: 12),
 
                 // School Name & Address

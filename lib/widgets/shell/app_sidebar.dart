@@ -291,7 +291,7 @@ class AppSidebar extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 1. Brand Header
-          _buildBrandHeader(isExpanded),
+          _buildBrandHeader(isExpanded, metadata),
           const Divider(height: 1.0, color: AppColors.borderDefault),
 
           // 2. Navigation Items (8 Groups)
@@ -371,7 +371,7 @@ class AppSidebar extends ConsumerWidget {
     );
   }
 
-  Widget _buildBrandHeader(bool isExpanded) {
+  Widget _buildBrandHeader(bool isExpanded, [ShellMetadata? metadata]) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCollapsed = constraints.maxWidth < 72 || !isExpanded;
@@ -396,11 +396,25 @@ class AppSidebar extends ConsumerWidget {
                       color: AppColors.brandPrimary,
                       borderRadius: BorderRadius.circular(AppRadius.md),
                     ),
-                    child: const Icon(
-                      Icons.school,
-                      color: AppColors.surfaceRaised,
-                      size: 20.0,
-                    ),
+                    child: (metadata?.logoBytes != null &&
+                            metadata!.logoBytes!.isNotEmpty)
+                        ? Image.memory(
+                            metadata.logoBytes!,
+                            width: 20.0,
+                            height: 20.0,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(
+                              Icons.school,
+                              color: AppColors.surfaceRaised,
+                              size: 20.0,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.school,
+                            color: AppColors.surfaceRaised,
+                            size: 20.0,
+                          ),
                   ),
                   if (!isCollapsed) ...[
                     const SizedBox(width: AppSpacing.sm),

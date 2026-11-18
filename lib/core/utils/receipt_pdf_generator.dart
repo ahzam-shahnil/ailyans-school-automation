@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/fee_receipt_view.dart' show VoucherPaymentInstallment;
+import '../../repositories/logo_repository.dart';
 import 'fee_head_display.dart';
 
 // ============================================================================
@@ -217,6 +218,7 @@ class ReceiptPdfGenerator {
     required String branchName,
     required String branchAddress,
   }) async {
+    final logoBytes = await LogoRepository.loadLogoBytes();
     final doc = pw.Document();
 
     for (final r in receipts) {
@@ -224,7 +226,7 @@ class ReceiptPdfGenerator {
         pw.Page(
           pageFormat: PdfPageFormat.a4.landscape,
           margin: const pw.EdgeInsets.all(14),
-          build: (ctx) => _buildPage(r, branchName, branchAddress),
+          build: (ctx) => _buildPage(r, branchName, branchAddress, logoBytes),
         ),
       );
     }
@@ -239,8 +241,9 @@ class ReceiptPdfGenerator {
   static pw.Widget _buildPage(
     FeeReceiptPrintData r,
     String branchName,
-    String branchAddress,
-  ) {
+    String branchAddress, [
+    Uint8List? logoBytes,
+  ]) {
     const dividerWidth = 10.0;
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -252,6 +255,7 @@ class ReceiptPdfGenerator {
             branchAddress,
             'STUDENT COPY',
             _Clr.navy,
+            logoBytes,
           ),
         ),
         pw.SizedBox(width: dividerWidth / 2),
@@ -264,6 +268,7 @@ class ReceiptPdfGenerator {
             branchAddress,
             'SCHOOL COPY',
             _Clr.teal,
+            logoBytes,
           ),
         ),
         pw.SizedBox(width: dividerWidth / 2),
@@ -276,6 +281,7 @@ class ReceiptPdfGenerator {
             branchAddress,
             'BANK COPY',
             _Clr.slate,
+            logoBytes,
           ),
         ),
       ],
@@ -306,8 +312,9 @@ class ReceiptPdfGenerator {
     String branchName,
     String branchAddress,
     String copyLabel,
-    PdfColor bannerColor,
-  ) {
+    PdfColor bannerColor, [
+    Uint8List? logoBytes,
+  ]) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
@@ -316,7 +323,7 @@ class ReceiptPdfGenerator {
         pw.SizedBox(height: 5),
 
         // Institutional header
-        _buildHeader(branchName, branchAddress),
+        _buildHeader(branchName, branchAddress, logoBytes),
         pw.SizedBox(height: 4),
 
         // Copy banner strip
@@ -361,28 +368,42 @@ class ReceiptPdfGenerator {
   // Section builders
   // --------------------------------------------------------------------------
 
-  static pw.Widget _buildHeader(String branchName, String branchAddress) {
+  static pw.Widget _buildHeader(
+    String branchName,
+    String branchAddress, [
+    Uint8List? logoBytes,
+  ]) {
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         // School crest
-        pw.Container(
-          width: 22,
-          height: 22,
-          decoration: const pw.BoxDecoration(
-            color: _Clr.navy,
-            borderRadius: pw.BorderRadius.all(pw.Radius.circular(3)),
-          ),
-          alignment: pw.Alignment.center,
-          child: pw.Text(
-            'AH',
-            style: const pw.TextStyle(
-              fontSize: 8,
-              fontWeight: pw.FontWeight.bold,
-              color: _Clr.white,
-            ),
-          ),
-        ),
+        logoBytes != null
+            ? pw.Container(
+                width: 26,
+                height: 26,
+                alignment: pw.Alignment.center,
+                child: pw.Image(
+                  pw.MemoryImage(logoBytes),
+                  fit: pw.BoxFit.contain,
+                ),
+              )
+            : pw.Container(
+                width: 22,
+                height: 22,
+                decoration: const pw.BoxDecoration(
+                  color: _Clr.navy,
+                  borderRadius: pw.BorderRadius.all(pw.Radius.circular(3)),
+                ),
+                alignment: pw.Alignment.center,
+                child: pw.Text(
+                  'AH',
+                  style: const pw.TextStyle(
+                    fontSize: 8,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _Clr.white,
+                  ),
+                ),
+              ),
         pw.SizedBox(width: 5),
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,

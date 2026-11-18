@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -622,7 +625,7 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
   // --- Logo actions (device-local, never synced) ---
 
   /// Picks a photo via the canonical picker, copies it to the branding dir,
-  /// persists the path in app_config, cleans the outbox, and updates state.
+  /// persists the path and base64 in app_config, cleans the path outbox, and updates state.
   Future<void> uploadLogo(BuildContext context) async {
     final pickedPath = await pickPhotoWithValidation(context);
     if (pickedPath == null) return;
@@ -631,13 +634,22 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
     if (destPath == null) return;
 
     try {
+      final file = File(destPath);
+      final bytes = await file.readAsBytes();
+      final b64 = base64Encode(bytes);
+
       final db = await DatabaseService.instance.database;
       await db.rawInsert(
         'INSERT OR REPLACE INTO app_config (config_key, config_value) VALUES (?, ?)',
         ['school_logo_path', destPath],
       );
+      await db.rawInsert(
+        'INSERT OR REPLACE INTO app_config (config_key, config_value) VALUES (?, ?)',
+        ['school_logo_base64', b64],
+      );
       // school_logo_path is in kProtectedConfigKeys — purge any outbox row
       // that the INSERT OR REPLACE trigger may have produced.
+      // school_logo_base64 is non-protected so outbox captures it for push.
       await db.delete(
         '_sync_outbox',
         where: "table_name = 'app_config' AND record_pk = 'school_logo_path'",
@@ -648,7 +660,7 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
     _ref?.invalidate(shellMetadataProvider);
   }
 
-  /// Removes the logo file, deletes the app_config row, cleans outbox, updates state.
+  /// Removes the logo file, deletes the app_config path row, sets base64='', cleans protected outbox, updates state.
   Future<void> removeLogo() async {
     await LogoRepository().deleteLogo();
 
@@ -662,6 +674,11 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
       await db.delete(
         '_sync_outbox',
         where: "table_name = 'app_config' AND record_pk = 'school_logo_path'",
+      );
+      // Empty string UPDATE captures in outbox and syncs remote removal
+      await db.rawInsert(
+        'INSERT OR REPLACE INTO app_config (config_key, config_value) VALUES (?, ?)',
+        ['school_logo_base64', ''],
       );
     } catch (_) {}
 

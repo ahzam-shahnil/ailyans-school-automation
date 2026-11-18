@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../repositories/logo_repository.dart';
 import '../db/database.dart';
 
 /// Aggregated system metadata consumed by the application shell.
@@ -31,6 +34,9 @@ class ShellMetadata {
   /// COUNT(*) FROM VoucharMas WHERE IsPaid = 'N'
   final int pendingVouchers;
 
+  /// Optional school logo bytes decoded from base64 (or local file fallback)
+  final Uint8List? logoBytes;
+
   const ShellMetadata({
     required this.branchName,
     required this.branchAddress,
@@ -41,6 +47,7 @@ class ShellMetadata {
     required this.classCount,
     required this.staffCount,
     required this.pendingVouchers,
+    this.logoBytes,
   });
 
   /// Fallback defaults when database is loading or unavailable.
@@ -55,6 +62,7 @@ class ShellMetadata {
       classCount: 0,
       staffCount: 0,
       pendingVouchers: 0,
+      logoBytes: null,
     );
   }
 }
@@ -127,6 +135,9 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
   );
   final pendingVouchers = (voucherRows.first['cnt'] as int?) ?? 0;
 
+  // 7. School Logo Bytes (base64-authoritative loader)
+  final logoBytes = await LogoRepository.loadLogoBytes(db);
+
   return ShellMetadata(
     branchName: branchName,
     branchAddress: branchAddress,
@@ -137,5 +148,6 @@ final shellMetadataProvider = FutureProvider<ShellMetadata>((ref) async {
     classCount: classCount,
     staffCount: staffCount,
     pendingVouchers: pendingVouchers,
+    logoBytes: logoBytes,
   );
 });
