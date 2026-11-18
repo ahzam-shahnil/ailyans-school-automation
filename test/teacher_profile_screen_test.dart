@@ -580,8 +580,8 @@ void main() {
         await tester.enterText(fatherField, 'Dirty Modified Father');
         await tester.pumpAndSettle();
 
-        // Tap [Back to Directory]
-        await tester.tap(find.text('Back to Directory'));
+        // Tap [Back to Directory] — now the top-left ProfileBackButton
+        await tester.tap(find.byKey(const ValueKey('profile_back_button')));
         await tester.pumpAndSettle();
 
         // Discard confirmation dialog appears

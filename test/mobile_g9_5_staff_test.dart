@@ -345,9 +345,11 @@ void main() {
       expect(find.text('Father / Spouse Name'), findsOneWidget);
       expect(find.text('Muhammad Ali'), findsOneWidget);
 
-      // Verify sticky bottom bar actions
+      // Verify sticky bottom bar actions. K-6-e: the view-mode 'Directory'
+      // button moved to the top-left header row (ProfileBackButton).
       expect(find.text('Edit Profile'), findsOneWidget);
-      expect(find.text('Directory'), findsOneWidget);
+      expect(find.text('Directory'), findsNothing);
+      expect(find.byKey(const ValueKey('profile_back_button')), findsOneWidget);
     },
   );
 

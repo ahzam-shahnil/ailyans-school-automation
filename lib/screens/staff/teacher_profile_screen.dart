@@ -12,6 +12,7 @@ import '../../core/providers/teacher_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../widgets/mobile/mobile_status_pill.dart';
+import '../../widgets/profile/profile_back_button.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -626,10 +627,18 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row 1: Avatar, Name, Badges, Action Buttons
+          // Row 1: Back, Avatar, Name, Badges, Action Buttons
           Row(
+            key: const ValueKey('teacher_desktop_header_row'),
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Phase K-6-e items 6+7: back button top-left, BEFORE the
+              // avatar — same placement as Student/Book profile screens.
+              ProfileBackButton(
+                onPressed: () => _handleBackToDirectory(state, notifier),
+                tooltip: 'Back to Directory',
+              ),
+              const SizedBox(width: AppSpacing.sm),
               // 72x72 Initials Avatar
               Container(
                 width: 72,
@@ -785,15 +794,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
               minimumSize: const Size(0, 36),
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          OutlinedButton(
-            onPressed: () => _handleBackToDirectory(state, notifier),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: const Size(0, 36),
-            ),
-            child: const Text('Back to Directory'),
-          ),
         ],
       );
     }
@@ -841,15 +841,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
               minimumSize: const Size(0, 36),
               side: const BorderSide(color: AppColors.statusErrorBorder),
             ),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          OutlinedButton(
-            onPressed: () => _handleBackToDirectory(state, notifier),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              minimumSize: const Size(0, 36),
-            ),
-            child: const Text('Back to Directory'),
           ),
         ],
       );
@@ -967,15 +958,6 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
             minimumSize: const Size(0, 36),
             side: const BorderSide(color: AppColors.statusErrorBorder),
           ),
-        ),
-        const SizedBox(width: AppSpacing.xs),
-        OutlinedButton(
-          onPressed: () => _handleBackToDirectory(state, notifier),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            minimumSize: const Size(0, 36),
-          ),
-          child: const Text('Back to Directory'),
         ),
       ],
     );
@@ -2583,6 +2565,33 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Phase K-6-e items 6+7: mobile top header row with the
+                    // back button top-left (before the hero card). The
+                    // Expanded title inside this Row is allowed: it is a
+                    // horizontal Row within a VERTICAL scroll (Rule 13).
+                    Row(
+                      key: const ValueKey('teacher_mobile_header_row'),
+                      children: [
+                        ProfileBackButton(
+                          onPressed: () =>
+                              _handleBackToDirectory(state, notifier),
+                          tooltip: 'Back to Directory',
+                        ),
+                        const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Text(
+                            state.isNew ? 'New Teacher' : 'Teacher Profile',
+                            style: AppTypography.h2.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     _buildMobileHeroCard(
                       context,
                       state,
@@ -3439,6 +3448,14 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
     final isNew = state.isNew;
     final isEdit = state.isEditMode;
 
+    // Phase K-6-e items 6+7: view mode no longer renders a 'Directory'
+    // button here (back moved to the top-left header row). When the user
+    // also cannot edit (readOnly), the bar would be EMPTY — render no
+    // bordered bar at all instead of an empty strip.
+    if (!isNew && !isEdit && isReadOnlyUser) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
@@ -3536,17 +3553,7 @@ class _TeacherProfileScreenState extends ConsumerState<TeacherProfileScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.sm),
                     ],
-                    SizedBox(
-                      height: 48,
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _handleBackToDirectory(state, notifier),
-                        icon: const Icon(Icons.arrow_back, size: 16),
-                        label: const Text('Directory'),
-                      ),
-                    ),
                   ],
                 ),
     );
