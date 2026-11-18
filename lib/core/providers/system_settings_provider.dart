@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -8,6 +8,8 @@ import '../sync/node_id_allocator.dart';
 import '../sync/supabase_client.dart';
 import '../sync/sync_provider.dart';
 import '../sync/sync_service.dart';
+import '../utils/photo_picker.dart';
+import '../../repositories/logo_repository.dart';
 import 'available_sessions_provider.dart';
 import 'batch_promotion_provider.dart';
 import 'dashboard_metrics_provider.dart';
@@ -228,6 +230,9 @@ class SystemSettingsState {
   final bool isForcePushing;
   final bool isForcePulling;
 
+  // Device-local: logo file path on this device only (never synced).
+  final String? logoPath;
+
   const SystemSettingsState({
     this.isLoading = true,
     this.activeTab = 0,
@@ -245,6 +250,7 @@ class SystemSettingsState {
     this.lastPushedAt,
     this.isForcePushing = false,
     this.isForcePulling = false,
+    this.logoPath,
   });
 
   bool get isDirty => branch != originalBranch || config != originalConfig;
@@ -266,6 +272,7 @@ class SystemSettingsState {
     String? Function()? lastPushedAt,
     bool? isForcePushing,
     bool? isForcePulling,
+    String? Function()? logoPath,
   }) {
     return SystemSettingsState(
       isLoading: isLoading ?? this.isLoading,
@@ -286,6 +293,7 @@ class SystemSettingsState {
           lastPushedAt != null ? lastPushedAt() : this.lastPushedAt,
       isForcePushing: isForcePushing ?? this.isForcePushing,
       isForcePulling: isForcePulling ?? this.isForcePulling,
+      logoPath: logoPath != null ? logoPath() : this.logoPath,
     );
   }
 }
@@ -443,6 +451,11 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
       // 5. Sync stats (device-local outbox + watermarks).
       final stats = await _readSyncStats(db);
 
+      // 6. Device-local logo path (never synced).
+      final rawLogoPath = configMap['school_logo_path'];
+      final logoPath =
+          (rawLogoPath != null && rawLogoPath.isNotEmpty) ? rawLogoPath : null;
+
       state = state.copyWith(
         isLoading: false,
         branch: branchData,
@@ -454,6 +467,7 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
         pendingOutboxCount: stats.pendingOutboxCount,
         lastPulledAt: () => stats.lastPulledAt,
         lastPushedAt: () => stats.lastPushedAt,
+        logoPath: () => logoPath,
       );
     } catch (e) {
       state = state.copyWith(
@@ -603,6 +617,56 @@ class SystemSettingsNotifier extends StateNotifier<SystemSettingsState> {
       config: state.config.copyWith(urduFontFallback: value),
       errorMessage: () => null,
     );
+  }
+
+  // --- Logo actions (device-local, never synced) ---
+
+  /// Picks a photo via the canonical picker, copies it to the branding dir,
+  /// persists the path in app_config, cleans the outbox, and updates state.
+  Future<void> uploadLogo(BuildContext context) async {
+    final pickedPath = await pickPhotoWithValidation(context);
+    if (pickedPath == null) return;
+
+    final destPath = await LogoRepository().copyLogo(pickedPath);
+    if (destPath == null) return;
+
+    try {
+      final db = await DatabaseService.instance.database;
+      await db.rawInsert(
+        'INSERT OR REPLACE INTO app_config (config_key, config_value) VALUES (?, ?)',
+        ['school_logo_path', destPath],
+      );
+      // school_logo_path is in kProtectedConfigKeys — purge any outbox row
+      // that the INSERT OR REPLACE trigger may have produced.
+      await db.delete(
+        '_sync_outbox',
+        where: "table_name = 'app_config' AND record_pk = 'school_logo_path'",
+      );
+    } catch (_) {}
+
+    state = state.copyWith(logoPath: () => destPath);
+    _ref?.invalidate(shellMetadataProvider);
+  }
+
+  /// Removes the logo file, deletes the app_config row, cleans outbox, updates state.
+  Future<void> removeLogo() async {
+    await LogoRepository().deleteLogo();
+
+    try {
+      final db = await DatabaseService.instance.database;
+      await db.delete(
+        'app_config',
+        where: 'config_key = ?',
+        whereArgs: ['school_logo_path'],
+      );
+      await db.delete(
+        '_sync_outbox',
+        where: "table_name = 'app_config' AND record_pk = 'school_logo_path'",
+      );
+    } catch (_) {}
+
+    state = state.copyWith(logoPath: () => null);
+    _ref?.invalidate(shellMetadataProvider);
   }
 
   // --- Mutators for Tab 5: Cloud Sync ---

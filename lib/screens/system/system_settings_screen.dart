@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1385,6 +1387,55 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
           ),
           value: state.config.urduFontFallback,
           onChanged: notifier.setUrduFontFallback,
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        _buildSectionTitle(
+          'SCHOOL LOGO',
+          'Upload a school logo for use in reports and printed documents (max 50 KB).',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Center(
+          child: (state.logoPath != null && File(state.logoPath!).existsSync())
+              ? Image.file(
+                  File(state.logoPath!),
+                  key: const ValueKey('school_logo_preview'),
+                  height: 96,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.business, size: 64),
+                      SizedBox(height: AppSpacing.xs),
+                      Text('No logo uploaded'),
+                    ],
+                  ),
+                )
+              : const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.business, size: 64),
+                    SizedBox(height: AppSpacing.xs),
+                    Text('No logo uploaded'),
+                  ],
+                ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            ElevatedButton(
+              key: const ValueKey('school_logo_upload'),
+              onPressed: () => notifier.uploadLogo(context),
+              child: const Text('Upload Logo'),
+            ),
+            if (state.logoPath != null)
+              OutlinedButton(
+                key: const ValueKey('school_logo_remove'),
+                onPressed: notifier.removeLogo,
+                child: const Text('Remove Logo'),
+              ),
+          ],
         ),
       ],
     );

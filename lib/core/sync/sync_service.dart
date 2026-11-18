@@ -216,6 +216,7 @@ const Set<String> kProtectedConfigKeys = {
   ...kDeviceLocalConfigKeys,
   ...kTenantLocalConfigKeys,
   'master_sync_backfill_v1',
+  'school_logo_path', // K-6-h: device-local logo path; file lives on this device only
 };
 
 // ============================================================================
