@@ -192,4 +192,177 @@ void main() {
       }
     });
   }
+
+  // ===========================================================================
+  // Phase K-6-f (item 8): full containment matrix — verification run.
+  //
+  // CONTAINMENT LAW: every visible control sits inside dialogRect on all
+  // FOUR edges; scroll-child controls ALSO sit inside the toolbar horizontal
+  // scroll VIEWPORT rect on all four edges. maxScrollExtent is reported as a
+  // diagnostic only (non-interactive trailing spacing may scroll while every
+  // button stays visible) — never asserted to be 0.
+  // ===========================================================================
+
+  Finder toolbarScrollFinder() => find.ancestor(
+        of: find.byKey(const ValueKey('report_toolbar_refresh')),
+        matching: find.byWidgetPredicate(
+          (w) => w is SingleChildScrollView &&
+              w.scrollDirection == Axis.horizontal,
+        ),
+      ).first;
+
+  double maxScrollExtentOf(WidgetTester tester, Finder scrollFinder) {
+    final scrollable = find.descendant(
+      of: scrollFinder,
+      matching: find.byType(Scrollable),
+    );
+    if (scrollable.evaluate().isEmpty) return 0;
+    final state = tester.state<ScrollableState>(scrollable.first);
+    return state.position.maxScrollExtent;
+  }
+
+  void expectInside(Rect inner, Rect outer, String what) {
+    expect(
+      inner.left >= outer.left &&
+          inner.right <= outer.right &&
+          inner.top >= outer.top &&
+          inner.bottom <= outer.bottom,
+      isTrue,
+      reason: '$what rect $inner must sit inside $outer on all four edges',
+    );
+  }
+
+  group('K-6-f desktop containment matrix', () {
+    const scrollChildKeys = [
+      'report_toolbar_orientation',
+      'report_toolbar_refresh',
+      'report_toolbar_export',
+      'report_toolbar_print',
+    ];
+
+    for (final size in const [
+      Size(1024, 768),
+      Size(1280, 720),
+      Size(1366, 768),
+      Size(1440, 900),
+    ]) {
+      testWidgets(
+        'all toolbar keys inside dialog AND scroll viewport at '
+        '${size.width.round()}x${size.height.round()}',
+        (tester) async {
+          await _pumpModal(tester, size);
+          expect(tester.takeException(), isNull);
+
+          final dialogRect = tester.getRect(find.byType(ReportPreviewModal));
+          final scrollRect = tester.getRect(toolbarScrollFinder());
+
+          // The scroll viewport itself must live inside the dialog.
+          expectInside(scrollRect, dialogRect, 'toolbar scroll viewport');
+
+          // Scroll-child controls: dialog AND viewport containment.
+          for (final key in scrollChildKeys) {
+            final rect = tester.getRect(find.byKey(ValueKey<String>(key)));
+            expectInside(rect, dialogRect, '$key (dialog)');
+            expectInside(rect, scrollRect, '$key (scroll viewport)');
+          }
+
+          // Close is FIXED outside the horizontal scroll (Run 2 design):
+          // dialog containment only.
+          final closeRect = tester.getRect(
+            find.byKey(const ValueKey('report_toolbar_close')),
+          );
+          expectInside(closeRect, dialogRect, 'report_toolbar_close');
+
+          // Title (stable text finder — no production keys added) must not
+          // overlap the scroll viewport horizontally.
+          final titleRect = tester.getRect(find.text('Fee Defaulter List'));
+          expect(
+            titleRect.right <= scrollRect.left,
+            isTrue,
+            reason: 'title $titleRect must end left of the scroll viewport '
+                '$scrollRect at ${size.width.round()}px',
+          );
+
+          // Diagnostic only: non-interactive trailing spacing may scroll.
+          final maxExtent = maxScrollExtentOf(tester, toolbarScrollFinder());
+          expect(maxExtent, greaterThanOrEqualTo(0.0));
+          // ignore: avoid_print
+          print('K-6-f ${size.width.round()}x${size.height.round()} '
+              'maxScrollExtent=$maxExtent scrollRect=$scrollRect');
+
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  });
+
+  group('K-6-f tablet containment upgrade (600x1024)', () {
+    testWidgets('all 5 inline keys fully inside the dialog on 4 edges',
+        (tester) async {
+      await _pumpModal(tester, const Size(600, 1024));
+      expect(tester.takeException(), isNull);
+
+      final dialogRect = tester.getRect(find.byType(ReportPreviewModal));
+      for (final key in const [
+        'report_toolbar_orientation',
+        'report_toolbar_refresh',
+        'report_toolbar_export',
+        'report_toolbar_print',
+        'report_toolbar_close',
+      ]) {
+        final rect = tester.getRect(find.byKey(ValueKey<String>(key)));
+        expectInside(rect, dialogRect, '$key (tablet)');
+      }
+
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('K-6-f mobile inline + opened-menu containment (390x844)', () {
+    testWidgets('inline controls inside dialog; menu items inside screen',
+        (tester) async {
+      await _pumpModal(tester, const Size(390, 844));
+      expect(tester.takeException(), isNull);
+
+      final dialogRect = tester.getRect(find.byType(ReportPreviewModal));
+
+      // INLINE controls only — closed-menu items are NOT in the render
+      // tree, so getRect on them would throw a StateError (test bug).
+      for (final key in const [
+        'report_toolbar_refresh',
+        'report_toolbar_print',
+        'report_toolbar_close',
+      ]) {
+        final rect = tester.getRect(find.byKey(ValueKey<String>(key)));
+        expectInside(rect, dialogRect, '$key (mobile inline)');
+      }
+      final triggerRect = tester.getRect(find.byTooltip('More actions'));
+      expectInside(triggerRect, dialogRect, 'overflow trigger');
+
+      // Open the overflow menu (fixed pumps — never pumpAndSettle around
+      // PdfPreview) and assert each menu item inside the SCREEN rect.
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      final screenRect = Rect.fromLTWH(
+        0,
+        0,
+        tester.view.physicalSize.width / tester.view.devicePixelRatio,
+        tester.view.physicalSize.height / tester.view.devicePixelRatio,
+      );
+      for (final item in const ['Export PDF', 'Regenerate']) {
+        final itemRect = tester.getRect(find.text(item));
+        expectInside(itemRect, screenRect, 'menu item "$item"');
+      }
+
+      expect(tester.takeException(), isNull);
+
+      // Close the menu via the modal barrier before the test ends.
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.takeException(), isNull);
+    });
+  });
 }
