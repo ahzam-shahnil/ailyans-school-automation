@@ -577,6 +577,10 @@ Future<void> permanentlyDeleteStudent(
         [stuRegId],
       );
       await txn.rawDelete(
+        'DELETE FROM Sibling_Links WHERE Stu1_RegID = ? OR Stu2_RegID = ?',
+        [stuRegId, stuRegId],
+      );
+      await txn.rawDelete(
         'DELETE FROM Student_Class WHERE Stu_RegID = ?',
         [stuRegId],
       );

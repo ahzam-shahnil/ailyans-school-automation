@@ -310,8 +310,12 @@ final studentListProvider = FutureProvider<List<StudentListRow>>((ref) async {
         WHEN sc.Present = 0 OR sl.StuRegID IS NOT NULL THEN 'Left'
         ELSE 'Active'
       END as status,
-      (SELECT COUNT(*) FROM Sibling_Links
-       WHERE Stu1_RegID = sc.Stu_RegID OR Stu2_RegID = sc.Stu_RegID) AS siblingCount
+      (SELECT COUNT(DISTINCT sr_sib.Stu_RegID)
+       FROM Sibling_Links sl
+       JOIN Stu_Reg sr_sib ON sr_sib.Stu_RegID = (
+         CASE WHEN sl.Stu1_RegID = sc.Stu_RegID THEN sl.Stu2_RegID ELSE sl.Stu1_RegID END
+       )
+       WHERE sl.Stu1_RegID = sc.Stu_RegID OR sl.Stu2_RegID = sc.Stu_RegID) AS siblingCount
     FROM Stu_Reg sr
     JOIN Student_Class sc ON sr.Stu_RegID = sc.Stu_RegID
     JOIN Class c ON sc.ClassID = c.ClassID
