@@ -1,10 +1,14 @@
+import 'dart:ui' as ui;
+
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
 
 import '../../core/providers/clock_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
@@ -122,6 +126,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   static const double _minSplitRatio = 0.38;
   static const double _maxSplitRatio = 0.72;
 
+  final GlobalKey _snapshotKey = GlobalKey();
+
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
 
@@ -179,6 +185,49 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     if (!mounted) return;
     ref.invalidate(dashboardMetricsProvider);
     ref.invalidate(shellMetadataProvider);
+  }
+
+  Future<void> _shareSnapshot() async {
+    try {
+      final boundary = _snapshotKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Dashboard not ready yet')),
+          );
+        }
+        return;
+      }
+      final image = await boundary.toImage(pixelRatio: 2.0);
+      ByteData? byteData;
+      try {
+        byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      } finally {
+        image.dispose();
+      }
+      if (byteData == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Snapshot failed')),
+          );
+        }
+        return;
+      }
+      final bytes = byteData.buffer.asUint8List();
+      final dateStr = DateFormat('dd-MMM-yyyy').format(DateTime.now());
+      if (!mounted) return;
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'Dashboard_$dateStr.png',
+      );
+    } catch (e, st) {
+      debugPrint('Dashboard snapshot failed: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to share snapshot: $e')),
+      );
+    }
   }
 
   String _formatDate(String? rawDate) {
@@ -293,44 +342,50 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
               return SingleChildScrollView(
                 padding: EdgeInsets.all(pagePadding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (metricsAsync.hasError) ...[
-                      _buildErrorBanner(metricsAsync, gutter),
-                      gap,
-                    ],
-                    _buildHeaderBar(
-                      shellMeta,
-                      todayFormatted,
-                      isStacked: w < 760,
+                child: KeyedSubtree(
+                  key: const ValueKey('dashboard_snapshot_boundary'),
+                  child: RepaintBoundary(
+                    key: _snapshotKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (metricsAsync.hasError) ...[
+                          _buildErrorBanner(metricsAsync, gutter),
+                          gap,
+                        ],
+                        _buildHeaderBar(
+                          shellMeta,
+                          todayFormatted,
+                          isStacked: w < 760,
+                        ),
+                        gap,
+                        _buildStitchKpiGrid(
+                          metrics: metrics,
+                          shellMeta: shellMeta,
+                          isLoading: isLoading,
+                          currencyFormatter: currencyFormatter,
+                          isDesktop: isDesktop,
+                          isTablet: isTablet,
+                          isMobile: isMobile,
+                        ),
+                        gap,
+                        _buildStitchQuickOperations(
+                          metrics: metrics,
+                          currencyFormatter: currencyFormatter,
+                          isDesktop: isDesktop,
+                          isTablet: isTablet,
+                          isMobile: isMobile,
+                        ),
+                        gap,
+                        _buildLowerWorkspace(
+                          metrics: metrics,
+                          isLoading: isLoading,
+                          currencyFormatter: currencyFormatter,
+                          isDesktop: isDesktop,
+                        ),
+                      ],
                     ),
-                    gap,
-                    _buildStitchKpiGrid(
-                      metrics: metrics,
-                      shellMeta: shellMeta,
-                      isLoading: isLoading,
-                      currencyFormatter: currencyFormatter,
-                      isDesktop: isDesktop,
-                      isTablet: isTablet,
-                      isMobile: isMobile,
-                    ),
-                    gap,
-                    _buildStitchQuickOperations(
-                      metrics: metrics,
-                      currencyFormatter: currencyFormatter,
-                      isDesktop: isDesktop,
-                      isTablet: isTablet,
-                      isMobile: isMobile,
-                    ),
-                    gap,
-                    _buildLowerWorkspace(
-                      metrics: metrics,
-                      isLoading: isLoading,
-                      currencyFormatter: currencyFormatter,
-                      isDesktop: isDesktop,
-                    ),
-                  ],
+                  ),
                 ),
               );
             },
@@ -514,6 +569,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     if (ResponsiveBreakpoints.isMobile(context)) {
       final sessionYr = shellMeta?.sessionYear ?? '2017-2018';
       return _SurfaceCard(
+        key: const ValueKey('dashboard_header_bar'),
         padding: const EdgeInsets.all(12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -568,13 +624,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                     ),
                   ),
                   const SizedBox(height: 8),
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    iconSize: 20,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    tooltip: 'Refresh Dashboard (Ctrl+R)',
-                    onPressed: _refresh,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.camera_alt_outlined),
+                        iconSize: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Share Dashboard Snapshot',
+                        key: const ValueKey('dashboard_snapshot_button'),
+                        onPressed: _shareSnapshot,
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        iconSize: 20,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: 'Refresh Dashboard (Ctrl+R)',
+                        onPressed: _refresh,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -658,6 +729,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         const SizedBox(width: AppSpacing.xxs),
         IconButton(
           icon: const Icon(
+            Icons.camera_alt_outlined,
+            size: 20,
+            color: AppColors.textSecondary,
+          ),
+          tooltip: 'Share Dashboard Snapshot',
+          key: const ValueKey('dashboard_snapshot_button'),
+          onPressed: _shareSnapshot,
+          visualDensity: VisualDensity.compact,
+        ),
+        const SizedBox(width: AppSpacing.xxs),
+        IconButton(
+          icon: const Icon(
             Icons.refresh,
             size: 20,
             color: AppColors.textSecondary,
@@ -704,6 +787,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     );
 
     return _SurfaceCard(
+      key: const ValueKey('dashboard_header_bar'),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       child: isStacked
           ? Column(
@@ -2509,26 +2593,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 const SizedBox(width: AppSpacing.xxs),
-                MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  child: Tooltip(
-                    message: actionLabel,
-                    waitDuration: const Duration(milliseconds: 500),
-                    child: TextButton(
-                      onPressed: onAction,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.xs,
+                Flexible(
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Tooltip(
+                      message: actionLabel,
+                      waitDuration: const Duration(milliseconds: 500),
+                      child: TextButton(
+                        onPressed: onAction,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xs,
+                          ),
+                          minimumSize: const Size(0, 32),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        minimumSize: const Size(0, 32),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        actionLabel,
-                        maxLines: 1,
-                        style: AppTypography.label.copyWith(
-                          color: AppColors.brandPrimary,
-                          fontWeight: FontWeight.w600,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            actionLabel,
+                            maxLines: 1,
+                            style: AppTypography.label.copyWith(
+                              color: AppColors.brandPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -2851,6 +2940,7 @@ class _StitchCardState extends State<_StitchCard> {
 
 class _SurfaceCard extends StatefulWidget {
   const _SurfaceCard({
+    super.key,
     required this.child,
     this.onTap,
     this.padding = EdgeInsets.zero,
