@@ -24,6 +24,12 @@ abstract class SyncRemoteAdapter {
     int offset = 0,
     int limit = 500,
   });
+  Future<List<Map<String, dynamic>>> fetchTombstones({
+    String? sinceIso,
+    String? schoolId,
+    int offset = 0,
+    int limit = 500,
+  });
 }
 
 class SupabaseSyncRemoteAdapter implements SyncRemoteAdapter {
@@ -43,6 +49,30 @@ class SupabaseSyncRemoteAdapter implements SyncRemoteAdapter {
         .from(tableName)
         .delete()
         .match(pkMatch.cast<String, Object>());
+    await Supabase.instance.client.from('_sync_tombstones').insert({
+      'table_name': tableName,
+      'pk_json': pkMatch,
+    });
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchTombstones({
+    String? sinceIso,
+    String? schoolId,
+    int offset = 0,
+    int limit = 500,
+  }) async {
+    var query = Supabase.instance.client.from('_sync_tombstones').select();
+    if (schoolId != null) {
+      query = query.eq('school_id', schoolId);
+    }
+    if (sinceIso != null) {
+      query = query.gt('deleted_at', sinceIso);
+    }
+    final rows = await query
+        .order('deleted_at', ascending: true)
+        .range(offset, offset + limit - 1);
+    return List<Map<String, dynamic>>.from(rows);
   }
 
   @override
@@ -82,6 +112,11 @@ class FakeSyncRemoteAdapter implements SyncRemoteAdapter {
           String table, String? sinceIso, int offset, int limit)?
       fakeFetchDelta;
 
+  /// Optional fake for fetchTombstones. Returns [] if null (existing tests unaffected).
+  List<Map<String, dynamic>> Function(
+          String? sinceIso, String? schoolId, int offset, int limit)?
+      fakeFetchTombstones;
+
   /// G-10 Shot 6b: the school_id passed to the most recent fetchDelta call,
   /// so tests can assert the service resolves and forwards it (the .eq
   /// filter itself lives in [SupabaseSyncRemoteAdapter]).
@@ -117,6 +152,21 @@ class FakeSyncRemoteAdapter implements SyncRemoteAdapter {
       throw Exception('Simulated fetchDelta failure for $tableName');
     }
     return fakeFetchDelta!(tableName, sinceIso, offset, limit);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchTombstones({
+    String? sinceIso,
+    String? schoolId,
+    int offset = 0,
+    int limit = 500,
+  }) async {
+    lastFetchSchoolId = schoolId;
+    if (fakeFetchTombstones == null) return const [];
+    if (failTables.contains('_sync_tombstones')) {
+      throw Exception('Simulated fetchTombstones failure');
+    }
+    return fakeFetchTombstones!(sinceIso, schoolId, offset, limit);
   }
 }
 
@@ -826,12 +876,137 @@ class SyncService {
       }
     }
 
+    // Call pullTombstones at END of pullDelta (after table deltas).
+    try {
+      final tombstonesApplied = await pullTombstones(db, schoolId: schoolId);
+      totalPulled += tombstonesApplied;
+    } catch (e) {
+      debugPrint('[SyncService] pullTombstones failed: $e');
+    }
+
     debugPrint('[F-4b] Pull summary: pulled=$totalPulled, failed=$totalFailed');
     return SyncPullResult(
       pulledCount: totalPulled,
       failedCount: totalFailed,
       errors: errors,
     );
+  }
+
+  /// Pull remote deletion tombstones and apply them locally to propagate
+  /// hard deletes across devices without trigger echo loops.
+  Future<int> pullTombstones(Database db, {String? schoolId}) async {
+    final stateRows = await db.query(
+      '_sync_state',
+      columns: ['last_pulled_at'],
+      where: 'table_name = ?',
+      whereArgs: ['_sync_tombstones'],
+    );
+    final initialSinceIso = stateRows.isEmpty
+        ? null
+        : stateRows.first['last_pulled_at'] as String?;
+
+    int totalApplied = 0;
+    int offset = 0;
+
+    while (true) {
+      List<Map<String, dynamic>> remoteTombstones;
+      try {
+        remoteTombstones = await _adapter.fetchTombstones(
+          sinceIso: initialSinceIso,
+          schoolId: schoolId,
+          offset: offset,
+          limit: 500,
+        );
+      } catch (e) {
+        debugPrint('[SyncService] fetchTombstones error: $e');
+        break;
+      }
+
+      if (remoteTombstones.isEmpty) break;
+
+      try {
+        await db.transaction((txn) async {
+          // Rule 2: suppress local AFTER DELETE triggers during remote tombstone application.
+          await txn.rawUpdate(
+            "UPDATE _sync_state SET is_applying_remote = 1 "
+            "WHERE table_name = '__global__'",
+          );
+
+          try {
+            for (final remoteRow in remoteTombstones) {
+              final tableName = remoteRow['table_name'];
+              if (tableName is! String) continue;
+
+              final pkCols = kPkColumns[tableName];
+              if (pkCols == null || pkCols.isEmpty) continue;
+
+              final rawPk = remoteRow['pk_json'];
+              Map<String, dynamic> pkMap;
+              if (rawPk is Map) {
+                pkMap = Map<String, dynamic>.from(rawPk);
+              } else if (rawPk is String) {
+                try {
+                  final decoded = jsonDecode(rawPk);
+                  if (decoded is! Map) continue;
+                  pkMap = Map<String, dynamic>.from(decoded);
+                } catch (_) {
+                  continue;
+                }
+              } else {
+                continue;
+              }
+
+              bool hasAllPk = true;
+              for (final col in pkCols) {
+                if (!pkMap.containsKey(col) || pkMap[col] == null) {
+                  hasAllPk = false;
+                  break;
+                }
+              }
+              if (!hasAllPk) continue;
+
+              final where = pkCols.map((c) => '"$c" = ?').join(' AND ');
+              final args = pkCols.map((c) => pkMap[c]).toList();
+
+              await txn.rawDelete(
+                'DELETE FROM "$tableName" WHERE $where',
+                args,
+              );
+              totalApplied++;
+            }
+
+            final deletedAts = remoteTombstones
+                .map((r) => r['deleted_at'] as String?)
+                .whereType<String>();
+            if (deletedAts.isNotEmpty) {
+              final pageMax =
+                  deletedAts.reduce((a, b) => a.compareTo(b) >= 0 ? a : b);
+              await txn.rawInsert(
+                'INSERT INTO _sync_state '
+                '(table_name, last_pulled_at, is_applying_remote) '
+                'VALUES (?, ?, 0) '
+                'ON CONFLICT(table_name) DO UPDATE '
+                'SET last_pulled_at = excluded.last_pulled_at',
+                ['_sync_tombstones', pageMax],
+              );
+            }
+          } finally {
+            await txn.rawUpdate(
+              "UPDATE _sync_state SET is_applying_remote = 0 "
+              "WHERE table_name = '__global__'",
+            );
+          }
+        });
+      } catch (e) {
+        debugPrint('[SyncService] apply tombstones error: $e');
+        break;
+      }
+
+      if (remoteTombstones.length < 500) break;
+      offset += remoteTombstones.length;
+    }
+
+    return totalApplied;
   }
 
   /// Build the record_pk string for a row (mirrors the trigger expression).
