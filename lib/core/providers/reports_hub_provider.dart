@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 
 import '../../models/student.dart';
 import '../db/database.dart';
+import '../utils/date_parse.dart';
 import '../utils/vb6_table_report_pdf.dart';
 import 'voucher_generation_provider.dart' show normalizeBillingMonthForStorage;
 
@@ -315,7 +316,7 @@ String _fmtDate(dynamic raw) {
   if (raw == null) return '';
   final s = raw.toString().trim();
   if (s.isEmpty) return '';
-  final dt = DateTime.tryParse(s);
+  final dt = parseFlexibleDate(s);
   if (dt != null) return DateFormat('dd-MMM-yyyy').format(dt);
   return s;
 }

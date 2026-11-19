@@ -136,6 +136,25 @@ void main() {
       expect(pageCount!, greaterThan(1));
       expect(pageCount, lessThan(20), reason: 'Must stay well within 20-page guard');
     });
+
+    test('portrait stacked header and unconstrained footer render without exception', () async {
+      final (groups, summary) = _build75RowFixture();
+      // Test portrait rendering with long branch name (which previously threatened footer squashing/stretching)
+      final bytes = await DefaulterListPdfGenerator.generate(
+        groups: groups,
+        summary: summary,
+        branchName: "Ailyans's Higher Secondary School Mianwali - Main Campus System",
+        branchAddress: 'Muslim Bazar Mianwali District Mianwali Punjab Pakistan',
+        branchPhone: '0300-1234567',
+        branchPrincipal: 'Prof. Muhammad Tariq Mehmood Khan',
+        pageFormat: PdfPageFormat.a4,
+      );
+      expect(bytes, isNotEmpty);
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+      final pageCount = _extractPageCount(bytes);
+      expect(pageCount, isNotNull);
+      expect(pageCount!, lessThan(20));
+    });
   });
 
   group('Report Preview Modal Defaulter Badge & Unlock', () {

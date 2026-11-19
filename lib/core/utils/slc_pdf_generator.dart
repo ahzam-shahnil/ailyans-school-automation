@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'date_parse.dart';
+
 /// Generates the A4 School Leaving Certificate (SLC) PDF.
 ///
 /// Batch 1 (Ailyans): the layout matches the school's physical pre-printed
@@ -354,28 +356,7 @@ class SlcPdfGenerator {
     final trimmed = raw.trim();
     if (trimmed.isEmpty || trimmed == '-') return '-';
 
-    DateTime? dt = DateTime.tryParse(trimmed);
-
-    if (dt == null) {
-      final datePart = trimmed.split(' ').first;
-      final slashParts = datePart.split('/');
-      if (slashParts.length == 3) {
-        final p0 = int.tryParse(slashParts[0]);
-        final p1 = int.tryParse(slashParts[1]);
-        var p2 = int.tryParse(slashParts[2]);
-        if (p0 != null && p1 != null && p2 != null) {
-          if (p2 < 100) p2 += 2000;
-          if (p0 > 12) {
-            // dd/MM/yyyy
-            dt = DateTime(p2, p1, p0);
-          } else {
-            // MM/dd/yy (e.g. 04/02/24 -> 02-Apr-2024)
-            dt = DateTime(p2, p0, p1);
-          }
-        }
-      }
-    }
-
+    final dt = parseFlexibleDate(trimmed);
     if (dt != null) {
       try {
         return DateFormat('dd-MMM-yyyy').format(dt);

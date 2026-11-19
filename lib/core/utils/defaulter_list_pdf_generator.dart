@@ -154,10 +154,12 @@ class DefaulterListPdfGenerator {
                 branchPhone: branchPhone,
                 branchPrincipal: branchPrincipal,
                 logoBytes: logoBytes,
+                isPortrait: isPortrait,
               )
             : _buildContinuationHeader(summary: summary),
-        footer: (context) =>
-            ReportTheme.buildStandardFooter(context, branchName: branchName),
+        footer: (context) => isPortrait
+            ? _buildPortraitFooter(context, branchName: branchName)
+            : ReportTheme.buildStandardFooter(context, branchName: branchName),
         build: (context) => [
           // 1. Executive KPI Summary Strip
           _buildKpiSummary(summary),
@@ -221,7 +223,19 @@ class DefaulterListPdfGenerator {
     String? branchPhone,
     String? branchPrincipal,
     Uint8List? logoBytes,
+    bool isPortrait = false,
   }) {
+    if (isPortrait) {
+      return _buildPortraitHeader(
+        summary: summary,
+        branchName: branchName,
+        branchAddress: branchAddress,
+        branchPhone: branchPhone,
+        branchPrincipal: branchPrincipal,
+        logoBytes: logoBytes,
+      );
+    }
+
     final phone = (branchPhone != null && branchPhone.trim().isNotEmpty)
         ? branchPhone.trim()
         : '03334449993';
@@ -364,6 +378,186 @@ class DefaulterListPdfGenerator {
                   style: const pw.TextStyle(fontSize: 6.5, color: _slate600),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Phase K-6 Run C: Portrait stacked header so title never wraps at 525pt printable width.
+  static pw.Widget _buildPortraitHeader({
+    required DefaulterListFilterSummary summary,
+    required String branchName,
+    required String branchAddress,
+    String? branchPhone,
+    String? branchPrincipal,
+    Uint8List? logoBytes,
+  }) {
+    final phone = (branchPhone != null && branchPhone.trim().isNotEmpty)
+        ? branchPhone.trim()
+        : '03334449993';
+    final principal =
+        (branchPrincipal != null && branchPrincipal.trim().isNotEmpty)
+        ? branchPrincipal.trim()
+        : '-';
+
+    return pw.Container(
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(color: _navy, width: 2)),
+      ),
+      padding: const pw.EdgeInsets.only(bottom: 6),
+      margin: const pw.EdgeInsets.only(bottom: 8),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          // Line 1: Institutional branding (full width)
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              logoBytes != null
+                  ? pw.Container(
+                      width: 24,
+                      height: 24,
+                      alignment: pw.Alignment.center,
+                      child: pw.Image(
+                        pw.MemoryImage(logoBytes),
+                        fit: pw.BoxFit.contain,
+                      ),
+                    )
+                  : pw.Container(
+                      width: 24,
+                      height: 24,
+                      decoration: const pw.BoxDecoration(
+                        color: _navy,
+                        borderRadius:
+                            pw.BorderRadius.all(pw.Radius.circular(2)),
+                      ),
+                      alignment: pw.Alignment.center,
+                      child: pw.Text(
+                        'AH',
+                        style: const pw.TextStyle(
+                          fontSize: 9,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                    ),
+              pw.SizedBox(width: 8),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      branchName,
+                      style: const pw.TextStyle(
+                        fontSize: 12,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _navy,
+                      ),
+                    ),
+                    pw.SizedBox(height: 1),
+                    pw.Text(
+                      '$branchAddress  |  Phone: $phone  |  Principal: $principal',
+                      style: const pw.TextStyle(
+                        fontSize: 7,
+                        color: _slate600,
+                      ),
+                      maxLines: 1,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 5),
+
+          // Line 2: 'INSTITUTIONAL FEE DEFAULTERS ROSTER' (full width, MUST NOT wrap)
+          pw.Text(
+            'INSTITUTIONAL FEE DEFAULTERS ROSTER',
+            style: const pw.TextStyle(
+              fontSize: 11,
+              fontWeight: pw.FontWeight.bold,
+              color: _navy,
+            ),
+            textAlign: pw.TextAlign.center,
+          ),
+          pw.SizedBox(height: 2),
+
+          // Line 3: session/scope
+          pw.Text(
+            'Session: ${summary.sessionYr}  |  Scope: ${summary.classFilter ?? "All Classes"} (${summary.reportMonth})',
+            style: const pw.TextStyle(fontSize: 7.5, color: _slate600),
+            textAlign: pw.TextAlign.center,
+          ),
+          pw.SizedBox(height: 5),
+
+          // Line 4: Audit box full-width below
+          pw.Container(
+            decoration: pw.BoxDecoration(
+              color: _dangerBg,
+              border: pw.Border.all(color: _dangerBorder, width: 0.8),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+            ),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'FEE RECOVERY REGISTER  |  Defaulters: ${summary.totalDefaulters} Vouchers (${summary.uniqueStudents} Stu)',
+                  style: const pw.TextStyle(
+                    fontSize: 7.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _dangerText,
+                  ),
+                ),
+                pw.Text(
+                  'Generated: ${ReportTheme.formatDate(summary.generatedAt)}',
+                  style: const pw.TextStyle(fontSize: 7, color: _slate600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Phase K-6 Run C: Portrait footer without stretched glyphs at 525pt printable width.
+  static pw.Widget _buildPortraitFooter(
+    pw.Context context, {
+    String? branchName,
+  }) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(top: 8),
+      padding: const pw.EdgeInsets.only(top: 5),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(
+          top: pw.BorderSide(color: _borderColor, width: 0.8),
+        ),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Expanded(
+            child: pw.Text(
+              branchName ?? 'Ailyans Higher Secondary School',
+              style: const pw.TextStyle(fontSize: 7.5, color: _slate600),
+              maxLines: 1,
+            ),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Text(
+            'Generated: ${ReportTheme.formatDate(DateTime.now())}',
+            style: const pw.TextStyle(fontSize: 7.5, color: _slate600),
+          ),
+          pw.SizedBox(width: 12),
+          pw.Text(
+            'Page ${context.pageNumber} of ${context.pagesCount}',
+            style: const pw.TextStyle(
+              fontSize: 7.5,
+              fontWeight: pw.FontWeight.bold,
+              color: _navy,
             ),
           ),
         ],
