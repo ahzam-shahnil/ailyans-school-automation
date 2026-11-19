@@ -1018,7 +1018,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 4,
-                      vertical: 2,
+                      vertical: 0,
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -1261,7 +1261,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }) {
     if (isMobile) {
       return _StitchCard(
-        height: 125,
+        height: 102,
         accentColor: accentColor,
         onTap: onTap,
         tooltip: tooltip,
@@ -1272,14 +1272,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             Row(
               children: [
                 Container(
-                  width: 28,
-                  height: 28,
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
                     color: accentSoftBg,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   alignment: Alignment.center,
-                  child: Icon(icon, size: 16, color: accentColor),
+                  child: Icon(icon, size: 14, color: accentColor),
                 ),
                 const Spacer(),
                 Flexible(
@@ -1351,7 +1351,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   AutoSizeText(
                     subtitle,
                     maxLines: 1,
@@ -1363,7 +1363,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ],
                 if (footerAction != null) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 1),
                   footerAction,
                 ],
               ],
@@ -1374,7 +1374,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     }
 
     return _StitchCard(
-      height: 165,
+      height: 132,
       accentColor: accentColor,
       onTap: onTap,
       tooltip: tooltip,
@@ -1388,8 +1388,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   color: accentSoftBg,
                   borderRadius: BorderRadius.circular(8),
@@ -1464,7 +1464,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             ClipRRect(
               borderRadius: BorderRadius.circular(3),
               child: SizedBox(
-                height: 7,
+                height: 4,
                 child: Row(
                   children: [
                     if (progressPercent > 0)
@@ -1480,7 +1480,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                 ),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
           ],
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1500,7 +1500,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
                 if (footerAction != null) ...[
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   footerAction,
                 ],
               ],
@@ -1516,7 +1516,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   /// InkWell, so tapping it triggers the card's navigation.
   Widget _buildKpiFooterStrip(String label, Color accent) {
     return Container(
-      height: 30,
+      height: 21,
       decoration: const BoxDecoration(
         color: _bandSurface,
         border: Border(top: BorderSide(color: _bandBorder, width: 1)),
@@ -1562,7 +1562,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     String? tooltip,
   }) {
     return _StitchCard(
-      height: 165,
+      height: 132,
       accentColor: _amberAccent,
       onTap: onTap,
       tooltip: tooltip,
@@ -1574,8 +1574,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                   color: _amberBadge,
                   borderRadius: BorderRadius.circular(8),
@@ -1674,7 +1674,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               ClipRRect(
                 borderRadius: BorderRadius.circular(3),
                 child: SizedBox(
-                  height: 6,
+                  height: 4,
                   child: Row(
                     children: [
                       if (presentCount > 0)
@@ -1695,7 +1695,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 2),
               Text(
                 '$presentCount / $totalCount Present',
                 maxLines: 1,
@@ -2867,14 +2867,14 @@ class _StitchCardState extends State<_StitchCard> {
     final lifted = _hovered && _interactive && !reduceMotion;
 
     final body = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: widget.child,
     );
 
     final stack = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(height: 4.5, color: widget.accentColor),
+        Container(height: 2.0, color: widget.accentColor),
         widget.height != null ? Expanded(child: body) : body,
         if (widget.footer != null) widget.footer!,
       ],
