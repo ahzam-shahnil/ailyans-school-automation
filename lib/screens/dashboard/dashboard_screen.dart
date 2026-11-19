@@ -2972,16 +2972,16 @@ class _SurfaceCardState extends State<_SurfaceCard> {
       transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: lifted ? AppColors.borderHover : _cardBorder,
-          width: 1.5,
+          width: 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: lifted ? const Color(0x140F172A) : const Color(0x06000000),
-            blurRadius: lifted ? 16 : 4,
-            offset: lifted ? const Offset(0, 6) : const Offset(0, 1),
+            color: lifted ? const Color(0x140F172A) : const Color(0x08000000),
+            blurRadius: lifted ? 12 : 2,
+            offset: lifted ? const Offset(0, 4) : const Offset(0, 1),
           ),
         ],
       ),
@@ -2989,7 +2989,7 @@ class _SurfaceCardState extends State<_SurfaceCard> {
         color: Colors.transparent,
         child: InkWell(
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(8),
           hoverColor: Colors.transparent,
           splashColor: AppColors.brandPrimary.withValues(alpha: 0.05),
           highlightColor: AppColors.brandPrimary.withValues(alpha: 0.03),
