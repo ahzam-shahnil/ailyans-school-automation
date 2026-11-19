@@ -3406,6 +3406,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             label: 'Date of Birth *',
             value: _selectedDob,
             onSelected: (date) => setState(() => _selectedDob = date),
+            fallback: DateTime(2010, 6, 15),
           ),
           _buildDropdownField<String>(
             label: 'Gender *',
@@ -3719,10 +3720,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     required String label,
     required DateTime? value,
     required ValueChanged<DateTime> onSelected,
+    DateTime? fallback,
   }) {
     final display = value != null
         ? DateFormat('dd-MMM-yyyy').format(value)
-        : 'Select date';
+        : 'DD-MMM-YYYY';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3737,11 +3739,17 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         const SizedBox(height: 6),
         InkWell(
           onTap: () async {
+            final firstDate = DateTime(1980);
+            final lastDate = DateTime(2030);
+            var initial = value ?? (fallback ?? DateTime(2005, 1, 1));
+            if (initial.isBefore(firstDate)) initial = firstDate;
+            if (initial.isAfter(lastDate)) initial = lastDate;
             final picked = await showDatePicker(
               context: context,
-              initialDate: value ?? DateTime(2005, 1, 1),
-              firstDate: DateTime(1980),
-              lastDate: DateTime(2030),
+              initialDate: initial,
+              firstDate: firstDate,
+              lastDate: lastDate,
+              fieldHintText: 'MM/DD/YYYY',
             );
             if (picked != null) onSelected(picked);
           },

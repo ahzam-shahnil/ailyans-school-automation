@@ -257,12 +257,18 @@ class _StudentRegistrationWizardState
 
   Future<void> _pickDob() async {
     final draft = ref.read(wizardDraftProvider);
-    final initialDate = draft.dob ?? DateTime(2010, 1, 1);
+    final firstDate = DateTime(1990);
+    final lastDate = ref.read(clockProvider)();
+    final fallback = DateTime(2010, 6, 15);
+    var initial = draft.dob ?? fallback;
+    if (initial.isBefore(firstDate)) initial = firstDate;
+    if (initial.isAfter(lastDate)) initial = lastDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(1990),
-      lastDate: ref.read(clockProvider)(),
+      initialDate: initial,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      fieldHintText: 'MM/DD/YYYY',
     );
 
     if (picked != null) {
@@ -1552,7 +1558,7 @@ class _StudentRegistrationWizardState
               child: _buildDatePickerField(
                 label: 'Date of Birth *',
                 controller: _dobController,
-                hint: 'Select date of birth',
+                hint: 'e.g. 15-Jun-2010',
                 onTap: _pickDob,
               ),
             ),
