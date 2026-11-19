@@ -9,6 +9,7 @@ import 'package:school_automation/core/sync/sync_provider.dart';
 import 'package:school_automation/core/theme/app_theme_tokens.dart';
 import 'package:school_automation/core/utils/responsive_breakpoints.dart';
 import 'package:school_automation/widgets/reports/report_definition.dart';
+import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
 
 /// Orientation choices for the preview modal's desktop toolbar toggle
 /// (Phase K Shot 3b-core). pdf 3.13.x has no built-in orientation enum.
@@ -183,6 +184,34 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   /// (one A4 page per voucher), e.g. '71 Vouchers · 71 Pages'. Hidden when
   /// the report carries no voucher records.
   Widget? _buildCountBadge() {
+    // Defaulter list: badge reads from the summary (totalDefaulters +
+    // uniqueStudents) rather than request.vouchers which carries class groups.
+    if (widget.request.type == ReportType.defaulterList) {
+      final summary =
+          widget.request.extraParams['summary'] as DefaulterListFilterSummary?;
+      if (summary == null) return null;
+      final label =
+          '${summary.totalDefaulters} Vouchers · ${summary.uniqueStudents} Students';
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF6FF),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: const Color(0xFFBFDBFE)),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          style: AppTypography.label.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF1E40AF),
+          ),
+        ),
+      );
+    }
+
+    // All other report types: count individual voucher records.
     final count = widget.request.vouchers?.length ?? 0;
     if (count == 0) return null;
     final label = count == 1

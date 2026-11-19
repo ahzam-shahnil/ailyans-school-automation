@@ -134,6 +134,8 @@ class DefaulterListPdfGenerator {
     final logoBytes = await LogoRepository.loadLogoBytes();
     final doc = pw.Document();
     final activeFormat = pageFormat ?? PdfPageFormat.a4.landscape;
+    // Portrait when height > width (portrait A4: 595×841; landscape: 841×595).
+    final isPortrait = activeFormat.height > activeFormat.width;
 
     doc.addPage(
       pw.MultiPage(
@@ -162,11 +164,13 @@ class DefaulterListPdfGenerator {
           pw.SizedBox(height: 6),
 
           // 2. Empty State or Grouped Tables
+          // Phase K-6 Run B: portrait renders an 8-column merged layout;
+          // landscape renders the original 10-column layout unchanged.
           if (groups.isEmpty)
             _buildEmptyState()
           else ...[
             for (final group in groups) ...[
-              _buildClassGroup(group),
+              _buildClassGroup(group, isPortrait: isPortrait),
               pw.SizedBox(height: 6),
             ],
 
@@ -439,11 +443,11 @@ class DefaulterListPdfGenerator {
     );
   }
 
-  static pw.Widget _buildClassGroup(DefaulterClassGroup group) {
+  static pw.Widget _buildClassGroup(DefaulterClassGroup group, {bool isPortrait = false}) {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
       children: [
-        // Group Header Banner
+        // Group Header Banner (identical for both orientations)
         pw.Container(
           padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           margin: const pw.EdgeInsets.only(top: 4),
@@ -477,78 +481,148 @@ class DefaulterListPdfGenerator {
           ),
         ),
 
-        // 10-Column Bordered Table
-        pw.Table(
-          border: pw.TableBorder.all(color: _borderColor, width: 0.5),
-          columnWidths: const {
-            0: pw.FixedColumnWidth(24),
-            1: pw.FixedColumnWidth(32),
-            2: pw.FixedColumnWidth(42),
-            3: pw.FlexColumnWidth(2.3),
-            4: pw.FlexColumnWidth(2.1),
-            5: pw.FixedColumnWidth(76),
-            6: pw.FixedColumnWidth(58),
-            7: pw.FixedColumnWidth(68),
-            8: pw.FixedColumnWidth(78),
-            9: pw.FixedColumnWidth(72),
-          },
-          children: [
-            // Table Header Row
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: _headerBg),
-              children: [
-                _thCell('#', alignment: pw.Alignment.center),
-                _thCell('Roll', alignment: pw.Alignment.center),
-                _thCell('Reg ID', alignment: pw.Alignment.center),
-                _thCell('Student Full Name'),
-                _thCell('Father / Guardian Name'),
-                _thCell('Contact Mobile'),
-                _thCell('Voucher ID', alignment: pw.Alignment.center),
-                _thCell('Billing Month'),
-                _thCell('Due Date / Status', alignment: pw.Alignment.center),
-                _thCell('Balance (Rs)', alignment: pw.Alignment.centerRight),
-              ],
-            ),
+        if (isPortrait)
+          // Phase K-6 Run B: 8-column portrait layout.
+          // Fixed budget 350pt (#20+Roll26+RegID36+Contact70+Voucher64+Due70+Bal64),
+          // Student/Father merged into one flex column (~175pt at 525pt printable).
+          pw.Table(
+            border: pw.TableBorder.all(color: _borderColor, width: 0.5),
+            columnWidths: const {
+              0: pw.FixedColumnWidth(20),  // #
+              1: pw.FixedColumnWidth(26),  // Roll
+              2: pw.FixedColumnWidth(36),  // Reg ID
+              3: pw.FlexColumnWidth(1),    // Student / Father (stacked, ~175pt)
+              4: pw.FixedColumnWidth(70),  // Contact Mobile
+              5: pw.FixedColumnWidth(64),  // Voucher / Month (stacked)
+              6: pw.FixedColumnWidth(70),  // Due Date / Status
+              7: pw.FixedColumnWidth(64),  // Balance (Rs)
+            },
+            children: [
+              // Table Header Row
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: _headerBg),
+                children: [
+                  _thCell('#', alignment: pw.Alignment.center),
+                  _thCell('Roll', alignment: pw.Alignment.center),
+                  _thCell('Reg ID', alignment: pw.Alignment.center),
+                  _thCell('Student / Father'),
+                  _thCell('Contact'),
+                  _thCell('Voucher\nMonth'),
+                  _thCell('Due / Status', alignment: pw.Alignment.center),
+                  _thCell('Balance', alignment: pw.Alignment.centerRight),
+                ],
+              ),
 
-            // Data Rows
-            for (int i = 0; i < group.rows.length; i++)
-              _buildDataRow(i, group.rows[i]),
+              // Data Rows
+              for (int i = 0; i < group.rows.length; i++)
+                _buildDataRowPortrait(i, group.rows[i]),
 
-            // Group Subtotal Footer Row
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: _lightBg),
-              children: [
-                _subtotalLabelCell(''),
-                _subtotalLabelCell(''),
-                _subtotalLabelCell(''),
-                _subtotalLabelCell(
-                  '${group.classLabel} Subtotal (${group.rows.length} Vouchers)',
-                  isBold: true,
-                ),
-                _subtotalLabelCell(''),
-                _subtotalLabelCell(''),
-                _subtotalLabelCell(''),
-                _subtotalLabelCell(''),
-                _subtotalLabelCell(''),
-                pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 3.5,
+              // Group Subtotal Footer Row (8 cols)
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: _lightBg),
+                children: [
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(
+                    '${group.classLabel} Subtotal (${group.rows.length} Vouchers)',
+                    isBold: true,
                   ),
-                  alignment: pw.Alignment.centerRight,
-                  child: pw.Text(
-                    'Rs. ${ReportTheme.formatCurrency(group.subtotal)}',
-                    style: const pw.TextStyle(
-                      fontSize: 7.5,
-                      fontWeight: pw.FontWeight.bold,
-                      color: _dangerText,
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 3.5,
+                    ),
+                    alignment: pw.Alignment.centerRight,
+                    child: pw.Text(
+                      'Rs. ${ReportTheme.formatCurrency(group.subtotal)}',
+                      style: const pw.TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _dangerText,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
-        ),
+                ],
+              ),
+            ],
+          )
+        else
+          // Original 10-column landscape layout — UNCHANGED byte-for-byte.
+          pw.Table(
+            border: pw.TableBorder.all(color: _borderColor, width: 0.5),
+            columnWidths: const {
+              0: pw.FixedColumnWidth(24),
+              1: pw.FixedColumnWidth(32),
+              2: pw.FixedColumnWidth(42),
+              3: pw.FlexColumnWidth(2.3),
+              4: pw.FlexColumnWidth(2.1),
+              5: pw.FixedColumnWidth(76),
+              6: pw.FixedColumnWidth(58),
+              7: pw.FixedColumnWidth(68),
+              8: pw.FixedColumnWidth(78),
+              9: pw.FixedColumnWidth(72),
+            },
+            children: [
+              // Table Header Row
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: _headerBg),
+                children: [
+                  _thCell('#', alignment: pw.Alignment.center),
+                  _thCell('Roll', alignment: pw.Alignment.center),
+                  _thCell('Reg ID', alignment: pw.Alignment.center),
+                  _thCell('Student Full Name'),
+                  _thCell('Father / Guardian Name'),
+                  _thCell('Contact Mobile'),
+                  _thCell('Voucher ID', alignment: pw.Alignment.center),
+                  _thCell('Billing Month'),
+                  _thCell('Due Date / Status', alignment: pw.Alignment.center),
+                  _thCell('Balance (Rs)', alignment: pw.Alignment.centerRight),
+                ],
+              ),
+
+              // Data Rows
+              for (int i = 0; i < group.rows.length; i++)
+                _buildDataRow(i, group.rows[i]),
+
+              // Group Subtotal Footer Row
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: _lightBg),
+                children: [
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(
+                    '${group.classLabel} Subtotal (${group.rows.length} Vouchers)',
+                    isBold: true,
+                  ),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  _subtotalLabelCell(''),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 3.5,
+                    ),
+                    alignment: pw.Alignment.centerRight,
+                    child: pw.Text(
+                      'Rs. ${ReportTheme.formatCurrency(group.subtotal)}',
+                      style: const pw.TextStyle(
+                        fontSize: 7.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: _dangerText,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
       ],
     );
   }
@@ -599,6 +673,107 @@ class DefaulterListPdfGenerator {
           color: isOverdue ? _dangerText : null,
           isBold: isOverdue,
         ),
+        _tdCell(
+          ReportTheme.formatCurrency(row.balance),
+          alignment: pw.Alignment.centerRight,
+          color: _dangerText,
+          isBold: true,
+        ),
+      ],
+    );
+  }
+
+  /// Phase K-6 Run B: portrait 8-column data row.
+  /// Merges Student+Father into one stacked cell, Voucher ID+Month into one.
+  static pw.TableRow _buildDataRowPortrait(int index, DefaulterListRow row) {
+    final bg = index.isEven ? PdfColors.white : _lightBg;
+
+    // Due Date / Status string (identical logic as landscape)
+    String statusStr = '-';
+    bool isOverdue = false;
+    if (row.dueDate != null) {
+      final dateStr = ReportTheme.formatDate(row.dueDate);
+      if (row.daysOverdue > 0 && row.daysOverdue <= 365) {
+        statusStr = '$dateStr (${row.daysOverdue}d)';
+        isOverdue = true;
+      } else if (row.isPaid == 'O') {
+        statusStr = '$dateStr [OVD]';
+        isOverdue = true;
+      } else {
+        statusStr = dateStr;
+      }
+    } else if (row.isPaid == 'O') {
+      statusStr = '[OVERDUE]';
+      isOverdue = true;
+    }
+
+    return pw.TableRow(
+      decoration: pw.BoxDecoration(color: bg),
+      children: [
+        // Col 0: #
+        _tdCell('${index + 1}', alignment: pw.Alignment.center),
+        // Col 1: Roll
+        _tdCell(
+          row.rollNo != null ? row.rollNo.toString().padLeft(2, '0') : '-',
+          alignment: pw.Alignment.center,
+        ),
+        // Col 2: Reg ID
+        _tdCell('${row.stuRegId}', alignment: pw.Alignment.center),
+        // Col 3: Student / Father stacked
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                row.studentName,
+                style: const pw.TextStyle(
+                  fontSize: 7.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              if (row.fatherName != null && row.fatherName!.isNotEmpty)
+                pw.Text(
+                  row.fatherName!,
+                  style: const pw.TextStyle(
+                    fontSize: 6.5,
+                    color: _slate600,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        // Col 4: Contact
+        _tdCell(
+          row.mobile1 != null && row.mobile1!.trim().isNotEmpty
+              ? row.mobile1!.trim()
+              : '-',
+        ),
+        // Col 5: Voucher ID / Month stacked
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                row.voucherMasId,
+                style: const pw.TextStyle(fontSize: 7, color: _slate900),
+              ),
+              pw.Text(
+                row.forMonth,
+                style: const pw.TextStyle(fontSize: 6.5, color: _slate600),
+              ),
+            ],
+          ),
+        ),
+        // Col 6: Due / Status
+        _tdCell(
+          statusStr,
+          alignment: pw.Alignment.center,
+          color: isOverdue ? _dangerText : null,
+          isBold: isOverdue,
+        ),
+        // Col 7: Balance
         _tdCell(
           ReportTheme.formatCurrency(row.balance),
           alignment: pw.Alignment.centerRight,

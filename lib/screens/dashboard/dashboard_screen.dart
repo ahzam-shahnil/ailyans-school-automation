@@ -1012,9 +1012,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                         type: ReportType.defaulterList,
                         // Phase K-6 Run 2: natural format is A4 landscape.
                         naturalPageFormat: PdfPageFormat.a4.landscape,
-                        // Phase K-6 Run 2b: the 10-column roster garbles in
-                        // portrait — the orientation toggle is disabled.
-                        locksOrientation: true,
+                        // Phase K-6 Run B: portrait layout is now supported
+                        // — the orientation toggle is enabled.
+                        locksOrientation: false,
                         vouchers: buildData.groups,
                         extraParams: {
                           'summary': buildData.summary,

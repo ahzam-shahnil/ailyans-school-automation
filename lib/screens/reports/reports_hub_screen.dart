@@ -126,9 +126,10 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
         request: ReportRequest(
           type: ReportType.defaulterList,
           titleOverride: def.title,
-          // The roster's designed format; the toggle renders disabled.
+          // Phase K-6 Run B: portrait layout is now supported — the
+          // orientation toggle is enabled.
           naturalPageFormat: PdfPageFormat.a4.landscape,
-          locksOrientation: true,
+          locksOrientation: false,
           vouchers: buildData.groups,
           extraParams: {
             'summary': buildData.summary,

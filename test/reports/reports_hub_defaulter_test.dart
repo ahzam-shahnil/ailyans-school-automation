@@ -175,8 +175,9 @@ void main() {
     );
     expect(
       request.locksOrientation,
-      isTrue,
-      reason: 'The hub request must lock the A4-landscape orientation',
+      isFalse,
+      reason: 'Phase K-6 Run B: portrait layout is now supported — the hub '
+          'request must NOT lock the orientation so the toggle works',
     );
     expect(request.naturalPageFormat, PdfPageFormat.a4.landscape);
   });

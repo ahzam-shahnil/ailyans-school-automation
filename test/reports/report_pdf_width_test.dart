@@ -20,6 +20,11 @@ import 'package:school_automation/widgets/reports/report_definition.dart';
 /// `_buildClassGroup`'s columnWidths: 24+32+42+76+58+68+78+72.
 const double _kDefaulterFixedWidths = 450.0;
 
+/// Phase K-6 Run B: The 8-column portrait defaulter table's FIXED column budget
+/// (points) from `_buildClassGroup`'s portrait columnWidths:
+/// 20+26+36+70+64+70+64 = 350.
+const double _kDefaulterPortraitFixedWidths = 350.0;
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -51,6 +56,15 @@ void main() {
       expect(_kDefaulterFixedWidths, lessThanOrEqualTo(portrait));
       expect(landscape - _kDefaulterFixedWidths, greaterThan(0));
       expect(portrait - _kDefaulterFixedWidths, greaterThan(0));
+    });
+
+    test('portrait 8-column fixed budget fits printable width with >100pt flex room',
+        () {
+      final portrait = DefaulterListPdfGenerator.printableWidth(
+        PdfPageFormat.a4,
+      );
+      expect(_kDefaulterPortraitFixedWidths, lessThanOrEqualTo(portrait));
+      expect(portrait - _kDefaulterPortraitFixedWidths, greaterThan(100.0));
     });
 
     test('PDF bytes construct for the natural landscape and portrait override',
