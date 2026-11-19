@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:auto_size_text/auto_size_text.dart';
@@ -8,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
 
 import '../../core/providers/clock_provider.dart';
 import '../../core/providers/dashboard_metrics_provider.dart';
@@ -19,6 +19,7 @@ import '../../core/providers/student_list_provider.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
+import '../../widgets/dashboard/snapshot_dialog.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -188,46 +189,58 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   }
 
   Future<void> _shareSnapshot() async {
-    try {
-      final boundary = _snapshotKey.currentContext?.findRenderObject()
-          as RenderRepaintBoundary?;
-      if (boundary == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Dashboard not ready yet')),
-          );
-        }
-        return;
-      }
-      final image = await boundary.toImage(pixelRatio: 2.0);
-      ByteData? byteData;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       try {
-        byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      } finally {
-        image.dispose();
-      }
-      if (byteData == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Snapshot failed')),
-          );
+        final boundary = _snapshotKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
+        if (boundary == null) {
+          if (mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              const SnackBar(content: Text('Dashboard not ready yet')),
+            );
+          }
+          return;
         }
-        return;
+        final image = await boundary.toImage(pixelRatio: 2.0);
+        final imgWidth = image.width;
+        final imgHeight = image.height;
+        ByteData? byteData;
+        try {
+          byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        } finally {
+          image.dispose();
+        }
+        if (byteData == null) {
+          if (mounted) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              const SnackBar(content: Text('Snapshot failed')),
+            );
+          }
+          return;
+        }
+        final bytes = byteData.buffer.asUint8List();
+        final dateStr = DateFormat('dd-MMM-yyyy').format(DateTime.now());
+        final filename = 'Dashboard_$dateStr.png';
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: true,
+          builder: (ctx) => SnapshotDialog(
+            bytes: bytes,
+            filename: filename,
+            imageWidth: imgWidth,
+            imageHeight: imgHeight,
+          ),
+        );
+      } catch (e, st) {
+        debugPrint('Dashboard snapshot failed: $e\n$st');
+        if (!mounted) return;
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text('Failed to share snapshot: $e')),
+        );
       }
-      final bytes = byteData.buffer.asUint8List();
-      final dateStr = DateFormat('dd-MMM-yyyy').format(DateTime.now());
-      if (!mounted) return;
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: 'Dashboard_$dateStr.png',
-      );
-    } catch (e, st) {
-      debugPrint('Dashboard snapshot failed: $e\n$st');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to share snapshot: $e')),
-      );
-    }
+    });
   }
 
   String _formatDate(String? rawDate) {
