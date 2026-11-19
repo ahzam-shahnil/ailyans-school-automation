@@ -2640,7 +2640,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     Widget? extra,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -2686,10 +2686,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     required Color border,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: border, width: 1),
       ),
       child: FittedBox(
@@ -2711,7 +2711,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: 10,
-        vertical: AppSpacing.xs,
+        vertical: 5,
       ),
       child: Text(
         text,
@@ -2758,7 +2758,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       child: content,
     );
   }
