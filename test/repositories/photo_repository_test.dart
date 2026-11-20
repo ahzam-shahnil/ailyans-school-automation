@@ -122,5 +122,27 @@ void main() {
         expect(await File(stagedPath).exists(), isTrue);
       },
     );
+
+    test('7. copyForStudent creates parent directory recursively if missing before write', () async {
+      // Ensure photos directory does not exist yet
+      final photosDir = Directory(p.join(tempDir.path, 'Ailyans', 'photos'));
+      if (await photosDir.exists()) {
+        await photosDir.delete(recursive: true);
+      }
+      expect(await photosDir.exists(), isFalse);
+
+      final dummySource = File(p.join(tempDir.path, 'source_photo.jpg'));
+      await dummySource.writeAsString('sample');
+
+      final resultPath = await repo.copyForStudent(
+        5500,
+        dummySource.path,
+        studentName: 'Test Student',
+      );
+
+      expect(resultPath, isNotNull);
+      expect(await File(resultPath!).exists(), isTrue);
+      expect(await photosDir.exists(), isTrue);
+    });
   });
 }

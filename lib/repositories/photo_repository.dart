@@ -62,6 +62,9 @@ class PhotoRepository {
       }
 
       final dest = File(p.join(dir.path, filename));
+      if (!await dest.parent.exists()) {
+        await dest.parent.create(recursive: true);
+      }
       await PhotoProcessor.processAndSaveFile(src.path, dest.path);
 
       // Clean up legacy {stuRegId}.jpg if the new filename is different
@@ -89,6 +92,9 @@ class PhotoRepository {
       final dir = await getPhotosDirectory();
       final filename = PhotoProcessor.generateFilename();
       final dest = File(p.join(dir.path, filename));
+      if (!await dest.parent.exists()) {
+        await dest.parent.create(recursive: true);
+      }
       await PhotoProcessor.processAndSaveFile(src.path, dest.path);
       return dest.path;
     } catch (_) {

@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/theme/app_theme_tokens.dart';
 import '../core/utils/photo_processor.dart';
+import '../repositories/photo_repository.dart';
 
 /// Shows a dialog that allows the user to capture a student photo using their
 /// connected webcam (internal or USB), preview it, retake, or confirm and use it.
@@ -248,6 +249,18 @@ class _CameraCaptureDialogState extends State<CameraCaptureDialog> {
     });
   }
 
+  Future<Directory> _resolveTempDir() async {
+    try {
+      final dir = await getTemporaryDirectory();
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      return dir;
+    } catch (_) {
+      return PhotoRepository().getPhotosDirectory();
+    }
+  }
+
   Future<void> _confirmAndUsePhoto() async {
     if (_capturedBytes == null) return;
     setState(() {
@@ -258,10 +271,13 @@ class _CameraCaptureDialogState extends State<CameraCaptureDialog> {
       // Auto-compress and square-crop the captured image
       final processedBytes = PhotoProcessor.processPhotoBytes(_capturedBytes!);
 
-      // Save to a temporary file in system cache
-      final tempDir = await getTemporaryDirectory();
+      // Save to a temporary file in system cache or photo directory
+      final tempDir = await _resolveTempDir();
       final tempFilename = PhotoProcessor.generateFilename();
       final tempFile = File(p.join(tempDir.path, tempFilename));
+      if (!await tempFile.parent.exists()) {
+        await tempFile.parent.create(recursive: true);
+      }
       await tempFile.writeAsBytes(processedBytes, flush: true);
 
       if (mounted) {
