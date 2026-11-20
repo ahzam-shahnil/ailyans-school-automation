@@ -7,7 +7,9 @@ import '../../models/fee_receipt_view.dart';
 import '../../models/student.dart';
 import '../db/database.dart';
 import '../sync/sync_provider.dart';
+
 import 'package:school_automation/core/sync/node_id_allocator.dart';
+
 import 'clock_provider.dart';
 import 'shell_metadata_provider.dart';
 import '../../core/utils/fee_head_display.dart';
@@ -139,6 +141,7 @@ class FeeCollectionState {
 /// State notifier driving fee receipt search, payment posting, and supervisory revocation.
 class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
   final Ref? _ref;
+  final Set<String> _inFlightVouchers = <String>{};
 
   FeeCollectionNotifier([FeeCollectionState? initialState, Ref? ref])
     : _ref = ref,
@@ -616,9 +619,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         mas['NameMiddle'] as String?,
         mas['NameLast'] as String?,
       );
-      final studentName = rawName.isNotEmpty
-          ? rawName
-          : 'Unknown Student';
+      final studentName = rawName.isNotEmpty ? rawName : 'Unknown Student';
       final fatherName = (mas['F_Name'] as String?)?.trim();
 
       // 2. Load line items from VoucharDet joined to FeeParameters
@@ -759,8 +760,31 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
   /// StuAdv deduction row inserted when advance credit used.
   Future<bool> postPayment() async {
     final receipt = state.currentReceipt;
-    if (receipt == null || receipt.isFullyPaid) return false;
-    if (state.selectedBankId == null) return false;
+    if (receipt == null) {
+      state = state.copyWith(
+        postError: () => 'No voucher selected for payment',
+      );
+      return false;
+    }
+    if (receipt.isPaid == 'Y' ||
+        receipt.isFullyPaid ||
+        receipt.remainingBalance <= 0) {
+      state = state.copyWith(postError: () => 'Voucher is already fully paid');
+      return false;
+    }
+    if (state.selectedBankId == null) {
+      state = state.copyWith(postError: () => 'Please select a bank account');
+      return false;
+    }
+
+    final voucherId = receipt.voucherMasId;
+    if (_inFlightVouchers.contains(voucherId)) {
+      state = state.copyWith(
+        postError: () =>
+            'Payment for voucher $voucherId is already in progress',
+      );
+      return false;
+    }
 
     // Compute advance deduction
     final cashReceived = state.amountTendered;
@@ -768,8 +792,22 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
         ? min(receipt.advanceBalance, receipt.remainingBalance)
         : 0;
     final paidAmountNow = cashReceived + advanceApplied;
-    if (paidAmountNow <= 0) return false;
+    if (paidAmountNow <= 0) {
+      state = state.copyWith(
+        postError: () => 'Payment amount must be greater than zero',
+      );
+      return false;
+    }
 
+    if (paidAmountNow > receipt.remainingBalance) {
+      state = state.copyWith(
+        postError: () =>
+            'Payment amount exceeds remaining balance of Rs. ${receipt.remainingBalance}',
+      );
+      return false;
+    }
+
+    _inFlightVouchers.add(voucherId);
     state = state.copyWith(isPosting: true, postError: () => null);
 
     try {
@@ -778,19 +816,40 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           .format(state.paymentDate ?? _now());
 
       await db.transaction((txn) async {
-        // Query current SubTotal, Discount, and PaidAmt directly from VoucharMas
+        // Query fresh SubTotal, Discount, PaidAmt, and IsPaid directly from VoucharMas
         final currentRows = await txn.rawQuery(
           '''
-          SELECT SubTotal, COALESCE(Discount, 0) AS Discount, COALESCE(PaidAmt, 0) AS PrevPaid
+          SELECT SubTotal, COALESCE(Discount, 0) AS Discount, COALESCE(PaidAmt, 0) AS PrevPaid, IsPaid
           FROM VoucharMas
           WHERE VoucherMasID = ?
           LIMIT 1
           ''',
-          [receipt.voucherMasId],
+          [voucherId],
         );
         if (currentRows.isEmpty) {
+          throw StateError('Voucher $voucherId not found in database');
+        }
+
+        final row = currentRows.first;
+        final subTotal = (row['SubTotal'] as num?)?.toInt() ?? 0;
+        final discount = (row['Discount'] as num?)?.toInt() ?? 0;
+        final prevPaid = (row['PrevPaid'] as num?)?.toInt() ?? 0;
+        final currentIsPaid = (row['IsPaid'] as String?) ?? 'N';
+
+        final netPayable = max(0, subTotal - discount);
+        final remaining = max(0, netPayable - prevPaid);
+
+        if (currentIsPaid == 'Y' || remaining <= 0) {
+          throw StateError('Voucher is already fully paid');
+        }
+
+        if (paidAmountNow <= 0) {
+          throw StateError('Payment amount must be greater than zero');
+        }
+
+        if (paidAmountNow > remaining) {
           throw StateError(
-            'Voucher ${receipt.voucherMasId} not found in database',
+            'Payment amount exceeds remaining balance of Rs. $remaining',
           );
         }
 
@@ -802,11 +861,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
               BankID = ?
           WHERE VoucherMasID = ?
           ''',
-          [
-            submissionDateStr,
-            state.selectedBankId,
-            receipt.voucherMasId,
-          ],
+          [submissionDateStr, state.selectedBankId, voucherId],
         );
 
         // 2. Fetch next FeeTransID via allocator
@@ -825,7 +880,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
           'FeeTransID': nextTransId,
           'BankID': state.selectedBankId,
           'SubmissionDate': submissionDateStr,
-          'VoucharNo': receipt.voucherMasId,
+          'VoucharNo': voucherId,
           'TotalAmount': receipt.netPayable,
           'PaidAmount': cashReceived,
           'Detail': detailStr,
@@ -845,24 +900,27 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
             'MOP': 'Advance Deduction',
             'Date': submissionDateStr,
             'DepositedBy': 'System',
-            'Detail': 'Fee offset for voucher ${receipt.voucherMasId}',
-            'VoucherMasID': receipt.voucherMasId,
+            'Detail': 'Fee offset for voucher $voucherId',
+            'VoucherMasID': voucherId,
           });
         }
 
         // 5. Reconcile voucher ledger to compute PaidAmt and IsPaid from transactions
-        await LedgerReconciler.reconcileVoucher(txn, receipt.voucherMasId);
+        await LedgerReconciler.reconcileVoucher(txn, voucherId);
       });
 
       // Clear receipt state on successful post
       clearReceipt();
       return true;
     } catch (e) {
-      state = state.copyWith(
-        isPosting: false,
-        postError: () => 'Failed to post payment: $e',
-      );
+      final rawMsg = e is StateError ? e.message : e.toString();
+      final cleanMsg = rawMsg
+          .replaceFirst('Bad state: ', '')
+          .replaceFirst('Exception: ', '');
+      state = state.copyWith(isPosting: false, postError: () => cleanMsg);
       return false;
+    } finally {
+      _inFlightVouchers.remove(voucherId);
     }
   }
 
@@ -961,9 +1019,7 @@ class FeeCollectionNotifier extends StateNotifier<FeeCollectionState> {
 /// entry point renders the identical PDF for identical params.
 DateTime _defaultClock() => DateTime.now();
 
-Future<
-  ({List<DefaulterClassGroup> groups, DefaulterListFilterSummary summary})
->
+Future<({List<DefaulterClassGroup> groups, DefaulterListFilterSummary summary})>
 buildDefaulterListData({
   String? sessionYr,
   String? metaSessionYr,

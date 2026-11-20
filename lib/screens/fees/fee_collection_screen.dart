@@ -129,6 +129,8 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
   }
 
   Future<void> _onPostPayment() async {
+    if (ref.read(feeCollectionProvider).isPosting) return;
+
     // Capture voucherMasId BEFORE postPayment() clears the state
     final settledVoucherId = ref
         .read(feeCollectionProvider)
@@ -368,7 +370,9 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
-          if (receipt != null && !receipt.isFullyPaid) {
+          if (receipt != null &&
+              !receipt.isFullyPaid &&
+              !ref.read(feeCollectionProvider).isPosting) {
             _onPostPayment();
           }
         },
@@ -824,7 +828,11 @@ class _FeeCollectionScreenState extends ConsumerState<FeeCollectionScreen> {
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.enter, control: true): () {
-          if (receipt != null && !receipt.isFullyPaid) _onPostPayment();
+          if (receipt != null &&
+              !receipt.isFullyPaid &&
+              !ref.read(feeCollectionProvider).isPosting) {
+            _onPostPayment();
+          }
         },
         const SingleActivator(
           LogicalKeyboardKey.keyR,
