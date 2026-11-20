@@ -1939,13 +1939,16 @@ class ThreeCopyVouchersPdf {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(
-            'FEE CHALLAN',
-            style: const pw.TextStyle(
-              fontSize: 8.5,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.white,
-              letterSpacing: 0.5,
+          pw.Flexible(
+            child: pw.Text(
+              'FEE CHALLAN',
+              style: const pw.TextStyle(
+                fontSize: 8.5,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+                letterSpacing: 0.5,
+              ),
+              maxLines: 1,
             ),
           ),
           pw.Container(
@@ -1985,54 +1988,65 @@ class ThreeCopyVouchersPdf {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(
-                'Bank: $bankName',
-                style: const pw.TextStyle(
-                  fontSize: 9.5,
-                  fontWeight: pw.FontWeight.bold,
-                  color: ReportTheme.primaryColor,
+              pw.Expanded(
+                flex: 3,
+                child: pw.Text(
+                  'Bank: $bankName',
+                  style: const pw.TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: ReportTheme.primaryColor,
+                  ),
+                  maxLines: 1,
                 ),
               ),
-              if (bankBranch.isNotEmpty)
-                pw.Text(
-                  'Branch: $bankBranch',
-                  style: const pw.TextStyle(
-                    fontSize: 9.0,
-                    color: PdfColors.grey700,
+              if (bankBranch.isNotEmpty) ...[
+                pw.SizedBox(width: 6),
+                pw.Expanded(
+                  flex: 2,
+                  child: pw.Text(
+                    'Branch: $bankBranch',
+                    style: const pw.TextStyle(
+                      fontSize: 9.0,
+                      color: PdfColors.grey700,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                    maxLines: 1,
                   ),
                 ),
+              ],
             ],
           ),
           pw.SizedBox(height: 1.5),
+          pw.Text(
+            'A/C Title: $branchName',
+            style: const pw.TextStyle(fontSize: 9.0),
+          ),
+          pw.SizedBox(height: 1.5),
           pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(
-                'A/C Title: $branchName',
-                style: const pw.TextStyle(fontSize: 9.0),
-                maxLines: 1,
-              ),
-              pw.RichText(
-                text: pw.TextSpan(
-                  children: [
-                    const pw.TextSpan(
-                      text: 'A/C No: ',
-                      style: pw.TextStyle(
-                        fontSize: 9.0,
-                        color: PdfColors.grey800,
+              pw.Expanded(
+                child: pw.RichText(
+                  text: pw.TextSpan(
+                    children: [
+                      const pw.TextSpan(
+                        text: 'A/C No: ',
+                        style: pw.TextStyle(
+                          fontSize: 9.0,
+                          color: PdfColors.grey800,
+                        ),
                       ),
-                    ),
-                    pw.TextSpan(
-                      text: bankAcctNo,
-                      style: const pw.TextStyle(
-                        fontSize: 10.0,
-                        fontWeight: pw.FontWeight.bold,
-                        color: ReportTheme.primaryColor,
+                      pw.TextSpan(
+                        text: bankAcctNo,
+                        style: const pw.TextStyle(
+                          fontSize: 10.0,
+                          fontWeight: pw.FontWeight.bold,
+                          color: ReportTheme.primaryColor,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -2057,19 +2071,27 @@ class ThreeCopyVouchersPdf {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(
-                'Challan No: ${v.voucherMasId}',
-                style: const pw.TextStyle(
-                  fontSize: 11.0,
-                  fontWeight: pw.FontWeight.bold,
-                  color: ReportTheme.primaryColor,
+              pw.Expanded(
+                child: pw.Text(
+                  'Challan No: ${v.voucherMasId}',
+                  style: const pw.TextStyle(
+                    fontSize: 11.0,
+                    fontWeight: pw.FontWeight.bold,
+                    color: ReportTheme.primaryColor,
+                  ),
+                  maxLines: 1,
                 ),
               ),
-              pw.Text(
-                'Month: ${v.forMonth}',
-                style: const pw.TextStyle(
-                  fontSize: 10.0,
-                  fontWeight: pw.FontWeight.bold,
+              pw.SizedBox(width: 4),
+              pw.Flexible(
+                child: pw.Text(
+                  'Month: ${v.forMonth}',
+                  style: const pw.TextStyle(
+                    fontSize: 10.0,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                  maxLines: 1,
                 ),
               ),
             ],
@@ -2078,19 +2100,27 @@ class ThreeCopyVouchersPdf {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(
-                'Issue: ${ReportTheme.formatDate(v.issueDate)}',
-                style: const pw.TextStyle(
-                  fontSize: 9.5,
-                  color: PdfColors.grey700,
+              pw.Expanded(
+                child: pw.Text(
+                  'Issue: ${ReportTheme.formatDate(v.issueDate)}',
+                  style: const pw.TextStyle(
+                    fontSize: 9.5,
+                    color: PdfColors.grey700,
+                  ),
+                  maxLines: 1,
                 ),
               ),
-              pw.Text(
-                'Due Date: ${ReportTheme.formatDate(v.dueDate)}',
-                style: const pw.TextStyle(
-                  fontSize: 10.0,
-                  fontWeight: pw.FontWeight.bold,
-                  color: ReportTheme.dangerTextColor,
+              pw.SizedBox(width: 4),
+              pw.Flexible(
+                child: pw.Text(
+                  'Due Date: ${ReportTheme.formatDate(v.dueDate)}',
+                  style: const pw.TextStyle(
+                    fontSize: 10.0,
+                    fontWeight: pw.FontWeight.bold,
+                    color: ReportTheme.dangerTextColor,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                  maxLines: 1,
                 ),
               ),
             ],
@@ -2113,28 +2143,13 @@ class ThreeCopyVouchersPdf {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Expanded(
-                child: pw.Text(
-                  'Student: ${v.studentName}',
-                  style: const pw.TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                ),
-              ),
-              pw.Text(
-                'Reg #: ${v.stuRegId}',
-                style: const pw.TextStyle(
-                  fontSize: 10.0,
-                  fontWeight: pw.FontWeight.bold,
-                  color: ReportTheme.primaryColor,
-                ),
-              ),
-            ],
+          pw.Text(
+            'Student: ${v.studentName}',
+            style: const pw.TextStyle(
+              fontSize: 10.5,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            maxLines: 1,
           ),
           pw.SizedBox(height: 1.5),
           pw.Text(
@@ -2149,15 +2164,35 @@ class ThreeCopyVouchersPdf {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text(
-                'Class: ${v.className ?? "Unknown"}-${v.sectionName ?? "A"}',
-                style: const pw.TextStyle(fontSize: 9.5),
-              ),
-              if (v.rollNo != null)
-                pw.Text(
-                  'Roll No: ${v.rollNo}',
-                  style: const pw.TextStyle(fontSize: 9.5),
+              pw.Flexible(
+                child: pw.Text(
+                  'Class: ${v.className ?? "Unknown"}-${v.sectionName ?? "A"}',
+                  style: const pw.TextStyle(fontSize: 9.0),
+                  maxLines: 1,
                 ),
+              ),
+              pw.SizedBox(width: 4),
+              pw.Flexible(
+                child: pw.Text(
+                  'Reg #: ${v.stuRegId}',
+                  style: const pw.TextStyle(
+                    fontSize: 9.0,
+                    fontWeight: pw.FontWeight.bold,
+                    color: ReportTheme.primaryColor,
+                  ),
+                  maxLines: 1,
+                ),
+              ),
+              if (v.rollNo != null) ...[
+                pw.SizedBox(width: 4),
+                pw.Flexible(
+                  child: pw.Text(
+                    'Roll No: ${v.rollNo}',
+                    style: const pw.TextStyle(fontSize: 9.0),
+                    maxLines: 1,
+                  ),
+                ),
+              ],
             ],
           ),
         ],
@@ -2272,7 +2307,9 @@ class ThreeCopyVouchersPdf {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text('Gross Total:', style: const pw.TextStyle(fontSize: 9.5)),
+              pw.Expanded(
+                child: pw.Text('Gross Total:', style: const pw.TextStyle(fontSize: 9.5)),
+              ),
               pw.Text(
                 'Rs. ${ReportTheme.formatCurrency(grossTotal)}',
                 style: const pw.TextStyle(fontSize: 9.5),
@@ -2284,11 +2321,13 @@ class ThreeCopyVouchersPdf {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text(
-                  'Less Concession / Discount:',
-                  style: const pw.TextStyle(
-                    fontSize: 9.5,
-                    color: ReportTheme.dangerTextColor,
+                pw.Expanded(
+                  child: pw.Text(
+                    'Less Concession / Discount:',
+                    style: const pw.TextStyle(
+                      fontSize: 9.5,
+                      color: ReportTheme.dangerTextColor,
+                    ),
                   ),
                 ),
                 pw.Text(
@@ -2307,11 +2346,13 @@ class ThreeCopyVouchersPdf {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text(
-                  'Arrears / Prior Balance:',
-                  style: const pw.TextStyle(
-                    fontSize: 9.5,
-                    color: ReportTheme.dangerTextColor,
+                pw.Expanded(
+                  child: pw.Text(
+                    'Arrears / Prior Balance:',
+                    style: const pw.TextStyle(
+                      fontSize: 9.5,
+                      color: ReportTheme.dangerTextColor,
+                    ),
                   ),
                 ),
                 pw.Text(
@@ -2338,12 +2379,14 @@ class ThreeCopyVouchersPdf {
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text(
-                  'Net Payable (Within Due Date):',
-                  style: const pw.TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: ReportTheme.primaryColor,
+                pw.Expanded(
+                  child: pw.Text(
+                    'Net Payable (Within Due Date):',
+                    style: const pw.TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: pw.FontWeight.bold,
+                      color: ReportTheme.primaryColor,
+                    ),
                   ),
                 ),
                 pw.Text(
@@ -2365,12 +2408,14 @@ class ThreeCopyVouchersPdf {
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text(
-                    'PAID: ${ReportTheme.formatDate(paidDate)}',
-                    style: const pw.TextStyle(
-                      fontSize: 9.5,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.green900,
+                  pw.Expanded(
+                    child: pw.Text(
+                      'PAID: ${ReportTheme.formatDate(paidDate)}',
+                      style: const pw.TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.green900,
+                      ),
                     ),
                   ),
                   pw.Text(
@@ -2416,25 +2461,31 @@ class ThreeCopyVouchersPdf {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         crossAxisAlignment: pw.CrossAxisAlignment.end,
         children: [
-          pw.Column(
-            children: [
-              pw.Container(width: 80, height: 0.5, color: PdfColors.black),
-              pw.SizedBox(height: 2),
-              pw.Text(
-                'Cashier Signature',
-                style: const pw.TextStyle(fontSize: 8.0, color: PdfColors.grey800),
-              ),
-            ],
+          pw.Flexible(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Container(width: 80, height: 0.5, color: PdfColors.black),
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'Cashier Signature',
+                  style: const pw.TextStyle(fontSize: 8.0, color: PdfColors.grey800),
+                ),
+              ],
+            ),
           ),
-          pw.Column(
-            children: [
-              pw.Container(width: 80, height: 0.5, color: PdfColors.black),
-              pw.SizedBox(height: 2),
-              pw.Text(
-                'Bank Stamp / Officer',
-                style: const pw.TextStyle(fontSize: 8.0, color: PdfColors.grey800),
-              ),
-            ],
+          pw.Flexible(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.end,
+              children: [
+                pw.Container(width: 80, height: 0.5, color: PdfColors.black),
+                pw.SizedBox(height: 2),
+                pw.Text(
+                  'Bank Stamp / Officer',
+                  style: const pw.TextStyle(fontSize: 8.0, color: PdfColors.grey800),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -2453,23 +2504,30 @@ class ThreeCopyVouchersPdf {
       child: pw.Row(
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         children: [
-          pw.Text(
-            '|||| | ||| |||||| | || |||',
-            style: pw.TextStyle(
-              font: pw.Font.courier(),
-              fontSize: 8,
-              fontWeight: pw.FontWeight.bold,
-              color: PdfColors.grey700,
+          pw.Flexible(
+            child: pw.Text(
+              '|||| | ||| |||||| | || |||',
+              style: pw.TextStyle(
+                font: pw.Font.courier(),
+                fontSize: 8,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.grey700,
+              ),
+              maxLines: 1,
             ),
           ),
-          pw.Text(
-            '* $voucherMasId *',
-            style: pw.TextStyle(
-              font: pw.Font.courier(),
-              fontSize: 8.5,
-              fontWeight: pw.FontWeight.bold,
-              letterSpacing: 1,
-              color: PdfColors.black,
+          pw.Flexible(
+            child: pw.Text(
+              '* $voucherMasId *',
+              style: pw.TextStyle(
+                font: pw.Font.courier(),
+                fontSize: 8.5,
+                fontWeight: pw.FontWeight.bold,
+                letterSpacing: 1,
+                color: PdfColors.black,
+              ),
+              textAlign: pw.TextAlign.right,
+              maxLines: 1,
             ),
           ),
         ],

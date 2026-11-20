@@ -259,7 +259,7 @@ class DefaulterListPdfGenerator {
         children: [
           // Left: Institutional branding
           pw.Expanded(
-            flex: 3,
+            flex: 6,
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
@@ -292,46 +292,49 @@ class DefaulterListPdfGenerator {
                         ),
                       ),
                 pw.SizedBox(width: 8),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      branchName,
-                      style: const pw.TextStyle(
-                        fontSize: 14,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _navy,
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        branchName,
+                        style: const pw.TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: pw.FontWeight.bold,
+                          color: _navy,
+                        ),
                       ),
-                    ),
-                    pw.SizedBox(height: 1),
-                    pw.Text(
-                      branchAddress,
-                      style: const pw.TextStyle(fontSize: 8.5, color: _slate600),
-                    ),
-                    pw.SizedBox(height: 1),
-                    pw.Text(
-                      'Phone: $phone  |  Principal: $principal',
-                      style: const pw.TextStyle(
-                        fontSize: 7.5,
-                        color: _slate500,
+                      pw.SizedBox(height: 1),
+                      pw.Text(
+                        branchAddress,
+                        style: const pw.TextStyle(fontSize: 8.5, color: _slate600),
                       ),
-                    ),
-                  ],
+                      pw.SizedBox(height: 1),
+                      pw.Text(
+                        'Phone: $phone  |  Principal: $principal',
+                        style: const pw.TextStyle(
+                          fontSize: 7.5,
+                          color: _slate500,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
+          pw.SizedBox(width: 12),
 
           // Center: Title & Scope
           pw.Expanded(
-            flex: 3,
+            flex: 5,
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
                 pw.Text(
                   'INSTITUTIONAL FEE DEFAULTERS ROSTER',
                   style: const pw.TextStyle(
-                    fontSize: 13.5,
+                    fontSize: 12.5,
                     fontWeight: pw.FontWeight.bold,
                     color: _navy,
                   ),
@@ -346,10 +349,11 @@ class DefaulterListPdfGenerator {
               ],
             ),
           ),
+          pw.SizedBox(width: 12),
 
           // Right: Audit Control Box
           pw.Container(
-            width: 150,
+            width: 145,
             decoration: pw.BoxDecoration(
               color: _dangerBg,
               border: pw.Border.all(color: _dangerBorder, width: 0.8),
