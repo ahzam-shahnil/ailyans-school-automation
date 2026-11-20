@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pdf/pdf.dart';
 import 'package:school_automation/core/utils/voucher_pdf_generator.dart';
 import 'package:school_automation/models/fee_receipt_view.dart';
 
@@ -66,6 +67,33 @@ void main() {
     );
     // PDF magic header
     expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+  });
+
+  test('ThreeCopyVouchersPdf produces distinct layouts for landscape and portrait', () async {
+    final landscapeBytes = await ThreeCopyVouchersPdf.generate(
+      vouchers: [_fakeReceipt()],
+      branchName: 'Ailyans Higher Secondary School',
+      branchAddress: 'Muslim Bazar Mianwali',
+      bankName: 'Askari Bank Limited',
+      bankBranch: 'Ballo Khel Road',
+      bankAcctNo: '4528',
+      pageFormat: PdfPageFormat.a4.landscape,
+    );
+    expect(landscapeBytes, isA<Uint8List>());
+    expect(landscapeBytes.length, greaterThan(5000));
+
+    final portraitBytes = await ThreeCopyVouchersPdf.generate(
+      vouchers: [_fakeReceipt()],
+      branchName: 'Ailyans Higher Secondary School',
+      branchAddress: 'Muslim Bazar Mianwali',
+      bankName: 'Askari Bank Limited',
+      bankBranch: 'Ballo Khel Road',
+      bankAcctNo: '4528',
+      pageFormat: PdfPageFormat.a4,
+    );
+    expect(portraitBytes, isA<Uint8List>());
+    expect(portraitBytes.length, greaterThan(5000));
+    expect(identical(landscapeBytes, portraitBytes), isFalse);
   });
 
   test('ThreeCopyVouchersPdf handles multiple vouchers', () async {

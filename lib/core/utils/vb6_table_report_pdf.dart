@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../repositories/logo_repository.dart';
 import 'voucher_pdf_generator.dart' show ReportTheme;
 
 /// One grouped band in a report (e.g. a Class/Section block in the student
@@ -58,7 +59,14 @@ class Vb6TableReportPdf {
     /// Phase K Shot 3c-columns: indices into headers/rows that may be
     /// dropped when rendering in portrait with more columns than fit.
     List<int> optionalColumnIndices = const [],
+    /// Run G: Optional preloaded school logo bytes.
+    Uint8List? logoBytes,
+    /// Run G: Optional margins override.
+    double? marginLeft,
+    double? marginRight,
   }) async {
+    logoBytes ??= await LogoRepository.loadLogoBytes();
+
     // Rebind to local mutable variables so the optional-column stripping
     // block can reassign them.
     var headersL = headers;
@@ -77,13 +85,18 @@ class Vb6TableReportPdf {
     final activeFormat = pageFormat ??
         (landscape ? PdfPageFormat.a4.landscape : PdfPageFormat.a4);
 
+    final isLandscapeFormat = activeFormat.width > activeFormat.height;
+    final effectiveMarginLeft = marginLeft ??
+        ((breakPerGroup && isLandscapeFormat) ? 20.0 : kMarginLeft);
+    final effectiveMarginRight = marginRight ??
+        ((breakPerGroup && isLandscapeFormat) ? 20.0 : kMarginRight);
+
     // ---- Phase K Shot 3c-columns: portrait-mode optional-column stripping --
     // When the report is being rendered in portrait and has more columns
     // than fit comfortably, drop the declared optional columns (e.g.
     // Emergency No + Permanent Address on the class/section roster) so no
     // cell wraps onto multiple lines. (pdf 3.13.x PdfPageFormat has no
     // isLandscape getter — compare width/height.)
-    final isLandscapeFormat = activeFormat.width > activeFormat.height;
     if (!isLandscapeFormat &&
         headersL.length > 7 &&
         optionalColumnIndices.isNotEmpty) {
@@ -245,7 +258,19 @@ class Vb6TableReportPdf {
 
     final keptColumnWidths = <int, pw.TableColumnWidth>{
       for (var c = 0; c < keptHeaders.length; c++)
-        c: pw.FlexColumnWidth((columnMaxLen(c) / 8.0).clamp(0.7, 3.2)),
+        c: breakPerGroup
+            ? (switch (keptHeaders[c].trim().toLowerCase()) {
+                'reg id' => const pw.FixedColumnWidth(50),
+                'roll no' => const pw.FixedColumnWidth(50),
+                'dob' => const pw.FixedColumnWidth(76),
+                'date of adm' => const pw.FixedColumnWidth(84),
+                'emergency no' => const pw.FixedColumnWidth(92),
+                'name' => const pw.FlexColumnWidth(1.4),
+                'father name' => const pw.FlexColumnWidth(1.3),
+                'permanent address' => const pw.FlexColumnWidth(2.2),
+                _ => pw.FlexColumnWidth((columnMaxLen(c) / 8.0).clamp(0.7, 3.2)),
+              })
+            : pw.FlexColumnWidth((columnMaxLen(c) / 8.0).clamp(0.7, 3.2)),
     };
 
     pw.Alignment alignFor(int i) {
@@ -266,7 +291,7 @@ class Vb6TableReportPdf {
             width: 0.5,
           ),
           headerStyle:
-              ReportTheme.tableHeaderStyle.copyWith(fontSize: 8.5),
+              ReportTheme.tableHeaderStyle.copyWith(fontSize: breakPerGroup ? 10.5 : 8.5),
           headerDecoration: const pw.BoxDecoration(
             color: ReportTheme.primaryColor,
           ),
@@ -274,16 +299,16 @@ class Vb6TableReportPdf {
             for (var i = 0; i < keptHeaders.length; i++) i: alignFor(i),
           },
           headerPadding: const pw.EdgeInsets.symmetric(
-            horizontal: 5,
-            vertical: 5,
+            horizontal: 4,
+            vertical: 4.5,
           ),
-          cellStyle: ReportTheme.tableCellStyle.copyWith(fontSize: 8.0),
+          cellStyle: ReportTheme.tableCellStyle.copyWith(fontSize: breakPerGroup ? 9.5 : 8.0),
           cellAlignment: pw.Alignment.centerLeft,
           cellAlignments: {
             for (var i = 0; i < keptHeaders.length; i++) i: alignFor(i),
           },
           cellPadding: const pw.EdgeInsets.symmetric(
-            horizontal: 5,
+            horizontal: 4,
             vertical: 3.5,
           ),
           rowDecoration: const pw.BoxDecoration(
@@ -297,27 +322,69 @@ class Vb6TableReportPdf {
     pw.Widget buildHeader(pw.Context context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,
           children: [
-            pw.Text(
-              branchName.isNotEmpty ? branchName.toUpperCase() : 'SCHOOL',
-              style: pw.TextStyle(
-                font: boldFont,
-                fontSize: 14,
-                color: ReportTheme.primaryColor,
-              ),
-              textAlign: pw.TextAlign.center,
-            ),
-            if (branchAddress.isNotEmpty) ...[
-              pw.SizedBox(height: 2),
-              pw.Text(
-                branchAddress,
-                style: pw.TextStyle(
-                  font: regularFont,
-                  fontSize: 8,
-                  color: ReportTheme.secondaryColor,
+            pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
+                if (logoBytes != null)
+                  pw.Container(
+                    width: 48,
+                    height: 48,
+                    alignment: pw.Alignment.center,
+                    child: pw.Image(
+                      pw.MemoryImage(logoBytes),
+                      fit: pw.BoxFit.contain,
+                    ),
+                  )
+                else
+                  pw.Container(
+                    width: 48,
+                    height: 48,
+                    decoration: const pw.BoxDecoration(
+                      color: ReportTheme.primaryColor,
+                      borderRadius:
+                          pw.BorderRadius.all(pw.Radius.circular(4)),
+                    ),
+                    alignment: pw.Alignment.center,
+                    child: pw.Text(
+                      'AH',
+                      style: const pw.TextStyle(
+                        fontSize: 16,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.white,
+                      ),
+                    ),
+                  ),
+                pw.SizedBox(width: 10),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        branchName.isNotEmpty
+                            ? branchName.toUpperCase()
+                            : 'SCHOOL',
+                        style: pw.TextStyle(
+                          font: boldFont,
+                          fontSize: 16,
+                          color: ReportTheme.primaryColor,
+                        ),
+                      ),
+                      if (branchAddress.isNotEmpty) ...[
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          branchAddress,
+                          style: pw.TextStyle(
+                            font: regularFont,
+                            fontSize: 8.5,
+                            color: ReportTheme.secondaryColor,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
-                textAlign: pw.TextAlign.center,
-              ),
-            ],
+              ],
+            ),
             pw.SizedBox(height: 8),
             pw.Container(
               padding: const pw.EdgeInsets.symmetric(
@@ -348,7 +415,7 @@ class Vb6TableReportPdf {
                       title.toUpperCase(),
                       style: pw.TextStyle(
                         font: boldFont,
-                        fontSize: 10,
+                        fontSize: 11,
                         color: ReportTheme.primaryColor,
                       ),
                     ),
@@ -359,7 +426,7 @@ class Vb6TableReportPdf {
                         subtitle,
                         style: pw.TextStyle(
                           font: boldFont,
-                          fontSize: 9,
+                          fontSize: 9.5,
                           color: ReportTheme.secondaryColor,
                         ),
                         textAlign: pw.TextAlign.right,
@@ -393,15 +460,15 @@ class Vb6TableReportPdf {
           pw.Container(
             alignment: pw.Alignment.centerLeft,
             padding: const pw.EdgeInsets.symmetric(
-              vertical: 3,
-              horizontal: 6,
+              vertical: 4,
+              horizontal: 8,
             ),
             decoration: const pw.BoxDecoration(
               color: ReportTheme.bannerBgColor,
               border: pw.Border(
                 bottom: pw.BorderSide(
                   color: ReportTheme.primaryColor,
-                  width: 0.8,
+                  width: 1.0,
                 ),
               ),
             ),
@@ -409,7 +476,7 @@ class Vb6TableReportPdf {
               group.bandTitle,
               style: pw.TextStyle(
                 font: boldFont,
-                fontSize: 9,
+                fontSize: breakPerGroup ? 13.5 : 9.0,
                 color: ReportTheme.primaryColor,
               ),
             ),
@@ -426,10 +493,10 @@ class Vb6TableReportPdf {
       doc.addPage(
         pw.MultiPage(
           pageFormat: activeFormat,
-          margin: const pw.EdgeInsets.fromLTRB(
-            kMarginLeft,
+          margin: pw.EdgeInsets.fromLTRB(
+            effectiveMarginLeft,
             kMarginTop,
-            kMarginRight,
+            effectiveMarginRight,
             kMarginBottom,
           ),
           // Whole-school rosters legitimately span many pages; the package
@@ -450,10 +517,10 @@ class Vb6TableReportPdf {
       doc.addPage(
         pw.MultiPage(
           pageFormat: activeFormat,
-          margin: const pw.EdgeInsets.fromLTRB(
-            kMarginLeft,
+          margin: pw.EdgeInsets.fromLTRB(
+            effectiveMarginLeft,
             kMarginTop,
-            kMarginRight,
+            effectiveMarginRight,
             kMarginBottom,
           ),
           // Whole-school rosters legitimately span many pages; the package
@@ -471,12 +538,12 @@ class Vb6TableReportPdf {
         doc.addPage(
           pw.MultiPage(
             pageFormat: activeFormat,
-            margin: const pw.EdgeInsets.fromLTRB(
-            kMarginLeft,
-            kMarginTop,
-            kMarginRight,
-            kMarginBottom,
-          ),
+            margin: pw.EdgeInsets.fromLTRB(
+              effectiveMarginLeft,
+              kMarginTop,
+              effectiveMarginRight,
+              kMarginBottom,
+            ),
             // Whole-school rosters legitimately span many pages; the package
             // default of 20 pages is far too low for institutional reports.
             maxPages: 2000,

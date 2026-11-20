@@ -117,10 +117,16 @@ class ReportRequest {
   /// preview modal (Portrait/Landscape). Null = use [naturalPageFormat].
   final PdfPageFormat? pageFormatOverride;
 
+  final PdfPageFormat? _naturalPageFormat;
+
   /// The page format this report naturally renders in (its shipped default,
   /// e.g. A4 for a biodata, A4-landscape for a wide ledger). Used as the
   /// orientation fallback when no override is set.
-  final PdfPageFormat naturalPageFormat;
+  PdfPageFormat get naturalPageFormat =>
+      _naturalPageFormat ??
+      (type == ReportType.feeVoucher
+          ? PdfPageFormat.a4.landscape
+          : PdfPageFormat.a4);
 
   /// Phase K-6 Run 2b: when true, the preview modal's Portrait/Landscape
   /// toggle renders DISABLED (the report's column layout is designed for
@@ -141,9 +147,10 @@ class ReportRequest {
     this.customBytesBuilder,
     this.customBytesBuilderWithFormat,
     this.pageFormatOverride,
-    this.naturalPageFormat = PdfPageFormat.a4,
+    PdfPageFormat? naturalPageFormat,
     this.locksOrientation = false,
-  });
+    // ignore: prefer_initializing_formals
+  }) : _naturalPageFormat = naturalPageFormat;
 
   ReportRequest copyWith({
     Future<Uint8List> Function()? customBytesBuilder,
@@ -167,7 +174,7 @@ class ReportRequest {
       pageFormatOverride: clearPageFormatOverride
           ? null
           : (pageFormatOverride ?? this.pageFormatOverride),
-      naturalPageFormat: naturalPageFormat ?? this.naturalPageFormat,
+      naturalPageFormat: naturalPageFormat ?? _naturalPageFormat,
       locksOrientation: locksOrientation ?? this.locksOrientation,
     );
   }

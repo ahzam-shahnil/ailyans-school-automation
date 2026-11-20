@@ -103,6 +103,10 @@ class DefaulterListPdfGenerator {
   static const double kMarginRight = 30;
   static const double kMarginBottom = 30;
 
+  // Run G: Tightened side margins for A4 portrait to maximize usable table width.
+  static const double kPortraitMarginLeft = 18;
+  static const double kPortraitMarginRight = 18;
+
   /// Printable content width for [format] under this generator's page
   /// margins: `pageFormat.width − marginLeft − marginRight`. Exposed so
   /// tests can assert every table's column budget stays inside it.
@@ -140,10 +144,10 @@ class DefaulterListPdfGenerator {
     doc.addPage(
       pw.MultiPage(
         pageFormat: activeFormat,
-        margin: const pw.EdgeInsets.fromLTRB(
-          kMarginLeft,
+        margin: pw.EdgeInsets.fromLTRB(
+          isPortrait ? kPortraitMarginLeft : kMarginLeft,
           kMarginTop,
-          kMarginRight,
+          isPortrait ? kPortraitMarginRight : kMarginRight,
           kMarginBottom,
         ),
         header: (context) => context.pageNumber == 1
@@ -261,8 +265,8 @@ class DefaulterListPdfGenerator {
               children: [
                 logoBytes != null
                     ? pw.Container(
-                        width: 26,
-                        height: 26,
+                        width: 48,
+                        height: 48,
                         alignment: pw.Alignment.center,
                         child: pw.Image(
                           pw.MemoryImage(logoBytes),
@@ -270,18 +274,18 @@ class DefaulterListPdfGenerator {
                         ),
                       )
                     : pw.Container(
-                        width: 26,
-                        height: 26,
+                        width: 48,
+                        height: 48,
                         decoration: const pw.BoxDecoration(
                           color: _navy,
                           borderRadius:
-                              pw.BorderRadius.all(pw.Radius.circular(2)),
+                              pw.BorderRadius.all(pw.Radius.circular(3)),
                         ),
                         alignment: pw.Alignment.center,
                         child: pw.Text(
                           'AH',
                           style: const pw.TextStyle(
-                            fontSize: 10,
+                            fontSize: 16,
                             fontWeight: pw.FontWeight.bold,
                             color: PdfColors.white,
                           ),
@@ -294,7 +298,7 @@ class DefaulterListPdfGenerator {
                     pw.Text(
                       branchName,
                       style: const pw.TextStyle(
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: pw.FontWeight.bold,
                         color: _navy,
                       ),
@@ -302,7 +306,7 @@ class DefaulterListPdfGenerator {
                     pw.SizedBox(height: 1),
                     pw.Text(
                       branchAddress,
-                      style: const pw.TextStyle(fontSize: 8, color: _slate600),
+                      style: const pw.TextStyle(fontSize: 8.5, color: _slate600),
                     ),
                     pw.SizedBox(height: 1),
                     pw.Text(
@@ -327,7 +331,7 @@ class DefaulterListPdfGenerator {
                 pw.Text(
                   'INSTITUTIONAL FEE DEFAULTERS ROSTER',
                   style: const pw.TextStyle(
-                    fontSize: 12,
+                    fontSize: 13.5,
                     fontWeight: pw.FontWeight.bold,
                     color: _navy,
                   ),
@@ -336,7 +340,7 @@ class DefaulterListPdfGenerator {
                 pw.SizedBox(height: 2),
                 pw.Text(
                   'Session: ${summary.sessionYr}  |  Scope: ${summary.classFilter ?? "All Classes"} (${summary.reportMonth})',
-                  style: const pw.TextStyle(fontSize: 8, color: _slate600),
+                  style: const pw.TextStyle(fontSize: 8.5, color: _slate600),
                   textAlign: pw.TextAlign.center,
                 ),
               ],
@@ -417,8 +421,8 @@ class DefaulterListPdfGenerator {
             children: [
               logoBytes != null
                   ? pw.Container(
-                      width: 24,
-                      height: 24,
+                      width: 48,
+                      height: 48,
                       alignment: pw.Alignment.center,
                       child: pw.Image(
                         pw.MemoryImage(logoBytes),
@@ -426,24 +430,24 @@ class DefaulterListPdfGenerator {
                       ),
                     )
                   : pw.Container(
-                      width: 24,
-                      height: 24,
+                      width: 48,
+                      height: 48,
                       decoration: const pw.BoxDecoration(
                         color: _navy,
                         borderRadius:
-                            pw.BorderRadius.all(pw.Radius.circular(2)),
+                            pw.BorderRadius.all(pw.Radius.circular(3)),
                       ),
                       alignment: pw.Alignment.center,
                       child: pw.Text(
                         'AH',
                         style: const pw.TextStyle(
-                          fontSize: 9,
+                          fontSize: 16,
                           fontWeight: pw.FontWeight.bold,
                           color: PdfColors.white,
                         ),
                       ),
                     ),
-              pw.SizedBox(width: 8),
+              pw.SizedBox(width: 10),
               pw.Expanded(
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -451,7 +455,7 @@ class DefaulterListPdfGenerator {
                     pw.Text(
                       branchName,
                       style: const pw.TextStyle(
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: pw.FontWeight.bold,
                         color: _navy,
                       ),
@@ -460,7 +464,7 @@ class DefaulterListPdfGenerator {
                     pw.Text(
                       '$branchAddress  |  Phone: $phone  |  Principal: $principal',
                       style: const pw.TextStyle(
-                        fontSize: 7,
+                        fontSize: 8,
                         color: _slate600,
                       ),
                       maxLines: 1,
@@ -476,7 +480,7 @@ class DefaulterListPdfGenerator {
           pw.Text(
             'INSTITUTIONAL FEE DEFAULTERS ROSTER',
             style: const pw.TextStyle(
-              fontSize: 11,
+              fontSize: 13.5,
               fontWeight: pw.FontWeight.bold,
               color: _navy,
             ),
@@ -487,7 +491,7 @@ class DefaulterListPdfGenerator {
           // Line 3: session/scope
           pw.Text(
             'Session: ${summary.sessionYr}  |  Scope: ${summary.classFilter ?? "All Classes"} (${summary.reportMonth})',
-            style: const pw.TextStyle(fontSize: 7.5, color: _slate600),
+            style: const pw.TextStyle(fontSize: 8, color: _slate600),
             textAlign: pw.TextAlign.center,
           ),
           pw.SizedBox(height: 5),
@@ -499,21 +503,21 @@ class DefaulterListPdfGenerator {
               border: pw.Border.all(color: _dangerBorder, width: 0.8),
               borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
             ),
-            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 pw.Text(
                   'FEE RECOVERY REGISTER  |  Defaulters: ${summary.totalDefaulters} Vouchers (${summary.uniqueStudents} Stu)',
                   style: const pw.TextStyle(
-                    fontSize: 7.5,
+                    fontSize: 9.5,
                     fontWeight: pw.FontWeight.bold,
                     color: _dangerText,
                   ),
                 ),
                 pw.Text(
                   'Generated: ${ReportTheme.formatDate(summary.generatedAt)}',
-                  style: const pw.TextStyle(fontSize: 7, color: _slate600),
+                  style: const pw.TextStyle(fontSize: 8.5, color: _slate600),
                 ),
               ],
             ),
@@ -584,21 +588,31 @@ class DefaulterListPdfGenerator {
               '${summary.totalDefaulters} Records',
               valueColor: summary.totalDefaulters > 0 ? _dangerText : null,
               isBold: true,
+              valueSize: 13,
             ),
             _kpiCell(
               'DEFAULTING STUDENTS',
               '${summary.uniqueStudents} Students',
               valueColor: _slate900,
               isBold: true,
+              valueSize: 13,
             ),
-            _kpiCell('CLASS COHORT', summary.classFilter ?? 'All Classes'),
-            _kpiCell('BILLING PERIOD', summary.reportMonth),
+            _kpiCell(
+              'CLASS COHORT',
+              summary.classFilter ?? 'All Classes',
+              valueSize: 13,
+            ),
+            _kpiCell(
+              'BILLING PERIOD',
+              summary.reportMonth,
+              valueSize: 13,
+            ),
             _kpiCell(
               'TOTAL ARREARS RECEIVABLE',
               'Rs. ${ReportTheme.formatCurrency(summary.totalOutstanding)}',
               valueColor: _dangerText,
               isBold: true,
-              valueSize: 9.5,
+              valueSize: 13,
             ),
           ],
         ),
@@ -611,7 +625,7 @@ class DefaulterListPdfGenerator {
     String value, {
     PdfColor? valueColor,
     bool isBold = false,
-    double valueSize = 8,
+    double valueSize = 13,
   }) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -621,9 +635,9 @@ class DefaulterListPdfGenerator {
         children: [
           pw.Text(
             label,
-            style: const pw.TextStyle(fontSize: 6, color: PdfColors.grey600),
+            style: const pw.TextStyle(fontSize: 6.5, color: PdfColors.grey600),
           ),
-          pw.SizedBox(height: 1),
+          pw.SizedBox(height: 2),
           pw.Text(
             value,
             style: pw.TextStyle(
@@ -643,7 +657,7 @@ class DefaulterListPdfGenerator {
       children: [
         // Group Header Banner (identical for both orientations)
         pw.Container(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
           margin: const pw.EdgeInsets.only(top: 4),
           decoration: const pw.BoxDecoration(
             color: _navy,
@@ -658,7 +672,7 @@ class DefaulterListPdfGenerator {
               pw.Text(
                 'COHORT: ${group.classLabel.toUpperCase()}  (${group.rows.length} Unpaid Vouchers)',
                 style: const pw.TextStyle(
-                  fontSize: 8,
+                  fontSize: 11.5,
                   fontWeight: pw.FontWeight.bold,
                   color: PdfColors.white,
                 ),
@@ -666,7 +680,7 @@ class DefaulterListPdfGenerator {
               pw.Text(
                 'Class Arrears Subtotal: Rs. ${ReportTheme.formatCurrency(group.subtotal)}',
                 style: const pw.TextStyle(
-                  fontSize: 8,
+                  fontSize: 11.5,
                   fontWeight: pw.FontWeight.bold,
                   color: PdfColors.white,
                 ),
@@ -676,34 +690,34 @@ class DefaulterListPdfGenerator {
         ),
 
         if (isPortrait)
-          // Phase K-6 Run B: 8-column portrait layout.
-          // Fixed budget 350pt (#20+Roll26+RegID36+Contact70+Voucher64+Due70+Bal64),
-          // Student/Father merged into one flex column (~175pt at 525pt printable).
+          // Run G: 8-column portrait layout with enlarged 9.5pt typography.
+          // Side margins 18/18pt -> 559.28pt printable width.
+          // Fixed budget: 22+28+42+76+68+78+74 = 388pt. Flex (~171pt) for Student/Father.
           pw.Table(
             border: pw.TableBorder.all(color: _borderColor, width: 0.5),
             columnWidths: const {
-              0: pw.FixedColumnWidth(20),  // #
-              1: pw.FixedColumnWidth(26),  // Roll
-              2: pw.FixedColumnWidth(36),  // Reg ID
-              3: pw.FlexColumnWidth(1),    // Student / Father (stacked, ~175pt)
-              4: pw.FixedColumnWidth(70),  // Contact Mobile
-              5: pw.FixedColumnWidth(64),  // Voucher / Month (stacked)
-              6: pw.FixedColumnWidth(70),  // Due Date / Status
-              7: pw.FixedColumnWidth(64),  // Balance (Rs)
+              0: pw.FixedColumnWidth(22),  // #
+              1: pw.FixedColumnWidth(28),  // Roll
+              2: pw.FixedColumnWidth(42),  // Reg ID
+              3: pw.FlexColumnWidth(1),    // Student / Father (stacked, ~171pt)
+              4: pw.FixedColumnWidth(76),  // Contact Mobile
+              5: pw.FixedColumnWidth(68),  // Voucher / Month (stacked)
+              6: pw.FixedColumnWidth(78),  // Due Date / Status
+              7: pw.FixedColumnWidth(74),  // Balance (Rs)
             },
             children: [
               // Table Header Row
               pw.TableRow(
                 decoration: const pw.BoxDecoration(color: _headerBg),
                 children: [
-                  _thCell('#', alignment: pw.Alignment.center),
-                  _thCell('Roll', alignment: pw.Alignment.center),
-                  _thCell('Reg ID', alignment: pw.Alignment.center),
-                  _thCell('Student / Father'),
-                  _thCell('Contact'),
-                  _thCell('Voucher\nMonth'),
-                  _thCell('Due / Status', alignment: pw.Alignment.center),
-                  _thCell('Balance', alignment: pw.Alignment.centerRight),
+                  _thCell('#', alignment: pw.Alignment.center, fontSize: 9.5),
+                  _thCell('Roll', alignment: pw.Alignment.center, fontSize: 9.5),
+                  _thCell('Reg ID', alignment: pw.Alignment.center, fontSize: 9.5),
+                  _thCell('Student / Father', fontSize: 9.5),
+                  _thCell('Contact', fontSize: 9.5),
+                  _thCell('Voucher\nMonth', fontSize: 9.0),
+                  _thCell('Due / Status', alignment: pw.Alignment.center, fontSize: 9.5),
+                  _thCell('Balance', alignment: pw.Alignment.centerRight, fontSize: 9.5),
                 ],
               ),
 
@@ -721,6 +735,7 @@ class DefaulterListPdfGenerator {
                   _subtotalLabelCell(
                     '${group.classLabel} Subtotal (${group.rows.length} Vouchers)',
                     isBold: true,
+                    fontSize: 9.5,
                   ),
                   _subtotalLabelCell(''),
                   _subtotalLabelCell(''),
@@ -734,7 +749,7 @@ class DefaulterListPdfGenerator {
                     child: pw.Text(
                       'Rs. ${ReportTheme.formatCurrency(group.subtotal)}',
                       style: const pw.TextStyle(
-                        fontSize: 7.5,
+                        fontSize: 9.5,
                         fontWeight: pw.FontWeight.bold,
                         color: _dangerText,
                       ),
@@ -905,87 +920,106 @@ class DefaulterListPdfGenerator {
       decoration: pw.BoxDecoration(color: bg),
       children: [
         // Col 0: #
-        _tdCell('${index + 1}', alignment: pw.Alignment.center),
+        _tdCell('${index + 1}', alignment: pw.Alignment.center, fontSize: 9.5),
         // Col 1: Roll
         _tdCell(
           row.rollNo != null ? row.rollNo.toString().padLeft(2, '0') : '-',
           alignment: pw.Alignment.center,
+          fontSize: 9.5,
         ),
         // Col 2: Reg ID
-        _tdCell('${row.stuRegId}', alignment: pw.Alignment.center),
+        _tdCell('${row.stuRegId}', alignment: pw.Alignment.center, fontSize: 9.5),
         // Col 3: Student / Father stacked
         pw.Container(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2.5),
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
                 row.studentName,
+                maxLines: 1,
                 style: const pw.TextStyle(
-                  fontSize: 7.5,
+                  fontSize: 9.5,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
               if (row.fatherName != null && row.fatherName!.isNotEmpty)
                 pw.Text(
                   row.fatherName!,
+                  maxLines: 1,
                   style: const pw.TextStyle(
-                    fontSize: 6.5,
+                    fontSize: 8.5,
                     color: _slate600,
                   ),
                 ),
             ],
           ),
         ),
-        // Col 4: Contact
+        // Col 4: Contact (single line)
         _tdCell(
           row.mobile1 != null && row.mobile1!.trim().isNotEmpty
               ? row.mobile1!.trim()
               : '-',
+          fontSize: 9.5,
+          maxLines: 1,
         ),
         // Col 5: Voucher ID / Month stacked
         pw.Container(
-          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+          padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2.5),
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Text(
                 row.voucherMasId,
-                style: const pw.TextStyle(fontSize: 7, color: _slate900),
+                maxLines: 1,
+                style: const pw.TextStyle(
+                  fontSize: 9.0,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _slate900,
+                ),
               ),
               pw.Text(
                 row.forMonth,
-                style: const pw.TextStyle(fontSize: 6.5, color: _slate600),
+                maxLines: 1,
+                style: const pw.TextStyle(fontSize: 8.0, color: _slate600),
               ),
             ],
           ),
         ),
-        // Col 6: Due / Status
+        // Col 6: Due / Status (single line)
         _tdCell(
           statusStr,
           alignment: pw.Alignment.center,
           color: isOverdue ? _dangerText : null,
           isBold: isOverdue,
+          fontSize: 9.5,
+          maxLines: 1,
         ),
-        // Col 7: Balance
+        // Col 7: Balance (single line)
         _tdCell(
           ReportTheme.formatCurrency(row.balance),
           alignment: pw.Alignment.centerRight,
           color: _dangerText,
           isBold: true,
+          fontSize: 9.5,
+          maxLines: 1,
         ),
       ],
     );
   }
 
-  static pw.Widget _thCell(String text, {pw.Alignment? alignment}) {
+  static pw.Widget _thCell(
+    String text, {
+    pw.Alignment? alignment,
+    double fontSize = 7,
+  }) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
       alignment: alignment ?? pw.Alignment.centerLeft,
       child: pw.Text(
         text,
-        style: const pw.TextStyle(
-          fontSize: 7,
+        style: pw.TextStyle(
+          fontSize: fontSize,
           fontWeight: pw.FontWeight.bold,
           color: _navy,
         ),
@@ -998,14 +1032,17 @@ class DefaulterListPdfGenerator {
     pw.Alignment? alignment,
     bool isBold = false,
     PdfColor? color,
+    double fontSize = 7.5,
+    int? maxLines,
   }) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       alignment: alignment ?? pw.Alignment.centerLeft,
       child: pw.Text(
         text,
+        maxLines: maxLines,
         style: pw.TextStyle(
-          fontSize: 7.5,
+          fontSize: fontSize,
           fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: color ?? PdfColors.black,
         ),
@@ -1013,14 +1050,18 @@ class DefaulterListPdfGenerator {
     );
   }
 
-  static pw.Widget _subtotalLabelCell(String text, {bool isBold = false}) {
+  static pw.Widget _subtotalLabelCell(
+    String text, {
+    bool isBold = false,
+    double fontSize = 7.5,
+  }) {
     return pw.Container(
       padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3.5),
       alignment: pw.Alignment.centerLeft,
       child: pw.Text(
         text,
         style: pw.TextStyle(
-          fontSize: 7.5,
+          fontSize: fontSize,
           fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
           color: _slate900,
         ),

@@ -6,6 +6,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/fee_receipt_view.dart';
+import '../../repositories/logo_repository.dart';
 import 'fee_head_display.dart';
 
 // ============================================================================
@@ -1679,58 +1680,125 @@ class ThreeCopyVouchersPdf {
     required String bankBranch,
     required String bankAcctNo,
     PdfPageFormat? pageFormat,
+    Uint8List? logoBytes,
   }) async {
+    logoBytes ??= await LogoRepository.loadLogoBytes();
     final doc = pw.Document(
       title: 'Fee Vouchers - $branchName',
       author: branchName,
     );
+    final activeFormat = pageFormat ?? PdfPageFormat.a4.landscape;
+    final isLandscape = activeFormat.width > activeFormat.height;
+
     for (final v in vouchers) {
-      doc.addPage(
-        pw.Page(
-          pageFormat: pageFormat ?? PdfPageFormat.a4.landscape,
-          margin: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          build: (ctx) => pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: [
-              pw.Expanded(
-                child: _buildCopy(
-                  v,
-                  'BANK COPY',
-                  branchName,
-                  branchAddress,
-                  bankName,
-                  bankBranch,
-                  bankAcctNo,
+      if (isLandscape) {
+        doc.addPage(
+          pw.Page(
+            pageFormat: activeFormat,
+            margin: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            build: (ctx) => pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                pw.Expanded(
+                  flex: 1,
+                  child: _buildLandscapeCopy(
+                    v: v,
+                    copyLabel: 'BANK COPY',
+                    branchName: branchName,
+                    branchAddress: branchAddress,
+                    bankName: bankName,
+                    bankBranch: bankBranch,
+                    bankAcctNo: bankAcctNo,
+                    logoBytes: logoBytes,
+                  ),
                 ),
-              ),
-              _buildCutSeparator(),
-              pw.Expanded(
-                child: _buildCopy(
-                  v,
-                  'SCHOOL COPY',
-                  branchName,
-                  branchAddress,
-                  bankName,
-                  bankBranch,
-                  bankAcctNo,
+                _buildCutSeparator(),
+                pw.Expanded(
+                  flex: 1,
+                  child: _buildLandscapeCopy(
+                    v: v,
+                    copyLabel: 'SCHOOL COPY',
+                    branchName: branchName,
+                    branchAddress: branchAddress,
+                    bankName: bankName,
+                    bankBranch: bankBranch,
+                    bankAcctNo: bankAcctNo,
+                    logoBytes: logoBytes,
+                  ),
                 ),
-              ),
-              _buildCutSeparator(),
-              pw.Expanded(
-                child: _buildCopy(
-                  v,
-                  'STUDENT COPY',
-                  branchName,
-                  branchAddress,
-                  bankName,
-                  bankBranch,
-                  bankAcctNo,
+                _buildCutSeparator(),
+                pw.Expanded(
+                  flex: 1,
+                  child: _buildLandscapeCopy(
+                    v: v,
+                    copyLabel: 'STUDENT COPY',
+                    branchName: branchName,
+                    branchAddress: branchAddress,
+                    bankName: bankName,
+                    bankBranch: bankBranch,
+                    bankAcctNo: bankAcctNo,
+                    logoBytes: logoBytes,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        // Portrait: 3 copies stacked vertically in a pw.Column
+        doc.addPage(
+          pw.Page(
+            pageFormat: activeFormat,
+            margin: const pw.EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            build: (ctx) => pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                pw.Expanded(
+                  flex: 1,
+                  child: _buildPortraitCopy(
+                    v: v,
+                    copyLabel: 'BANK COPY',
+                    branchName: branchName,
+                    branchAddress: branchAddress,
+                    bankName: bankName,
+                    bankBranch: bankBranch,
+                    bankAcctNo: bankAcctNo,
+                    logoBytes: logoBytes,
+                  ),
+                ),
+                _buildHorizontalCutSeparator(),
+                pw.Expanded(
+                  flex: 1,
+                  child: _buildPortraitCopy(
+                    v: v,
+                    copyLabel: 'SCHOOL COPY',
+                    branchName: branchName,
+                    branchAddress: branchAddress,
+                    bankName: bankName,
+                    bankBranch: bankBranch,
+                    bankAcctNo: bankAcctNo,
+                    logoBytes: logoBytes,
+                  ),
+                ),
+                _buildHorizontalCutSeparator(),
+                pw.Expanded(
+                  flex: 1,
+                  child: _buildPortraitCopy(
+                    v: v,
+                    copyLabel: 'STUDENT COPY',
+                    branchName: branchName,
+                    branchAddress: branchAddress,
+                    bankName: bankName,
+                    bankBranch: bankBranch,
+                    bankAcctNo: bankAcctNo,
+                    logoBytes: logoBytes,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
     }
     return doc.save();
   }
@@ -1751,29 +1819,683 @@ class ThreeCopyVouchersPdf {
     );
   }
 
-  static pw.Widget _buildCopy(
-    FeeReceiptView v,
-    String copyLabel,
-    String branchName,
-    String branchAddress,
-    String bankName,
-    String bankBranch,
-    String bankAcctNo,
-  ) {
+  static pw.Widget _buildHorizontalCutSeparator() {
+    return pw.Container(
+      height: 8,
+      margin: const pw.EdgeInsets.symmetric(vertical: 2),
+      decoration: const pw.BoxDecoration(
+        border: pw.Border(
+          bottom: pw.BorderSide(
+            color: PdfColors.grey400,
+            width: 0.6,
+            style: pw.BorderStyle.dashed,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 3-line school header with logo
+  static pw.Widget _buildSchoolHeader({
+    required String branchName,
+    required String branchAddress,
+    Uint8List? logoBytes,
+  }) {
+    final nameUpper = branchName.toUpperCase();
+    String line1 = "AILYAN'S";
+    String line2 = "HIGHER SECONDARY SCHOOL";
+    String line3 = "MIANWALI";
+
+    if (!nameUpper.contains('AILYAN')) {
+      final words = branchName.trim().split(RegExp(r'\s+'));
+      if (words.length >= 3) {
+        line1 = words.first.toUpperCase();
+        line2 = words.sublist(1).join(' ').toUpperCase();
+      } else {
+        line1 = branchName.toUpperCase();
+        line2 = 'HIGHER SECONDARY SCHOOL';
+      }
+      line3 = branchAddress.isNotEmpty && branchAddress != '-'
+          ? branchAddress.toUpperCase()
+          : 'MIANWALI';
+    }
+
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.center,
+      children: [
+        if (logoBytes != null)
+          pw.Container(
+            width: 34,
+            height: 34,
+            margin: const pw.EdgeInsets.only(right: 6),
+            alignment: pw.Alignment.center,
+            child: pw.Image(
+              pw.MemoryImage(logoBytes),
+              fit: pw.BoxFit.contain,
+            ),
+          )
+        else
+          pw.Container(
+            width: 34,
+            height: 34,
+            margin: const pw.EdgeInsets.only(right: 6),
+            decoration: const pw.BoxDecoration(
+              color: ReportTheme.primaryColor,
+              borderRadius: pw.BorderRadius.all(pw.Radius.circular(3)),
+            ),
+            alignment: pw.Alignment.center,
+            child: pw.Text(
+              'AH',
+              style: const pw.TextStyle(
+                fontSize: 12,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+              ),
+            ),
+          ),
+        pw.Expanded(
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            mainAxisSize: pw.MainAxisSize.min,
+            children: [
+              pw.Text(
+                line1,
+                style: const pw.TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: ReportTheme.primaryColor,
+                ),
+              ),
+              pw.Text(
+                line2,
+                style: const pw.TextStyle(
+                  fontSize: 11.0,
+                  fontWeight: pw.FontWeight.bold,
+                  color: ReportTheme.primaryColor,
+                ),
+              ),
+              pw.Text(
+                line3,
+                style: const pw.TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: ReportTheme.primaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildCopyHeaderBar(String copyLabel) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+      decoration: const pw.BoxDecoration(
+        color: ReportTheme.primaryColor,
+        borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            'FEE CHALLAN',
+            style: const pw.TextStyle(
+              fontSize: 8.5,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.white,
+              letterSpacing: 0.5,
+            ),
+          ),
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+            decoration: const pw.BoxDecoration(
+              color: PdfColors.amber600,
+              borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
+            ),
+            child: pw.Text(
+              copyLabel,
+              style: const pw.TextStyle(
+                fontSize: 8.5,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildBankDetailsBox({
+    required String bankName,
+    required String bankBranch,
+    required String branchName,
+    required String bankAcctNo,
+  }) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+      decoration: pw.BoxDecoration(
+        color: ReportTheme.bannerBgColor,
+        border: pw.Border.all(color: PdfColors.blue200, width: 0.5),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Bank: $bankName',
+                style: const pw.TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: pw.FontWeight.bold,
+                  color: ReportTheme.primaryColor,
+                ),
+              ),
+              if (bankBranch.isNotEmpty)
+                pw.Text(
+                  'Branch: $bankBranch',
+                  style: const pw.TextStyle(
+                    fontSize: 9.0,
+                    color: PdfColors.grey700,
+                  ),
+                ),
+            ],
+          ),
+          pw.SizedBox(height: 1.5),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'A/C Title: $branchName',
+                style: const pw.TextStyle(fontSize: 9.0),
+                maxLines: 1,
+              ),
+              pw.RichText(
+                text: pw.TextSpan(
+                  children: [
+                    const pw.TextSpan(
+                      text: 'A/C No: ',
+                      style: pw.TextStyle(
+                        fontSize: 9.0,
+                        color: PdfColors.grey800,
+                      ),
+                    ),
+                    pw.TextSpan(
+                      text: bankAcctNo,
+                      style: const pw.TextStyle(
+                        fontSize: 10.0,
+                        fontWeight: pw.FontWeight.bold,
+                        color: ReportTheme.primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildVoucherMetaStrip(FeeReceiptView v) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(
+          color: ReportTheme.borderRuleColor,
+          width: 0.5,
+        ),
+        color: PdfColors.grey50,
+      ),
+      child: pw.Column(
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Challan No: ${v.voucherMasId}',
+                style: const pw.TextStyle(
+                  fontSize: 11.0,
+                  fontWeight: pw.FontWeight.bold,
+                  color: ReportTheme.primaryColor,
+                ),
+              ),
+              pw.Text(
+                'Month: ${v.forMonth}',
+                style: const pw.TextStyle(
+                  fontSize: 10.0,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 1.5),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Issue: ${ReportTheme.formatDate(v.issueDate)}',
+                style: const pw.TextStyle(
+                  fontSize: 9.5,
+                  color: PdfColors.grey700,
+                ),
+              ),
+              pw.Text(
+                'Due Date: ${ReportTheme.formatDate(v.dueDate)}',
+                style: const pw.TextStyle(
+                  fontSize: 10.0,
+                  fontWeight: pw.FontWeight.bold,
+                  color: ReportTheme.dangerTextColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildStudentIdentityBox(FeeReceiptView v) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(
+          color: ReportTheme.borderRuleColor,
+          width: 0.5,
+        ),
+        color: PdfColors.white,
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Expanded(
+                child: pw.Text(
+                  'Student: ${v.studentName}',
+                  style: const pw.TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                ),
+              ),
+              pw.Text(
+                'Reg #: ${v.stuRegId}',
+                style: const pw.TextStyle(
+                  fontSize: 10.0,
+                  fontWeight: pw.FontWeight.bold,
+                  color: ReportTheme.primaryColor,
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 1.5),
+          pw.Text(
+            'Father: ${v.fatherName.isEmpty ? "N/A" : v.fatherName}',
+            style: const pw.TextStyle(
+              fontSize: 9.5,
+              color: PdfColors.grey800,
+            ),
+            maxLines: 1,
+          ),
+          pw.SizedBox(height: 1.5),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Class: ${v.className ?? "Unknown"}-${v.sectionName ?? "A"}',
+                style: const pw.TextStyle(fontSize: 9.5),
+              ),
+              if (v.rollNo != null)
+                pw.Text(
+                  'Roll No: ${v.rollNo}',
+                  style: const pw.TextStyle(fontSize: 9.5),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildFeeParticularsTable(List<FeeReceiptLineItem> items) {
+    return pw.Table(
+      border: pw.TableBorder.all(
+        color: ReportTheme.borderRuleColor,
+        width: 0.5,
+      ),
+      columnWidths: const {
+        0: pw.FlexColumnWidth(3.2),
+        1: pw.FlexColumnWidth(1.8),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(
+            color: ReportTheme.tableHeaderBg,
+          ),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: 2.5,
+              ),
+              child: pw.Text(
+                'Fee Particulars',
+                style: const pw.TextStyle(
+                  fontSize: 10.0,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white,
+                ),
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: 2.5,
+              ),
+              child: pw.Text(
+                'Amount (Rs.)',
+                style: const pw.TextStyle(
+                  fontSize: 10.0,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
+            ),
+          ],
+        ),
+        ...items.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final li = entry.value;
+          final isEven = idx % 2 == 0;
+          return pw.TableRow(
+            decoration: pw.BoxDecoration(
+              color: isEven ? PdfColors.white : ReportTheme.tableRowAltBg,
+            ),
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 2,
+                ),
+                child: pw.Text(
+                  FeeHeadDisplay.of(li.headName),
+                  style: const pw.TextStyle(fontSize: 9.5),
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 4,
+                  vertical: 2,
+                ),
+                child: pw.Text(
+                  ReportTheme.formatCurrency(li.amount),
+                  style: const pw.TextStyle(fontSize: 9.5),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
+  static pw.Widget _buildFinancialSummary({
+    required int grossTotal,
+    required int discount,
+    required int arrearsAmount,
+    required int netPayable,
+    required bool isFullyPaid,
+    DateTime? paidDate,
+    required int paidAmount,
+  }) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(
+          color: ReportTheme.borderRuleColor,
+          width: 0.5,
+        ),
+        color: PdfColors.grey50,
+      ),
+      child: pw.Column(
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Gross Total:', style: const pw.TextStyle(fontSize: 9.5)),
+              pw.Text(
+                'Rs. ${ReportTheme.formatCurrency(grossTotal)}',
+                style: const pw.TextStyle(fontSize: 9.5),
+              ),
+            ],
+          ),
+          if (discount > 0) ...[
+            pw.SizedBox(height: 1),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Less Concession / Discount:',
+                  style: const pw.TextStyle(
+                    fontSize: 9.5,
+                    color: ReportTheme.dangerTextColor,
+                  ),
+                ),
+                pw.Text(
+                  '- Rs. ${ReportTheme.formatCurrency(discount)}',
+                  style: const pw.TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: ReportTheme.dangerTextColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (arrearsAmount > 0) ...[
+            pw.SizedBox(height: 1),
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Arrears / Prior Balance:',
+                  style: const pw.TextStyle(
+                    fontSize: 9.5,
+                    color: ReportTheme.dangerTextColor,
+                  ),
+                ),
+                pw.Text(
+                  '+ Rs. ${ReportTheme.formatCurrency(arrearsAmount)}',
+                  style: const pw.TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: ReportTheme.dangerTextColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          pw.Divider(
+            color: ReportTheme.primaryColor,
+            height: 4,
+            thickness: 0.5,
+          ),
+          pw.Container(
+            padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: const pw.BoxDecoration(
+              color: ReportTheme.bannerBgColor,
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Text(
+                  'Net Payable (Within Due Date):',
+                  style: const pw.TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: pw.FontWeight.bold,
+                    color: ReportTheme.primaryColor,
+                  ),
+                ),
+                pw.Text(
+                  'Rs. ${ReportTheme.formatCurrency(netPayable)}',
+                  style: const pw.TextStyle(
+                    fontSize: 11.0,
+                    fontWeight: pw.FontWeight.bold,
+                    color: ReportTheme.primaryColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isFullyPaid) ...[
+            pw.SizedBox(height: 2),
+            pw.Container(
+              padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+              decoration: const pw.BoxDecoration(color: PdfColors.green50),
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'PAID: ${ReportTheme.formatDate(paidDate)}',
+                    style: const pw.TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.green900,
+                    ),
+                  ),
+                  pw.Text(
+                    'Rs. ${ReportTheme.formatCurrency(paidAmount)}',
+                    style: const pw.TextStyle(
+                      fontSize: 9.5,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.green900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildDepositInstructions() {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            '- Fee must be deposited in cash on or before the due date.',
+            style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
+          ),
+          pw.Text(
+            '- A late surcharge applies if deposited after the due date.',
+            style: const pw.TextStyle(fontSize: 7.5, color: PdfColors.grey700),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildSignatures() {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: pw.CrossAxisAlignment.end,
+        children: [
+          pw.Column(
+            children: [
+              pw.Container(width: 80, height: 0.5, color: PdfColors.black),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                'Cashier Signature',
+                style: const pw.TextStyle(fontSize: 8.0, color: PdfColors.grey800),
+              ),
+            ],
+          ),
+          pw.Column(
+            children: [
+              pw.Container(width: 80, height: 0.5, color: PdfColors.black),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                'Bank Stamp / Officer',
+                style: const pw.TextStyle(fontSize: 8.0, color: PdfColors.grey800),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildBarcodeStrip(String voucherMasId) {
+    return pw.Container(
+      height: 19,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.grey100,
+        border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+      ),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            '|||| | ||| |||||| | || |||',
+            style: pw.TextStyle(
+              font: pw.Font.courier(),
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+              color: PdfColors.grey700,
+            ),
+          ),
+          pw.Text(
+            '* $voucherMasId *',
+            style: pw.TextStyle(
+              font: pw.Font.courier(),
+              fontSize: 8.5,
+              fontWeight: pw.FontWeight.bold,
+              letterSpacing: 1,
+              color: PdfColors.black,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildLandscapeCopy({
+    required FeeReceiptView v,
+    required String copyLabel,
+    required String branchName,
+    required String branchAddress,
+    required String bankName,
+    required String bankBranch,
+    required String bankAcctNo,
+    Uint8List? logoBytes,
+  }) {
     final arrearsAmount = v.lineItems
         .where((li) => li.headName.toLowerCase().contains('arrear'))
         .fold<int>(0, (sum, item) => sum + item.amount);
 
-    // Shot 6j: arrears already appears as its own '+ Arrears / Prior Balance'
-    // row in the financial summary, so it must NOT also be listed inside the
-    // Fee Particulars table (the user photo showed it printed twice).
-    // Gross Total therefore excludes the arrears line item so the printed
-    // math stays exact: Gross (excl. arrears) - Concession + Arrears = Net.
     final hasArrearsSummaryRow = arrearsAmount > 0;
     final particularsItems = hasArrearsSummaryRow
         ? v.lineItems
-              .where((li) => !li.headName.toLowerCase().contains('arrear'))
-              .toList()
+            .where((li) => !li.headName.toLowerCase().contains('arrear'))
+            .toList()
         : v.lineItems;
     final grossTotal = v.subtotal - (hasArrearsSummaryRow ? arrearsAmount : 0);
 
@@ -1786,607 +2508,125 @@ class ThreeCopyVouchersPdf {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.stretch,
         children: [
-          // 1. Copy Header Bar: Dark Blue with White text and copy badge
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: const pw.BoxDecoration(
-              color: ReportTheme.primaryColor,
-              borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
-            ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'FEE CHALLAN',
-                  style: const pw.TextStyle(
-                    fontSize: 7.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 5,
-                    vertical: 1.5,
-                  ),
-                  decoration: const pw.BoxDecoration(
-                    color: PdfColors.amber600,
-                    borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
-                  ),
-                  child: pw.Text(
-                    copyLabel,
-                    style: const pw.TextStyle(
-                      fontSize: 7.5,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.black,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          _buildCopyHeaderBar(copyLabel),
+          pw.SizedBox(height: 3),
+          _buildSchoolHeader(
+            branchName: branchName,
+            branchAddress: branchAddress,
+            logoBytes: logoBytes,
           ),
           pw.SizedBox(height: 3),
-
-          // 2. School Name and Address inside the copy block
-          pw.Center(
-            child: pw.Column(
-              children: [
-                pw.Text(
-                  branchName.toUpperCase(),
-                  style: const pw.TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: ReportTheme.primaryColor,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                  maxLines: 1,
-                ),
-                if (branchAddress.isNotEmpty) ...[
-                  pw.SizedBox(height: 1),
-                  pw.Text(
-                    branchAddress,
-                    style: const pw.TextStyle(
-                      fontSize: 6.5,
-                      color: PdfColors.grey700,
-                    ),
-                    textAlign: pw.TextAlign.center,
-                    maxLines: 1,
-                  ),
-                ],
-              ],
-            ),
+          _buildBarcodeStrip(v.voucherMasId),
+          pw.SizedBox(height: 3),
+          _buildBankDetailsBox(
+            bankName: bankName,
+            bankBranch: bankBranch,
+            branchName: branchName,
+            bankAcctNo: bankAcctNo,
           ),
           pw.SizedBox(height: 3),
-
-          // 3. Barcode Placeholder Container
-          pw.Container(
-            height: 19,
-            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.grey100,
-              border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
-            ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  '|||| | ||| |||||| | || |||',
-                  style: pw.TextStyle(
-                    font: pw.Font.courier(),
-                    fontSize: 8,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.grey700,
-                  ),
-                ),
-                pw.Text(
-                  '* ${v.voucherMasId} *',
-                  style: pw.TextStyle(
-                    font: pw.Font.courier(),
-                    fontSize: 7.5,
-                    fontWeight: pw.FontWeight.bold,
-                    letterSpacing: 1,
-                    color: PdfColors.black,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildVoucherMetaStrip(v),
           pw.SizedBox(height: 3),
-
-          // 4. Bank Details Box: Tinted Blue50
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-            decoration: pw.BoxDecoration(
-              color: ReportTheme.bannerBgColor,
-              border: pw.Border.all(color: PdfColors.blue200, width: 0.5),
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Bank: $bankName',
-                      style: const pw.TextStyle(
-                        fontSize: 7.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: ReportTheme.primaryColor,
-                      ),
-                    ),
-                    if (bankBranch.isNotEmpty)
-                      pw.Text(
-                        'Branch: $bankBranch',
-                        style: const pw.TextStyle(
-                          fontSize: 6.5,
-                          color: PdfColors.grey700,
-                        ),
-                      ),
-                  ],
-                ),
-                pw.SizedBox(height: 1.5),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'A/C Title: $branchName',
-                      style: const pw.TextStyle(fontSize: 6.5),
-                      maxLines: 1,
-                    ),
-                    pw.RichText(
-                      text: pw.TextSpan(
-                        children: [
-                          const pw.TextSpan(
-                            text: 'A/C No: ',
-                            style: pw.TextStyle(
-                              fontSize: 7,
-                              color: PdfColors.grey800,
-                            ),
-                          ),
-                          pw.TextSpan(
-                            text: bankAcctNo,
-                            style: const pw.TextStyle(
-                              fontSize: 7.5,
-                              fontWeight: pw.FontWeight.bold,
-                              color: ReportTheme.primaryColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          _buildStudentIdentityBox(v),
           pw.SizedBox(height: 3),
-
-          // 5. Voucher Metadata Strip (Challan No, Month, Issue, Due)
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(
-              horizontal: 5,
-              vertical: 2.5,
-            ),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(
-                color: ReportTheme.borderRuleColor,
-                width: 0.5,
-              ),
-              color: PdfColors.grey50,
-            ),
-            child: pw.Column(
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Challan No: ${v.voucherMasId}',
-                      style: const pw.TextStyle(
-                        fontSize: 7.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: ReportTheme.primaryColor,
-                      ),
-                    ),
-                    pw.Text(
-                      'Month: ${v.forMonth}',
-                      style: const pw.TextStyle(
-                        fontSize: 7.5,
-                        fontWeight: pw.FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 1.5),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Issue: ${ReportTheme.formatDate(v.issueDate)}',
-                      style: const pw.TextStyle(
-                        fontSize: 7,
-                        color: PdfColors.grey700,
-                      ),
-                    ),
-                    pw.Text(
-                      'Due Date: ${ReportTheme.formatDate(v.dueDate)}',
-                      style: const pw.TextStyle(
-                        fontSize: 7,
-                        fontWeight: pw.FontWeight.bold,
-                        color: ReportTheme.dangerTextColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+          _buildFeeParticularsTable(particularsItems),
           pw.SizedBox(height: 3),
-
-          // 6. Student Identity Box
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(
-                color: ReportTheme.borderRuleColor,
-                width: 0.5,
-              ),
-              color: PdfColors.white,
-            ),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Expanded(
-                      child: pw.Text(
-                        'Student: ${v.studentName}',
-                        style: const pw.TextStyle(
-                          fontSize: 7.5,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                      ),
-                    ),
-                    pw.Text(
-                      'Reg #: ${v.stuRegId}',
-                      style: const pw.TextStyle(
-                        fontSize: 7.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: ReportTheme.primaryColor,
-                      ),
-                    ),
-                  ],
-                ),
-                pw.SizedBox(height: 1.5),
-                pw.Text(
-                  'Father: ${v.fatherName.isEmpty ? "N/A" : v.fatherName}',
-                  style: const pw.TextStyle(
-                    fontSize: 6.5,
-                    color: PdfColors.grey800,
-                  ),
-                  maxLines: 1,
-                ),
-                pw.SizedBox(height: 1.5),
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Class: ${v.className ?? "Unknown"}-${v.sectionName ?? "A"}',
-                      style: const pw.TextStyle(fontSize: 6.5),
-                    ),
-                    if (v.rollNo != null)
-                      pw.Text(
-                        'Roll No: ${v.rollNo}',
-                        style: const pw.TextStyle(fontSize: 6.5),
-                      ),
-                  ],
-                ),
-              ],
-            ),
+          _buildFinancialSummary(
+            grossTotal: grossTotal,
+            discount: v.discount,
+            arrearsAmount: arrearsAmount,
+            netPayable: v.netPayable,
+            isFullyPaid: v.isFullyPaid,
+            paidDate: v.paidDate,
+            paidAmount: v.paidAmount,
           ),
-          pw.SizedBox(height: 3),
-
-          // 7. Fee Heads Table (Alternating rows, compact header)
-          pw.Table(
-            border: pw.TableBorder.all(
-              color: ReportTheme.borderRuleColor,
-              width: 0.5,
-            ),
-            columnWidths: const {
-              0: pw.FlexColumnWidth(3.2),
-              1: pw.FlexColumnWidth(1.8),
-            },
-            children: [
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(
-                  color: ReportTheme.tableHeaderBg,
-                ),
-                children: [
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 2.5,
-                    ),
-                    child: pw.Text(
-                      'Fee Particulars',
-                      style: const pw.TextStyle(
-                        fontSize: 7.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.white,
-                      ),
-                    ),
-                  ),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 2.5,
-                    ),
-                    child: pw.Text(
-                      'Amount (Rs.)',
-                      style: const pw.TextStyle(
-                        fontSize: 7.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: PdfColors.white,
-                      ),
-                      textAlign: pw.TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-              ...particularsItems.asMap().entries.map((entry) {
-                final idx = entry.key;
-                final li = entry.value;
-                final isEven = idx % 2 == 0;
-                return pw.TableRow(
-                  decoration: pw.BoxDecoration(
-                    color: isEven ? PdfColors.white : ReportTheme.tableRowAltBg,
-                  ),
-                  children: [
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                      child: pw.Text(
-                        FeeHeadDisplay.of(li.headName),
-                        style: const pw.TextStyle(fontSize: 7),
-                      ),
-                    ),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 2,
-                      ),
-                      child: pw.Text(
-                        ReportTheme.formatCurrency(li.amount),
-                        style: const pw.TextStyle(fontSize: 7),
-                        textAlign: pw.TextAlign.right,
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ],
-          ),
-          pw.SizedBox(height: 3),
-
-          // 8. Financial Summary (Totals, Concession, Arrears, Net Payable)
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(
-                color: ReportTheme.borderRuleColor,
-                width: 0.5,
-              ),
-              color: PdfColors.grey50,
-            ),
-            child: pw.Column(
-              children: [
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text(
-                      'Gross Total:',
-                      style: const pw.TextStyle(fontSize: 7.5),
-                    ),
-                    pw.Text(
-                      'Rs. ${ReportTheme.formatCurrency(grossTotal)}',
-                      style: const pw.TextStyle(fontSize: 7.5),
-                    ),
-                  ],
-                ),
-                if (v.discount > 0) ...[
-                  pw.SizedBox(height: 1),
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Text(
-                        'Less Concession / Discount:',
-                        style: const pw.TextStyle(
-                          fontSize: 7.5,
-                          color: ReportTheme.dangerTextColor,
-                        ),
-                      ),
-                      pw.Text(
-                        '- Rs. ${ReportTheme.formatCurrency(v.discount)}',
-                        style: const pw.TextStyle(
-                          fontSize: 7.5,
-                          fontWeight: pw.FontWeight.bold,
-                          color: ReportTheme.dangerTextColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                if (arrearsAmount > 0) ...[
-                  pw.SizedBox(height: 1),
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Text(
-                        'Arrears / Prior Balance:',
-                        style: const pw.TextStyle(
-                          fontSize: 7.5,
-                          color: ReportTheme.dangerTextColor,
-                        ),
-                      ),
-                      pw.Text(
-                        '+ Rs. ${ReportTheme.formatCurrency(arrearsAmount)}',
-                        style: const pw.TextStyle(
-                          fontSize: 7.5,
-                          fontWeight: pw.FontWeight.bold,
-                          color: ReportTheme.dangerTextColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                pw.Divider(
-                  color: ReportTheme.primaryColor,
-                  height: 4,
-                  thickness: 0.5,
-                ),
-                // Net Payable Highlight
-                pw.Container(
-                  padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
-                  ),
-                  decoration: const pw.BoxDecoration(
-                    color: ReportTheme.bannerBgColor,
-                  ),
-                  child: pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Text(
-                        'Net Payable (Within Due Date):',
-                        style: const pw.TextStyle(
-                          fontSize: 8,
-                          fontWeight: pw.FontWeight.bold,
-                          color: ReportTheme.primaryColor,
-                        ),
-                      ),
-                      pw.Text(
-                        'Rs. ${ReportTheme.formatCurrency(v.netPayable)}',
-                        style: const pw.TextStyle(
-                          fontSize: 8.5,
-                          fontWeight: pw.FontWeight.bold,
-                          color: ReportTheme.primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (v.isFullyPaid) ...[
-                  pw.SizedBox(height: 2),
-                  pw.Container(
-                    padding: const pw.EdgeInsets.symmetric(
-                      horizontal: 4,
-                      vertical: 1.5,
-                    ),
-                    decoration: const pw.BoxDecoration(
-                      color: PdfColors.green50,
-                    ),
-                    child: pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text(
-                          'PAID: ${ReportTheme.formatDate(v.paidDate)}',
-                          style: const pw.TextStyle(
-                            fontSize: 7,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.green900,
-                          ),
-                        ),
-                        pw.Text(
-                          'Rs. ${ReportTheme.formatCurrency(v.paidAmount)}',
-                          style: const pw.TextStyle(
-                            fontSize: 7,
-                            fontWeight: pw.FontWeight.bold,
-                            color: PdfColors.green900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          pw.SizedBox(height: 3),
-
-          // 9. Deposit Instructions
-          pw.Container(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  '- Fee must be deposited in cash on or before the due date.',
-                  style: const pw.TextStyle(
-                    fontSize: 6,
-                    color: PdfColors.grey700,
-                  ),
-                ),
-                pw.Text(
-                  '- A late surcharge applies if deposited after the due date.',
-                  style: const pw.TextStyle(
-                    fontSize: 6,
-                    color: PdfColors.grey700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // 10. Spacer pushes signatures to bottom of the copy
+          pw.SizedBox(height: 2),
+          _buildDepositInstructions(),
           pw.Spacer(),
+          _buildSignatures(),
+        ],
+      ),
+    );
+  }
 
-          // 11. Signatures
-          pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
+  static pw.Widget _buildPortraitCopy({
+    required FeeReceiptView v,
+    required String copyLabel,
+    required String branchName,
+    required String branchAddress,
+    required String bankName,
+    required String bankBranch,
+    required String bankAcctNo,
+    Uint8List? logoBytes,
+  }) {
+    final arrearsAmount = v.lineItems
+        .where((li) => li.headName.toLowerCase().contains('arrear'))
+        .fold<int>(0, (sum, item) => sum + item.amount);
+
+    final hasArrearsSummaryRow = arrearsAmount > 0;
+    final particularsItems = hasArrearsSummaryRow
+        ? v.lineItems
+            .where((li) => !li.headName.toLowerCase().contains('arrear'))
+            .toList()
+        : v.lineItems;
+    final grossTotal = v.subtotal - (hasArrearsSummaryRow ? arrearsAmount : 0);
+
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: ReportTheme.primaryColor, width: 0.8),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(2)),
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: [
+          // Left Column: Header + Logo + Bank + Student Identity
+          pw.Expanded(
+            flex: 11,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
               children: [
-                pw.Column(
-                  children: [
-                    pw.Container(
-                      width: 70,
-                      height: 0.5,
-                      color: PdfColors.black,
-                    ),
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      'Cashier Signature',
-                      style: const pw.TextStyle(
-                        fontSize: 6.5,
-                        color: PdfColors.grey800,
-                      ),
-                    ),
-                  ],
+                _buildCopyHeaderBar(copyLabel),
+                pw.SizedBox(height: 3),
+                _buildSchoolHeader(
+                  branchName: branchName,
+                  branchAddress: branchAddress,
+                  logoBytes: logoBytes,
                 ),
-                pw.Column(
-                  children: [
-                    pw.Container(
-                      width: 70,
-                      height: 0.5,
-                      color: PdfColors.black,
-                    ),
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      'Bank Stamp / Officer',
-                      style: const pw.TextStyle(
-                        fontSize: 6.5,
-                        color: PdfColors.grey800,
-                      ),
-                    ),
-                  ],
+                pw.SizedBox(height: 3),
+                _buildBankDetailsBox(
+                  bankName: bankName,
+                  bankBranch: bankBranch,
+                  branchName: branchName,
+                  bankAcctNo: bankAcctNo,
                 ),
+                pw.SizedBox(height: 3),
+                _buildStudentIdentityBox(v),
+              ],
+            ),
+          ),
+          pw.SizedBox(width: 8),
+          // Right Column: Metadata + Fees + Financial Summary + Signatures
+          pw.Expanded(
+            flex: 12,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                _buildVoucherMetaStrip(v),
+                pw.SizedBox(height: 2),
+                _buildFeeParticularsTable(particularsItems),
+                pw.SizedBox(height: 2),
+                _buildFinancialSummary(
+                  grossTotal: grossTotal,
+                  discount: v.discount,
+                  arrearsAmount: arrearsAmount,
+                  netPayable: v.netPayable,
+                  isFullyPaid: v.isFullyPaid,
+                  paidDate: v.paidDate,
+                  paidAmount: v.paidAmount,
+                ),
+                pw.Spacer(),
+                _buildSignatures(),
               ],
             ),
           ),

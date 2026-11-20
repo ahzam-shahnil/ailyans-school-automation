@@ -22,6 +22,7 @@ import 'package:school_automation/core/utils/teacher_attendance_register_pdf_gen
 import 'package:school_automation/core/utils/teacher_biodata_pdf_generator.dart';
 import 'package:school_automation/core/utils/voucher_pdf_generator.dart';
 import 'package:school_automation/models/fee_receipt_view.dart';
+import 'package:school_automation/repositories/logo_repository.dart';
 import 'package:school_automation/widgets/reports/report_definition.dart';
 
 // ---------------------------------------------------------------------------
@@ -246,6 +247,7 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
     final branchAddress = _safeBranchAddress();
 
     if (mode == 0) {
+      final logoBytes = await LogoRepository.loadLogoBytes();
       // Three-Copy Slips (one page per student, 3 columns: Student/School/Bank)
       return ThreeCopyVouchersPdf.generate(
         vouchers: vouchers,
@@ -254,6 +256,8 @@ class ReportPreviewNotifier extends StateNotifier<ReportPreviewState> {
         bankName: bankName,
         bankBranch: bankBranch,
         bankAcctNo: bankAcctNo,
+        pageFormat: activePageFormat,
+        logoBytes: logoBytes,
       );
     } else {
       // Cohort Ledger — summary table of all vouchers

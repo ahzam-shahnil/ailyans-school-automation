@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 
 import '../../models/student.dart';
+import '../../repositories/logo_repository.dart';
 import '../db/database.dart';
 import '../utils/date_parse.dart';
 import '../utils/vb6_table_report_pdf.dart';
@@ -1069,12 +1070,14 @@ Future<Uint8List> buildVb6ReportPdf({
   PdfPageFormat? pageFormat,
 }) async {
   final data = await fetchVb6ReportRows(reportId, filters);
+  final logoBytes = await LogoRepository.loadLogoBytes();
   return Vb6TableReportPdf.generate(
     title: title,
     subtitle: vb6ReportSubtitle(filters),
     branchName: branchName,
     branchAddress: branchAddress,
     pageFormat: pageFormat,
+    logoBytes: logoBytes,
     headers: data.headers,
     rows: data.rows,
     groups: data.groups,
