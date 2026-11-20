@@ -25,6 +25,7 @@ import '../../models/student.dart';
 import '../../models/student_enrollment.dart';
 import '../../models/student_voucher.dart';
 import '../../repositories/photo_repository.dart';
+import '../../widgets/camera_capture_dialog.dart';
 import '../../widgets/reports/report_definition.dart';
 import '../../widgets/reports/report_preview_modal.dart';
 
@@ -1075,11 +1076,49 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 96px Avatar / Photo
-          InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: () => _handlePhotoTap(student),
-            child: _buildAvatar(student),
+          // 96px Avatar / Photo + Actions
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                onTap: () => _handlePhotoTap(student),
+                child: _buildAvatar(student),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _uploadPhoto(student),
+                    icon: const Icon(Icons.file_upload_outlined, size: 12),
+                    label: const Text('Upload', style: TextStyle(fontSize: 10)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  OutlinedButton.icon(
+                    onPressed: () => _takePhoto(student),
+                    icon: const Icon(Icons.camera_alt_outlined, size: 12),
+                    label: const Text('Camera', style: TextStyle(fontSize: 10)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 3,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
           const SizedBox(width: AppSpacing.lg),
 
@@ -2662,11 +2701,13 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     );
   }
 
-  Future<void> _handlePhotoTap(Student student) async {
-    final source = await pickPhotoWithValidation(context);
-    if (source == null) return;
+  Future<void> _applyNewPhoto(Student student, String sourcePath) async {
     final repo = PhotoRepository();
-    final newPath = await repo.copyForStudent(student.stuRegId, source);
+    final newPath = await repo.copyForStudent(
+      student.stuRegId,
+      sourcePath,
+      studentName: student.fullName,
+    );
     if (newPath == null) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -2679,8 +2720,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       await saveStudentProfile(student.copyWith(photoPath: newPath));
       if (!mounted) return;
       ref.invalidate(studentProfileProvider(student.stuRegId));
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Photo updated')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo updated successfully')),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -2688,6 +2730,48 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         ).showSnackBar(SnackBar(content: Text('Failed to update photo: $e')));
       }
     }
+  }
+
+  Future<void> _uploadPhoto(Student student) async {
+    final source = await pickPhotoWithValidation(context);
+    if (source != null) {
+      await _applyNewPhoto(student, source);
+    }
+  }
+
+  Future<void> _takePhoto(Student student) async {
+    final source = await showCameraCaptureDialog(context);
+    if (source != null) {
+      await _applyNewPhoto(student, source);
+    }
+  }
+
+  Future<void> _handlePhotoTap(Student student) async {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.file_upload_outlined),
+              title: const Text('Upload Photo from File'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _uploadPhoto(student);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take Photo with Webcam'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _takePhoto(student);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildAvatar(Student student) {
@@ -3253,7 +3337,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       _responsiveFieldRow([
         _buildViewField(
           'Admitted In Class',
-          bundle.admittedClassName ?? 'Class ${student.admInClass ?? student.admClass ?? 13}',
+          bundle.admittedClassName ??
+              'Class ${student.admInClass ?? student.admClass ?? 13}',
         ),
         _buildViewField(
           'Current Enrolled Class',

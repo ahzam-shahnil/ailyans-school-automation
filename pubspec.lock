@@ -105,6 +105,62 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
+  camera:
+    dependency: "direct main"
+    description:
+      name: camera
+      sha256: "4a0863bc142f6fbfdca19161205574fd8a8f00d4753b48d214c4dfbdcc534c51"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.12.2"
+  camera_android_camerax:
+    dependency: transitive
+    description:
+      name: camera_android_camerax
+      sha256: daefacb4c2c575426772a83ac312b93e2c49c003224962cddab904426dc04dbc
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.7.6+2"
+  camera_avfoundation:
+    dependency: transitive
+    description:
+      name: camera_avfoundation
+      sha256: "971f7b4938ae761797dd667c078af92f1b6a1bb7760774c0cbcf9c9d4a14bdf1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.11.1"
+  camera_macos:
+    dependency: "direct main"
+    description:
+      name: camera_macos
+      sha256: "64e199368efb0dc12c5298819df98aada4fe2cc50a5d84997f7bf7d94edaa3f8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.1"
+  camera_platform_interface:
+    dependency: transitive
+    description:
+      name: camera_platform_interface
+      sha256: c22b8403d7925c6cc6a37fc0cf01f645c1400bdfb0e765f81373a3ac080d93e3
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.15.1"
+  camera_web:
+    dependency: transitive
+    description:
+      name: camera_web
+      sha256: "54183db5a296cf29478dd150d7685b761f9e8eeb4a11114bcbc2792adea7cb3b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.6"
+  camera_windows:
+    dependency: "direct main"
+    description:
+      name: camera_windows
+      sha256: "3d730f64bed259328029222bc8136c9c23a1b9f33e3b8acc5a2048317cc72f22"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.1"
   characters:
     dependency: transitive
     description:
@@ -302,6 +358,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  flutter_plugin_android_lifecycle:
+    dependency: transitive
+    description:
+      name: flutter_plugin_android_lifecycle
+      sha256: "3854fe5e3bff0b113c658f260b90c95dea17c92db0f2addeac2e343dd9969785"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.0.35"
   flutter_riverpod:
     dependency: "direct main"
     description:
@@ -377,7 +441,7 @@ packages:
     source: hosted
     version: "4.1.2"
   image:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: image
       sha256: "89ed75b2f8231fe676808c5564f9590d728024ded7ac782a7ed8474f1c95b72a"
@@ -917,6 +981,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.4"
+  stream_transform:
+    dependency: transitive
+    description:
+      name: stream_transform
+      sha256: a00e5f18bffc764f923e7dec1038527f7fe7a1791361a7117f0358193f13d53a
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.2"
   string_scanner:
     dependency: transitive
     description:

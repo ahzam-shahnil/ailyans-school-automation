@@ -1,10 +1,14 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../repositories/photo_repository.dart';
 import '../db/database.dart';
+
 import 'package:school_automation/core/sync/node_id_allocator.dart';
+
 import '../../models/student.dart';
 import 'clock_provider.dart';
 
@@ -99,8 +103,10 @@ class WizardDraft {
   /// Explicitly chosen Registration ID (sequential default, manual edit, or
   /// gap pick). Null falls back to NodeIdAllocator (offline node block).
   int? customRegId;
+
   /// Whether the Reg ID TextField is unlocked via [Edit Reg ID].
   bool isRegIdEditable;
+
   /// True after [GO] loads an existing student for editing (save = UPDATE).
   bool isEditingExisting;
 
@@ -384,18 +390,18 @@ class WizardDraftNotifier extends StateNotifier<WizardDraft> {
         'ORDER BY Stu_RegID DESC LIMIT 200',
       );
       if (rows.isEmpty) return const [];
-      final existing = rows
-          .map((r) => (r['Stu_RegID'] as num).toInt())
-          .toList()
+      final existing = rows.map((r) => (r['Stu_RegID'] as num).toInt()).toList()
         ..sort();
       final minId = existing.first;
       final maxId = existing.last;
       final present = existing.toSet();
 
       final gaps = <int>[];
-      for (int candidate = maxId - 1;
-          candidate > minId && gaps.length < 50;
-          candidate--) {
+      for (
+        int candidate = maxId - 1;
+        candidate > minId && gaps.length < 50;
+        candidate--
+      ) {
         if (present.contains(candidate)) continue;
         // Confirm the candidate is genuinely missing (zero rows = missing).
         final dup = await db.rawQuery(
@@ -442,7 +448,8 @@ class WizardDraftNotifier extends StateNotifier<WizardDraft> {
         }
       }
       final doAdmRaw = (r['DOAdmission'] as String?)?.trim();
-      final doAdmission = (doAdmRaw != null && doAdmRaw.isNotEmpty
+      final doAdmission =
+          (doAdmRaw != null && doAdmRaw.isNotEmpty
               ? DateTime.tryParse(doAdmRaw)
               : null) ??
           _now();
@@ -489,8 +496,7 @@ class WizardDraftNotifier extends StateNotifier<WizardDraft> {
         admClass: admClass,
         classSecId: classSecId,
         doAdmission: doAdmission,
-        discount:
-            ((r['Discount'] as num?)?.toDouble()) ?? 0.0,
+        discount: ((r['Discount'] as num?)?.toDouble()) ?? 0.0,
         vmDiscount: (r['VMDiscount'] as num?)?.toInt() ?? 0,
         fullDiscount: (r['FullDiscount'] as num?)?.toInt() == 1,
         remarks: r['Remarls'] as String?,
@@ -551,8 +557,7 @@ class SiblingInfo {
     this.mobile1,
   });
 
-  String get fullName =>
-      formatStudentFullName(nameFirst, nameMiddle, nameLast);
+  String get fullName => formatStudentFullName(nameFirst, nameMiddle, nameLast);
 
   String get initials {
     if (fullName.isEmpty) return 'ST';
@@ -859,10 +864,26 @@ Future<int> submitStudentAdmission(
     // 3. Handle photo copy if photoPath is provided
     String? finalPhotoPath;
     if (draft.photoPath != null && draft.photoPath!.isNotEmpty) {
+      final studentFullName = [
+        draft.nameFirst,
+        draft.nameMiddle,
+        draft.nameLast,
+      ].where((s) => s.trim().isNotEmpty).join(' ');
+
       finalPhotoPath = await PhotoRepository().copyForStudent(
         nextStuRegId,
         draft.photoPath!,
+        studentName: studentFullName,
       );
+
+      // If draft.photoPath was a staged temp file, clean it up after copying
+      if (draft.photoPath!.contains('temp_') &&
+          finalPhotoPath != draft.photoPath) {
+        try {
+          final tempF = File(draft.photoPath!);
+          if (await tempF.exists()) await tempF.delete();
+        } catch (_) {}
+      }
     }
 
     // 4. Format ISO dates
@@ -961,10 +982,7 @@ Future<int> submitStudentAdmission(
         if (activeEnroll.isNotEmpty) {
           await txn.update(
             'Student_Class',
-            {
-              'ClassID': draft.admInClass,
-              'ClassSecID': draft.classSecId ?? 25,
-            },
+            {'ClassID': draft.admInClass, 'ClassSecID': draft.classSecId ?? 25},
             where: 'Stu_RegID = ? AND Present = 1',
             whereArgs: [nextStuRegId],
           );

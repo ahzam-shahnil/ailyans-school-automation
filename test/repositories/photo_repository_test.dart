@@ -78,5 +78,49 @@ void main() {
         await expectLater(repo.deleteForStudent(4411), completes);
       },
     );
+
+    test('5. copyForStudent with studentName creates {stuRegId}_{SanitizedName}.jpg and removes legacy file', () async {
+      // First create legacy file
+      final legacy = File(
+        p.join(tempDir.path, 'Ailyans', 'photos', '4411.jpg'),
+      );
+      await legacy.parent.create(recursive: true);
+      await legacy.writeAsString('old-legacy');
+      expect(await legacy.exists(), isTrue);
+
+      final dummySource = File(p.join(tempDir.path, 'source_photo.jpg'));
+      await dummySource.writeAsString('sample');
+
+      final resultPath = await repo.copyForStudent(
+        4411,
+        dummySource.path,
+        studentName: 'Ajwa Mumtaz',
+      );
+
+      expect(resultPath, isNotNull);
+      expect(p.basename(resultPath!), '4411_Ajwa_Mumtaz.jpg');
+      expect(await File(resultPath).exists(), isTrue);
+      // Legacy file was purged
+      expect(await legacy.exists(), isFalse);
+
+      // deleteForStudent removes the sanitized file too
+      await repo.deleteForStudent(4411);
+      expect(await File(resultPath).exists(), isFalse);
+    });
+
+    test(
+      '6. stageTempPhoto creates temporary photo file in photos directory',
+      () async {
+        final dummySource = File(p.join(tempDir.path, 'source_photo.jpg'));
+        await dummySource.writeAsString('temp-sample');
+
+        final stagedPath = await repo.stageTempPhoto(dummySource.path);
+        expect(stagedPath, isNotNull);
+        final filename = p.basename(stagedPath!);
+        expect(filename, startsWith('temp_'));
+        expect(filename, endsWith('.jpg'));
+        expect(await File(stagedPath).exists(), isTrue);
+      },
+    );
   });
 }

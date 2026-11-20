@@ -17,6 +17,8 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/input_formatters.dart';
 import '../../core/utils/photo_picker.dart';
+import '../../repositories/photo_repository.dart';
+import '../../widgets/camera_capture_dialog.dart';
 import '../../models/school_class.dart';
 
 // Shot 1b — refined institutional palette for the admission wizard.
@@ -244,6 +246,15 @@ class _StudentRegistrationWizardState
 
   Future<void> _pickPhoto() async {
     final path = await pickPhotoWithValidation(context);
+    if (path != null) {
+      final staged = await PhotoRepository().stageTempPhoto(path);
+      ref.read(wizardDraftProvider.notifier).setPhotoPath(staged ?? path);
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    final path = await showCameraCaptureDialog(context);
     if (path != null) {
       ref.read(wizardDraftProvider.notifier).setPhotoPath(path);
       if (mounted) setState(() {});
@@ -666,9 +677,8 @@ class _StudentRegistrationWizardState
     _emerContMobileController.text = draft.emerContMobile ?? '';
     _pAddressController.text = draft.pAddress ?? '';
     _tAddressController.text = draft.tAddress ?? '';
-    _doAdmissionController.text = DateFormat(
-      'dd-MMM-yyyy',
-    ).format(draft.doAdmission);
+    _doAdmissionController.text = DateFormat('dd-MMM-yyyy')
+        .format(draft.doAdmission);
     _discountController.text = draft.discount.toStringAsFixed(0);
     _vmDiscountController.text = draft.vmDiscount.toString();
     _remarksController.text = draft.remarks ?? '';
@@ -757,9 +767,7 @@ class _StudentRegistrationWizardState
         enabled: draft.isRegIdEditable && !draft.isEditingExisting,
         keyboardType: TextInputType.number,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: AppTypography.monospace.copyWith(
-          color: AppColors.textPrimary,
-        ),
+        style: AppTypography.monospace.copyWith(color: AppColors.textPrimary),
         decoration: _wizardInputDecoration(
           dense: true,
           prefixText: '#',
@@ -879,8 +887,7 @@ class _StudentRegistrationWizardState
           child: CallbackShortcuts(
             bindings: {
               const SingleActivator(LogicalKeyboardKey.escape): _onCancel,
-              const SingleActivator(LogicalKeyboardKey.enter):
-                  _advanceOrSubmit,
+              const SingleActivator(LogicalKeyboardKey.enter): _advanceOrSubmit,
               const SingleActivator(LogicalKeyboardKey.enter, control: true):
                   _advanceOrSubmit,
             },
@@ -1272,11 +1279,7 @@ class _StudentRegistrationWizardState
         scrollDirection: Axis.horizontal,
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            leftContent,
-            const SizedBox(width: 8),
-            rightContent,
-          ],
+          children: [leftContent, const SizedBox(width: 8), rightContent],
         ),
       );
     }
@@ -1499,10 +1502,7 @@ class _StudentRegistrationWizardState
               ),
             ),
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 8),
-            trailing,
-          ],
+          if (trailing != null) ...[const SizedBox(width: 8), trailing],
         ],
       ),
     );
@@ -1582,16 +1582,7 @@ class _StudentRegistrationWizardState
                 optionalLabel: '(Optional)',
                 value: draft.bloodGroup,
                 hint: 'Select Blood Group',
-                items: const [
-                  'A+',
-                  'A-',
-                  'B+',
-                  'B-',
-                  'AB+',
-                  'AB-',
-                  'O+',
-                  'O-',
-                ],
+                items: const ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
                 onChanged: notifier.setBloodGroup,
               ),
             ),
@@ -1702,25 +1693,24 @@ class _StudentRegistrationWizardState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-        // Shot 6h: on desktop the photo picker is a compact 64px strip at
-        // the TOP of the card, so the 2-column field grid below gets 100%
-        // of the column width (no more 60px-crushed inputs). Mobile keeps
-        // the stacked full-size dropzone.
-        if (isMobile)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              identityFieldsColumn,
-              const SizedBox(height: AppSpacing.md),
-              photoColumn,
-            ],
-          )
-        else ...[
-          _buildCompactPhotoBar(draft.photoPath),
-          const SizedBox(height: AppSpacing.md),
-          identityFieldsColumn,
-        ],
+              // Shot 6h: on desktop the photo picker is a compact 64px strip at
+              // the TOP of the card, so the 2-column field grid below gets 100%
+              // of the column width (no more 60px-crushed inputs). Mobile keeps
+              // the stacked full-size dropzone.
+              if (isMobile)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    identityFieldsColumn,
+                    const SizedBox(height: AppSpacing.md),
+                    photoColumn,
+                  ],
+                )
+              else ...[
+                _buildCompactPhotoBar(draft.photoPath),
+                const SizedBox(height: AppSpacing.md),
+                identityFieldsColumn,
+              ],
             ],
           ),
         ),
@@ -1797,16 +1787,44 @@ class _StudentRegistrationWizardState
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Max 50 KB, JPEG or PNG',
+                      'Auto-compressed to 400×400 JPEG',
                       style: AppTypography.bodySmall.copyWith(
                         color: AppColors.textMuted,
                         fontSize: 11,
                       ),
                     ),
                     const SizedBox(height: 12),
-                    OutlinedButton(
-                      onPressed: _pickPhoto,
-                      child: const Text('Choose Photo'),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _pickPhoto,
+                          icon: const Icon(
+                            Icons.file_upload_outlined,
+                            size: 14,
+                          ),
+                          label: const Text('Choose Photo'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _takePhoto,
+                          icon: const Icon(Icons.camera_alt_outlined, size: 14),
+                          label: const Text('Camera'),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -1836,8 +1854,8 @@ class _StudentRegistrationWizardState
           child: Row(
             children: [
               Container(
-                width: 48,
-                height: 56,
+                width: 44,
+                height: 52,
                 clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
                   color: AppColors.surfaceRaised,
@@ -1852,14 +1870,14 @@ class _StudentRegistrationWizardState
                         color: AppColors.textMuted,
                       ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Student Photograph (Max 50 KB)',
+                      'Student Photograph',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.label.copyWith(
@@ -1879,14 +1897,36 @@ class _StudentRegistrationWizardState
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              OutlinedButton(
+              const SizedBox(width: 6),
+              OutlinedButton.icon(
                 onPressed: _pickPhoto,
+                icon: const Icon(Icons.file_upload_outlined, size: 14),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  minimumSize: const Size(0, 32),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  minimumSize: const Size(0, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: const Text('Choose Photo'),
+                label: const Text(
+                  'Choose Photo',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+              const SizedBox(width: 4),
+              FilledButton.icon(
+                onPressed: _takePhoto,
+                icon: const Icon(Icons.camera_alt_outlined, size: 14),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 4,
+                  ),
+                  minimumSize: const Size(0, 30),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                label: const Text('Camera', style: TextStyle(fontSize: 12)),
               ),
               if (hasPhoto)
                 IconButton(
@@ -1934,94 +1974,94 @@ class _StudentRegistrationWizardState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                label: 'Father / Guardian Name *',
-                controller: _fNameController,
-                focusNode: _fNameFocusNode,
-                hint: 'Enter father or legal guardian full name',
-                prefixIcon: Icons.person_outline,
-                onChanged: _onFNameChanged,
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Father / Guardian Name *',
+                      controller: _fNameController,
+                      focusNode: _fNameFocusNode,
+                      hint: 'Enter father or legal guardian full name',
+                      prefixIcon: Icons.person_outline,
+                      onChanged: _onFNameChanged,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Father CNIC *',
+                      controller: _cnicController,
+                      focusNode: _cnicFocusNode,
+                      hint: 'XXXXX-XXXXXXX-X',
+                      prefixIcon: Icons.badge_outlined,
+                      monospace: true,
+                      inputFormatters: const [CnicInputFormatter()],
+                      onChanged: _onCnicChanged,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildTextField(
-                label: 'Father CNIC *',
-                controller: _cnicController,
-                focusNode: _cnicFocusNode,
-                hint: 'XXXXX-XXXXXXX-X',
-                prefixIcon: Icons.badge_outlined,
-                monospace: true,
-                inputFormatters: const [CnicInputFormatter()],
-                onChanged: _onCnicChanged,
-              ),
-            ),
-          ],
-        ),
 
-        // Sibling Auto-Discovery Panel
-        siblingsAsync.when(
-          data: (siblings) {
-            if (siblings.isEmpty) return const SizedBox.shrink();
-            return _buildSiblingPanel(siblings);
-          },
-          loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
-        ),
+              // Sibling Auto-Discovery Panel
+              siblingsAsync.when(
+                data: (siblings) {
+                  if (siblings.isEmpty) return const SizedBox.shrink();
+                  return _buildSiblingPanel(siblings);
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
 
-        SizedBox(height: _wizardRowGap),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                label: 'Occupation',
-                optionalLabel: '(Optional)',
-                controller: _occupationController,
-                hint: 'e.g. Civil Servant, Businessman, Teacher',
-                prefixIcon: Icons.work_outline,
-                onChanged: notifier.setOccupation,
+              SizedBox(height: _wizardRowGap),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Occupation',
+                      optionalLabel: '(Optional)',
+                      controller: _occupationController,
+                      hint: 'e.g. Civil Servant, Businessman, Teacher',
+                      prefixIcon: Icons.work_outline,
+                      onChanged: notifier.setOccupation,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Previous School',
+                      optionalLabel: '(Optional)',
+                      controller: _pSchoolController,
+                      hint: 'Name of last school attended, if any',
+                      prefixIcon: Icons.school_outlined,
+                      onChanged: notifier.setPSchool,
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildTextField(
-                label: 'Previous School',
-                optionalLabel: '(Optional)',
-                controller: _pSchoolController,
-                hint: 'Name of last school attended, if any',
-                prefixIcon: Icons.school_outlined,
-                onChanged: notifier.setPSchool,
+              SizedBox(height: _wizardRowGap),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Previous Class',
+                      optionalLabel: '(Optional)',
+                      controller: _pClassController,
+                      hint: 'Highest class grade completed',
+                      onChanged: notifier.setPClass,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'SLC Certificate #',
+                      optionalLabel: '(Optional)',
+                      controller: _slCertificateController,
+                      hint: 'Previous School Leaving Certificate ref',
+                      onChanged: notifier.setSLCertificate,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
-        SizedBox(height: _wizardRowGap),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                label: 'Previous Class',
-                optionalLabel: '(Optional)',
-                controller: _pClassController,
-                hint: 'Highest class grade completed',
-                onChanged: notifier.setPClass,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildTextField(
-                label: 'SLC Certificate #',
-                optionalLabel: '(Optional)',
-                controller: _slCertificateController,
-                hint: 'Previous School Leaving Certificate ref',
-                onChanged: notifier.setSLCertificate,
-              ),
-            ),
-          ],
-        ),
             ],
           ),
         ),
@@ -2201,139 +2241,140 @@ class _StudentRegistrationWizardState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                label: 'Mobile 1 * (SMS notifications)',
-                controller: _mobile1Controller,
-                focusNode: _mobile1FocusNode,
-                hint: '0300-1234567',
-                prefixIcon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
-                inputFormatters: const [MobileInputFormatter()],
-                onChanged: notifier.setMobile1,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildTextField(
-                label: 'Mobile 2',
-                optionalLabel: '(Optional)',
-                controller: _mobile2Controller,
-                hint: '0321-7654321',
-                prefixIcon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
-                inputFormatters: const [MobileInputFormatter()],
-                onChanged: notifier.setMobile2,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                label: 'Emergency Contact Name',
-                optionalLabel: '(Optional)',
-                controller: _emerContNameController,
-                hint: 'Designated emergency contact person name',
-                onChanged: notifier.setEmerContName,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildTextField(
-                label: 'Emergency Contact Mobile',
-                optionalLabel: '(Optional)',
-                controller: _emerContMobileController,
-                hint: '0345-7654321',
-                keyboardType: TextInputType.phone,
-                inputFormatters: const [MobileInputFormatter()],
-                onChanged: notifier.setEmerContMobile,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        _buildTextField(
-          label: 'Permanent Address',
-          optionalLabel: '(Optional)',
-          controller: _pAddressController,
-          hint: 'House number, street, mohallah/village, tehsil, district',
-          // Shot 6h: 2-line addresses on desktop keep the whole Contact
-          // card above the fold.
-          maxLines: isMobile ? 3 : 2,
-          onChanged: notifier.setPAddress,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        if (isMobile)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Present Address (Optional)',
-                style: AppTypography.label.copyWith(
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              TextButton.icon(
-                icon: const Icon(Icons.copy, size: 14),
-                label: const Text('Copy from Permanent'),
-                onPressed: _copyFromPermanent,
-              ),
-            ],
-          )
-        else
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Present Address (Optional)',
-                  style: AppTypography.label.copyWith(
-                    color: AppColors.textPrimary,
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Mobile 1 * (SMS notifications)',
+                      controller: _mobile1Controller,
+                      focusNode: _mobile1FocusNode,
+                      hint: '0300-1234567',
+                      prefixIcon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: const [MobileInputFormatter()],
+                      onChanged: notifier.setMobile1,
+                    ),
                   ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Mobile 2',
+                      optionalLabel: '(Optional)',
+                      controller: _mobile2Controller,
+                      hint: '0321-7654321',
+                      prefixIcon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: const [MobileInputFormatter()],
+                      onChanged: notifier.setMobile2,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Emergency Contact Name',
+                      optionalLabel: '(Optional)',
+                      controller: _emerContNameController,
+                      hint: 'Designated emergency contact person name',
+                      onChanged: notifier.setEmerContName,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Emergency Contact Mobile',
+                      optionalLabel: '(Optional)',
+                      controller: _emerContMobileController,
+                      hint: '0345-7654321',
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: const [MobileInputFormatter()],
+                      onChanged: notifier.setEmerContMobile,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              _buildTextField(
+                label: 'Permanent Address',
+                optionalLabel: '(Optional)',
+                controller: _pAddressController,
+                hint:
+                    'House number, street, mohallah/village, tehsil, district',
+                // Shot 6h: 2-line addresses on desktop keep the whole Contact
+                // card above the fold.
+                maxLines: isMobile ? 3 : 2,
+                onChanged: notifier.setPAddress,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              if (isMobile)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Present Address (Optional)',
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.copy, size: 14),
+                      label: const Text('Copy from Permanent'),
+                      onPressed: _copyFromPermanent,
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Present Address (Optional)',
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      icon: const Icon(Icons.copy, size: 14),
+                      label: const Text('Copy from Permanent'),
+                      onPressed: _copyFromPermanent,
+                    ),
+                  ],
                 ),
+              const SizedBox(height: 4),
+              TextField(
+                controller: _tAddressController,
+                maxLines: isMobile ? 3 : 2,
+                style: AppTypography.body.copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _kInkPrimary,
+                ),
+                decoration: _wizardInputDecoration(
+                  hint: 'Leave blank if same as permanent residential address',
+                  dense: !isMobile,
+                  contentPadding: isMobile
+                      ? null
+                      : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                ),
+                onChanged: notifier.setTAddress,
               ),
-              TextButton.icon(
-                icon: const Icon(Icons.copy, size: 14),
-                label: const Text('Copy from Permanent'),
-                onPressed: _copyFromPermanent,
-              ),
-            ],
-          ),
-        const SizedBox(height: 4),
-        TextField(
-          controller: _tAddressController,
-          maxLines: isMobile ? 3 : 2,
-          style: AppTypography.body.copyWith(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: _kInkPrimary,
-          ),
-          decoration: _wizardInputDecoration(
-            hint: 'Leave blank if same as permanent residential address',
-            dense: !isMobile,
-            contentPadding: isMobile
-                ? null
-                : const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-          ),
-          onChanged: notifier.setTAddress,
-        ),
-          // Shot 1d: on desktop the remarks field lives in the Contact card
-          // (column 3) to free vertical space in column 2.
-          if (ResponsiveBreakpoints.isDesktop(context)) ...[
-            const SizedBox(height: AppSpacing.md),
-            _buildTextField(
-              label: 'Administrative Remarks & Notes',
-              optionalLabel: '(Optional)',
-              controller: _remarksController,
-              hint: 'General administrative notes...',
-              maxLines: 2,
-              onChanged: notifier.setRemarks,
-            ),
-          ],
+              // Shot 1d: on desktop the remarks field lives in the Contact card
+              // (column 3) to free vertical space in column 2.
+              if (ResponsiveBreakpoints.isDesktop(context)) ...[
+                const SizedBox(height: AppSpacing.md),
+                _buildTextField(
+                  label: 'Administrative Remarks & Notes',
+                  optionalLabel: '(Optional)',
+                  controller: _remarksController,
+                  hint: 'General administrative notes...',
+                  maxLines: 2,
+                  onChanged: notifier.setRemarks,
+                ),
+              ],
             ],
           ),
         ),
@@ -2387,244 +2428,247 @@ class _StudentRegistrationWizardState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-        // Class & Section dropdowns
-        Row(
-          children: [
-            Expanded(
-              child: classesAsync.when(
-                data: (classes) {
-                  return _buildDropdownField<int>(
-                    label: 'Admission In Class *',
-                    value: draft.admInClass,
-                    hint: 'Select Admission Class',
-                    items: classes.map((c) => c.classId).toList(),
-                    itemLabels: {for (final c in classes) c.classId: c.cName},
-                    onChanged: (val) {
-                      notifier.setAdmInClass(val);
-                      // Auto select first section for this class if available
-                      sectionsAsync.whenData((sections) {
-                        final classSections = sections
-                            .where((s) => s.classId == val)
-                            .toList();
-                        if (classSections.isNotEmpty) {
-                          notifier.setClassSecId(
-                            classSections.first.classSecId,
-                          );
-                        }
-                      });
-                    },
-                  );
-                },
-                loading: () => const SizedBox.shrink(),
-                error: (e, _) => Text('Error loading classes: $e'),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: sectionsAsync.when(
-                data: (sections) {
-                  final filteredSections = draft.admInClass != null
-                      ? sections
-                            .where((s) => s.classId == draft.admInClass)
-                            .toList()
-                      : <ClassSec>[];
-
-                  return _buildDropdownField<int>(
-                    label: 'Assigned Section *',
-                    value:
-                        filteredSections.any(
-                          (s) => s.classSecId == draft.classSecId,
-                        )
-                        ? draft.classSecId
-                        : (filteredSections.isNotEmpty
-                              ? filteredSections.first.classSecId
-                              : null),
-                    hint: 'Select Section',
-                    items: filteredSections.map((s) => s.classSecId).toList(),
-                    itemLabels: {
-                      for (final s in filteredSections)
-                        s.classSecId: 'Section ${s.secName}',
-                    },
-                    onChanged: notifier.setClassSecId,
-                  );
-                },
-                loading: () => const SizedBox.shrink(),
-                error: (e, _) => Text('Error loading sections: $e'),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: _wizardRowGap),
-
-        Row(
-          children: [
-            Expanded(
-              child: _buildDatePickerField(
-                label: 'Official Date of Admission *',
-                controller: _doAdmissionController,
-                hint: 'Select admission date',
-                onTap: _pickAdmissionDate,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: _buildTextField(
-                label: 'Tuition Concession (Rs.)',
-                controller: _discountController,
-                hint: '0',
-                keyboardType: TextInputType.number,
-                prefixText: 'Rs. ',
-                onChanged: (val) {
-                  final d = double.tryParse(val) ?? 0.0;
-                  notifier.setDiscount(d);
-                },
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: _wizardRowGap),
-
-        Row(
-          children: [
-            Expanded(
-              child: _buildTextField(
-                label: 'Voucher Adjustment (Rs.)',
-                controller: _vmDiscountController,
-                hint: '0',
-                keyboardType: TextInputType.number,
-                prefixText: 'Rs. ',
-                onChanged: (val) {
-                  final v = int.tryParse(val) ?? 0;
-                  notifier.setVmDiscount(v);
-                },
-              ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              // Class & Section dropdowns
+              Row(
                 children: [
-                  // Shot 1b: high-visibility waiver toggle container.
-                  Container(
-                    decoration: BoxDecoration(
-                      color: draft.fullDiscount
-                          ? _kEmeraldTintStrong
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: draft.fullDiscount
-                            ? _kEmerald
-                            : _kInputBorderRest,
-                        width: 1.5,
-                      ),
+                  Expanded(
+                    child: classesAsync.when(
+                      data: (classes) {
+                        return _buildDropdownField<int>(
+                          label: 'Admission In Class *',
+                          value: draft.admInClass,
+                          hint: 'Select Admission Class',
+                          items: classes.map((c) => c.classId).toList(),
+                          itemLabels: {
+                            for (final c in classes) c.classId: c.cName,
+                          },
+                          onChanged: (val) {
+                            notifier.setAdmInClass(val);
+                            // Auto select first section for this class if available
+                            sectionsAsync.whenData((sections) {
+                              final classSections = sections
+                                  .where((s) => s.classId == val)
+                                  .toList();
+                              if (classSections.isNotEmpty) {
+                                notifier.setClassSecId(
+                                  classSections.first.classSecId,
+                                );
+                              }
+                            });
+                          },
+                        );
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (e, _) => Text('Error loading classes: $e'),
                     ),
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: CheckboxListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                        ),
-                        title: Text(
-                          '100% Full Fee Waiver Concession',
-                          style: AppTypography.label.copyWith(
-                            color: _kInkPrimary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        value: draft.fullDiscount,
-                        onChanged: (val) {
-                          notifier.setFullDiscount(val ?? false);
-                        },
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: sectionsAsync.when(
+                      data: (sections) {
+                        final filteredSections = draft.admInClass != null
+                            ? sections
+                                  .where((s) => s.classId == draft.admInClass)
+                                  .toList()
+                            : <ClassSec>[];
+
+                        return _buildDropdownField<int>(
+                          label: 'Assigned Section *',
+                          value:
+                              filteredSections.any(
+                                (s) => s.classSecId == draft.classSecId,
+                              )
+                              ? draft.classSecId
+                              : (filteredSections.isNotEmpty
+                                    ? filteredSections.first.classSecId
+                                    : null),
+                          hint: 'Select Section',
+                          items: filteredSections
+                              .map((s) => s.classSecId)
+                              .toList(),
+                          itemLabels: {
+                            for (final s in filteredSections)
+                              s.classSecId: 'Section ${s.secName}',
+                          },
+                          onChanged: notifier.setClassSecId,
+                        );
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (e, _) => Text('Error loading sections: $e'),
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
-        ),
+              SizedBox(height: _wizardRowGap),
 
-        // Full discount warning box
-        if (draft.fullDiscount) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: AppColors.surfaceSubtle,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: AppColors.statusWarningBorder),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.warning_amber_rounded,
-                  size: 16,
-                  color: AppColors.statusWarningText,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '100% fee waiver — no vouchers will be generated for this student.',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.statusWarningText,
-                      fontWeight: FontWeight.w600,
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDatePickerField(
+                      label: 'Official Date of Admission *',
+                      controller: _doAdmissionController,
+                      hint: 'Select admission date',
+                      onTap: _pickAdmissionDate,
                     ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Tuition Concession (Rs.)',
+                      controller: _discountController,
+                      hint: '0',
+                      keyboardType: TextInputType.number,
+                      prefixText: 'Rs. ',
+                      onChanged: (val) {
+                        final d = double.tryParse(val) ?? 0.0;
+                        notifier.setDiscount(d);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: _wizardRowGap),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      label: 'Voucher Adjustment (Rs.)',
+                      controller: _vmDiscountController,
+                      hint: '0',
+                      keyboardType: TextInputType.number,
+                      prefixText: 'Rs. ',
+                      onChanged: (val) {
+                        final v = int.tryParse(val) ?? 0;
+                        notifier.setVmDiscount(v);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Shot 1b: high-visibility waiver toggle container.
+                        Container(
+                          decoration: BoxDecoration(
+                            color: draft.fullDiscount
+                                ? _kEmeraldTintStrong
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: draft.fullDiscount
+                                  ? _kEmerald
+                                  : _kInputBorderRest,
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: CheckboxListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              title: Text(
+                                '100% Full Fee Waiver Concession',
+                                style: AppTypography.label.copyWith(
+                                  color: _kInkPrimary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              value: draft.fullDiscount,
+                              onChanged: (val) {
+                                notifier.setFullDiscount(val ?? false);
+                              },
+                              controlAffinity: ListTileControlAffinity.leading,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+
+              // Full discount warning box
+              if (draft.fullDiscount) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceSubtle,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: AppColors.statusWarningBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        size: 16,
+                        color: AppColors.statusWarningText,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '100% fee waiver — no vouchers will be generated for this student.',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.statusWarningText,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
 
-        // Shot 1d: on desktop the remarks field moves to the Contact card
-        // (column 3) so the waiver toggle + emerald fee banner stay above
-        // the fold. Mobile keeps it inside the Academic Placement card.
-        if (!ResponsiveBreakpoints.isDesktop(context)) ...[
-          const SizedBox(height: AppSpacing.md),
-          _buildTextField(
-            label: 'Administrative Remarks & Notes',
-            optionalLabel: '(Optional)',
-            controller: _remarksController,
-            hint: 'General administrative notes...',
-            helperText: 'Max: 250 chars',
-            maxLines: ResponsiveBreakpoints.isMobile(context) ? 3 : 2,
-            onChanged: notifier.setRemarks,
-          ),
-        ],
-
-        // Fee Preview Card
-        SizedBox(height: _wizardRowGap),
-        if (draft.admInClass != null)
-          _buildFeePreviewCard(draft.admInClass!)
-        else
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(AppRadius.md),
-              border: Border.all(color: _kInputBorderRest, width: 1.5),
-            ),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.calculate_outlined,
-                  size: 18,
-                  color: _kInputBorderRest,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Select a class above to calculate estimated monthly fee preview.',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textMuted,
-                    ),
-                  ),
+              // Shot 1d: on desktop the remarks field moves to the Contact card
+              // (column 3) so the waiver toggle + emerald fee banner stay above
+              // the fold. Mobile keeps it inside the Academic Placement card.
+              if (!ResponsiveBreakpoints.isDesktop(context)) ...[
+                const SizedBox(height: AppSpacing.md),
+                _buildTextField(
+                  label: 'Administrative Remarks & Notes',
+                  optionalLabel: '(Optional)',
+                  controller: _remarksController,
+                  hint: 'General administrative notes...',
+                  helperText: 'Max: 250 chars',
+                  maxLines: ResponsiveBreakpoints.isMobile(context) ? 3 : 2,
+                  onChanged: notifier.setRemarks,
                 ),
               ],
-            ),
-          ),
+
+              // Fee Preview Card
+              SizedBox(height: _wizardRowGap),
+              if (draft.admInClass != null)
+                _buildFeePreviewCard(draft.admInClass!)
+              else
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(AppRadius.md),
+                    border: Border.all(color: _kInputBorderRest, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calculate_outlined,
+                        size: 18,
+                        color: _kInputBorderRest,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Select a class above to calculate estimated monthly fee preview.',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
@@ -2750,11 +2794,7 @@ class _StudentRegistrationWizardState
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Icon(
-                    Icons.info_outline,
-                    size: 14,
-                    color: _kEmerald,
-                  ),
+                  const Icon(Icons.info_outline, size: 14, color: _kEmerald),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -2828,10 +2868,7 @@ class _StudentRegistrationWizardState
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  TextButton(
-                    onPressed: _onCancel,
-                    child: const Text('Cancel'),
-                  ),
+                  TextButton(onPressed: _onCancel, child: const Text('Cancel')),
                   if (currentStep > 0)
                     OutlinedButton.icon(
                       icon: const Icon(Icons.arrow_back, size: 16),
@@ -2849,10 +2886,7 @@ class _StudentRegistrationWizardState
             children: [
               Row(
                 children: [
-                  TextButton(
-                    onPressed: _onCancel,
-                    child: const Text('Cancel'),
-                  ),
+                  TextButton(onPressed: _onCancel, child: const Text('Cancel')),
                   const SizedBox(width: 8),
                   if (currentStep > 0)
                     OutlinedButton.icon(
@@ -3023,10 +3057,10 @@ class _StudentRegistrationWizardState
             inputFormatters: inputFormatters,
             style: (monospace ? AppTypography.monospace : AppTypography.body)
                 .copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: _kInkPrimary,
-            ),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _kInkPrimary,
+                ),
             decoration: _wizardInputDecoration(
               focused: focused,
               dense: !isMobile,
@@ -3155,7 +3189,8 @@ class _StudentRegistrationWizardState
               ),
             ),
             items: items.map((item) {
-              final labelText = itemLabels != null && itemLabels.containsKey(item)
+              final labelText =
+                  itemLabels != null && itemLabels.containsKey(item)
                   ? itemLabels[item]!
                   : item.toString();
               return DropdownMenuItem<T>(
