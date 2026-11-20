@@ -475,6 +475,8 @@ void main() {
         await tester.tap(find.text('System Information'));
         await tester.pumpAndSettle();
         expect(find.text('APPLICATION IDENTIFICATION'), findsOneWidget);
+        expect(find.text('App Version'), findsOneWidget);
+        expect(find.text('v2.0.0+2'), findsOneWidget);
 
         // 2. Test at 1440x780
         tester.view.physicalSize = const Size(1440, 780);
@@ -505,6 +507,8 @@ void main() {
         await tester.tap(find.text('System Information'));
         await tester.pumpAndSettle();
         expect(find.text('APPLICATION IDENTIFICATION'), findsOneWidget);
+        expect(find.text('App Version'), findsOneWidget);
+        expect(find.text('v2.0.0+2'), findsOneWidget);
 
         addTearDown(() {
           tester.view.resetPhysicalSize();

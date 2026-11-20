@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/db/backup_service.dart';
+import '../../core/providers/app_version_provider.dart';
 import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/backup_provider.dart';
 import '../../core/providers/session_provider.dart';
@@ -1411,30 +1412,35 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
                     ],
                   ),
                 )
-              : (ref.watch(shellMetadataProvider).valueOrNull?.logoBytes != null &&
-                      ref.watch(shellMetadataProvider).valueOrNull!.logoBytes!.isNotEmpty)
-                  ? Image.memory(
-                      ref.watch(shellMetadataProvider).valueOrNull!.logoBytes!,
-                      key: const ValueKey('school_logo_preview'),
-                      height: 96,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.business, size: 64),
-                          SizedBox(height: AppSpacing.xs),
-                          Text('No logo uploaded'),
-                        ],
-                      ),
-                    )
-                  : const Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.business, size: 64),
-                        SizedBox(height: AppSpacing.xs),
-                        Text('No logo uploaded'),
-                      ],
-                    ),
+              : (ref.watch(shellMetadataProvider).valueOrNull?.logoBytes !=
+                        null &&
+                    ref
+                        .watch(shellMetadataProvider)
+                        .valueOrNull!
+                        .logoBytes!
+                        .isNotEmpty)
+              ? Image.memory(
+                  ref.watch(shellMetadataProvider).valueOrNull!.logoBytes!,
+                  key: const ValueKey('school_logo_preview'),
+                  height: 96,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.business, size: 64),
+                      SizedBox(height: AppSpacing.xs),
+                      Text('No logo uploaded'),
+                    ],
+                  ),
+                )
+              : const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.business, size: 64),
+                    SizedBox(height: AppSpacing.xs),
+                    Text('No logo uploaded'),
+                  ],
+                ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
@@ -1447,8 +1453,13 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
               child: const Text('Upload Logo'),
             ),
             if (state.logoPath != null ||
-                (ref.watch(shellMetadataProvider).valueOrNull?.logoBytes != null &&
-                    ref.watch(shellMetadataProvider).valueOrNull!.logoBytes!.isNotEmpty))
+                (ref.watch(shellMetadataProvider).valueOrNull?.logoBytes !=
+                        null &&
+                    ref
+                        .watch(shellMetadataProvider)
+                        .valueOrNull!
+                        .logoBytes!
+                        .isNotEmpty))
               OutlinedButton(
                 key: const ValueKey('school_logo_remove'),
                 onPressed: notifier.removeLogo,
@@ -1467,6 +1478,9 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
     SystemSettingsNotifier notifier, {
     bool stacked = false,
   }) {
+    final appVersion =
+        ref.watch(appVersionProvider).valueOrNull ?? kDefaultAppVersion;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1477,6 +1491,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
         const SizedBox(height: AppSpacing.sm),
         _buildInfoCard([
           ('Product Edition', 'ByteWave School Manager — Enterprise Edition'),
+          ('App Version', appVersion),
           ('Rebuild Runtime', 'Flutter (Android / iOS / Desktop)'),
           (
             'Architecture Pattern',
