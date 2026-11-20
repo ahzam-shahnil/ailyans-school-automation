@@ -93,6 +93,7 @@ class _StudentRegistrationWizardState
   String _debouncedCnic = '';
   String _debouncedFName = '';
   bool _isSubmitting = false;
+  int _photoVersion = 0;
 
   @override
   void initState() {
@@ -245,19 +246,42 @@ class _StudentRegistrationWizardState
   }
 
   Future<void> _pickPhoto() async {
+    final oldPath = ref.read(wizardDraftProvider).photoPath;
     final path = await pickPhotoWithValidation(context);
     if (path != null) {
       final staged = await PhotoRepository().stageTempPhoto(path);
-      ref.read(wizardDraftProvider.notifier).setPhotoPath(staged ?? path);
-      if (mounted) setState(() {});
+      final finalPath = staged ?? path;
+      try {
+        if (oldPath != null && oldPath.isNotEmpty) {
+          await FileImage(File(oldPath)).evict();
+        }
+        await FileImage(File(finalPath)).evict();
+      } catch (_) {}
+      ref.read(wizardDraftProvider.notifier).setPhotoPath(finalPath);
+      if (mounted) {
+        setState(() {
+          _photoVersion++;
+        });
+      }
     }
   }
 
   Future<void> _takePhoto() async {
+    final oldPath = ref.read(wizardDraftProvider).photoPath;
     final path = await showCameraCaptureDialog(context);
     if (path != null) {
+      try {
+        if (oldPath != null && oldPath.isNotEmpty) {
+          await FileImage(File(oldPath)).evict();
+        }
+        await FileImage(File(path)).evict();
+      } catch (_) {}
       ref.read(wizardDraftProvider.notifier).setPhotoPath(path);
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          _photoVersion++;
+        });
+      }
     }
   }
 
@@ -1745,6 +1769,7 @@ class _StudentRegistrationWizardState
                       borderRadius: BorderRadius.circular(AppRadius.md),
                       child: Image.file(
                         File(photoPath),
+                        key: ValueKey('${photoPath}_$_photoVersion'),
                         width: 160,
                         height: 160,
                         fit: BoxFit.cover,
@@ -1863,7 +1888,11 @@ class _StudentRegistrationWizardState
                   border: Border.all(color: AppColors.borderDefault),
                 ),
                 child: hasPhoto
-                    ? Image.file(File(photoPath), fit: BoxFit.cover)
+                    ? Image.file(
+                        File(photoPath),
+                        key: ValueKey('${photoPath}_$_photoVersion'),
+                        fit: BoxFit.cover,
+                      )
                     : const Icon(
                         Icons.add_a_photo,
                         size: 20,

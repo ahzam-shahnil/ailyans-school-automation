@@ -42,6 +42,7 @@ class StudentProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
+  int _photoVersion = 0;
   // Edit mode controllers
   late final TextEditingController _firstNameController;
   late final TextEditingController _middleNameController;
@@ -1601,6 +1602,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                           borderRadius: BorderRadius.circular(AppRadius.full),
                           onTap: () => _handlePhotoTap(student),
                           child: CircleAvatar(
+                            key: ValueKey(
+                              '${student.photoPath}_$_photoVersion',
+                            ),
                             radius: 22,
                             backgroundColor: AppColors.accentStudents
                                 .withValues(alpha: 0.12),
@@ -2702,6 +2706,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   }
 
   Future<void> _applyNewPhoto(Student student, String sourcePath) async {
+    final oldPath = student.photoPath;
     final repo = PhotoRepository();
     final newPath = await repo.copyForStudent(
       student.stuRegId,
@@ -2716,9 +2721,21 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       }
       return;
     }
+
+    // Evict old and new paths from Flutter's image cache so it re-decodes immediately
+    try {
+      if (oldPath != null && oldPath.isNotEmpty) {
+        await FileImage(File(oldPath)).evict();
+      }
+      await FileImage(File(newPath)).evict();
+    } catch (_) {}
+
     try {
       await saveStudentProfile(student.copyWith(photoPath: newPath));
       if (!mounted) return;
+      setState(() {
+        _photoVersion++;
+      });
       ref.invalidate(studentProfileProvider(student.stuRegId));
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Photo updated successfully')),
@@ -2783,6 +2800,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           borderRadius: BorderRadius.circular(AppRadius.md),
           child: Image.file(
             file,
+            key: ValueKey('${student.photoPath}_$_photoVersion'),
             width: 96,
             height: 96,
             fit: BoxFit.cover,
