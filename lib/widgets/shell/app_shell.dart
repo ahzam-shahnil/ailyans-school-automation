@@ -18,6 +18,8 @@ import 'app_sidebar.dart';
 import 'app_status_bar.dart';
 import 'app_top_bar.dart';
 import 'mobile_bottom_nav.dart';
+import 'update_available_banner.dart';
+import '../../core/providers/update_check_provider.dart';
 
 /// Persistent desktop application shell wrapping all authenticated routes.
 class AppShell extends ConsumerStatefulWidget {
@@ -95,6 +97,9 @@ class _AppShellState extends ConsumerState<AppShell>
           debugPrint('[F-5] Connectivity stream error: $e');
         },
       );
+
+      // Phase L-1: Initial check for updates
+      ref.read(updateCheckProvider.notifier).checkForUpdates();
     } catch (e) {
       debugPrint('[F-5] Connectivity bootstrap failed: $e');
     }
@@ -149,6 +154,7 @@ class _AppShellState extends ConsumerState<AppShell>
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     final activeFlyoutModule = ref.watch(sidebarFlyoutProvider);
+    final updateState = ref.watch(updateCheckProvider);
 
     return CallbackShortcuts(
       bindings: {
@@ -173,7 +179,7 @@ class _AppShellState extends ConsumerState<AppShell>
         child: LayoutBuilder(
           builder: (context, constraints) {
             if (constraints.maxWidth < ResponsiveBreakpoints.mobileMax) {
-              return _buildMobileScaffold(context);
+              return _buildMobileScaffold(context, updateState);
             }
 
             return Scaffold(
@@ -194,6 +200,12 @@ class _AppShellState extends ConsumerState<AppShell>
                                       context,
                                       ref,
                                       session!,
+                                    ),
+                                  if (updateState.isUpdateAvailable &&
+                                      !updateState.isDismissed &&
+                                      updateState.manifest != null)
+                                    UpdateAvailableBanner(
+                                      manifest: updateState.manifest!,
                                     ),
                                   Expanded(child: widget.child),
                                 ],
@@ -363,7 +375,10 @@ class _AppShellState extends ConsumerState<AppShell>
         path == '/attendance';
   }
 
-  Widget _buildMobileScaffold(BuildContext context) {
+  Widget _buildMobileScaffold(
+    BuildContext context,
+    UpdateCheckState updateState,
+  ) {
     final currentLocation = _safeCurrentLocation(context);
     final topPadding = MediaQuery.paddingOf(context).top;
     final isRoot = _isRootLocation(currentLocation);
@@ -457,6 +472,12 @@ class _AppShellState extends ConsumerState<AppShell>
           behavior: HitTestBehavior.opaque,
           child: Column(
             children: [
+              if (updateState.isUpdateAvailable &&
+                  !updateState.isDismissed &&
+                  updateState.manifest != null)
+                UpdateAvailableBanner(
+                  manifest: updateState.manifest!,
+                ),
               Expanded(child: widget.child),
               const AppStatusBar(showSyncStatus: true),
             ],

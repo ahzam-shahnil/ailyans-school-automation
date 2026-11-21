@@ -2,6 +2,12 @@ name: Build All
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish artifacts & latest.json to bytewave-releases'
+        required: false
+        type: boolean
+        default: false
   push:
     tags: ['v*']
 
@@ -84,3 +90,138 @@ jobs:
         with:
           name: android-${{ matrix.seed_profile }}
           path: build/app/outputs/flutter-apk/*.apk
+
+  publish-release:
+    name: Publish Release (bytewave-releases)
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Windows (Ailyans)
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-ailyans
+          path: release-artifacts
+      - name: Download Windows (Clean)
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-clean
+          path: release-artifacts
+      - name: Download Android (Ailyans)
+        uses: actions/download-artifact@v4
+        with:
+          name: android-ailyans
+          path: release-artifacts
+      - name: Download Android (Clean)
+        uses: actions/download-artifact@v4
+        with:
+          name: android-clean
+          path: release-artifacts
+      - name: Determine Tag and Version
+        id: vars
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+            RAW_VER="${TAG#v}"
+            if [[ "$RAW_VER" == *"+"* ]]; then
+              VERSION="${RAW_VER%+*}"
+              BUILD="${RAW_VER#*+}"
+            else
+              VERSION="$RAW_VER"
+              BUILD="0"
+            fi
+          else
+            PUBSPEC_VER=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+            VERSION="${PUBSPEC_VER%+*}"
+            BUILD="${PUBSPEC_VER#*+}"
+            TAG="v${PUBSPEC_VER}"
+          fi
+          echo "TAG=${TAG}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "BUILD=${BUILD}" >> $GITHUB_OUTPUT
+          echo "Resolved release: TAG=$TAG, VERSION=$VERSION, BUILD=$BUILD"
+      - name: Publish GitHub Release to bytewave-releases
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          TAG: ${{ steps.vars.outputs.TAG }}
+        run: |
+          gh release create "$TAG" \
+            --repo ahzam-shahnil/bytewave-releases \
+            --title "$TAG" \
+            --notes "Automated release $TAG" \
+            release-artifacts/ailyans-school-manager-windows.zip \
+            release-artifacts/bytewave-school-manager-windows.zip \
+            release-artifacts/ailyans-school-manager.apk \
+            release-artifacts/bytewave-school-manager.apk \
+            || gh release upload "$TAG" \
+            --repo ahzam-shahnil/bytewave-releases \
+            --clobber \
+            release-artifacts/ailyans-school-manager-windows.zip \
+            release-artifacts/bytewave-school-manager-windows.zip \
+            release-artifacts/ailyans-school-manager.apk \
+            release-artifacts/bytewave-school-manager.apk
+      - name: Update latest.json with Downgrade Guard
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          TAG: ${{ steps.vars.outputs.TAG }}
+          VERSION: ${{ steps.vars.outputs.VERSION }}
+          BUILD: ${{ steps.vars.outputs.BUILD }}
+        run: |
+          python3 - << 'EOF'
+          import os, json, urllib.request, datetime, subprocess
+
+          tag = os.environ['TAG']
+          version = os.environ['VERSION']
+          build = int(os.environ['BUILD'])
+
+          remote_url = 'https://raw.githubusercontent.com/ahzam-shahnil/bytewave-releases/main/latest.json'
+          should_update = True
+
+          try:
+              req = urllib.request.Request(remote_url, headers={'User-Agent': 'ByteWave-CI'})
+              with urllib.request.urlopen(req) as resp:
+                  if resp.status == 200:
+                      curr = json.loads(resp.read().decode('utf-8'))
+                      curr_ver_parts = [int(x) for x in curr.get('version', '0.0.0').split('.')]
+                      curr_build = int(curr.get('build', 0))
+                      new_ver_parts = [int(x) for x in version.split('.')]
+                      if (new_ver_parts, build) <= (curr_ver_parts, curr_build):
+                          print(f"Downgrade guard: Current version {(curr_ver_parts, curr_build)} >= New version {(new_ver_parts, build)}. Skipping latest.json update.")
+                          should_update = False
+          except Exception as e:
+              print(f"Note: Could not check remote latest.json ({e}). Proceeding with update.")
+
+          if should_update:
+              now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+              manifest = {
+                  "version": version,
+                  "build": build,
+                  "tag": tag,
+                  "published_at": now_iso,
+                  "notes": f"Release {tag}",
+                  "assets": {
+                      "windows_ailyans": f"https://github.com/ahzam-shahnil/bytewave-releases/releases/download/{tag}/ailyans-school-manager-windows.zip",
+                      "windows_clean": f"https://github.com/ahzam-shahnil/bytewave-releases/releases/download/{tag}/bytewave-school-manager-windows.zip",
+                      "android_ailyans": f"https://github.com/ahzam-shahnil/bytewave-releases/releases/download/{tag}/ailyans-school-manager.apk",
+                      "android_clean": f"https://github.com/ahzam-shahnil/bytewave-releases/releases/download/{tag}/bytewave-school-manager.apk"
+                  }
+              }
+              with open('latest.json', 'w') as f:
+                  json.dump(manifest, f, indent=2)
+
+              gh_token = os.environ['GH_TOKEN']
+              clone_url = f"https://x-access-token:{gh_token}@github.com/ahzam-shahnil/bytewave-releases.git"
+              subprocess.run(["git", "clone", clone_url, "repo-releases"], check=True)
+              subprocess.run(["cp", "latest.json", "repo-releases/latest.json"], check=True)
+              subprocess.run(["git", "-C", "repo-releases", "config", "user.name", "github-actions[bot]"], check=True)
+              subprocess.run(["git", "-C", "repo-releases", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
+              subprocess.run(["git", "-C", "repo-releases", "add", "latest.json"], check=True)
+              diff_res = subprocess.run(["git", "-C", "repo-releases", "diff", "--staged", "--quiet"])
+              if diff_res.returncode != 0:
+                  subprocess.run(["git", "-C", "repo-releases", "commit", "-m", f"chore(release): update latest.json to {tag}"], check=True)
+                  subprocess.run(["git", "-C", "repo-releases", "push", "origin", "main"], check=True)
+                  print(f"Successfully published updated latest.json for {tag} to bytewave-releases.")
+              else:
+                  print("latest.json unchanged.")
+          EOF

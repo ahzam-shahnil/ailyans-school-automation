@@ -14,9 +14,11 @@ import '../../core/providers/backup_provider.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/system_settings_provider.dart';
+import '../../core/providers/update_check_provider.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
+import '../../widgets/shell/update_available_banner.dart';
 
 /// Screen 27: System Settings & Configuration Screen (/system/settings).
 /// Consolidates legacy Win32 utility dialogs into a unified 4-tab admin workstation.
@@ -1480,6 +1482,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
   }) {
     final appVersion =
         ref.watch(appVersionProvider).valueOrNull ?? kDefaultAppVersion;
+    final updateState = ref.watch(updateCheckProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1498,6 +1501,40 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             'Clean Architecture / Riverpod 2.x / SQLite',
           ),
         ], stacked: stacked),
+        const SizedBox(height: AppSpacing.sm),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            key: const ValueKey('btn_check_for_updates'),
+            onPressed: updateState.isChecking
+                ? null
+                : () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final manifest = await ref
+                        .read(updateCheckProvider.notifier)
+                        .checkForUpdates(manual: true);
+                    if (!mounted) return;
+                    final latestState = ref.read(updateCheckProvider);
+                    if (latestState.isUpdateAvailable && manifest != null) {
+                      showUpdateDialog(context, manifest);
+                    } else {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text("You're on the latest version"),
+                        ),
+                      );
+                    }
+                  },
+            icon: updateState.isChecking
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sync, size: 16),
+            label: const Text('Check for Updates'),
+          ),
+        ),
         const SizedBox(height: AppSpacing.lg),
         _buildSectionTitle(
           'DATABASE & STORAGE INTEGRITY',
