@@ -20,7 +20,7 @@ jobs:
       matrix:
         seed_profile: [ailyans, clean]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.50.0
@@ -45,7 +45,7 @@ jobs:
         run: |
           $name = if ($env:SEED_PROFILE -eq 'ailyans') { 'ailyans-school-manager-windows' } else { 'bytewave-school-manager-windows' }
           Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "build/windows/$name.zip"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: windows-${{ matrix.seed_profile }}
           path: build/windows/*.zip
@@ -58,8 +58,8 @@ jobs:
       matrix:
         seed_profile: [ailyans, clean]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: 'zulu'
           java-version: '17'
@@ -86,7 +86,7 @@ jobs:
           else
             mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/bytewave-school-manager.apk
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: android-${{ matrix.seed_profile }}
           path: build/app/outputs/flutter-apk/*.apk
@@ -97,24 +97,14 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
     steps:
-      - uses: actions/checkout@v4
-      - name: Download Windows (Ailyans)
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-ailyans
-          path: release-artifacts
+      - uses: actions/checkout@v5
       - name: Download Windows (Clean)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: windows-clean
           path: release-artifacts
-      - name: Download Android (Ailyans)
-        uses: actions/download-artifact@v4
-        with:
-          name: android-ailyans
-          path: release-artifacts
       - name: Download Android (Clean)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: android-clean
           path: release-artifacts
@@ -150,16 +140,12 @@ jobs:
             --repo ahzam-shahnil/bytewave-releases \
             --title "$TAG" \
             --notes "Automated release $TAG" \
-            release-artifacts/ailyans-school-manager-windows.zip \
             release-artifacts/bytewave-school-manager-windows.zip \
-            release-artifacts/ailyans-school-manager.apk \
             release-artifacts/bytewave-school-manager.apk \
             || gh release upload "$TAG" \
             --repo ahzam-shahnil/bytewave-releases \
             --clobber \
-            release-artifacts/ailyans-school-manager-windows.zip \
             release-artifacts/bytewave-school-manager-windows.zip \
-            release-artifacts/ailyans-school-manager.apk \
             release-artifacts/bytewave-school-manager.apk
       - name: Update latest.json with Downgrade Guard
         env:
@@ -201,9 +187,7 @@ jobs:
                   "published_at": now_iso,
                   "notes": f"Release {tag}",
                   "assets": {
-                      "windows_ailyans": f"https://github.com/ahzam-shahnil/bytewave-releases/releases/download/{tag}/ailyans-school-manager-windows.zip",
                       "windows_clean": f"https://github.com/ahzam-shahnil/bytewave-releases/releases/download/{tag}/bytewave-school-manager-windows.zip",
-                      "android_ailyans": f"https://github.com/ahzam-shahnil/bytewave-releases/releases/download/{tag}/ailyans-school-manager.apk",
                       "android_clean": f"https://github.com/ahzam-shahnil/bytewave-releases/releases/download/{tag}/bytewave-school-manager.apk"
                   }
               }

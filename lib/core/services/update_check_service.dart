@@ -128,6 +128,7 @@ class UpdateManifest {
 class UpdateCheckService {
   final http.Client? client;
   final SharedPreferences? prefs;
+  final bool? isAilyansEditionOverride;
 
   static const String manifestUrl =
       'https://raw.githubusercontent.com/ahzam-shahnil/bytewave-releases/main/latest.json';
@@ -135,7 +136,15 @@ class UpdateCheckService {
   static const String fallbackReleaseUrl =
       'https://github.com/ahzam-shahnil/bytewave-releases/releases/latest';
 
-  UpdateCheckService({this.client, this.prefs});
+  UpdateCheckService({
+    this.client,
+    this.prefs,
+    this.isAilyansEditionOverride,
+  });
+
+  /// True when this client runs the Ailyans production edition.
+  bool get isAilyansEdition =>
+      isAilyansEditionOverride ?? BuildConfig.isAilyansEdition;
 
   /// Compares [remote] version against [installed] version.
   /// Returns `true` only if remote > installed.
@@ -145,14 +154,13 @@ class UpdateCheckService {
     return remoteSemver > installedSemver;
   }
 
-  /// Resolves the specific artifact download URL based on OS and edition.
+  /// Resolves the specific artifact download URL based on OS (clean builds only).
   static String resolveDownloadUrl(UpdateManifest manifest) {
-    final isAilyans = BuildConfig.isAilyansEdition;
     String? assetKey;
     if (Platform.isWindows) {
-      assetKey = isAilyans ? 'windows_ailyans' : 'windows_clean';
+      assetKey = 'windows_clean';
     } else if (Platform.isAndroid) {
-      assetKey = isAilyans ? 'android_ailyans' : 'android_clean';
+      assetKey = 'android_clean';
     }
 
     if (assetKey != null) {
@@ -166,9 +174,15 @@ class UpdateCheckService {
 
   /// Fetches latest update manifest from public repo.
   /// Fails silently and returns `null` on network errors, timeouts, or invalid JSON.
+  /// If [isAilyansEdition] is true, returns `null` immediately without making any network call.
   Future<UpdateManifest?> fetchLatestManifest({
     ConnectivityResult? connectivity,
   }) async {
+    // 0. Ailyan's Edition guard: public releases are generic clean edition only.
+    if (isAilyansEdition) {
+      return null;
+    }
+
     // 1. Offline guard
     if (connectivity == ConnectivityResult.none) {
       return null;

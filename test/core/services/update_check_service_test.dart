@@ -62,9 +62,7 @@ void main() {
       "published_at": "2026-11-21T00:00:00Z",
       "notes": "Feature release notes",
       "assets": {
-        "windows_ailyans": "https://github.com/ahzam-shahnil/bytewave-releases/releases/download/v2.1.0+3/ailyans-school-manager-windows.zip",
         "windows_clean": "https://github.com/ahzam-shahnil/bytewave-releases/releases/download/v2.1.0+3/bytewave-school-manager-windows.zip",
-        "android_ailyans": "https://github.com/ahzam-shahnil/bytewave-releases/releases/download/v2.1.0+3/ailyans-school-manager.apk",
         "android_clean": "https://github.com/ahzam-shahnil/bytewave-releases/releases/download/v2.1.0+3/bytewave-school-manager.apk"
       }
     }
@@ -84,7 +82,10 @@ void main() {
       expect(manifest.build, equals(3));
       expect(manifest.tag, equals('v2.1.0+3'));
       expect(manifest.notes, equals('Feature release notes'));
-      expect(manifest.assets.length, equals(4));
+      expect(manifest.assets.length, equals(2));
+      expect(manifest.assets.containsKey('windows_clean'), isTrue);
+      expect(manifest.assets.containsKey('android_clean'), isTrue);
+      expect(manifest.assets.containsKey('windows_ailyans'), isFalse);
     });
 
     test('3. Offline guard skips network request', () async {
@@ -137,6 +138,43 @@ void main() {
 
       await service.dismissTag('v2.2.0+1');
       expect(await service.isTagDismissed('v2.2.0+1'), isTrue);
+    });
+
+    test('6. Ailyans Edition guard returns null immediately without network call', () async {
+      var called = false;
+      final mockClient = MockHttpClient((request) async {
+        called = true;
+        return http.Response(validJson, 200);
+      });
+
+      final service = UpdateCheckService(
+        client: mockClient,
+        isAilyansEditionOverride: true,
+      );
+      final manifest = await service.fetchLatestManifest(
+        connectivity: ConnectivityResult.wifi,
+      );
+
+      expect(manifest, isNull);
+      expect(called, isFalse);
+    });
+
+    test('7. resolveDownloadUrl uses clean assets and falls back gracefully', () {
+      final manifest = UpdateManifest.fromJson(const {
+        'version': '2.1.0',
+        'build': 3,
+        'tag': 'v2.1.0+3',
+        'assets': {
+          'windows_clean': 'https://example.com/windows_clean.zip',
+          'android_clean': 'https://example.com/android_clean.apk',
+        },
+      });
+
+      // On macOS / other non-windows/android dev box, returns fallback
+      expect(
+        UpdateCheckService.resolveDownloadUrl(manifest),
+        equals(UpdateCheckService.fallbackReleaseUrl),
+      );
     });
   });
 }

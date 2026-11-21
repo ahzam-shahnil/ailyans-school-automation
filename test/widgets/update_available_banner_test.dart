@@ -46,9 +46,7 @@ void main() {
     publishedAt: '2026-11-21T00:00:00Z',
     notes: 'Bug fixes and performance enhancements.\n- Resolved camera device name overflow\n- Added update notification banner',
     assets: {
-      'windows_ailyans': 'https://github.com/ahzam-shahnil/bytewave-releases/releases/download/v2.1.0+3/ailyans-school-manager-windows.zip',
       'windows_clean': 'https://github.com/ahzam-shahnil/bytewave-releases/releases/download/v2.1.0+3/bytewave-school-manager-windows.zip',
-      'android_ailyans': 'https://github.com/ahzam-shahnil/bytewave-releases/releases/download/v2.1.0+3/ailyans-school-manager.apk',
       'android_clean': 'https://github.com/ahzam-shahnil/bytewave-releases/releases/download/v2.1.0+3/bytewave-school-manager.apk',
     },
   );

@@ -64,6 +64,17 @@ class UpdateCheckNotifier extends StateNotifier<UpdateCheckState> {
     try {
       final service = _ref.read(updateCheckServiceProvider);
 
+      // Guard: Ailyan's edition clients must never receive public clean updates.
+      if (service.isAilyansEdition) {
+        final installed = await _ref.read(appVersionProvider.future);
+        state = state.copyWith(
+          isChecking: false,
+          isUpdateAvailable: false,
+          installedVersion: installed,
+        );
+        return null;
+      }
+
       // Check connectivity
       ConnectivityResult? conn;
       try {
