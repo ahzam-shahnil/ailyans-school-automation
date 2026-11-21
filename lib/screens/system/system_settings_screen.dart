@@ -18,6 +18,7 @@ import '../../core/providers/update_check_provider.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
+import '../../core/utils/tenant_storage.dart';
 import '../../widgets/shell/update_available_banner.dart';
 
 /// Screen 27: System Settings & Configuration Screen (/system/settings).
@@ -957,7 +958,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
           controller: _branchNameCtrl,
           label: 'Institution / Branch Name *',
           onChanged: notifier.setBranchName,
-          hint: 'e.g. Ailyans\'s Higher Secondary School Mianwali',
+          hint: 'e.g. School Name',
           dense: stacked,
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -1548,7 +1549,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             'Level ${state.schemaVersion} (Migrations 001-010 applied)',
           ),
           ('Configured Operators', '${state.operatorCount} active users'),
-          ('Database Path', '~/Documents/Ailyans/school_database.db'),
+          ('Database Path', TenantStorage.resolveDatabaseDisplayPath()),
         ], stacked: stacked),
         const SizedBox(height: AppSpacing.lg),
         _buildSectionTitle(
@@ -1670,7 +1671,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
         // Available backups list (Expanded, scrollable)
         _buildSectionTitle(
           'AVAILABLE BACKUPS',
-          'Files in ~/Documents/Ailyans/backups/. Newest first.',
+          'Files in ${TenantStorage.resolveBackupsDisplayPath()}/. Newest first.',
         ),
         const SizedBox(height: AppSpacing.sm),
         stacked
@@ -2060,7 +2061,7 @@ class _SystemSettingsScreenState extends ConsumerState<SystemSettingsScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              '~/Documents/Ailyans/backups/pre_restore_<timestamp>.db',
+              '${TenantStorage.resolveBackupsDisplayPath()}/pre_restore_<timestamp>.db',
               style: AppTypography.monospace.copyWith(fontSize: 12),
             ),
             const SizedBox(height: 12),

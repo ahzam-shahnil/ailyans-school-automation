@@ -21,6 +21,7 @@ import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/photo_picker.dart';
+import '../../core/utils/tenant_storage.dart';
 import '../../models/student.dart';
 import '../../models/student_enrollment.dart';
 import '../../models/student_voucher.dart';
@@ -333,10 +334,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
   Map<String, String> _branchPrintParams() {
     final meta = ref.read(shellMetadataProvider).value;
+    final isAilyans = TenantStorage.isAilyansBrand(meta);
     final branchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : 'Ailyans Higher Secondary School';
+        : (isAilyans ? 'Ailyans Higher Secondary School' : 'ByteWave School');
     final branchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()
@@ -347,7 +349,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       'branchName': branchName,
       'branchAddress': branchAddress,
       'bankName': 'Askari Bank Limited',
-      'bankBranch': 'Ballo Khel Road',
+      'bankBranch': isAilyans ? 'Ballo Khel Road' : 'Main Branch',
       'bankAcctNo': '4528',
     };
   }
@@ -2078,7 +2080,13 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           const SizedBox(height: AppSpacing.sm),
           _buildBentoWell(
             label: 'Domicile Territory',
-            value: student.pAddress ?? student.tAddress ?? 'Mianwali (Punjab)',
+            value: student.pAddress ??
+                student.tAddress ??
+                (TenantStorage.isAilyansBrand(
+                  ref.watch(shellMetadataProvider).valueOrNull,
+                )
+                    ? 'Mianwali (Punjab)'
+                    : 'Not Specified'),
             leadingIcon: Icons.location_on_outlined,
           ),
         ],
@@ -2090,6 +2098,12 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     Student student,
     StudentProfileBundle bundle,
   ) {
+    final meta = ref.watch(shellMetadataProvider).valueOrNull;
+    final isAilyans = meta == null || TenantStorage.isAilyansBrand(meta);
+    final siblingsLabel = isAilyans
+        ? 'Registered Siblings in Ailyans'
+        : 'Registered Siblings in ${TenantStorage.resolveShortBrand(meta)}';
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
@@ -2216,17 +2230,18 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
           const SizedBox(height: AppSpacing.sm),
           _buildBentoWell(
             label: 'Permanent Residence',
-            value:
-                student.pAddress ??
+            value: student.pAddress ??
                 student.tAddress ??
-                'House #14, St 2, Mohallah Khel, Mianwali',
+                (isAilyans
+                    ? 'House #14, St 2, Mohallah Khel, Mianwali'
+                    : 'Not Specified'),
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
               Expanded(
                 child: Text(
-                  'Registered Siblings in Ailyans',
+                  siblingsLabel,
                   style: AppTypography.bodySmall.copyWith(
                     fontWeight: FontWeight.w700,
                     color: AppColors.textPrimary,
@@ -2440,6 +2455,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   }
 
   Widget _buildMobileCampusCard(Student student) {
+    final meta = ref.watch(shellMetadataProvider).valueOrNull;
+    final isAilyans = meta == null || TenantStorage.isAilyansBrand(meta);
+    final campusAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+        ? meta.branchAddress.trim()
+        : (isAilyans
+            ? 'Sargodha Road, Mianwali Campus Block-C'
+            : 'Main Campus');
+
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surfaceRaised,
@@ -2485,7 +2509,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  'Sargodha Road, Mianwali Campus Block-C',
+                  campusAddress,
                   style: AppTypography.bodySmall.copyWith(
                     fontSize: 10,
                     color: AppColors.textSecondary,

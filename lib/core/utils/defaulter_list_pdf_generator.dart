@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../../core/theme/app_theme_tokens.dart';
 import '../../repositories/logo_repository.dart';
+import '../config/build_config.dart';
 import 'voucher_pdf_generator.dart';
 
 // ============================================================================
@@ -549,7 +550,10 @@ class DefaulterListPdfGenerator {
         children: [
           pw.Expanded(
             child: pw.Text(
-              branchName ?? 'Ailyans Higher Secondary School',
+              branchName ??
+                  (BuildConfig.isAilyansEdition
+                      ? 'Ailyans Higher Secondary School'
+                      : 'ByteWave School'),
               style: const pw.TextStyle(fontSize: 7.5, color: _slate600),
               maxLines: 1,
             ),

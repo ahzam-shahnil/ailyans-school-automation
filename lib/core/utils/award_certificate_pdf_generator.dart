@@ -4,6 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import 'voucher_pdf_generator.dart' show ReportTheme;
+import '../config/build_config.dart';
 
 /// Generates an A4 landscape Award of Excellence Certificate PDF.
 class AwardCertificatePdfGenerator {
@@ -112,7 +113,9 @@ class AwardCertificatePdfGenerator {
                           pw.Text(
                             branchName.isNotEmpty
                                 ? branchName.toUpperCase()
-                                : "AILYANS'S HIGHER SECONDARY SCHOOL",
+                                : (BuildConfig.isAilyansEdition
+                                    ? "AILYANS'S HIGHER SECONDARY SCHOOL"
+                                    : "BYTEWAVE SCHOOL"),
                             style: pw.TextStyle(
                               font: boldFont,
                               fontSize: 18,

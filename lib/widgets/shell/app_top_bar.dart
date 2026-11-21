@@ -7,6 +7,7 @@ import '../../core/db/database.dart';
 import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/tenant_storage.dart';
 import '../../screens/login/change_password_dialog.dart';
 import 'app_sidebar.dart';
 
@@ -282,7 +283,8 @@ class _AppTopBarState extends ConsumerState<AppTopBar> {
     if (path.startsWith('/attendance')) return 'Attendance';
     if (path.startsWith('/search')) return 'Search';
 
-    return 'Ailyans HSS';
+    final metadata = ref.watch(shellMetadataProvider).valueOrNull;
+    return TenantStorage.resolveShortBrand(metadata, forTopBar: true);
   }
 
   Widget _buildMobileSessionChip(String sessionYear) {

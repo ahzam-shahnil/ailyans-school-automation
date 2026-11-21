@@ -82,7 +82,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
         ? dbBranchName
         : (BuildConfig.isAilyansEdition
             ? "Ailyan's Higher Secondary School Mianwali"
-            : '-');
+            : 'ByteWave School');
     final branchAddress = dbBranchAddress;
 
     // Phase K-6 Run 2b: the Fee Defaulter List roster renders through the
@@ -262,7 +262,7 @@ class _ReportsHubScreenState extends ConsumerState<ReportsHubScreen> {
         ? meta!.branchName
         : (BuildConfig.isAilyansEdition
             ? "Ailyan's Higher Secondary School Mianwali"
-            : 'Reports');
+            : 'ByteWave School');
 
     final dateLabel = filters.date == null
         ? DateFormat('yyyy-MM-dd').format(ref.read(clockProvider)())

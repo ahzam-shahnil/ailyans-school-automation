@@ -7,6 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../../models/fee_receipt_view.dart';
 import '../../repositories/logo_repository.dart';
+import '../config/build_config.dart';
 import 'fee_head_display.dart';
 
 // ============================================================================
@@ -86,7 +87,9 @@ class ReportTheme {
         children: [
           pw.Text(
             branchName ??
-                'Alams High School Mianwali - Automated School System',
+                (BuildConfig.isAilyansEdition
+                    ? 'Alams High School Mianwali - Automated School System'
+                    : 'ByteWave School - Automated School System'),
             style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
           ),
           pw.Text(
@@ -396,7 +399,7 @@ class ClassSectionListGenerator {
   final List<ClassSectionGroup> sectionGroups;
 
   const ClassSectionListGenerator({
-    this.institutionName = 'Alams High School Mianwali',
+    this.institutionName = 'ByteWave School',
     this.reportTitle = 'Academic Class & Section Structural Roster',
     required this.sectionGroups,
   });
@@ -864,7 +867,7 @@ class FeeLedgerVoucherGenerator {
   final bool includeParameterBreakdown;
 
   const FeeLedgerVoucherGenerator({
-    this.institutionName = 'Alams High School Mianwali',
+    this.institutionName = 'ByteWave School',
     this.ledgerPeriodTitle = 'Fee Transaction & Master Financial Ledger',
     required this.transactions,
     this.includeParameterBreakdown = true,
@@ -1329,9 +1332,14 @@ class InstitutionBranchProfile {
 
   factory InstitutionBranchProfile.fromMap(Map<String, dynamic> map) {
     return InstitutionBranchProfile(
-      branchName: (map['BranchName'] ?? 'Alams High School Mianwali')
+      branchName: (map['BranchName'] ??
+              (BuildConfig.isAilyansEdition
+                  ? 'Alams High School Mianwali'
+                  : 'ByteWave School'))
           .toString(),
-      branchAddress: (map['BranchAddress'] ?? 'Mianwali, Punjab').toString(),
+      branchAddress: (map['BranchAddress'] ??
+              (BuildConfig.isAilyansEdition ? 'Mianwali, Punjab' : ''))
+          .toString(),
       brContactPerson: (map['BrContactPerson'] ?? 'Admin').toString(),
       brPrincipal: (map['BrPrincipal'] ?? 'Principal').toString(),
       brPhone: (map['BrPhone'] ?? 'N/A').toString(),
@@ -1857,7 +1865,7 @@ class ThreeCopyVouchersPdf {
       }
       line3 = branchAddress.isNotEmpty && branchAddress != '-'
           ? branchAddress.toUpperCase()
-          : 'MIANWALI';
+          : '';
     }
 
     return pw.Row(

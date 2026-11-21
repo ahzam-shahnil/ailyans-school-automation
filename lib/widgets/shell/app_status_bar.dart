@@ -7,6 +7,7 @@ import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/sync/sync_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/tenant_storage.dart';
 
 /// Contextual bottom status bar of the desktop application shell.
 /// Fixed 28px height, pinned at the bottom of the AppShell root Column.
@@ -79,13 +80,13 @@ class AppStatusBar extends ConsumerWidget {
     final dotColor = hasError
         ? AppColors.statusErrorText
         : AppColors.statusSuccessText;
+    final dbName = TenantStorage.resolveDbBaseName(metadata);
+    final status = hasError ? 'Offline' : 'Online';
 
     return Row(
       children: [
         Tooltip(
-          message: hasError
-              ? 'DB: SDB_Ailyans.db (Offline)'
-              : 'DB: SDB_Ailyans.db (Online)',
+          message: 'DB: $dbName ($status)',
           child: Icon(Icons.circle, size: 8.0, color: dotColor),
         ),
         const SizedBox(width: AppSpacing.xs),
@@ -137,6 +138,8 @@ class AppStatusBar extends ConsumerWidget {
     final dotColor = hasError
         ? AppColors.statusErrorText
         : AppColors.statusSuccessText;
+    final dbName = TenantStorage.resolveDbBaseName(metadata);
+    final status = hasError ? 'Offline' : 'Online';
 
     return Row(
       children: [
@@ -157,7 +160,7 @@ class AppStatusBar extends ConsumerWidget {
               const SizedBox(width: AppSpacing.xs),
               Flexible(
                 child: Text(
-                  'DB: SDB_Ailyans.db (Online)',
+                  'DB: $dbName ($status)',
                   maxLines: 1,
                   softWrap: false,
                   overflow: TextOverflow.ellipsis,

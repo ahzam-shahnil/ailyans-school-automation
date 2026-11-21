@@ -12,6 +12,7 @@ import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
+import '../../core/utils/tenant_storage.dart';
 import '../../core/utils/defaulter_list_pdf_generator.dart';
 import '../../models/fee_ledger_row.dart';
 import '../../models/fee_receipt_view.dart';
@@ -416,10 +417,11 @@ class _FeeLedgerScreenState extends ConsumerState<FeeLedgerScreen> {
     if (!mounted) return;
 
     final meta = ref.read(shellMetadataProvider).value;
+    final isAilyans = TenantStorage.isAilyansBrand(meta);
     final safeBranchName =
         (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
         ? meta.branchName.trim()
-        : 'Ailyans Higher Secondary School';
+        : (isAilyans ? 'Ailyans Higher Secondary School' : 'ByteWave School');
     final safeBranchAddress =
         (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
         ? meta.branchAddress.trim()

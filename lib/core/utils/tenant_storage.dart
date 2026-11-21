@@ -103,4 +103,156 @@ class TenantStorage {
     }
     return '';
   }
+
+  /// Returns true if [metadataOrName] indicates an Ailyans brand (via
+  /// branchName containing 'Ailyan' or [BuildConfig.isAilyansEdition]).
+  static bool isAilyansBrand([dynamic metadataOrName]) {
+    if (metadataOrName is String && metadataOrName.isNotEmpty) {
+      return metadataOrName.toLowerCase().contains('ailyan') ||
+          BuildConfig.isAilyansEdition;
+    }
+    if (metadataOrName != null) {
+      try {
+        final branchName = (metadataOrName as dynamic).branchName;
+        if (branchName is String && branchName.isNotEmpty) {
+          return branchName.toLowerCase().contains('ailyan') ||
+              BuildConfig.isAilyansEdition;
+        }
+      } catch (_) {}
+    }
+    return BuildConfig.isAilyansEdition;
+  }
+
+  /// Resolves short brand name for shell navigation (sidebar/topbar).
+  /// If Ailyans: 'Ailyans HSS' for topbar or 'Ailyans School' for sidebar.
+  /// If clean tenant: first word of branchName (if 3-15 chars) or 'ByteWave'.
+  static String resolveShortBrand(
+    dynamic metadataOrName, {
+    bool forTopBar = false,
+  }) {
+    if (isAilyansBrand(metadataOrName)) {
+      return forTopBar ? 'Ailyans HSS' : 'Ailyans School';
+    }
+    String? branchName;
+    if (metadataOrName is String && metadataOrName.isNotEmpty) {
+      branchName = metadataOrName;
+    } else if (metadataOrName != null) {
+      try {
+        final name = (metadataOrName as dynamic).branchName;
+        if (name is String && name.isNotEmpty) {
+          branchName = name;
+        }
+      } catch (_) {}
+    }
+    if (branchName != null && branchName.trim().isNotEmpty) {
+      final words = branchName.trim().split(RegExp(r'\s+'));
+      final candidate = words.first;
+      if (candidate.length >= 3 && candidate.length <= 15) {
+        return candidate;
+      }
+    }
+    return 'ByteWave';
+  }
+
+  /// Resolves database basename for status bars and login screens.
+  /// If Ailyans: 'SDB_Ailyans.db'.
+  /// If clean tenant: 'school_<tenantId>.db'.
+  static String resolveDbBaseName([dynamic metadataOrName]) {
+    if (isAilyansBrand(metadataOrName)) {
+      return 'SDB_Ailyans.db';
+    }
+    final tenantId = resolveActiveTenantIdSync();
+    return 'school_$tenantId.db';
+  }
+
+  /// Resolves full school name.
+  /// If metadata branchName is present, uses it.
+  /// Otherwise falls back to Ailyans title if Ailyans brand, else [fallback].
+  static String resolveSchoolName(
+    dynamic metadataOrName, {
+    String fallback = 'ByteWave School',
+  }) {
+    String? branchName;
+    if (metadataOrName is String && metadataOrName.isNotEmpty) {
+      branchName = metadataOrName;
+    } else if (metadataOrName != null) {
+      try {
+        final name = (metadataOrName as dynamic).branchName;
+        if (name is String && name.isNotEmpty) {
+          branchName = name;
+        }
+      } catch (_) {}
+    }
+    if (branchName != null && branchName.trim().isNotEmpty) {
+      return branchName.trim();
+    }
+    if (isAilyansBrand(metadataOrName)) {
+      return "Ailyans's Higher Secondary School Mianwali";
+    }
+    return fallback;
+  }
+
+  /// Resolves school branch address.
+  static String resolveSchoolAddress(
+    dynamic metadataOrName, {
+    String fallback = '',
+  }) {
+    String? branchAddress;
+    if (metadataOrName != null) {
+      try {
+        final addr = (metadataOrName as dynamic).branchAddress;
+        if (addr is String && addr.isNotEmpty) {
+          branchAddress = addr;
+        }
+      } catch (_) {}
+    }
+    if (branchAddress != null && branchAddress.trim().isNotEmpty) {
+      return branchAddress.trim();
+    }
+    if (isAilyansBrand(metadataOrName)) {
+      return 'Muslim Bazar Mianwali';
+    }
+    return fallback;
+  }
+
+  /// Resolves splash title displayed while app boots.
+  static String resolveSplashTitle([dynamic metadataOrName]) {
+    if (metadataOrName != null) {
+      String? branchName;
+      if (metadataOrName is String) {
+        branchName = metadataOrName;
+      } else {
+        try {
+          final name = (metadataOrName as dynamic).branchName;
+          if (name is String) branchName = name;
+        } catch (_) {}
+      }
+      if (branchName != null && branchName.isNotEmpty) {
+        if (isAilyansBrand(metadataOrName)) {
+          return 'Ailyans School Automation System';
+        }
+        return '$branchName School Automation System';
+      }
+    }
+    return 'Ailyans School Automation System';
+  }
+
+  /// Resolves the human-readable database path label for settings.
+  static String resolveDatabaseDisplayPath({String? overrideTenantId}) {
+    final tenant = resolveActiveTenantIdSync(
+      overrideTenantId: overrideTenantId,
+    );
+    if (BuildConfig.isAilyansEdition || tenant == 'ailyans') {
+      return '~/Documents/Ailyans/school_database.db';
+    }
+    return '~/Documents/ByteWave/school_$tenant.db';
+  }
+
+  /// Resolves the human-readable backup path label for settings.
+  static String resolveBackupsDisplayPath() {
+    if (BuildConfig.isAilyansEdition) {
+      return '~/Documents/Ailyans/backups';
+    }
+    return '~/Documents/ByteWave/backups';
+  }
 }

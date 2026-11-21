@@ -12,6 +12,7 @@ import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/tenant_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/tenant_storage.dart';
 import '../../repositories/auth_repository.dart';
 import '../../widgets/shell/app_status_bar.dart';
 import 'change_password_dialog.dart';
@@ -203,9 +204,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final metadataAsync = ref.watch(shellMetadataProvider);
-    final schoolName = metadataAsync.valueOrNull?.branchName.isNotEmpty == true
-        ? metadataAsync.valueOrNull!.branchName
-        : 'Ailyans School';
+    final metadata = metadataAsync.valueOrNull;
+    final schoolName = TenantStorage.resolveSchoolName(metadata);
 
     final hasError = _errorMessage != null;
 
@@ -725,7 +725,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   const SizedBox(width: AppSpacing.xs),
                                   Flexible(
                                     child: Text(
-                                      'Database: SDB_Ailyans.db (Online)',
+                                      'Database: ${TenantStorage.resolveDbBaseName(metadata)} (Online)',
                                       style: AppTypography.monospace.copyWith(
                                         fontSize: 11.0,
                                         color: AppColors.textSecondary,

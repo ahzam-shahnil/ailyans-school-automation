@@ -6,6 +6,7 @@ import '../../core/providers/session_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
+import '../../core/utils/tenant_storage.dart';
 
 /// Riverpod provider managing sidebar expanded vs collapsed rail state.
 /// Defaults to collapsed: the desktop shell starts as the icon rail, and the
@@ -372,6 +373,7 @@ class AppSidebar extends ConsumerWidget {
   }
 
   Widget _buildBrandHeader(bool isExpanded, [ShellMetadata? metadata]) {
+    final brandName = TenantStorage.resolveShortBrand(metadata);
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCollapsed = constraints.maxWidth < 72 || !isExpanded;
@@ -424,7 +426,7 @@ class AppSidebar extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Ailyans School',
+                            brandName,
                             style: AppTypography.h3.copyWith(
                               color: AppColors.textPrimary,
                             ),
@@ -449,7 +451,7 @@ class AppSidebar extends ConsumerWidget {
               // Collapsed rail keeps the brand texts mounted near-invisibly
               // so find.text on them still resolves to a full-size target.
               if (isCollapsed)
-                const Positioned.fill(
+                Positioned.fill(
                   child: Opacity(
                     opacity: 0.01,
                     child: FittedBox(
@@ -458,8 +460,8 @@ class AppSidebar extends ConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text('Ailyans School'),
-                          Text('Automation v2.0'),
+                          Text(brandName),
+                          const Text('Automation v2.0'),
                         ],
                       ),
                     ),

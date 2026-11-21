@@ -37,8 +37,10 @@ import '../../screens/system/user_management_screen.dart';
 import '../../widgets/shell/app_shell.dart';
 import '../providers/license_provider.dart';
 import '../providers/session_provider.dart';
+import '../providers/shell_metadata_provider.dart';
 import '../providers/tenant_provider.dart';
 import '../theme/app_theme_tokens.dart';
+import '../utils/tenant_storage.dart';
 
 /// Helper checking whether a route is permitted for the given authenticated [session].
 bool _isRouteAllowed(String location, UserSession session) {
@@ -679,7 +681,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              "Ailyans School Automation System",
+              TenantStorage.resolveSplashTitle(
+                ref.watch(shellMetadataProvider).valueOrNull,
+              ),
               style: AppTypography.h1.copyWith(color: AppColors.brandPrimary),
             ),
             const SizedBox(height: AppSpacing.md),

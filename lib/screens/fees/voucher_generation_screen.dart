@@ -14,6 +14,7 @@ import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
+import '../../core/utils/tenant_storage.dart';
 import '../../core/utils/voucher_pdf_generator.dart';
 import '../../models/fee_receipt_view.dart';
 import '../../models/school_class.dart';
@@ -398,15 +399,29 @@ class _VoucherGenerationScreenState
       request: ReportRequest(
         type: ReportType.feeVoucher,
         vouchers: receipts,
-        extraParams: const {
-          'branchName': 'Ailyans Higher Secondary School',
-          'branchAddress': '-',
-          'bankName': 'Askari Bank Limited',
-          'bankBranch': 'Ballo Khel Road',
-          'bankAcctNo': '4528',
-        },
+        extraParams: _resolveBranchPrintParams(),
       ),
     );
+  }
+
+  Map<String, String> _resolveBranchPrintParams() {
+    final meta = ref.read(shellMetadataProvider).valueOrNull;
+    final isAilyans = TenantStorage.isAilyansBrand(meta);
+    final branchName =
+        (meta?.branchName != null && meta!.branchName.trim().isNotEmpty)
+        ? meta.branchName.trim()
+        : (isAilyans ? 'Ailyans Higher Secondary School' : 'ByteWave School');
+    final branchAddress =
+        (meta?.branchAddress != null && meta!.branchAddress.trim().isNotEmpty)
+        ? meta.branchAddress.trim()
+        : '-';
+    return {
+      'branchName': branchName,
+      'branchAddress': branchAddress,
+      'bankName': 'Askari Bank Limited',
+      'bankBranch': isAilyans ? 'Ballo Khel Road' : 'Main Branch',
+      'bankAcctNo': '4528',
+    };
   }
 
   /// Shot 6d: opens the print preview for the given students' generated
@@ -444,13 +459,7 @@ class _VoucherGenerationScreenState
       request: ReportRequest(
         type: ReportType.feeVoucher,
         vouchers: receipts,
-        extraParams: const {
-          'branchName': 'Ailyans Higher Secondary School',
-          'branchAddress': '-',
-          'bankName': 'Askari Bank Limited',
-          'bankBranch': 'Ballo Khel Road',
-          'bankAcctNo': '4528',
-        },
+        extraParams: _resolveBranchPrintParams(),
       ),
     );
   }
@@ -475,13 +484,14 @@ class _VoucherGenerationScreenState
       return;
     }
     try {
+      final printParams = _resolveBranchPrintParams();
       final bytes = await ThreeCopyVouchersPdf.generate(
         vouchers: receipts,
-        branchName: 'Ailyans Higher Secondary School',
-        branchAddress: '-',
-        bankName: 'Askari Bank Limited',
-        bankBranch: 'Ballo Khel Road',
-        bankAcctNo: '4528',
+        branchName: printParams['branchName']!,
+        branchAddress: printParams['branchAddress']!,
+        bankName: printParams['bankName']!,
+        bankBranch: printParams['bankBranch']!,
+        bankAcctNo: printParams['bankAcctNo']!,
       );
       final monthStr = ref
           .read(voucherGenFiltersProvider)
