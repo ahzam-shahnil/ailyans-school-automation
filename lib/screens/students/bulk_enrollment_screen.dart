@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
 
 import '../../core/providers/available_sessions_provider.dart';
 import '../../core/providers/bulk_enrollment_provider.dart';
 import '../../core/providers/shell_metadata_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/class_biodata_pdf_generator.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/enrollment_row.dart';
 import '../../models/school_class.dart';
@@ -14,6 +16,8 @@ import '../../models/student.dart';
 import '../../widgets/mobile/mobile_dropdown_field.dart';
 import '../../widgets/mobile/mobile_kpi_card.dart';
 import '../../widgets/mobile/mobile_status_pill.dart';
+import '../../widgets/reports/report_definition.dart';
+import '../../widgets/reports/report_preview_modal.dart';
 
 /// Screen 9: BulkEnrollmentScreen at `/students/enrollment/bulk`.
 ///
@@ -250,6 +254,74 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
         }
       }
     }
+  }
+
+  Future<void> _handlePrintClassBiodata(
+    List<SchoolClass> classes,
+    List<ClassSec> sections,
+  ) async {
+    final state = ref.read(bulkEnrollmentProvider);
+    if (!state.isRosterLoaded || state.roster.isEmpty) {
+      _showSnackBar(
+        'Load a class roster with enrolled students first',
+        isError: true,
+      );
+      return;
+    }
+
+    final classItem = classes.cast<SchoolClass?>().firstWhere(
+          (c) => c?.classId == state.selectedClassId,
+          orElse: () => null,
+        );
+    final className = classItem?.cName ??
+        (state.selectedClassId != null
+            ? 'Class ${state.selectedClassId}'
+            : 'Class');
+
+    final secItem = sections.cast<ClassSec?>().firstWhere(
+          (s) => s?.classSecId == state.selectedSecId,
+          orElse: () => null,
+        );
+    final sectionName = secItem?.secName ??
+        (state.selectedSecId != null
+            ? 'Sec ${state.selectedSecId}'
+            : 'Section');
+
+    final sessionYr = state.selectedSessionYr.trim().isNotEmpty
+        ? state.selectedSessionYr.trim()
+        : 'Session';
+
+    final students = await ref
+        .read(bulkEnrollmentProvider.notifier)
+        .loadBiodataStudents();
+
+    if (!mounted) return;
+
+    final safeClass = className.trim().replaceAll(RegExp(r'\s+'), '_');
+    final safeSection = sectionName.trim().replaceAll(RegExp(r'\s+'), '_');
+    final safeSession = sessionYr.trim().replaceAll(RegExp(r'\s+'), '_');
+    final fileName =
+        'class_biodata_${safeClass}_${safeSection}_$safeSession.pdf';
+
+    await ReportPreviewModal.show(
+      context,
+      request: ReportRequest(
+        type: ReportType.biodata,
+        titleOverride: 'Class Biodata - $className ($sectionName)',
+        subtitle: 'Academic Session: $sessionYr',
+        fileNameOverride: fileName,
+        naturalPageFormat: PdfPageFormat.a4.landscape,
+        locksOrientation: true,
+        customBytesBuilderWithFormat: (PdfPageFormat? pageFormat) =>
+            ClassBiodataPdfGenerator.generate(
+          className: className,
+          sectionName: sectionName,
+          sessionYr: sessionYr,
+          students: students,
+          pageFormat: pageFormat,
+        ),
+      ),
+    );
   }
 
   @override
@@ -623,9 +695,8 @@ class _BulkEnrollmentScreenState extends ConsumerState<BulkEnrollmentScreen> {
                   Tooltip(
                     message: 'Print the class roster as a PDF report',
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        _showSnackBar('Coming in Phase E');
-                      },
+                      onPressed: () =>
+                          _handlePrintClassBiodata(classes, sections),
                       icon: const Icon(Icons.print_outlined, size: 16),
                       label: const Text('Print Class Biodata'),
                       style: OutlinedButton.styleFrom(
