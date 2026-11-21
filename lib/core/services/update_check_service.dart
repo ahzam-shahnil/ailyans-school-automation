@@ -155,11 +155,18 @@ class UpdateCheckService {
   }
 
   /// Resolves the specific artifact download URL based on OS (clean builds only).
-  static String resolveDownloadUrl(UpdateManifest manifest) {
+  static String resolveDownloadUrl(
+    UpdateManifest manifest, {
+    bool? isWindowsOverride,
+    bool? isAndroidOverride,
+  }) {
+    final isWindows = isWindowsOverride ?? Platform.isWindows;
+    final isAndroid = isAndroidOverride ?? Platform.isAndroid;
+
     String? assetKey;
-    if (Platform.isWindows) {
+    if (isWindows) {
       assetKey = 'windows_clean';
-    } else if (Platform.isAndroid) {
+    } else if (isAndroid) {
       assetKey = 'android_clean';
     }
 

@@ -170,9 +170,33 @@ void main() {
         },
       });
 
-      // On macOS / other non-windows/android dev box, returns fallback
+      // 1. Windows platform override -> windows_clean URL
       expect(
-        UpdateCheckService.resolveDownloadUrl(manifest),
+        UpdateCheckService.resolveDownloadUrl(
+          manifest,
+          isWindowsOverride: true,
+          isAndroidOverride: false,
+        ),
+        equals('https://example.com/windows_clean.zip'),
+      );
+
+      // 2. Android platform override -> android_clean URL
+      expect(
+        UpdateCheckService.resolveDownloadUrl(
+          manifest,
+          isWindowsOverride: false,
+          isAndroidOverride: true,
+        ),
+        equals('https://example.com/android_clean.apk'),
+      );
+
+      // 3. Other platform fallback -> releases/latest
+      expect(
+        UpdateCheckService.resolveDownloadUrl(
+          manifest,
+          isWindowsOverride: false,
+          isAndroidOverride: false,
+        ),
         equals(UpdateCheckService.fallbackReleaseUrl),
       );
     });
