@@ -23,8 +23,34 @@ Future<String?> showCameraCaptureDialog(BuildContext context) {
   );
 }
 
+/// Formats and sanitizes camera device names (e.g., stripping Windows USB device paths like `<\\?\usb#...>`).
+/// Falls back to `'Camera ${index + 1}'` if empty or whitespace-only.
+@visibleForTesting
+String formatCameraLabel(String rawName, int index) {
+  var name = rawName;
+  final bracketIndex = name.indexOf(' <');
+  if (bracketIndex != -1) {
+    name = name.substring(0, bracketIndex);
+  } else if (name.trim().startsWith('<')) {
+    name = '';
+  }
+  name = name.trim();
+  if (name.isEmpty) {
+    return 'Camera ${index + 1}';
+  }
+  return name;
+}
+
+String _formatCameraLabel(String rawName, int index) =>
+    formatCameraLabel(rawName, index);
+
 class CameraCaptureDialog extends StatefulWidget {
   const CameraCaptureDialog({super.key});
+
+  /// Formats and sanitizes camera device names for testing or external display.
+  @visibleForTesting
+  static String formatCameraLabel(String rawName, int index) =>
+      _formatCameraLabel(rawName, index);
 
   @override
   State<CameraCaptureDialog> createState() => _CameraCaptureDialogState();
@@ -380,16 +406,21 @@ class _CameraCaptureDialogState extends State<CameraCaptureDialog> {
         child: DropdownButtonFormField<String>(
           initialValue: _selectedMacDeviceId,
           isDense: true,
+          isExpanded: true,
           decoration: const InputDecoration(
             labelText: 'Camera Source',
             prefixIcon: Icon(Icons.videocam_outlined, size: 20),
             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          items: _macDevices.map((d) {
+          items: _macDevices.asMap().entries.map((entry) {
+            final index = entry.key;
+            final d = entry.value;
+            final rawLabel = d.localizedName ?? d.deviceId;
             return DropdownMenuItem<String>(
               value: d.deviceId,
               child: Text(
-                d.localizedName ?? d.deviceId,
+                _formatCameraLabel(rawLabel, index),
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             );
@@ -404,15 +435,22 @@ class _CameraCaptureDialogState extends State<CameraCaptureDialog> {
         child: DropdownButtonFormField<CameraDescription>(
           initialValue: _selectedStandardCamera,
           isDense: true,
+          isExpanded: true,
           decoration: const InputDecoration(
             labelText: 'Camera Source',
             prefixIcon: Icon(Icons.videocam_outlined, size: 20),
             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          items: _standardCameras.map((c) {
+          items: _standardCameras.asMap().entries.map((entry) {
+            final index = entry.key;
+            final c = entry.value;
             return DropdownMenuItem<CameraDescription>(
               value: c,
-              child: Text(c.name, overflow: TextOverflow.ellipsis),
+              child: Text(
+                _formatCameraLabel(c.name, index),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             );
           }).toList(),
           onChanged: _onStandardCameraChanged,
