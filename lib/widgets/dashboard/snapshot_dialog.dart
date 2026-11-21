@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:school_automation/core/theme/app_theme_tokens.dart';
+import 'package:school_automation/core/utils/platform_compat.dart';
 
 /// Modal dialog previewing a captured dashboard PNG snapshot with actions to
 /// Export PNG (via [FilePicker.saveFile]), Print as a single-page landscape PDF
@@ -85,10 +86,17 @@ class _SnapshotDialogState extends State<SnapshotDialog> {
       );
       final pdfBytes = await doc.save();
       final printName = widget.filename.replaceAll('.png', '');
-      await Printing.layoutPdf(
-        onLayout: (_) async => pdfBytes,
-        name: printName,
-      );
+      if (isLegacyWindows()) {
+        await openPdfExternal(
+          bytes: pdfBytes,
+          fileName: '$printName.pdf',
+        );
+      } else {
+        await Printing.layoutPdf(
+          onLayout: (_) async => pdfBytes,
+          name: printName,
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -100,10 +108,17 @@ class _SnapshotDialogState extends State<SnapshotDialog> {
 
   Future<void> _handleShare() async {
     try {
-      await Printing.sharePdf(
-        bytes: widget.bytes,
-        filename: widget.filename,
-      );
+      if (isLegacyWindows()) {
+        await openPdfExternal(
+          bytes: widget.bytes,
+          fileName: widget.filename,
+        );
+      } else {
+        await Printing.sharePdf(
+          bytes: widget.bytes,
+          filename: widget.filename,
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -193,22 +208,23 @@ class _SnapshotDialogState extends State<SnapshotDialog> {
                     ),
                     onPressed: _handleClose,
                   ),
-                  OutlinedButton.icon(
-                    key: const ValueKey('snapshot_dialog_share'),
-                    icon: const Icon(Icons.share_outlined, size: 16),
-                    label: const Text('Share'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.borderDefault),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: AppSpacing.xs,
+                  if (!isLegacyWindows())
+                    OutlinedButton.icon(
+                      key: const ValueKey('snapshot_dialog_share'),
+                      icon: const Icon(Icons.share_outlined, size: 16),
+                      label: const Text('Share'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.borderDefault),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: AppSpacing.xs,
+                        ),
+                        minimumSize: const Size(0, 38),
+                        visualDensity: VisualDensity.compact,
                       ),
-                      minimumSize: const Size(0, 38),
-                      visualDensity: VisualDensity.compact,
+                      onPressed: _handleShare,
                     ),
-                    onPressed: _handleShare,
-                  ),
                   OutlinedButton.icon(
                     key: const ValueKey('snapshot_dialog_export'),
                     icon: const Icon(Icons.download_outlined, size: 16),

@@ -7,6 +7,7 @@ import 'package:printing/printing.dart';
 import 'package:school_automation/core/providers/report_preview_provider.dart';
 import 'package:school_automation/core/sync/sync_provider.dart';
 import 'package:school_automation/core/theme/app_theme_tokens.dart';
+import 'package:school_automation/core/utils/platform_compat.dart';
 import 'package:school_automation/core/utils/responsive_breakpoints.dart';
 import 'package:school_automation/widgets/reports/report_definition.dart';
 import 'package:school_automation/core/utils/defaulter_list_pdf_generator.dart';
@@ -24,15 +25,18 @@ class ReportPreviewModal extends ConsumerStatefulWidget {
     super.key,
     required this.request,
     this.headerControls,
+    this.isLegacyWindowsOverride,
   });
 
   final ReportRequest request;
   final Widget? headerControls;
+  final bool? isLegacyWindowsOverride;
 
   static Future<void> show(
     BuildContext context, {
     required ReportRequest request,
     Widget? headerControls,
+    bool? isLegacyWindowsOverride,
   }) {
     // Phase K-6 Item 3: the dialog is barrier-dismissible so an outside
     // click/tap dismisses it on Windows touch/mouse (ESC already works via
@@ -40,8 +44,11 @@ class ReportPreviewModal extends ConsumerStatefulWidget {
     return showDialog<void>(
       context: context,
       barrierDismissible: true,
-      builder: (_) =>
-          ReportPreviewModal(request: request, headerControls: headerControls),
+      builder: (_) => ReportPreviewModal(
+        request: request,
+        headerControls: headerControls,
+        isLegacyWindowsOverride: isLegacyWindowsOverride,
+      ),
     );
   }
 
@@ -125,6 +132,24 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   // Actions
   // ---------------------------------------------------------------------------
 
+  bool get _isLegacy => widget.isLegacyWindowsOverride ?? isLegacyWindows();
+
+  Future<void> _handleOpenPdf(Uint8List bytes) async {
+    final success = await openPdfExternal(
+      bytes: bytes,
+      fileName: widget.request.effectiveFileName,
+    );
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not open external PDF viewer. Please use Export PDF.',
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _handleSavePdf(Uint8List bytes) async {
     try {
       await FilePicker.saveFile(
@@ -142,6 +167,10 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   }
 
   Future<void> _handlePrint(Uint8List bytes) async {
+    if (_isLegacy) {
+      await _handleOpenPdf(bytes);
+      return;
+    }
     await Printing.layoutPdf(
       onLayout: (_) async => bytes,
       name: widget.request.effectiveTitle,
@@ -149,6 +178,10 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
   }
 
   Future<void> _handleShare(Uint8List bytes, String filename) async {
+    if (_isLegacy) {
+      await _handleOpenPdf(bytes);
+      return;
+    }
     await Printing.sharePdf(bytes: bytes, filename: filename);
   }
 
@@ -448,56 +481,47 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                   // --- K Shot 3b-core: orientation toggle (desktop only) -----
                   // Phase K-6 Run 2b: reports whose column layout is
                   // designed for their natural format (lockedOrientation)
-                  // render the toggle DISABLED — the segment still shows
-                  // the natural format, but the user cannot re-orient
-                  // (a portrait 10-column defaulter roster garbles with
-                  // mid-token breaks and merged cells).
-                  Tooltip(
-                    message: widget.request.locksOrientation
-                        ? 'This report is designed for A4 landscape '
-                            'and cannot be re-oriented.'
-                        : '',
-                    child: SegmentedButton<_PdfOrientation>(
-                      key: const ValueKey('report_toolbar_orientation'),
-                      style: SegmentedButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        textStyle: AppTypography.bodySmall,
+                  // render the toggle DISABLED. On legacy Windows (Win 8.1),
+                  // orientation toggle is omitted since in-app preview is disabled.
+                  if (!_isLegacy) ...[
+                    Tooltip(
+                      message: widget.request.locksOrientation
+                          ? 'This report is designed for A4 landscape '
+                              'and cannot be re-oriented.'
+                          : '',
+                      child: SegmentedButton<_PdfOrientation>(
+                        key: const ValueKey('report_toolbar_orientation'),
+                        style: SegmentedButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          textStyle: AppTypography.bodySmall,
+                        ),
+                        segments: const [
+                          ButtonSegment(
+                            value: _PdfOrientation.portrait,
+                            label: Text('Portrait'),
+                            icon: Icon(Icons.crop_portrait, size: 14),
+                          ),
+                          ButtonSegment(
+                            value: _PdfOrientation.landscape,
+                            label: Text('Landscape'),
+                            icon: Icon(Icons.crop_landscape, size: 14),
+                          ),
+                        ],
+                        selected: {_currentOrientation},
+                        onSelectionChanged: widget.request.locksOrientation
+                            ? null
+                            : (s) {
+                                final chosen = s.first;
+                                final override =
+                                    chosen == _PdfOrientation.landscape
+                                        ? PdfPageFormat.a4.landscape
+                                        : PdfPageFormat.a4;
+                                setState(() => _pageFormatOverride = override);
+                              },
                       ),
-                      segments: const [
-                        ButtonSegment(
-                          value: _PdfOrientation.portrait,
-                          label: Text('Portrait'),
-                          icon: Icon(Icons.crop_portrait, size: 14),
-                        ),
-                        ButtonSegment(
-                          value: _PdfOrientation.landscape,
-                          label: Text('Landscape'),
-                          icon: Icon(Icons.crop_landscape, size: 14),
-                        ),
-                      ],
-                      selected: {_currentOrientation},
-                      onSelectionChanged: widget.request.locksOrientation
-                          ? null
-                          : (s) {
-                              final chosen = s.first;
-                              final override =
-                                  chosen == _PdfOrientation.landscape
-                                      ? PdfPageFormat.a4.landscape
-                                      : PdfPageFormat.a4;
-                              // Phase K-6 Run 1: state first, then
-                              // invalidation. The setState updates the local
-                              // mirror; the NEXT build's watch key
-                              // (_previewKey) then carries the new
-                              // orientation as an explicit family argument,
-                              // rotating to a fresh notifier whose bytes are
-                              // generated FOR that orientation. Single click
-                              // re-renders — no second click, no data
-                              // refresh required.
-                              setState(() => _pageFormatOverride = override);
-                            },
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
 
                   // --- Optional caller-supplied controls ----------------------
                   if (widget.headerControls != null) ...[
@@ -555,26 +579,51 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
 
                   const SizedBox(width: AppSpacing.xs),
 
-                  // --- Print button -------------------------------------------
-                  // Phase K-6 Run 2b: label shortened to 'Print' — the
-                  // adjacent Export PDF button already covers the save path,
-                  // and the long label was the last fixed width that kept
-                  // this button outside a 1024px dialog's viewport.
-                  ElevatedButton.icon(
-                    key: const ValueKey('report_toolbar_print'),
-                    icon: const Icon(Icons.print_outlined, size: 16),
-                    label: const Text('Print'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.brandPrimary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: AppSpacing.xs,
+                  // --- Print button (or Open PDF on legacy) -------------------
+                  if (_isLegacy)
+                    compactActions
+                        ? IconButton(
+                            key: const ValueKey('report_toolbar_open'),
+                            icon: const Icon(Icons.open_in_new_rounded, size: 20),
+                            tooltip: 'Open PDF',
+                            onPressed: hasBytes
+                                ? () => _handleOpenPdf(state.bytes!)
+                                : null,
+                          )
+                        : ElevatedButton.icon(
+                            key: const ValueKey('report_toolbar_open'),
+                            icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                            label: const Text('Open PDF'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.brandPrimary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.sm,
+                                vertical: AppSpacing.xs,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            onPressed: hasBytes
+                                ? () => _handleOpenPdf(state.bytes!)
+                                : null,
+                          )
+                  else
+                    ElevatedButton.icon(
+                      key: const ValueKey('report_toolbar_print'),
+                      icon: const Icon(Icons.print_outlined, size: 16),
+                      label: const Text('Print'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandPrimary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: AppSpacing.xs,
+                        ),
+                        visualDensity: VisualDensity.compact,
                       ),
-                      visualDensity: VisualDensity.compact,
+                      onPressed:
+                          hasBytes ? () => _handlePrint(state.bytes!) : null,
                     ),
-                    onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
-                  ),
                 ],
               ),
             ),
@@ -653,47 +702,42 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             spacing: AppSpacing.sm,
             runSpacing: AppSpacing.xs,
             children: [
-              // Phase K-6 Run 2b: locked-orientation reports render the
-              // toggle disabled (same contract as the desktop toolbar).
-              Tooltip(
-                message: widget.request.locksOrientation
-                    ? 'This report is designed for A4 landscape '
-                        'and cannot be re-oriented.'
-                    : '',
-                child: SegmentedButton<_PdfOrientation>(
-                  key: const ValueKey('report_toolbar_orientation'),
-                  style: SegmentedButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    textStyle: AppTypography.bodySmall,
+              if (!_isLegacy)
+                Tooltip(
+                  message: widget.request.locksOrientation
+                      ? 'This report is designed for A4 landscape '
+                          'and cannot be re-oriented.'
+                      : '',
+                  child: SegmentedButton<_PdfOrientation>(
+                    key: const ValueKey('report_toolbar_orientation'),
+                    style: SegmentedButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: AppTypography.bodySmall,
+                    ),
+                    segments: const [
+                      ButtonSegment(
+                        value: _PdfOrientation.portrait,
+                        label: Text('Portrait'),
+                        icon: Icon(Icons.crop_portrait, size: 14),
+                      ),
+                      ButtonSegment(
+                        value: _PdfOrientation.landscape,
+                        label: Text('Landscape'),
+                        icon: Icon(Icons.crop_landscape, size: 14),
+                      ),
+                    ],
+                    selected: {_currentOrientation},
+                    onSelectionChanged: widget.request.locksOrientation
+                        ? null
+                        : (s) {
+                            final chosen = s.first;
+                            final override = chosen == _PdfOrientation.landscape
+                                ? PdfPageFormat.a4.landscape
+                                : PdfPageFormat.a4;
+                            setState(() => _pageFormatOverride = override);
+                          },
                   ),
-                  segments: const [
-                    ButtonSegment(
-                      value: _PdfOrientation.portrait,
-                      label: Text('Portrait'),
-                      icon: Icon(Icons.crop_portrait, size: 14),
-                    ),
-                    ButtonSegment(
-                      value: _PdfOrientation.landscape,
-                      label: Text('Landscape'),
-                      icon: Icon(Icons.crop_landscape, size: 14),
-                    ),
-                  ],
-                  selected: {_currentOrientation},
-                  onSelectionChanged: widget.request.locksOrientation
-                      ? null
-                      : (s) {
-                          final chosen = s.first;
-                          final override = chosen == _PdfOrientation.landscape
-                              ? PdfPageFormat.a4.landscape
-                              : PdfPageFormat.a4;
-                          // Phase K-6 Run 1: state first, then invalidation —
-                          // the next build's watch key carries the new
-                          // orientation as an explicit family argument
-                          // (fresh bytes generation).
-                          setState(() => _pageFormatOverride = override);
-                        },
                 ),
-              ),
               if (widget.headerControls != null) widget.headerControls!,
               IconButton(
                 key: const ValueKey('report_toolbar_refresh'),
@@ -717,23 +761,39 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                 ),
                 onPressed: hasBytes ? () => _handleSavePdf(state.bytes!) : null,
               ),
-              // Phase K-6 Run 2b: label shortened to 'Print' (the Export
-              // PDF button beside it covers the save path).
-              ElevatedButton.icon(
-                key: const ValueKey('report_toolbar_print'),
-                icon: const Icon(Icons.print_outlined, size: 16),
-                label: const Text('Print'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.brandPrimary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                    vertical: AppSpacing.xs,
+              if (_isLegacy)
+                ElevatedButton.icon(
+                  key: const ValueKey('report_toolbar_open'),
+                  icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                  label: const Text('Open PDF'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandPrimary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    visualDensity: VisualDensity.compact,
                   ),
-                  visualDensity: VisualDensity.compact,
+                  onPressed:
+                      hasBytes ? () => _handleOpenPdf(state.bytes!) : null,
+                )
+              else
+                ElevatedButton.icon(
+                  key: const ValueKey('report_toolbar_print'),
+                  icon: const Icon(Icons.print_outlined, size: 16),
+                  label: const Text('Print'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandPrimary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                      vertical: AppSpacing.xs,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
                 ),
-                onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
-              ),
               IconButton(
                 key: const ValueKey('report_toolbar_close'),
                 icon: const Icon(Icons.close),
@@ -786,27 +846,39 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
             tooltip: 'Refresh Data',
             onPressed: state.isLoading ? null : _onRefreshData,
           ),
-          IconButton(
-            icon: const Icon(Icons.share_outlined, size: 20),
-            tooltip: 'Share PDF',
-            onPressed: hasBytes
-                ? () => _handleShare(
-                      state.bytes!,
-                      widget.request.effectiveFileName,
-                    )
-                : null,
-          ),
-          IconButton(
-            key: const ValueKey('report_toolbar_print'),
-            icon: const Icon(Icons.print_outlined, size: 20),
-            tooltip: 'Print',
-            onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
-          ),
+          if (!_isLegacy)
+            IconButton(
+              icon: const Icon(Icons.share_outlined, size: 20),
+              tooltip: 'Share PDF',
+              onPressed: hasBytes
+                  ? () => _handleShare(
+                        state.bytes!,
+                        widget.request.effectiveFileName,
+                      )
+                  : null,
+            ),
+          if (_isLegacy)
+            IconButton(
+              key: const ValueKey('report_toolbar_open'),
+              icon: const Icon(Icons.open_in_new_rounded, size: 20),
+              tooltip: 'Open PDF',
+              onPressed: hasBytes ? () => _handleOpenPdf(state.bytes!) : null,
+            )
+          else
+            IconButton(
+              key: const ValueKey('report_toolbar_print'),
+              icon: const Icon(Icons.print_outlined, size: 20),
+              tooltip: 'Print',
+              onPressed: hasBytes ? () => _handlePrint(state.bytes!) : null,
+            ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, size: 20),
             tooltip: 'More actions',
             onSelected: (value) {
               switch (value) {
+                case 'open_external':
+                  if (hasBytes) _handleOpenPdf(state.bytes!);
+                  break;
                 case 'export':
                   if (hasBytes) _handleSavePdf(state.bytes!);
                   break;
@@ -822,6 +894,17 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
               }
             },
             itemBuilder: (context) => [
+              if (_isLegacy)
+                const PopupMenuItem(
+                  value: 'open_external',
+                  child: Row(
+                    children: [
+                      Icon(Icons.open_in_new_rounded, size: 18),
+                      SizedBox(width: 8),
+                      Text('Open in PDF Viewer'),
+                    ],
+                  ),
+                ),
               const PopupMenuItem(
                 value: 'export',
                 child: Row(
@@ -956,6 +1039,129 @@ class _ReportPreviewModalState extends ConsumerState<ReportPreviewModal> {
                 ],
               ),
             ],
+          ),
+        ),
+      );
+    }
+
+    // Legacy Windows 8.1 / 7 safe panel: in-app rasterization crashes native OS (0xc0000409).
+    // Pure Dart PDF generation is fully intact; render safe export/open workstation.
+    if (_isLegacy) {
+      return Container(
+        color: canvasColor,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: SingleChildScrollView(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 520),
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: AppColors.borderDefault),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black12,
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.brandPrimary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.picture_as_pdf_outlined,
+                    color: AppColors.brandPrimary,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  widget.request.effectiveTitle,
+                  textAlign: TextAlign.center,
+                  style: AppTypography.h3.copyWith(
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'In-app PDF preview and direct print are not supported on Windows 8.1. '
+                  'Use Export PDF or Open PDF to print from your PDF viewer.',
+                  textAlign: TextAlign.center,
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    ElevatedButton.icon(
+                      key: const ValueKey('report_legacy_open'),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 16),
+                      label: const Text('Open PDF'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brandPrimary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: state.bytes != null
+                          ? () => _handleOpenPdf(state.bytes!)
+                          : null,
+                    ),
+                    OutlinedButton.icon(
+                      key: const ValueKey('report_legacy_export'),
+                      icon: const Icon(Icons.download_outlined, size: 16),
+                      label: const Text('Export PDF'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.borderDefault),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: state.bytes != null
+                          ? () => _handleSavePdf(state.bytes!)
+                          : null,
+                    ),
+                    TextButton.icon(
+                      key: const ValueKey('report_legacy_close'),
+                      icon: const Icon(Icons.close_rounded, size: 16),
+                      label: const Text('Close'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: _handleClose,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       );

@@ -13,6 +13,7 @@ import '../../core/providers/clock_provider.dart';
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/voucher_generation_provider.dart';
 import '../../core/theme/app_theme_tokens.dart';
+import '../../core/utils/platform_compat.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../core/utils/tenant_storage.dart';
 import '../../core/utils/voucher_pdf_generator.dart';
@@ -497,10 +498,17 @@ class _VoucherGenerationScreenState
           .read(voucherGenFiltersProvider)
           .billingMonth
           .replaceAll(' ', '_');
-      await Printing.sharePdf(
-        bytes: bytes,
-        filename: 'Fee_Vouchers_$monthStr.pdf',
-      );
+      if (isLegacyWindows()) {
+        await openPdfExternal(
+          bytes: bytes,
+          fileName: 'Fee_Vouchers_$monthStr.pdf',
+        );
+      } else {
+        await Printing.sharePdf(
+          bytes: bytes,
+          filename: 'Fee_Vouchers_$monthStr.pdf',
+        );
+      }
     } catch (e, st) {
       debugPrint('Share PDF failed: $e\n$st');
       if (!mounted) return;
