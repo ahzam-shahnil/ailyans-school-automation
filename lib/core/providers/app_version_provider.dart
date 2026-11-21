@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// Default fallback version matching pubspec.yaml if platform channels fail or in tests.
-const String kDefaultAppVersion = 'v2.0.0+2';
+const String kDefaultAppVersion = 'v2.1.0+3';
 
 /// Asynchronous provider for the platform app version and build number.
 /// Gracefully returns [kDefaultAppVersion] if platform channels are unavailable.

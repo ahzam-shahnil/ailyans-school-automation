@@ -166,7 +166,7 @@ void main() {
           ProviderScope(
             overrides: [
               systemSettingsProvider.overrideWith((ref) => notifier),
-              appVersionProvider.overrideWith((ref) => Future.value('v2.0.0+2')),
+              appVersionProvider.overrideWith((ref) => Future.value('v2.1.0+3')),
               sessionProvider.overrideWith((ref) {
                 final session = SessionNotifier();
                 session.setSession(

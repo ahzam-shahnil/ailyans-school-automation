@@ -27,8 +27,8 @@ void main() {
       PackageInfo.setMockInitialValues(
         appName: 'School Automation',
         packageName: 'com.example.schoolAutomation',
-        version: '2.0.0',
-        buildNumber: '2',
+        version: '2.1.0',
+        buildNumber: '3',
         buildSignature: '',
       );
 
@@ -36,7 +36,7 @@ void main() {
       addTearDown(container.dispose);
 
       final version = await container.read(appVersionProvider.future);
-      expect(version, 'v2.0.0+2');
+      expect(version, 'v2.1.0+3');
     });
 
     test(
