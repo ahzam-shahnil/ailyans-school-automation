@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:path/path.dart' as p;
 
 import '../../core/providers/student_list_provider.dart';
 import '../../core/providers/session_provider.dart';
@@ -17,6 +16,7 @@ import '../../core/theme/app_theme_tokens.dart';
 import '../../core/utils/responsive_breakpoints.dart';
 import '../../models/school_class.dart';
 import '../../models/student_list_row.dart';
+import '../../repositories/photo_repository.dart';
 import '../../widgets/mobile/mobile_status_pill.dart';
 
 /// Production Student Directory and Search Portal (`frmStuSearch` / `ObjID: 13`).
@@ -314,29 +314,10 @@ class _StudentListScreenState extends ConsumerState<StudentListScreen> {
   }
 
   File? _resolvePhotoFile(StudentListRow student) {
-    if (student.photoPath != null && student.photoPath!.isNotEmpty) {
-      final f = File(student.photoPath!);
-      if (f.existsSync()) return f;
-    }
-
-    final home =
-        Platform.environment['HOME'] ??
-        Platform.environment['USERPROFILE'] ??
-        '';
-    if (home.isNotEmpty) {
-      final defaultPhoto = File(
-        p.join(
-          home,
-          'Documents',
-          'Ailyans',
-          'photos',
-          '${student.stuRegId}.jpg',
-        ),
-      );
-      if (defaultPhoto.existsSync()) return defaultPhoto;
-    }
-
-    return null;
+    return PhotoRepository.resolvePhotoFileSync(
+      photoPath: student.photoPath,
+      stuRegId: student.stuRegId,
+    );
   }
 
   @override

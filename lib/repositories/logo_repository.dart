@@ -4,20 +4,39 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../core/db/database.dart';
+import '../core/utils/tenant_storage.dart';
 
 class LogoRepository {
   final Directory? overrideDirectory;
+  final String? overrideDocumentsPath;
+  final String? overrideTenantId;
 
-  LogoRepository({this.overrideDirectory});
+  LogoRepository({
+    this.overrideDirectory,
+    this.overrideDocumentsPath,
+    this.overrideTenantId,
+  });
+
+  /// Resolves the active tenant ID for this repository instance.
+  Future<String> resolveTenantId() async {
+    return TenantStorage.resolveActiveTenantId(
+      overrideTenantId: overrideTenantId,
+    );
+  }
+
+  /// Resolves the portable Documents directory.
+  Future<String> getDocumentsPath() async {
+    return TenantStorage.getDocumentsPath(
+      overrideDocumentsPath: overrideDocumentsPath,
+    );
+  }
 
   /// Resolves the writable branding directory, mirroring PhotoRepository::getPhotosDirectory.
-  /// macOS/Linux: $HOME/Documents/Ailyans/branding
-  /// Windows:     %USERPROFILE%\Documents\Ailyans\branding
-  /// Fallback:    <appDocumentsDir>/Ailyans/branding
+  /// `<Documents>/ByteWave/<tenantId>/branding/`
+  /// If [overrideDirectory] is set (tests), returns it directly.
   Future<Directory> getBrandingDirectory() async {
     final override = overrideDirectory;
     if (override != null) {
@@ -27,25 +46,81 @@ class LogoRepository {
       return override;
     }
 
-    String documentsPath;
-    if (Platform.isWindows) {
-      final userProfile = Platform.environment['USERPROFILE'];
-      documentsPath = (userProfile != null && userProfile.isNotEmpty)
-          ? p.join(userProfile, 'Documents')
-          : (await getApplicationDocumentsDirectory()).path;
-    } else {
-      final home = Platform.environment['HOME'];
-      documentsPath = (home != null && home.isNotEmpty)
-          ? p.join(home, 'Documents')
-          : (await getApplicationDocumentsDirectory()).path;
-    }
-
+    final documentsPath = await getDocumentsPath();
+    final tenantId = await resolveTenantId();
     final brandingDir =
-        Directory(p.join(documentsPath, 'Ailyans', 'branding'));
+        Directory(p.join(documentsPath, 'ByteWave', tenantId, 'branding'));
     if (!await brandingDir.exists()) {
       await brandingDir.create(recursive: true);
     }
     return brandingDir;
+  }
+
+  /// Resolves legacy branding directory:
+  /// `<Documents>/Ailyans/branding/`.
+  Future<Directory> getLegacyBrandingDirectory() async {
+    final documentsPath = await getDocumentsPath();
+    return Directory(p.join(documentsPath, 'Ailyans', 'branding'));
+  }
+
+  /// Resolves an existing logo path with legacy read fallback:
+  /// 1. If [storedPath] is an absolute path that exists on disk, returns it directly.
+  /// 2. If [storedPath] filename exists in `<Documents>/ByteWave/<tenantId>/branding/`, returns it.
+  /// 3. Looks for any `logo.*` in `<Documents>/ByteWave/<tenantId>/branding/`.
+  /// 4. If tenant is 'ailyans', falls back to legacy `<Documents>/Ailyans/branding/`.
+  Future<String?> resolveLogoPath([String? storedPath]) async {
+    // 1. Direct check: existing file on disk
+    if (storedPath != null && storedPath.trim().isNotEmpty) {
+      final file = File(storedPath.trim());
+      if (await file.exists()) {
+        return file.path;
+      }
+    }
+
+    // 2. Check tenant branding directory
+    final brandingDir = await getBrandingDirectory();
+    if (await brandingDir.exists()) {
+      if (storedPath != null && storedPath.trim().isNotEmpty) {
+        final candidate = File(
+          p.join(brandingDir.path, p.basename(storedPath.trim())),
+        );
+        if (await candidate.exists()) return candidate.path;
+      }
+      final found = await _findLogoFileInDir(brandingDir);
+      if (found != null) return found.path;
+    }
+
+    // 3. Legacy Ailyan's fallback (read-only) when tenant is 'ailyans'
+    final tenantId = await resolveTenantId();
+    if (tenantId == 'ailyans') {
+      final legacyDir = await getLegacyBrandingDirectory();
+      if (await legacyDir.exists()) {
+        if (storedPath != null && storedPath.trim().isNotEmpty) {
+          final candidate = File(
+            p.join(legacyDir.path, p.basename(storedPath.trim())),
+          );
+          if (await candidate.exists()) return candidate.path;
+        }
+        final found = await _findLogoFileInDir(legacyDir);
+        if (found != null) return found.path;
+      }
+    }
+
+    return null;
+  }
+
+  static Future<File?> _findLogoFileInDir(Directory dir) async {
+    try {
+      await for (final entity in dir.list()) {
+        if (entity is File) {
+          final name = p.basename(entity.path);
+          if (name.startsWith('logo.')) {
+            return entity;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Copies [sourcePath] into the branding directory as `logo.<originalExt>`.
@@ -58,6 +133,9 @@ class LogoRepository {
       final ext = p.extension(sourcePath); // e.g. '.jpg', '.png'
       final dir = await getBrandingDirectory();
       final dest = File(p.join(dir.path, 'logo$ext'));
+      if (!await dest.parent.exists()) {
+        await dest.parent.create(recursive: true);
+      }
       await src.copy(dest.path);
       return dest.path;
     } catch (e) {
@@ -69,6 +147,21 @@ class LogoRepository {
   Future<void> deleteLogo() async {
     try {
       final dir = await getBrandingDirectory();
+      await _deleteFilesInDir(dir);
+
+      final tenantId = await resolveTenantId();
+      if (tenantId == 'ailyans') {
+        final legacyDir = await getLegacyBrandingDirectory();
+        if (await legacyDir.exists()) {
+          await _deleteFilesInDir(legacyDir);
+        }
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> _deleteFilesInDir(Directory dir) async {
+    if (!await dir.exists()) return;
+    try {
       await for (final entity in dir.list()) {
         if (entity is File) {
           final name = p.basename(entity.path);
@@ -127,6 +220,23 @@ class LogoRepository {
         if (f.existsSync()) {
           final bytes = await f.readAsBytes();
           if (bytes.isNotEmpty) return bytes;
+        }
+        final resolved = await LogoRepository().resolveLogoPath(path);
+        if (resolved != null) {
+          final rf = File(resolved);
+          if (rf.existsSync()) {
+            final bytes = await rf.readAsBytes();
+            if (bytes.isNotEmpty) return bytes;
+          }
+        }
+      } else {
+        final resolved = await LogoRepository().resolveLogoPath();
+        if (resolved != null) {
+          final rf = File(resolved);
+          if (rf.existsSync()) {
+            final bytes = await rf.readAsBytes();
+            if (bytes.isNotEmpty) return bytes;
+          }
         }
       }
       return null;

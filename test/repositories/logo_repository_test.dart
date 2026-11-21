@@ -105,5 +105,120 @@ void main() {
       expect(await f1.exists(), isFalse);
       expect(await f2.exists(), isFalse);
     });
+
+    test(
+      '9. Multi-tenant isolation: school_a and school_b write to separate branding directories',
+      () async {
+        final repoA = LogoRepository(
+          overrideDocumentsPath: tempDir.path,
+          overrideTenantId: 'school_a',
+        );
+        final repoB = LogoRepository(
+          overrideDocumentsPath: tempDir.path,
+          overrideTenantId: 'school_b',
+        );
+
+        final src = File(p.join(tempDir.path, 'logo_source.png'));
+        await src.writeAsString('logo-bytes');
+
+        final pathA = await repoA.copyLogo(src.path);
+        final pathB = await repoB.copyLogo(src.path);
+
+        expect(pathA, isNotNull);
+        expect(pathB, isNotNull);
+        expect(pathA, isNot(equals(pathB)));
+
+        expect(
+          pathA,
+          p.join(tempDir.path, 'ByteWave', 'school_a', 'branding', 'logo.png'),
+        );
+        expect(
+          pathB,
+          p.join(tempDir.path, 'ByteWave', 'school_b', 'branding', 'logo.png'),
+        );
+
+        expect(await File(pathA!).exists(), isTrue);
+        expect(await File(pathB!).exists(), isTrue);
+
+        // Deleting in school_a does not delete school_b
+        await repoA.deleteLogo();
+        expect(await File(pathA).exists(), isFalse);
+        expect(await File(pathB).exists(), isTrue);
+      },
+    );
+
+    test(
+      '10. Legacy Fallback: Documents/Ailyans/branding/logo.png resolves cleanly for tenant ailyans',
+      () async {
+        final legacyDir = Directory(
+          p.join(tempDir.path, 'Ailyans', 'branding'),
+        );
+        await legacyDir.create(recursive: true);
+        final legacyLogo = File(p.join(legacyDir.path, 'logo.png'));
+        await legacyLogo.writeAsString('legacy-logo-bytes');
+
+        final repoAilyans = LogoRepository(
+          overrideDocumentsPath: tempDir.path,
+          overrideTenantId: 'ailyans',
+        );
+
+        // Resolving with null or empty stored path finds legacy logo
+        final resolved = await repoAilyans.resolveLogoPath();
+        expect(resolved, equals(legacyLogo.path));
+        expect(await File(resolved!).readAsString(), equals('legacy-logo-bytes'));
+
+        // Resolving with filename also finds it
+        final resolvedByFilename = await repoAilyans.resolveLogoPath('logo.png');
+        expect(resolvedByFilename, equals(legacyLogo.path));
+
+        // When a new logo is saved to ByteWave/ailyans/branding, it takes precedence
+        final newSrc = File(p.join(tempDir.path, 'new_logo.jpg'));
+        await newSrc.writeAsString('new-logo-bytes');
+        final newPath = await repoAilyans.copyLogo(newSrc.path);
+        expect(newPath, isNotNull);
+
+        final resolvedNew = await repoAilyans.resolveLogoPath();
+        expect(resolvedNew, equals(newPath));
+        expect(await File(resolvedNew!).readAsString(), equals('new-logo-bytes'));
+      },
+    );
+
+    test(
+      '11. Stored absolute path directly resolves if it exists on disk',
+      () async {
+        final customDir = Directory(p.join(tempDir.path, 'branding_custom'));
+        await customDir.create(recursive: true);
+        final customLogo = File(p.join(customDir.path, 'my_school_logo.png'));
+        await customLogo.writeAsString('custom-logo-bytes');
+
+        final repoClean = LogoRepository(
+          overrideDocumentsPath: tempDir.path,
+          overrideTenantId: 'clean_school',
+        );
+
+        final resolved = await repoClean.resolveLogoPath(customLogo.path);
+        expect(resolved, equals(customLogo.path));
+      },
+    );
+
+    test(
+      '12. Non-ailyans tenant does not fall back to legacy Documents/Ailyans/branding',
+      () async {
+        final legacyDir = Directory(
+          p.join(tempDir.path, 'Ailyans', 'branding'),
+        );
+        await legacyDir.create(recursive: true);
+        final legacyLogo = File(p.join(legacyDir.path, 'logo.png'));
+        await legacyLogo.writeAsString('legacy-logo-bytes');
+
+        final repoClean = LogoRepository(
+          overrideDocumentsPath: tempDir.path,
+          overrideTenantId: 'clean_school',
+        );
+
+        final resolved = await repoClean.resolveLogoPath();
+        expect(resolved, isNull);
+      },
+    );
   });
 }
